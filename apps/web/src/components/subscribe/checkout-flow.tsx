@@ -84,6 +84,7 @@ function ScopedCheckoutFlow({
   const [message, setMessage] = useState('');
   const [effectiveAt, setEffectiveAt] = useState<string | null>(null);
   const [providerOpen, setProviderOpen] = useState(false);
+  const [checkoutDismissed, setCheckoutDismissed] = useState(false);
   const operationId = useRef<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(true);
@@ -202,6 +203,7 @@ function ScopedCheckoutFlow({
     setStep('loading');
     setPreview(null);
     setRecovery(null);
+    setCheckoutDismissed(false);
     setMessage('');
     operationId.current = null;
     try {
@@ -328,6 +330,7 @@ function ScopedCheckoutFlow({
             if (!mounted.current) return;
             externalCheckout.current = false;
             setProviderOpen(false);
+            setCheckoutDismissed(true);
             setMessage(`Checkout closed. ${PLAN_MAP[target].label} is still selected.`);
             setStep('error');
             previousInput.current = { open: true, target: initialTargetTier };
@@ -518,10 +521,11 @@ function ScopedCheckoutFlow({
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setStep('select');
+                    if (preview.confirmationAllowed) setStep('select');
+                    else onOpenChange(false);
                   }}
                 >
-                  Choose another plan
+                  {preview.confirmationAllowed ? 'Choose another plan' : 'Close'}
                 </Button>
               </div>
             )}
@@ -529,20 +533,19 @@ function ScopedCheckoutFlow({
               <div className="flex flex-col gap-4" role="status">
                 <h2 className="text-lg font-semibold">Plan saved</h2>
                 <p>
-                  {label} selected.{' '}
                   {recovery?.status === 'waiting_for_expiry'
-                    ? `Cancellation is scheduled; current access remains until ${dateLabel(recovery.eligibleAt)}. Continue to ${label} checkout after the current subscription ends.`
+                    ? recovery.eligibleAt
+                      ? `${PLAN_MAP[preview?.currentTier ?? currentTier].label} stays active until ${dateLabel(recovery.eligibleAt)}. You can purchase ${label} after it ends.`
+                      : `You can purchase ${label} after your current subscription ends. Its end date is not yet confirmed.`
                     : recovery?.status === 'eligible'
                       ? 'The previous subscription has ended. Review your selected plan to continue checkout.'
-                      : recovery?.status === 'dismissed' || recovery?.status === 'superseded'
-                        ? 'This saved selection is no longer active. Close this dialog to review your available plans.'
-                        : 'Cancellation is still being confirmed. This status updates automatically.'}
+                      : recovery?.status === 'checkout_pending'
+                        ? 'Your checkout is being confirmed. Please wait before making another purchase.'
+                        : recovery?.status === 'dismissed' || recovery?.status === 'superseded'
+                          ? 'This saved selection is no longer active. Close this dialog to review your available plans.'
+                          : 'Your cancellation is being confirmed. You can purchase your saved plan after your current subscription ends.'}
                 </p>
                 {message && <p>{message}</p>}
-                <p>
-                  No replacement purchase will start automatically. Unused value does not
-                  automatically transfer to a new subscription.
-                </p>
                 {recovery?.status === 'eligible' && !message && target && (
                   <Button onClick={() => void review(target)}>Review {label}</Button>
                 )}
@@ -554,10 +557,20 @@ function ScopedCheckoutFlow({
             {step === 'error' && (
               <div className="flex flex-col gap-4">
                 <p role="alert">{message}</p>
-                {target && <Button onClick={() => void review(target)}>Retry {label}</Button>}
-                <Button variant="outline" onClick={() => setStep('select')}>
-                  Choose another plan
-                </Button>
+                {target && (
+                  <Button onClick={() => void review(target)}>
+                    {checkoutDismissed ? 'Continue checkout' : `Retry ${label}`}
+                  </Button>
+                )}
+                {operationId.current ? (
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Close
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setStep('select')}>
+                    Choose another plan
+                  </Button>
+                )}
               </div>
             )}
             {step === 'pending' && (

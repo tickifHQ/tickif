@@ -23,6 +23,7 @@ interface PlanCardProps {
   allowCurrentAction?: boolean;
   actionLabel?: string;
   actionReason?: string;
+  hideAction?: boolean;
   onSelect: (tier: PlanTier) => void;
 }
 
@@ -35,6 +36,7 @@ export function PlanCard({
   allowCurrentAction = false,
   actionLabel,
   actionReason,
+  hideAction = false,
   onSelect,
 }: PlanCardProps) {
   const reasonId = useId();
@@ -75,18 +77,22 @@ export function PlanCard({
         </ul>
       </CardContent>
       <CardFooter className="flex-col items-stretch gap-3 md:row-span-2 md:grid md:grid-rows-subgrid">
-        <Button
-          variant={isSelected && !isCurrent ? 'default' : 'outline'}
-          className="h-auto min-h-10 w-full whitespace-normal"
-          disabled={currentActionDisabled || isLocked}
-          onClick={() => onSelect(plan.tier)}
-          aria-label={currentActionDisabled ? `${plan.label} is your current plan` : label}
-          aria-describedby={actionReason ? reasonId : undefined}
-        >
-          {currentActionDisabled ? 'Current plan' : label}
-        </Button>
+        {hideAction ? (
+          <p className="min-h-10 text-sm text-muted-foreground">{actionReason}</p>
+        ) : (
+          <Button
+            variant={isSelected && !isCurrent ? 'default' : 'outline'}
+            className="h-auto min-h-10 w-full whitespace-normal"
+            disabled={currentActionDisabled || isLocked}
+            onClick={() => onSelect(plan.tier)}
+            aria-label={currentActionDisabled ? `${plan.label} is your current plan` : label}
+            aria-describedby={actionReason ? reasonId : undefined}
+          >
+            {currentActionDisabled ? 'Current plan' : label}
+          </Button>
+        )}
         <p id={reasonId} className="min-h-10 text-sm text-muted-foreground">
-          {actionReason}
+          {hideAction ? null : actionReason}
         </p>
       </CardFooter>
     </Card>

@@ -3,10 +3,7 @@
 import { useCallback, useState } from 'react';
 import { Button } from '@repo/ui/components/button';
 import { Badge } from '@repo/ui/components/badge';
-import {
-  SavedRecoveryNotice,
-  PendingBillingNotice,
-} from '@/components/subscribe/saved-recovery-notice';
+import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
 import { PlanSelection } from './plan-selection';
 import { usePlanSelection, type BillingSelectionScope } from './use-plan-selection';
 import { useSelectionContext } from './use-selection-context';
@@ -118,6 +115,14 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
 
   const { tier, lifecycleState } = subscription;
   const currentPlan = PLAN_MAP[tier];
+  const suppressPlanActions =
+    subscription.cancellationScheduled ||
+    !selection.context ||
+    Object.values(selection.actions).some((action) => action?.hidden);
+  const needsPaymentRecovery =
+    subscription.razorpayStatus === 'halted' ||
+    lifecycleState === 'payment_failed' ||
+    lifecycleState === 'grace';
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -146,28 +151,25 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
             </div>
             <LifecycleBadge state={lifecycleState} />
           </div>
-          {subscription.currentPeriodEnd && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Current period ends:{' '}
-              {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
-            </p>
-          )}
+          {subscription.currentPeriodEnd &&
+            !(suppressPlanActions && subscription.cancellationScheduled) && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Current period ends:{' '}
+                {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
+              </p>
+            )}
         </div>
 
         {/* Lifecycle warnings */}
         <LifecycleNotice state={lifecycleState} />
       </div>
 
-      <PendingBillingNotice
+      <BillingStatusNotice
         context={selection.context}
-        onReview={(target) => {
-          setSelectedTier(target);
-          setDialogOpen(true);
-        }}
-      />
-      <SavedRecoveryNotice
+        currentTier={tier}
+        cancellationScheduled={subscription.cancellationScheduled}
+        currentPeriodEnd={subscription.currentPeriodEnd}
         onDismissed={refreshNow}
-        recovery={selection.context?.recovery}
         onReview={(target) => {
           setSelectedTier(target);
           setDialogOpen(true);
@@ -184,7 +186,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
           setDialogOpen(true);
         }}
       />
-      {selectedTier && !selection.actions[selectedTier]?.disabled && (
+      {selectedTier && !suppressPlanActions && !selection.actions[selectedTier]?.disabled && (
         <Button variant="outline" className="mt-4" onClick={() => setDialogOpen(true)}>
           Continue {PLAN_MAP[selectedTier].label}
         </Button>
@@ -196,26 +198,28 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
       )}
 
       {/* Plan selection / upgrade button */}
-      <Button
-        onClick={() => {
-          if (
-            subscription.razorpayStatus === 'halted' ||
-            lifecycleState === 'payment_failed' ||
-            lifecycleState === 'grace'
-          )
-            payment.open();
-          else setDialogOpen(true);
-        }}
-        disabled={payment.busy}
-      >
-        {subscription.razorpayStatus === 'halted' ||
-        lifecycleState === 'payment_failed' ||
-        lifecycleState === 'grace'
-          ? 'Update Payment Method'
-          : tier === 'hobby'
-            ? 'Upgrade Plan'
-            : 'Change Plan'}
-      </Button>
+      {(!suppressPlanActions || needsPaymentRecovery) && (
+        <Button
+          onClick={() => {
+            if (
+              subscription.razorpayStatus === 'halted' ||
+              lifecycleState === 'payment_failed' ||
+              lifecycleState === 'grace'
+            )
+              payment.open();
+            else setDialogOpen(true);
+          }}
+          disabled={payment.busy}
+        >
+          {subscription.razorpayStatus === 'halted' ||
+          lifecycleState === 'payment_failed' ||
+          lifecycleState === 'grace'
+            ? 'Update Payment Method'
+            : tier === 'hobby'
+              ? 'Upgrade Plan'
+              : 'Change Plan'}
+        </Button>
+      )}
       {payment.message && (
         <p role="status" className="mt-3 text-sm">
           {payment.message}

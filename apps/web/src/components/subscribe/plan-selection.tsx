@@ -20,7 +20,9 @@ interface PlanSelectionProps {
   currentTier: PlanTier;
   lifecycleState: SubscriptionState;
   selectedTier?: PlanTier | null;
-  actions?: Partial<Record<PlanTier, { label?: string; disabled?: boolean; reason?: string }>>;
+  actions?: Partial<
+    Record<PlanTier, { label?: string; disabled?: boolean; hidden?: boolean; reason?: string }>
+  >;
   onSelectPlan: (tier: PlanTier) => void;
 }
 
@@ -49,6 +51,18 @@ export function PlanSelection({
   actions,
   onSelectPlan,
 }: PlanSelectionProps) {
+  const hiddenReasons = [
+    ...new Set(
+      PLANS.flatMap((plan) => {
+        const reason = actions?.[plan.tier]?.reason;
+        return reason ? [reason] : [];
+      }),
+    ),
+  ];
+  const sharedRestriction =
+    PLANS.every((plan) => actions?.[plan.tier]?.hidden) && hiddenReasons.length === 1
+      ? hiddenReasons[0]
+      : undefined;
   const paymentRestricted = ['locked', 'payment_failed', 'grace'].includes(lifecycleState);
   const lifecycleReason =
     lifecycleState === 'locked'
@@ -89,14 +103,20 @@ export function PlanSelection({
               isSelected={selectedTier === plan.tier}
               isLocked={action?.disabled ?? paymentRestricted}
               actionLabel={action?.label ?? label}
+              hideAction={action?.hidden}
               actionReason={
-                action?.reason ?? (plan.tier === currentTier ? undefined : lifecycleReason)
+                sharedRestriction
+                  ? undefined
+                  : (action?.reason ?? (plan.tier === currentTier ? undefined : lifecycleReason))
               }
               onSelect={onSelectPlan}
             />
           );
         })}
       </div>
+      {sharedRestriction ? (
+        <p className="text-sm text-muted-foreground">{sharedRestriction}</p>
+      ) : null}
       <div className="hidden md:block">
         <Table aria-label="Compare plan features" className="table-fixed">
           <TableCaption>

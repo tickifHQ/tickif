@@ -8,6 +8,7 @@ import {
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
+import { billingChangePreviewSchema } from '@repo/contracts';
 import { db, desc, eq, schema } from '@repo/db';
 import {
   assertTestDb,
@@ -289,7 +290,9 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Retry Corporate', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Continue checkout', exact: true }),
+    ).toBeVisible();
     expect(targets).toEqual(['corporate']);
     const created = await owner.subscription();
     expect(created?.planTier).toBe('hobby');
@@ -298,9 +301,11 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await expect(page.getByRole('dialog')).not.toBeVisible();
     expect(targets).toEqual(['corporate']);
     await expect(page.getByText('Selected plan', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Continue Corporate', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Retry Corporate', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Continue checkout', exact: true }),
+    ).toBeVisible();
     expect(targets).toEqual(['corporate', 'corporate']);
     expect((await owner.subscription())?.razorpaySubscriptionId).toBe(
       created?.razorpaySubscriptionId,
@@ -380,12 +385,27 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       1,
     );
     await page.getByRole('button', { name: 'Done', exact: true }).click();
-    await page.getByRole('button', { name: 'Downgrade to Professional+', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Downgrade to Professional+', exact: true }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Save plan', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Plan saved' })).toBeVisible();
+      page.getByRole('button', { name: 'Downgrade to Professional+', exact: true }),
+    ).toHaveCount(0);
+    // Backend-only compatibility: save a target through the authenticated contract;
+    // the simplified UI offers no new plan selection while cancellation is scheduled.
+    const quoteResponse = await context.request.post(`${apiUrl}/api/billing/change-preview`, {
+      headers: { origin: stackWebUrl },
+      data: { targetTier: 'professional_plus' },
+    });
+    expect(quoteResponse.ok()).toBeTruthy();
+    const quote = billingChangePreviewSchema.parse(await quoteResponse.json());
+    const saveResponse = await context.request.post(`${apiUrl}/api/billing/recovery`, {
+      headers: { origin: stackWebUrl },
+      data: {
+        targetTier: 'professional_plus',
+        previewToken: quote.previewToken,
+        expectedRevision: null,
+        operationId: randomUUID(),
+      },
+    });
+    expect(saveResponse.ok(), await saveResponse.text()).toBeTruthy();
     await context.clearCookies();
     await page.evaluate(() => sessionStorage.clear());
     await signInPhone(context, owner.user.phoneNumber);
@@ -398,11 +418,9 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       ).ok(),
     ).toBeTruthy();
     await page.reload();
-    await expect(
-      page
-        .getByText(/Professional\+.*selected|Saved.*Professional\+|Recovery.*Professional\+/)
-        .first(),
-    ).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Billing status', exact: true })).toContainText(
+      'Professional+ saved',
+    );
     const intents = await db
       .select()
       .from(schema.billingRecovery)
@@ -421,11 +439,11 @@ test('paid recovery preserves the accepted downgrade across session loss and can
     await expect(
       page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
     ).toBeVisible({ timeout: 45_000 });
-    await page.getByRole('button', { name: 'Review plan', exact: true }).click();
+    await page.getByRole('button', { name: 'Review Professional+', exact: true }).click();
     expect(replacementRequests).toBe(0);
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'Retry Professional+', exact: true }),
+      page.getByRole('button', { name: 'Continue checkout', exact: true }),
     ).toBeVisible();
     const replacement = await owner.subscription();
     expect(replacementRequests).toBe(1);

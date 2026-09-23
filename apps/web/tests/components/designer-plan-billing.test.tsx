@@ -116,44 +116,88 @@ describe('DesignerPlanBilling', () => {
         })),
       }),
     );
-    apiMocks.refresh.mockReset().mockImplementation(async () => new Response(null, { status: 200 }));
-    apiMocks.getSubscription.mockReset().mockImplementation(async () => new Response(null, { status: 503 }));
-    apiMocks.paymentMethod.mockReset().mockImplementation(async () => new Response(null, { status: 409 }));
-    apiMocks.payments.mockReset().mockImplementation(async () => Response.json({ items: [], nextOffset: null }));
+    apiMocks.refresh
+      .mockReset()
+      .mockImplementation(async () => new Response(null, { status: 200 }));
+    apiMocks.getSubscription
+      .mockReset()
+      .mockImplementation(async () => new Response(null, { status: 503 }));
+    apiMocks.paymentMethod
+      .mockReset()
+      .mockImplementation(async () => new Response(null, { status: 409 }));
+    apiMocks.payments
+      .mockReset()
+      .mockImplementation(async () => Response.json({ items: [], nextOffset: null }));
   });
 
   it('automatically reconciles pending activation without losing the open checkout or selected target', async () => {
     sessionStorage.clear();
     let active = false;
     const snapshot = () => ({
-      tier: active ? 'corporate' : 'hobby', lifecycleState: 'active', preLapseTier: null,
-      razorpayStatus: active ? 'active' : 'authenticated', currentPeriodEnd: null, cancellationScheduled: false,
-      seatUsage: 1, branchUsage: 1, graceDaysRemaining: null, lockedDaysRemaining: null, frozenResources: [],
+      tier: active ? 'corporate' : 'hobby',
+      lifecycleState: 'active',
+      preLapseTier: null,
+      razorpayStatus: active ? 'active' : 'authenticated',
+      currentPeriodEnd: null,
+      cancellationScheduled: false,
+      seatUsage: 1,
+      branchUsage: 1,
+      graceDaysRemaining: null,
+      lockedDaysRemaining: null,
+      frozenResources: [],
       entitlements: resolveEntitlements(active ? 'corporate' : 'hobby', 'active'),
     });
     apiMocks.getSubscription.mockImplementation(async () => Response.json(snapshot()));
-    apiMocks.selection.mockImplementation(async () => Response.json({
-      organizationId: 'org-auto', currentTier: active ? 'corporate' : 'hobby', sourceSubscriptionId: 'sub_pending', providerState: 'known',
-      unfinishedCheckout: active ? null : { targetTier: 'corporate', status: 'created', razorpaySubscriptionId: 'sub_pending' },
-      recovery: null, pendingOperation: null, scheduledChange: null,
-      actions: ['hobby', 'professional_plus', 'corporate'].map((targetTier) => ({ targetTier,
-        action: targetTier === (active ? 'corporate' : 'hobby') ? 'current' : 'subscribe', reason: null, effectiveAt: null })),
-    }));
-    render(<DesignerPlanBilling userId="user-auto" organizationId="org-auto" billing={makeBilling({ tier: 'hobby', billing: null })} />);
-    await screen.findByText('Billing change in progress');
+    apiMocks.selection.mockImplementation(async () =>
+      Response.json({
+        organizationId: 'org-auto',
+        currentTier: active ? 'corporate' : 'hobby',
+        sourceSubscriptionId: 'sub_pending',
+        providerState: 'known',
+        unfinishedCheckout: active
+          ? null
+          : { targetTier: 'corporate', status: 'created', razorpaySubscriptionId: 'sub_pending' },
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: ['hobby', 'professional_plus', 'corporate'].map((targetTier) => ({
+          targetTier,
+          action: targetTier === (active ? 'corporate' : 'hobby') ? 'current' : 'subscribe',
+          reason: null,
+          effectiveAt: null,
+        })),
+      }),
+    );
+    render(
+      <DesignerPlanBilling
+        userId="user-auto"
+        organizationId="org-auto"
+        billing={makeBilling({ tier: 'hobby', billing: null })}
+      />,
+    );
+    await screen.findByText('Checkout in progress');
     expect(screen.queryByRole('button', { name: /refresh|check status/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Review Corporate checkout' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue checkout' }));
     const dialog = screen.getByRole('dialog');
     let finish: ((value: Response) => void) | undefined;
-    apiMocks.getSubscription.mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    apiMocks.getSubscription.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
     fireEvent(window, new Event('focus'));
     await waitFor(() => expect(finish).toBeDefined());
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(dialog).toHaveTextContent('corporate');
-    expect(sessionStorage.getItem('tickif:billing-selection:v1:user-auto:org-auto')).toBe('corporate');
+    expect(sessionStorage.getItem('tickif:billing-selection:v1:user-auto:org-auto')).toBe(
+      'corporate',
+    );
     active = true;
-    await act(async () => { finish?.(Response.json(snapshot())); });
-    await waitFor(() => expect(screen.queryByText('Billing change in progress')).not.toBeInTheDocument());
+    await act(async () => {
+      finish?.(Response.json(snapshot()));
+    });
+    await waitFor(() => expect(screen.queryByText('Checkout in progress')).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: 'Corporate', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Corporate is your current plan' })).toBeDisabled();
     expect(screen.getByRole('dialog')).toBe(dialog);
@@ -211,9 +255,10 @@ describe('DesignerPlanBilling', () => {
     describe('scheduled cancellation (E-290)', () => {
       const cancellingBilling = makeBilling({ cancellationScheduled: true });
 
-      it('shows "Your plan ends on" instead of "renews on" in the current plan card', () => {
+      it('shows the access end once in the consolidated cancellation status', () => {
         render(<DesignerPlanBilling billing={cancellingBilling} />);
-        expect(screen.getByText(/Your plan ends on/)).toBeInTheDocument();
+        expect(screen.getByText('Cancellation scheduled')).toBeInTheDocument();
+        expect(screen.getByText(/Professional\+ stays active until/)).toBeInTheDocument();
         expect(screen.queryByText(/renews on/)).not.toBeInTheDocument();
       });
 
@@ -292,7 +337,7 @@ describe('DesignerPlanBilling', () => {
     it('opens reactivation flow from the locked CTA', async () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={lockedBilling} />);
-      const cta = screen.getByRole('button', { name: 'Reactivate Subscription' });
+      const cta = await screen.findByRole('button', { name: 'Reactivate Subscription' });
       expect(cta).toBeEnabled();
       await user.click(cta);
       expect(screen.getByRole('dialog')).toHaveTextContent('professional_plus');
@@ -343,7 +388,7 @@ describe('DesignerPlanBilling', () => {
     it('opens restore upgrade from Upgrade to Restore', async () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={downgradedBilling} />);
-      await user.click(screen.getAllByRole('button', { name: 'Upgrade to Restore' })[0]!);
+      await user.click((await screen.findAllByRole('button', { name: 'Upgrade to Restore' }))[0]!);
       expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
     });
   });
@@ -366,24 +411,25 @@ describe('DesignerPlanBilling', () => {
   });
 
   it('replaces the complete billing snapshot after reconciliation', async () => {
-    apiMocks.getSubscription.mockImplementation(async () =>
-      new Response(
-        JSON.stringify({
-          tier: 'corporate',
-          lifecycleState: 'active',
-          preLapseTier: null,
-          razorpayStatus: 'active',
-          currentPeriodEnd: '2026-10-01T00:00:00.000Z',
-          cancellationScheduled: false,
-          seatUsage: 7,
-          branchUsage: 5,
-          graceDaysRemaining: null,
-          lockedDaysRemaining: null,
-          frozenResources: [],
-          entitlements: resolveEntitlements('corporate', 'active'),
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    apiMocks.getSubscription.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tier: 'corporate',
+            lifecycleState: 'active',
+            preLapseTier: null,
+            razorpayStatus: 'active',
+            currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+            cancellationScheduled: false,
+            seatUsage: 7,
+            branchUsage: 5,
+            graceDaysRemaining: null,
+            lockedDaysRemaining: null,
+            frozenResources: [],
+            entitlements: resolveEntitlements('corporate', 'active'),
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
     );
 
     render(<DesignerPlanBilling billing={makeBilling()} />);

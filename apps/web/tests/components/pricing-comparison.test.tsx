@@ -5,6 +5,87 @@ import { PlanSelection } from '../../src/components/subscribe/plan-selection';
 import { getCumulativeFeatures } from '../../src/lib/plan-config';
 
 describe('billing pricing comparison', () => {
+  it('shows a shared waiting explanation once instead of repeating it under paid plans', () => {
+    const reason = 'You can purchase your saved plan once your current subscription ends.';
+    render(
+      <PlanSelection
+        currentTier="hobby"
+        lifecycleState="active"
+        selectedTier="corporate"
+        onSelectPlan={vi.fn()}
+        actions={{
+          hobby: { hidden: true, disabled: true },
+          professional_plus: { hidden: true, disabled: true, reason },
+          corporate: { hidden: true, disabled: true, reason },
+        }}
+      />,
+    );
+    expect(screen.getAllByText(reason)).toHaveLength(1);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getByText('Selected plan')).toBeInTheDocument();
+  });
+
+  it('keeps plan comparison and selected state visible without duplicate checkout or purchase actions', () => {
+    render(
+      <PlanSelection
+        currentTier="hobby"
+        lifecycleState="active"
+        selectedTier="corporate"
+        onSelectPlan={vi.fn()}
+        actions={{
+          hobby: { hidden: true, disabled: true },
+          professional_plus: {
+            hidden: true,
+            disabled: true,
+            reason: 'Finish your existing checkout before choosing another plan.',
+          },
+          corporate: {
+            hidden: true,
+            disabled: true,
+            reason: 'Continue your Corporate checkout above.',
+          },
+        }}
+      />,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    for (const name of ['Hobby', 'Professional+', 'Corporate']) {
+      expect(screen.getByRole('heading', { name, level: 3 })).toBeInTheDocument();
+    }
+    expect(screen.getByText('Current plan')).toBeInTheDocument();
+    expect(screen.getByText('Selected plan')).toBeInTheDocument();
+    expect(screen.getByText('Continue your Corporate checkout above.')).toBeInTheDocument();
+  });
+
+  it('explains why a waiting saved plan cannot be purchased while keeping normal reviews available', async () => {
+    const onSelectPlan = vi.fn();
+    render(
+      <PlanSelection
+        currentTier="corporate"
+        lifecycleState="active"
+        selectedTier="professional_plus"
+        onSelectPlan={onSelectPlan}
+        actions={{
+          professional_plus: {
+            hidden: true,
+            disabled: true,
+            reason:
+              'You can purchase Professional+ after your current subscription ends on 1 October.',
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Downgrade to Professional+' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'You can purchase Professional+ after your current subscription ends on 1 October.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Hobby' }));
+    expect(onSelectPlan).toHaveBeenCalledWith('hobby');
+  });
+
   it('preserves the current badge while enabling an explicitly allowed same-tier renewal', async () => {
     const onSelectPlan = vi.fn();
     render(

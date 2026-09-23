@@ -60,7 +60,7 @@ for (const scenario of [
     test(`Hobby purchase to ${scenario.initialLabel} preserves the paid cycle through ${flow}, repeat purchase attempts, and ${scenario.targetLabel} recovery`, async ({
       page,
       context,
-    }) => {
+    }, testInfo) => {
       test.setTimeout(150_000);
       const owner = await createBillingOwner(context);
       await dismissProviderCheckout(page);
@@ -78,7 +78,7 @@ for (const scenario of [
           .click();
         await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
         await expect(
-          page.getByRole('button', { name: `Retry ${scenario.initialLabel}`, exact: true }),
+          page.getByRole('button', { name: 'Continue checkout', exact: true }),
         ).toBeVisible();
         const checkout = await owner.subscription();
         expect(checkout?.planTier).toBe('hobby');
@@ -134,16 +134,30 @@ for (const scenario of [
             page.getByRole('heading', { name: 'Plan change scheduled', exact: true }),
           ).toBeVisible();
           await page.getByRole('button', { name: 'Done', exact: true }).click();
-          await page
-            .getByRole('region', { name: 'Choose your plan', exact: true })
-            .getByRole('button', { name: targetAction, exact: true })
-            .click();
-          await page.getByRole('button', { name: 'Save plan', exact: true }).click();
-          await expect(
-            page.getByRole('heading', { name: 'Plan saved', exact: true }),
-          ).toBeVisible();
+          await expect(page.getByRole('button', { name: targetAction, exact: true })).toHaveCount(
+            0,
+          );
+          // This remains an authenticated backend contract regression. The simplified
+          // UI intentionally offers no plan switch during scheduled cancellation.
+          const response = await context.request.post(`${apiUrl}/api/billing/change-preview`, {
+            headers: { origin: webUrl },
+            data: { targetTier: scenario.targetTier },
+          });
+          expect(response.ok()).toBeTruthy();
+          const quote = billingChangePreviewSchema.parse(await response.json());
+          const savedResponse = await context.request.post(`${apiUrl}/api/billing/recovery`, {
+            headers: { origin: webUrl },
+            data: {
+              targetTier: scenario.targetTier,
+              previewToken: quote.previewToken,
+              expectedRevision: null,
+              operationId: randomUUID(),
+            },
+          });
+          expect(savedResponse.ok(), await savedResponse.text()).toBeTruthy();
         }
-        await page.getByRole('button', { name: 'Done', exact: true }).click();
+        if (flow === 'paid-plan recovery')
+          await page.getByRole('button', { name: 'Done', exact: true }).click();
         const scheduled = await owner.subscription();
         expect(scheduled).toMatchObject({
           planTier: scenario.initialTier,
@@ -164,12 +178,40 @@ for (const scenario of [
 
         await page.reload();
         await expect(
-          page.getByRole('button', {
-            name: `${scenario.initialLabel} is your current plan`,
-            exact: true,
-          }),
-        ).toBeDisabled();
-        await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeVisible();
+          page
+            .getByRole('region', { name: 'Choose your plan', exact: true })
+            .locator('[data-slot="card"]')
+            .filter({
+              has: page.getByRole('heading', { name: scenario.initialLabel, exact: true }),
+            })
+            .getByText('Current plan', { exact: true }),
+        ).toBeVisible();
+        // Check the simplified waiting state on both routes and screen sizes.
+        for (const route of ['/designer/plan-billing/subscribe', '/designer/plan-billing']) {
+          await page.goto(route);
+          for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            const waiting = page.getByRole('status', { name: 'Billing status', exact: true });
+            await expect(waiting).toHaveCount(1);
+            await expect(waiting).toContainText(`${scenario.targetLabel} saved`);
+            await expect(
+              waiting.getByRole('button', { name: /Review|Continue|Remove/ }),
+            ).toHaveCount(0);
+            await expect(
+              waiting.getByRole('button', { name: 'Saved plan options', exact: true }),
+            ).toBeVisible();
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+            ).toBe(true);
+            await page.screenshot({
+              path: testInfo.outputPath(`saved-${route.split('/').at(-1)}-${width}.png`),
+              fullPage: true,
+            });
+          }
+        }
+        const status = page.getByRole('status', { name: 'Billing status', exact: true });
+        await expect(status).toContainText(`${scenario.targetLabel} saved`);
+        await expect(status.getByRole('button', { name: /Review|Continue|Remove/ })).toHaveCount(0);
         const [saved] = await db
           .select()
           .from(schema.billingRecovery)
@@ -180,9 +222,27 @@ for (const scenario of [
           status: 'waiting_for_expiry',
         });
         expect(saved?.eligibleAt?.getTime()).toBe(cycleEnd * 1000);
-        await page.getByRole('button', { name: 'Review plan', exact: true }).click();
-        await page.getByRole('button', { name: 'Save plan', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'Plan saved', exact: true })).toBeVisible();
+        // Removal is secondary and requires confirmation; cancelling keeps both the
+        // saved target and the already-scheduled provider cancellation unchanged.
+        await status.getByRole('button', { name: 'Saved plan options', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Remove saved plan', exact: true }).click();
+        const confirmation = page.getByRole('alertdialog', {
+          name: 'Remove saved plan?',
+          exact: true,
+        });
+        await expect(confirmation).toBeVisible();
+        await confirmation.getByRole('button', { name: 'Keep saved plan', exact: true }).click();
+        await expect(confirmation).not.toBeVisible();
+        const [kept] = await db
+          .select()
+          .from(schema.billingRecovery)
+          .where(eq(schema.billingRecovery.organizationId, owner.org.id));
+        expect(kept).toMatchObject({
+          id: saved!.id,
+          revision: saved!.revision,
+          status: 'waiting_for_expiry',
+          targetTier: scenario.targetTier,
+        });
         expect(await providerMutationCount(context, `/subscriptions/${sourceId}/cancel`)).toBe(1);
         expect(await providerMutationCount(context, '/subscriptions')).toBe(createsBefore + 1);
 
@@ -197,7 +257,7 @@ for (const scenario of [
           cancel_at_cycle_end: true,
         });
         await expect.poll(async () => (await owner.subscription())?.planTier).toBe('hobby');
-        // The mounted dialog detects expiry; checkout still requires explicit consent.
+        // The mounted status panel detects expiry; checkout still requires explicit consent.
         await expect(
           page.getByRole('button', { name: `Review ${scenario.targetLabel}`, exact: true }),
         ).toBeVisible({ timeout: 45_000 });
@@ -208,7 +268,7 @@ for (const scenario of [
           .click();
         await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
         await expect(
-          page.getByRole('button', { name: `Retry ${scenario.targetLabel}`, exact: true }),
+          page.getByRole('button', { name: 'Continue checkout', exact: true }),
         ).toBeVisible();
         const replacement = await owner.subscription();
         expect(replacement?.planTier).toBe('hobby');

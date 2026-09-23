@@ -25,10 +25,7 @@ import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
-import {
-  SavedRecoveryNotice,
-  PendingBillingNotice,
-} from '@/components/subscribe/saved-recovery-notice';
+import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
 import { PlanSelection } from '@/components/subscribe/plan-selection';
 import {
   usePlanSelection,
@@ -106,7 +103,9 @@ function CurrentPlanCard({
   onSubscribe,
   onPayment,
   paymentBusy,
+  suppressPlanActions = false,
 }: {
+  suppressPlanActions?: boolean;
   onPayment?: () => void;
   paymentBusy?: boolean;
   billing: BillingState;
@@ -167,13 +166,16 @@ function CurrentPlanCard({
                 No paid subscription required. Upgrade anytime for more features.
               </p>
             )}
-            {billing.renewalDate && billing.lifecycle === 'active' && billing.tier !== 'hobby' && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                {billing.cancellationScheduled
-                  ? `Your plan ends on ${formatDate(billing.renewalDate)}`
-                  : `Your plan renews on ${formatDate(billing.renewalDate)}`}
-              </p>
-            )}
+            {billing.renewalDate &&
+              billing.lifecycle === 'active' &&
+              billing.tier !== 'hobby' &&
+              !(suppressPlanActions && billing.cancellationScheduled) && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {billing.cancellationScheduled
+                    ? `Your plan ends on ${formatDate(billing.renewalDate)}`
+                    : `Your plan renews on ${formatDate(billing.renewalDate)}`}
+                </p>
+              )}
             {billing.subscriptionId && (
               <div className="mt-1.5 flex min-w-0 flex-col items-start gap-1.5 text-xs text-muted-foreground">
                 Subscription ID:{' '}
@@ -189,21 +191,24 @@ function CurrentPlanCard({
             )}
           </div>
         </div>
-        {cta && (
-          <Button
-            variant="outline"
-            className="shrink-0"
-            disabled={paymentBusy}
-            onClick={
-              cta.kind === 'payment' ||
-              (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
-                ? onPayment
-                : () => onSubscribe()
-            }
-          >
-            {cta.label}
-          </Button>
-        )}
+        {cta &&
+          (!suppressPlanActions ||
+            cta.kind === 'payment' ||
+            (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')) && (
+            <Button
+              variant="outline"
+              className="shrink-0"
+              disabled={paymentBusy}
+              onClick={
+                cta.kind === 'payment' ||
+                (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
+                  ? onPayment
+                  : () => onSubscribe()
+              }
+            >
+              {cta.label}
+            </Button>
+          )}
       </div>
     </Card>
   );
@@ -385,7 +390,9 @@ function BillingSummary({
 function FrozenResourcesCard({
   resources,
   onSubscribe,
+  suppressPlanActions = false,
 }: {
+  suppressPlanActions?: boolean;
   resources: FrozenResource[];
   onSubscribe: (targetTier?: PlanTier) => void;
 }) {
@@ -423,10 +430,12 @@ function FrozenResourcesCard({
             </div>
           ))}
         </div>
-        <Button className="mt-5 w-full" onClick={() => onSubscribe()}>
-          Upgrade to Restore
-          <ArrowRight className="size-4" />
-        </Button>
+        {!suppressPlanActions && (
+          <Button className="mt-5 w-full" onClick={() => onSubscribe()}>
+            Upgrade to Restore
+            <ArrowRight className="size-4" />
+          </Button>
+        )}
       </div>
     </Card>
   );
@@ -554,7 +563,9 @@ function PlanIncludesCard({
   tier,
   lifecycle,
   onSubscribe,
+  suppressPlanActions = false,
 }: {
+  suppressPlanActions?: boolean;
   tier: PlanTier;
   lifecycle: BillingState['lifecycle'];
   onSubscribe: (targetTier?: PlanTier) => void;
@@ -599,7 +610,7 @@ function PlanIncludesCard({
             );
           })}
         </div>
-        {nextTier && lifecycle === 'active' && (
+        {nextTier && lifecycle === 'active' && !suppressPlanActions && (
           <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
             <p className="text-sm font-medium text-foreground">
               {tier === 'hobby'
@@ -740,6 +751,10 @@ function ScopedDesignerPlanBilling({
   const showPaymentDueCard =
     billing.tier !== 'hobby' &&
     (billing.lifecycle === 'grace' || billing.lifecycle === 'payment_failed');
+  const suppressPlanActions =
+    billing.cancellationScheduled ||
+    !selection.context ||
+    Object.values(selection.actions).some((action) => action?.hidden);
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -788,10 +803,12 @@ function ScopedDesignerPlanBilling({
         </Alert>
       )}
 
-      <PendingBillingNotice context={selection.context} onReview={openSubscribe} />
-      <SavedRecoveryNotice
+      <BillingStatusNotice
+        context={selection.context}
+        currentTier={billing.tier}
+        cancellationScheduled={billing.cancellationScheduled}
+        currentPeriodEnd={billing.renewalDate}
         onDismissed={refreshNow}
-        recovery={selection.context?.recovery}
         onReview={openSubscribe}
       />
 
@@ -803,7 +820,7 @@ function ScopedDesignerPlanBilling({
           actions={selection.actions}
           onSelectPlan={openSubscribe}
         />
-        {selectedTier && !selection.actions[selectedTier]?.disabled && (
+        {selectedTier && !suppressPlanActions && !selection.actions[selectedTier]?.disabled && (
           <Button variant="outline" className="mt-4" onClick={() => openSubscribe(selectedTier)}>
             Continue {PLAN_TIER_LABELS[selectedTier]}
           </Button>
@@ -819,6 +836,7 @@ function ScopedDesignerPlanBilling({
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
           <CurrentPlanCard
+            suppressPlanActions={suppressPlanActions}
             billing={billing}
             onSubscribe={openSubscribe}
             onPayment={payment.open}
@@ -831,13 +849,18 @@ function ScopedDesignerPlanBilling({
           )}
 
           {billing.lifecycle === 'downgraded' && billing.frozenResources.length > 0 && (
-            <FrozenResourcesCard resources={billing.frozenResources} onSubscribe={openSubscribe} />
+            <FrozenResourcesCard
+              resources={billing.frozenResources}
+              onSubscribe={openSubscribe}
+              suppressPlanActions={suppressPlanActions}
+            />
           )}
 
           <BillingSummary billing={billing} onPayment={payment.open} paymentBusy={payment.busy} />
           <PaymentHistory />
 
           <PlanIncludesCard
+            suppressPlanActions={suppressPlanActions}
             tier={billing.tier}
             lifecycle={billing.lifecycle}
             onSubscribe={openSubscribe}

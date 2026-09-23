@@ -294,6 +294,8 @@ describe('billing preview checkout regressions', () => {
     render(<CheckoutFlow {...base} cancellationScheduled />);
     await screen.findByText(/current subscription ends/i);
     expect(screen.queryByRole('button', { name: 'Continue to payment' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose another plan' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
   it('requires renewed review after stale preview without resubmitting', async () => {
     mocks.subscribe.mockResolvedValue({
@@ -352,7 +354,8 @@ describe('billing preview checkout regressions', () => {
     );
     render(<CheckoutFlow {...base} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
-    expect(await screen.findByRole('button', { name: 'Retry Corporate' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Continue checkout' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose another plan' })).not.toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledWith({
       json: expect.objectContaining({ targetTier: 'corporate', previewToken: 'signed-preview' }),
     });

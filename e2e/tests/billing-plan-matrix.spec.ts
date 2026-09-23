@@ -141,7 +141,7 @@ for (const entry of entryPoints) {
           if (current.tier === 'hobby') {
             await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
             await expect(
-              page.getByRole('button', { name: `Retry ${target.label}`, exact: true }),
+              page.getByRole('button', { name: 'Continue checkout', exact: true }),
             ).toBeVisible();
             expect(mutations).toEqual([
               { path: '/api/billing/subscribe', targetTier: target.tier },
@@ -197,10 +197,11 @@ for (const entry of entryPoints) {
             // No access change or replacement occurs merely because cancellation was accepted.
             await page.reload();
             await expect(
-              page.getByRole('button', {
-                name: `${current.label} is your current plan`,
-                exact: true,
-              }),
+              page
+                .getByRole('region', { name: 'Choose your plan', exact: true })
+                .locator('[data-slot="card"]')
+                .filter({ has: page.getByRole('heading', { name: current.label, exact: true }) })
+                .getByText('Current plan', { exact: true }),
             ).toBeVisible();
             expect(mutations).toHaveLength(1);
             const now = Math.floor(Date.now() / 1000);
@@ -218,11 +219,13 @@ for (const entry of entryPoints) {
             ).toBeVisible({ timeout: 45_000 });
             expect(mutations).toHaveLength(1);
             if (recovery) {
-              await page.getByRole('button', { name: 'Review plan', exact: true }).click();
+              await page
+                .getByRole('button', { name: `Review ${target.label}`, exact: true })
+                .click();
               expect(mutations).toHaveLength(1);
               await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
               await expect(
-                page.getByRole('button', { name: `Retry ${target.label}`, exact: true }),
+                page.getByRole('button', { name: 'Continue checkout', exact: true }),
               ).toBeVisible();
               expect(mutations[1]).toEqual({
                 path: '/api/billing/subscribe',

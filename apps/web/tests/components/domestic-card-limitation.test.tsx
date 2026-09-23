@@ -114,7 +114,9 @@ describe('E-289: preflight payment-method limitations', () => {
       },
     });
     expect(
-      screen.getByText(/Cancellation is scheduled; current access remains until 1 Oct 2026/),
+      screen.getByText(
+        /Professional\+ stays active until 1 Oct 2026. You can purchase Corporate after it ends./,
+      ),
     ).toBeInTheDocument();
     expect(mocks.cancel).not.toHaveBeenCalled();
     expect(mocks.checkout).not.toHaveBeenCalled();
@@ -150,7 +152,7 @@ describe('E-289: preflight payment-method limitations', () => {
     );
     renderUpgrade();
     await userEvent.click(await screen.findByRole('button', { name: 'Cancel & save plan' }));
-    expect(await screen.findByText(/Cancellation is still being confirmed/)).toBeInTheDocument();
+    expect(await screen.findByText(/Your cancellation is being confirmed/)).toBeInTheDocument();
     expect(screen.queryByText(/Cancellation is scheduled/)).not.toBeInTheDocument();
     expect(mocks.checkout).not.toHaveBeenCalled();
   });
