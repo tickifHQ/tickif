@@ -57,6 +57,7 @@ import {
 } from '@/components/phone-number-input';
 import { authClient } from '@/lib/auth-client';
 import { UserFacingError, userFacingErrorMessage } from '@/lib/user-facing-error';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import {
   fetchVerificationState,
   removeVerificationDocument,
@@ -610,8 +611,16 @@ export function DesignerVerification({
                   ))
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    The submitted document could not be displayed. Refresh the page or contact
-                    support if this continues.
+                    The submitted document could not be displayed. Refresh the page or{' '}
+                    <a
+                      href={SUPPORT_WHATSAPP_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
+                      contact support
+                    </a>{' '}
+                    if this continues.
                   </p>
                 )}
               </div>

@@ -799,7 +799,23 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
       {(payment.message || refreshError) && (
         <Alert className="mt-6">
           <AlertDescription>
-            <p>{payment.message ?? refreshError}</p>
+            <p>
+              {payment.message ?? refreshError}
+              {payment.supportRecommended ? (
+                <>
+                  {' '}
+                  <a
+                    href={SUPPORT_WHATSAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    Contact support
+                  </a>
+                  .
+                </>
+              ) : null}
+            </p>
             <Button variant="outline" size="sm" onClick={() => void refreshBilling()}>
               Refresh billing
             </Button>
