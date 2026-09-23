@@ -101,7 +101,10 @@ for (const scenario of [
         await expect
           .poll(async () => (await owner.subscription())?.planTier)
           .toBe(scenario.initialTier);
-        await page.reload();
+        await expect(
+          page.getByRole('heading', { name: 'Plan activated', exact: true }),
+        ).toBeVisible({ timeout: 15_000 });
+        await page.getByRole('button', { name: 'Done', exact: true }).click();
         await expect(
           page.getByRole('button', {
             name: `${scenario.initialLabel} is your current plan`,
@@ -120,9 +123,7 @@ for (const scenario of [
             .getByRole('region', { name: 'Choose your plan', exact: true })
             .getByRole('button', { name: targetAction, exact: true })
             .click();
-          await page
-            .getByRole('button', { name: 'Cancel & save plan', exact: true })
-            .click();
+          await page.getByRole('button', { name: 'Cancel & save plan', exact: true }).click();
           await expect(
             page.getByRole('heading', { name: 'Plan saved', exact: true }),
           ).toBeVisible();
@@ -168,9 +169,7 @@ for (const scenario of [
             exact: true,
           }),
         ).toBeDisabled();
-        await expect(
-          page.getByRole('button', { name: 'Review plan', exact: true }),
-        ).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeVisible();
         const [saved] = await db
           .select()
           .from(schema.billingRecovery)
@@ -183,9 +182,7 @@ for (const scenario of [
         expect(saved?.eligibleAt?.getTime()).toBe(cycleEnd * 1000);
         await page.getByRole('button', { name: 'Review plan', exact: true }).click();
         await page.getByRole('button', { name: 'Save plan', exact: true }).click();
-        await expect(
-          page.getByRole('heading', { name: 'Plan saved', exact: true }),
-        ).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Plan saved', exact: true })).toBeVisible();
         expect(await providerMutationCount(context, `/subscriptions/${sourceId}/cancel`)).toBe(1);
         expect(await providerMutationCount(context, '/subscriptions')).toBe(createsBefore + 1);
 
@@ -200,12 +197,15 @@ for (const scenario of [
           cancel_at_cycle_end: true,
         });
         await expect.poll(async () => (await owner.subscription())?.planTier).toBe('hobby');
-        await page.reload();
+        // The mounted dialog detects expiry; checkout still requires explicit consent.
         await expect(
-          page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
-        ).toBeVisible();
+          page.getByRole('button', { name: `Review ${scenario.targetLabel}`, exact: true }),
+        ).toBeVisible({ timeout: 45_000 });
         expect(await providerMutationCount(context, '/subscriptions')).toBe(createsBefore + 1);
-        await page.getByRole('button', { name: 'Review plan', exact: true }).click();
+        expect(await providerMutationCount(context, `/subscriptions/${sourceId}/cancel`)).toBe(1);
+        await page
+          .getByRole('button', { name: `Review ${scenario.targetLabel}`, exact: true })
+          .click();
         await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
         await expect(
           page.getByRole('button', { name: `Retry ${scenario.targetLabel}`, exact: true }),
@@ -224,7 +224,10 @@ for (const scenario of [
         await expect
           .poll(async () => (await owner.subscription())?.planTier)
           .toBe(scenario.targetTier);
-        await page.reload();
+        await expect(
+          page.getByRole('heading', { name: 'Plan activated', exact: true }),
+        ).toBeVisible({ timeout: 15_000 });
+        await page.getByRole('button', { name: 'Done', exact: true }).click();
         await expect(
           page.getByRole('button', {
             name: `${scenario.targetLabel} is your current plan`,
@@ -253,7 +256,6 @@ for (const scenario of [
           razorpaySubscriptionId: replacementId,
           cancelAtPeriodEnd: false,
         });
-        await page.reload();
         await expect(
           page.getByRole('button', {
             name: `${scenario.targetLabel} is your current plan`,

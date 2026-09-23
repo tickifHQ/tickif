@@ -21,11 +21,9 @@ const savedPlanStatus: Record<BillingRecovery['status'], string> = {
 export function PendingBillingNotice({
   context,
   onReview,
-  onRefresh,
 }: {
   context: BillingSelectionContext | null;
   onReview: (tier: PlanTier) => void;
-  onRefresh: () => Promise<void>;
 }) {
   if (!context) return null;
   const { pendingOperation, scheduledChange, unfinishedCheckout } = context;
@@ -36,8 +34,8 @@ export function PendingBillingNotice({
       <AlertDescription>
         {pendingOperation && (
           <p>
-            {PLAN_MAP[pendingOperation.targetTier].label}: we are checking your billing change.
-            Refresh status before trying again.
+            {PLAN_MAP[pendingOperation.targetTier].label}: we are checking your billing change. This
+            status updates automatically.
           </p>
         )}
         {scheduledChange && (
@@ -73,9 +71,6 @@ export function PendingBillingNotice({
             Review {PLAN_MAP[unfinishedCheckout.targetTier].label} checkout
           </Button>
         )}
-        <Button variant="outline" onClick={() => void onRefresh()}>
-          Refresh billing status
-        </Button>
       </AlertDescription>
     </Alert>
   );
@@ -101,10 +96,15 @@ export function SavedRecoveryNotice({
         <p>{savedPlanStatus[recovery.status]}.</p>
         {!terminal && (
           <p>
-            {recovery.eligibleAt
-              ? `You can continue after ${new Date(recovery.eligibleAt).toLocaleDateString('en-IN')}, once your previous subscription has ended.`
-              : 'Your previous subscription’s end date is not yet confirmed.'}{' '}
-            You will need to confirm a new purchase. Nothing is purchased automatically.
+            {recovery.status === 'eligible'
+              ? 'Review your selected plan to continue to payment. Nothing is purchased automatically.'
+              : recovery.status === 'checkout_pending'
+                ? 'Your selected plan already has a checkout. Review its status before continuing; do not start another purchase while activation is pending.'
+                : recovery.eligibleAt
+                  ? `You can continue after ${new Date(recovery.eligibleAt).toLocaleDateString('en-IN')}, once your previous subscription has ended.`
+                  : 'Your previous subscription’s end date is not yet confirmed.'}
+            {(recovery.status === 'requested' || recovery.status === 'waiting_for_expiry') &&
+              ' You will need to confirm a new purchase. Nothing is purchased automatically.'}
           </p>
         )}
         {recovery.reason && <p>{reasonLabel(recovery.reason)}</p>}
@@ -113,9 +113,7 @@ export function SavedRecoveryNotice({
             <Button variant="outline" disabled={busy} onClick={() => onReview(recovery.targetTier)}>
               Review plan
             </Button>
-            <p>
-              Removing this selection does not undo a scheduled cancellation or plan change.
-            </p>
+            <p>Removing this selection does not undo a scheduled cancellation or plan change.</p>
             <Button
               variant="ghost"
               disabled={busy}
@@ -128,7 +126,7 @@ export function SavedRecoveryNotice({
                   });
                   if (!response.ok)
                     throw new Error(
-                      'Unable to remove this selection. Refresh billing and try again.',
+                      'Unable to remove this selection. Billing details are being checked automatically; please try again shortly.',
                     );
                   await onDismissed();
                 } catch (failure) {

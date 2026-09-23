@@ -151,9 +151,7 @@ for (const entry of entryPoints) {
             await confirmProviderActivation(context, owner, target.tier);
           } else {
             const recovery = target.tier !== 'hobby';
-            const cta = recovery
-              ? 'Cancel & save plan'
-              : 'Schedule cancellation';
+            const cta = recovery ? 'Cancel & save plan' : 'Schedule cancellation';
             if (recovery) {
               await expect(
                 page.getByRole('button', { name: 'Confirm plan change', exact: true }),
@@ -215,14 +213,12 @@ for (const entry of entryPoints) {
               cancel_at_cycle_end: true,
             });
             await expect.poll(async () => (await owner.subscription())?.planTier).toBe('hobby');
-            await page.reload();
             await expect(
               page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
-            ).toBeVisible();
+            ).toBeVisible({ timeout: 45_000 });
+            expect(mutations).toHaveLength(1);
             if (recovery) {
-              await page
-                .getByRole('button', { name: 'Review plan', exact: true })
-                .click();
+              await page.getByRole('button', { name: 'Review plan', exact: true }).click();
               expect(mutations).toHaveLength(1);
               await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
               await expect(
@@ -236,7 +232,13 @@ for (const entry of entryPoints) {
               expect(replacementId).not.toBe(owner.provider.id);
             }
           }
-          await page.reload();
+          if (target.tier !== 'hobby') {
+            await expect(
+              page.getByRole('heading', { name: 'Plan activated', exact: true }),
+            ).toBeVisible({ timeout: 15_000 });
+            expect(mutations).toHaveLength(current.tier === 'hobby' ? 1 : 2);
+            await page.getByRole('button', { name: 'Done', exact: true }).click();
+          }
           await expect(
             page.getByRole('button', { name: `${target.label} is your current plan`, exact: true }),
           ).toBeVisible();

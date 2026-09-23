@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { resolveEntitlements } from '@repo/contracts';
 import type { BillingState } from '../../src/lib/billing-types';
@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   getSubscription: vi.fn(),
   paymentMethod: vi.fn(),
+  payments: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/lib/api', () => ({
       billing: {
         'selection-context': { $get: apiMocks.selection },
         'payment-method': { $post: apiMocks.paymentMethod },
+        payments: { $get: apiMocks.payments },
         subscription: {
           refresh: { $get: apiMocks.refresh },
           $get: apiMocks.getSubscription,
@@ -96,7 +98,7 @@ describe('BillingAccessDenied', () => {
 
 describe('DesignerPlanBilling', () => {
   beforeEach(() => {
-    apiMocks.selection.mockResolvedValue(
+    apiMocks.selection.mockImplementation(async () =>
       Response.json({
         organizationId: 'org-a',
         currentTier: 'hobby',
@@ -114,9 +116,47 @@ describe('DesignerPlanBilling', () => {
         })),
       }),
     );
-    apiMocks.refresh.mockReset().mockResolvedValue(new Response(null, { status: 200 }));
-    apiMocks.getSubscription.mockReset().mockResolvedValue(new Response(null, { status: 503 }));
-    apiMocks.paymentMethod.mockReset().mockResolvedValue(new Response(null, { status: 409 }));
+    apiMocks.refresh.mockReset().mockImplementation(async () => new Response(null, { status: 200 }));
+    apiMocks.getSubscription.mockReset().mockImplementation(async () => new Response(null, { status: 503 }));
+    apiMocks.paymentMethod.mockReset().mockImplementation(async () => new Response(null, { status: 409 }));
+    apiMocks.payments.mockReset().mockImplementation(async () => Response.json({ items: [], nextOffset: null }));
+  });
+
+  it('automatically reconciles pending activation without losing the open checkout or selected target', async () => {
+    sessionStorage.clear();
+    let active = false;
+    const snapshot = () => ({
+      tier: active ? 'corporate' : 'hobby', lifecycleState: 'active', preLapseTier: null,
+      razorpayStatus: active ? 'active' : 'authenticated', currentPeriodEnd: null, cancellationScheduled: false,
+      seatUsage: 1, branchUsage: 1, graceDaysRemaining: null, lockedDaysRemaining: null, frozenResources: [],
+      entitlements: resolveEntitlements(active ? 'corporate' : 'hobby', 'active'),
+    });
+    apiMocks.getSubscription.mockImplementation(async () => Response.json(snapshot()));
+    apiMocks.selection.mockImplementation(async () => Response.json({
+      organizationId: 'org-auto', currentTier: active ? 'corporate' : 'hobby', sourceSubscriptionId: 'sub_pending', providerState: 'known',
+      unfinishedCheckout: active ? null : { targetTier: 'corporate', status: 'created', razorpaySubscriptionId: 'sub_pending' },
+      recovery: null, pendingOperation: null, scheduledChange: null,
+      actions: ['hobby', 'professional_plus', 'corporate'].map((targetTier) => ({ targetTier,
+        action: targetTier === (active ? 'corporate' : 'hobby') ? 'current' : 'subscribe', reason: null, effectiveAt: null })),
+    }));
+    render(<DesignerPlanBilling userId="user-auto" organizationId="org-auto" billing={makeBilling({ tier: 'hobby', billing: null })} />);
+    await screen.findByText('Billing change in progress');
+    expect(screen.queryByRole('button', { name: /refresh|check status/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Review Corporate checkout' }));
+    const dialog = screen.getByRole('dialog');
+    let finish: ((value: Response) => void) | undefined;
+    apiMocks.getSubscription.mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    fireEvent(window, new Event('focus'));
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(dialog).toHaveTextContent('corporate');
+    expect(sessionStorage.getItem('tickif:billing-selection:v1:user-auto:org-auto')).toBe('corporate');
+    active = true;
+    await act(async () => { finish?.(Response.json(snapshot())); });
+    await waitFor(() => expect(screen.queryByText('Billing change in progress')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Corporate', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Corporate is your current plan' })).toBeDisabled();
+    expect(screen.getByRole('dialog')).toBe(dialog);
   });
 
   describe('active state', () => {
@@ -326,7 +366,7 @@ describe('DesignerPlanBilling', () => {
   });
 
   it('replaces the complete billing snapshot after reconciliation', async () => {
-    apiMocks.getSubscription.mockResolvedValue(
+    apiMocks.getSubscription.mockImplementation(async () =>
       new Response(
         JSON.stringify({
           tier: 'corporate',

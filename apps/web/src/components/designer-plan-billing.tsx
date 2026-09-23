@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -35,12 +35,13 @@ import {
   type BillingSelectionScope,
 } from '@/components/subscribe/use-plan-selection';
 import { useSelectionContext } from '@/components/subscribe/use-selection-context';
+import { useBillingAutoRefresh } from '@/components/subscribe/use-billing-auto-refresh';
 import { api } from '@/lib/api';
 import { mapSubscriptionToBillingState } from '@/lib/billing-state';
 import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import type { SubscriptionResponse } from '@repo/contracts';
+import { subscriptionResponseSchema } from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 interface DesignerPlanBillingProps extends BillingSelectionScope {
@@ -666,26 +667,45 @@ function ScopedDesignerPlanBilling({
   // Called on mount (SSR hydration catch-up) and after checkout flow completes.
   const refreshBilling = useCallback(async () => {
     try {
-      setRefreshError(null);
-      await api.api.billing.subscription.refresh.$get();
+      const refresh = await api.api.billing.subscription.refresh.$get();
+      if (!refresh.ok) throw new Error('Billing refresh unavailable');
       const response = await api.api.billing.subscription.$get();
       if (response.ok) {
-        const data = (await response.json()) as SubscriptionResponse;
-        setBilling(mapSubscriptionToBillingState(data));
+        const parsed = subscriptionResponseSchema.safeParse(await response.json());
+        if (!parsed.success) throw new Error('Billing response invalid');
+        setBilling(mapSubscriptionToBillingState(parsed.data));
+        setRefreshError(null);
       } else {
-        setRefreshError('Billing could not be refreshed. Displaying the last loaded information.');
+        throw new Error('Billing read unavailable');
       }
     } catch {
-      setRefreshError('Billing could not be refreshed. Displaying the last loaded information.');
+      setRefreshError(
+        'We could not update billing. Your last loaded details are shown while we try again.',
+      );
+      throw new Error('Billing refresh unavailable');
     }
   }, []);
 
-  const payment = usePaymentMethod(billing.tier, refreshBilling);
-
-  // Reconcile on mount so the client sees the latest state after SSR.
-  useEffect(() => {
-    void refreshBilling();
-  }, [refreshBilling]);
+  const refreshAll = useCallback(async () => {
+    try {
+      await refreshBilling();
+    } finally {
+      await selection.refreshContext();
+    }
+  }, [refreshBilling, selection.refreshContext]);
+  const refreshNow = useBillingAutoRefresh(refreshAll, {
+    urgent:
+      !subscribeOpen &&
+      !!(
+        refreshError ||
+        selection.error ||
+        selection.context?.pendingOperation ||
+        selection.context?.unfinishedCheckout ||
+        selection.context?.recovery?.status === 'requested' ||
+        selection.context?.recovery?.status === 'checkout_pending'
+      ),
+  });
+  const payment = usePaymentMethod(billing.tier, refreshNow);
 
   const openSubscribe = useCallback(
     (tier?: PlanTier) => {
@@ -764,20 +784,13 @@ function ScopedDesignerPlanBilling({
                 </>
               ) : null}
             </p>
-            <Button variant="outline" size="sm" onClick={() => void refreshBilling()}>
-              Refresh billing
-            </Button>
           </AlertDescription>
         </Alert>
       )}
 
-      <PendingBillingNotice
-        context={selection.context}
-        onReview={openSubscribe}
-        onRefresh={selection.refreshContext}
-      />
+      <PendingBillingNotice context={selection.context} onReview={openSubscribe} />
       <SavedRecoveryNotice
-        onDismissed={selection.refreshContext}
+        onDismissed={refreshNow}
         recovery={selection.context?.recovery}
         onReview={openSubscribe}
       />
@@ -796,13 +809,9 @@ function ScopedDesignerPlanBilling({
           </Button>
         )}
         {selection.error && (
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() => void selection.refreshContext()}
-          >
-            Refresh available plans
-          </Button>
+          <p role="status" className="mt-4 text-sm text-muted-foreground">
+            {selection.error}
+          </p>
         )}
       </section>
 
@@ -887,9 +896,7 @@ function ScopedDesignerPlanBilling({
         restoreTier={billing.preLapseTier}
         initialTargetTier={selectedTier}
         onTargetChange={setSelectedTier}
-        onSubscriptionChange={async () => {
-          await Promise.all([refreshBilling(), selection.refreshContext()]);
-        }}
+        onSubscriptionChange={refreshNow}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@repo/ui/components/button';
 import { Badge } from '@repo/ui/components/badge';
 import {
@@ -10,8 +10,10 @@ import {
 import { PlanSelection } from './plan-selection';
 import { usePlanSelection, type BillingSelectionScope } from './use-plan-selection';
 import { useSelectionContext } from './use-selection-context';
+import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import type { SubscriptionState, SubscriptionResponse } from '@repo/contracts';
+import { subscriptionResponseSchema } from '@repo/contracts';
 import { PLAN_MAP } from '@/lib/plan-config';
 import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
@@ -54,27 +56,44 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
 
   const fetchSubscription = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      const refresh = await api.api.billing.subscription.refresh.$get();
+      if (!refresh.ok) throw new Error('We could not update your billing details');
       const response = await api.api.billing.subscription.$get();
       if (!response.ok) {
-        setError('Failed to load subscription');
-        return;
+        throw new Error('We could not load your subscription');
       }
-      const data = (await response.json()) as SubscriptionResponse;
-      setSubscription(data);
+      const parsed = subscriptionResponseSchema.safeParse(await response.json());
+      if (!parsed.success) throw new Error('We could not verify your subscription');
+      setSubscription(parsed.data);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load subscription');
+      throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const payment = usePaymentMethod(subscription?.tier ?? 'hobby', fetchSubscription);
-
-  useEffect(() => {
-    void fetchSubscription();
-  }, [fetchSubscription]);
+  const refreshAll = useCallback(async () => {
+    try {
+      await fetchSubscription();
+    } finally {
+      await selection.refreshContext();
+    }
+  }, [fetchSubscription, selection.refreshContext]);
+  const refreshNow = useBillingAutoRefresh(refreshAll, {
+    urgent:
+      !dialogOpen &&
+      !!(
+        error ||
+        selection.error ||
+        selection.context?.pendingOperation ||
+        selection.context?.unfinishedCheckout ||
+        selection.context?.recovery?.status === 'requested' ||
+        selection.context?.recovery?.status === 'checkout_pending'
+      ),
+  });
+  const payment = usePaymentMethod(subscription?.tier ?? 'hobby', refreshNow);
 
   // Keep the mounted checkout and its provider callbacks alive during background refreshes.
   if (loading && !subscription) {
@@ -92,9 +111,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         <p className="mt-3 text-sm text-muted-foreground">
           {error ?? 'Unable to load subscription'}
         </p>
-        <Button variant="outline" className="mt-4" onClick={() => void fetchSubscription()}>
-          Retry
-        </Button>
+        <p className="mt-2 text-sm text-muted-foreground">We will try again automatically.</p>
       </div>
     );
   }
@@ -111,10 +128,9 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
       )}
       {error && (
         <div className="mb-4 flex flex-col gap-2" role="alert">
-          <p>{error}. Previously loaded billing details are shown.</p>
-          <Button variant="outline" onClick={() => void fetchSubscription()}>
-            Retry billing refresh
-          </Button>
+          <p>
+            {error}. Previously loaded billing details are shown. We will try again automatically.
+          </p>
         </div>
       )}
       {/* Current plan summary */}
@@ -148,10 +164,9 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
           setSelectedTier(target);
           setDialogOpen(true);
         }}
-        onRefresh={selection.refreshContext}
       />
       <SavedRecoveryNotice
-        onDismissed={selection.refreshContext}
+        onDismissed={refreshNow}
         recovery={selection.context?.recovery}
         onReview={(target) => {
           setSelectedTier(target);
@@ -175,9 +190,9 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         </Button>
       )}
       {selection.error && (
-        <Button variant="outline" className="mt-4" onClick={() => void selection.refreshContext()}>
-          Refresh available plans
-        </Button>
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          {selection.error}
+        </p>
       )}
 
       {/* Plan selection / upgrade button */}
@@ -241,9 +256,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         restoreTier={subscription.preLapseTier}
         initialTargetTier={selectedTier}
         onTargetChange={setSelectedTier}
-        onSubscriptionChange={async () => {
-          await Promise.all([fetchSubscription(), selection.refreshContext()]);
-        }}
+        onSubscriptionChange={refreshNow}
       />
     </div>
   );

@@ -170,8 +170,10 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
     await page.route('**/api/billing/payments?*', (route) =>
       route.fulfill({ status: 503, json: { error: { message: 'Synthetic outage' } } }),
     );
-    await page.getByRole('button', { name: 'Refresh payments' }).click();
-    await expect(page.getByText(/Payment history could not be loaded/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Refresh/ })).toHaveCount(0);
+    await expect(page.getByText(/We could not update your payments/)).toBeVisible({
+      timeout: 45_000,
+    });
     expect(runtimeErrors).toEqual([]);
   } finally {
     await assertTestDb();
@@ -315,7 +317,10 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
       notes: { organizationId: owner.org.id, tier: 'corporate' },
     });
     await expect.poll(async () => (await owner.subscription())?.planTier).toBe('corporate');
-    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Plan activated', exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Corporate is your current plan', exact: true }),
     ).toBeVisible();
@@ -413,10 +418,9 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       cancel_at_cycle_end: true,
     });
     await expect.poll(async () => (await owner.subscription())?.planTier).toBe('hobby');
-    await page.reload();
     await expect(
       page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 45_000 });
     await page.getByRole('button', { name: 'Review plan', exact: true }).click();
     expect(replacementRequests).toBe(0);
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
@@ -436,7 +440,10 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       notes: { organizationId: owner.org.id, tier: 'professional_plus' },
     });
     await expect.poll(async () => (await owner.subscription())?.planTier).toBe('professional_plus');
-    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Plan activated', exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Professional+ is your current plan', exact: true }),
     ).toBeVisible();

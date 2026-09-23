@@ -28,11 +28,11 @@ export function useSelectionContext(organizationId?: string | null) {
     } catch {
       if (request !== generation.current) return;
       setContext(null);
-      setError('Unable to verify available billing actions. Refresh billing to try again.');
+      setError('We could not check your available plans. We will try again automatically.');
+      throw new Error('Billing selection unavailable');
     }
   }, [organizationId]);
   useEffect(() => {
-    void refreshContext();
     return () => {
       generation.current += 1;
     };

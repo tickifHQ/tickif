@@ -14,14 +14,16 @@ import {
   billingRecoveryResponseSchema,
   billingMutationOutcomeSchema,
   billingSubscribeOutcomeSchema,
+  billingSelectionContextSchema,
+  subscriptionResponseSchema,
 } from '@repo/contracts';
 import { isUpgrade, isValidTier, PLAN_MAP } from '@/lib/plan-config';
 import { PlanSelection } from './plan-selection';
 import { api } from '@/lib/api';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
-import { waitForSubscriptionActivation } from '@/lib/subscription-activation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { reasonLabel } from './billing-reason';
+import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 
 interface CheckoutFlowProps {
   open: boolean;
@@ -34,7 +36,7 @@ interface CheckoutFlowProps {
   initialTargetTier?: PlanTier | null;
   onTargetChange?: (tier: PlanTier | null) => void;
   scopeKey?: string;
-  onSubscriptionChange?: () => void;
+  onSubscriptionChange?: () => void | Promise<void>;
 }
 
 type Step =
@@ -81,6 +83,7 @@ function ScopedCheckoutFlow({
   const [recovery, setRecovery] = useState<BillingRecovery | null>(null);
   const [message, setMessage] = useState('');
   const [effectiveAt, setEffectiveAt] = useState<string | null>(null);
+  const [providerOpen, setProviderOpen] = useState(false);
   const operationId = useRef<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(true);
@@ -98,11 +101,107 @@ function ScopedCheckoutFlow({
     };
   }, []);
 
+  const syncStatus = useCallback(async () => {
+    if (!target || !preview) return;
+    const request = sequence.current;
+    if (onSubscriptionChange) await onSubscriptionChange();
+    else {
+      const refreshed = await api.api.billing.subscription.refresh.$get();
+      if (!refreshed.ok) throw new Error('Billing confirmation is temporarily unavailable.');
+    }
+    if (!mounted.current || request !== sequence.current) return;
+    const [subscriptionResponse, contextResponse] = await Promise.all([
+      api.api.billing.subscription.$get(),
+      api.api.billing['selection-context'].$get(),
+    ]);
+    if (!subscriptionResponse.ok || !contextResponse.ok)
+      throw new Error('Billing confirmation is temporarily unavailable.');
+    const [subscriptionJson, contextJson] = await Promise.all([
+      subscriptionResponse.json(),
+      contextResponse.json(),
+    ]);
+    const subscription = subscriptionResponseSchema.safeParse(subscriptionJson);
+    const context = billingSelectionContextSchema.safeParse(contextJson);
+    if (
+      !subscription.success ||
+      !context.success ||
+      context.data.organizationId !== preview.organizationId
+    )
+      throw new Error('Billing confirmation could not be verified.');
+    if (!mounted.current || request !== sequence.current) return;
+    const saved = context.data.recovery;
+    const sameRecovery =
+      !!recovery &&
+      !!saved &&
+      saved.id === recovery.id &&
+      saved.sourceSubscriptionId === recovery.sourceSubscriptionId &&
+      saved.targetTier === target;
+    const recoveredLostResponse =
+      !recovery &&
+      preview.action === 'recover' &&
+      !!saved &&
+      saved.organizationId === preview.organizationId &&
+      saved.targetTier === target &&
+      saved.sourceSubscriptionId === preview.sourceSubscriptionId;
+    // A concurrent billing user may replace the recovery intent. Never adopt their target.
+    if (recovery && !sameRecovery) {
+      setMessage(
+        'Your saved plan changed elsewhere. Close this dialog to review the latest billing details.',
+      );
+      return;
+    }
+    if (sameRecovery && saved.revision < recovery.revision) return;
+    if (sameRecovery || recoveredLostResponse) {
+      setRecovery(saved);
+      setMessage('');
+      setStep('recovery');
+    }
+    if (
+      context.data.currentTier === target &&
+      context.data.providerState === 'known' &&
+      !context.data.pendingOperation &&
+      !context.data.unfinishedCheckout &&
+      subscription.data.tier === target &&
+      (subscription.data.lifecycleState === 'active' ||
+        (target === 'hobby' && subscription.data.lifecycleState === 'downgraded')) &&
+      (preview.action !== 'recover' ||
+        ((sameRecovery || recoveredLostResponse) && saved?.status === 'completed'))
+    ) {
+      setMessage('');
+      setStep('activated');
+    } else if (
+      context.data.scheduledChange?.targetTier === target ||
+      (target === 'hobby' && subscription.data.cancellationScheduled)
+    ) {
+      setEffectiveAt(
+        context.data.scheduledChange?.effectiveAt ?? subscription.data.currentPeriodEnd,
+      );
+      setStep('scheduled');
+    }
+  }, [onSubscriptionChange, preview, recovery, target]);
+  useBillingAutoRefresh(syncStatus, {
+    enabled:
+      open &&
+      !providerOpen &&
+      !!target &&
+      !!preview &&
+      (step === 'pending' ||
+        step === 'recovery' ||
+        step === 'scheduled' ||
+        (step === 'error' && operationId.current !== null)),
+    urgent:
+      step === 'pending' ||
+      step === 'error' ||
+      recovery?.status === 'requested' ||
+      recovery?.status === 'checkout_pending',
+  });
+
   const review = useCallback(async (tier: PlanTier) => {
     const request = ++sequence.current;
     setTarget(tier);
     setStep('loading');
     setPreview(null);
+    setRecovery(null);
     setMessage('');
     operationId.current = null;
     try {
@@ -110,8 +209,7 @@ function ScopedCheckoutFlow({
         json: { targetTier: tier },
       });
       if (!mounted.current || request !== sequence.current) return;
-      if (!response.ok)
-        throw new Error('Unable to verify this plan change. Refresh billing and retry.');
+      if (!response.ok) throw new Error('Unable to verify this plan change. Please try again.');
       const parsed = billingChangePreviewSchema.safeParse(await response.json());
       if (!parsed.success || parsed.data.targetTier !== tier)
         throw new Error('Unable to verify the selected plan.');
@@ -163,7 +261,7 @@ function ScopedCheckoutFlow({
     throw new Error(
       error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
         ? error.message
-        : 'Unable to complete the request. Refresh billing before retrying.',
+        : 'Unable to complete the request. We are checking billing status automatically.',
     );
   }
   async function confirm() {
@@ -191,7 +289,9 @@ function ScopedCheckoutFlow({
         if (!response.ok) await failResponse(response);
         const data = billingRecoveryResponseSchema.safeParse(await response.json());
         if (!data.success)
-          throw new Error('Recovery status could not be confirmed. Refresh billing.');
+          throw new Error(
+            'Your saved plan could not be confirmed yet. We are checking automatically.',
+          );
         if (!mounted.current) return;
         setRecovery(data.data.recovery);
         setStep('recovery');
@@ -204,21 +304,20 @@ function ScopedCheckoutFlow({
         if (!mounted.current) return;
         if (!parsedCheckout.success || parsedCheckout.data.targetTier !== target) {
           setMessage(
-            'Checkout details could not be verified. Refresh billing status before retrying.',
+            'Checkout details could not be verified. We are checking billing status automatically.',
           );
           setStep('pending');
           return;
         }
         const data = parsedCheckout.data;
         if (data.outcome === 'reconciliation_pending' || data.outcome === 'failed') {
-          setMessage(
-            'We are checking your checkout. Refresh billing before trying again.',
-          );
+          setMessage('We are checking your checkout. This status updates automatically.');
           setStep('pending');
           return;
         }
         onSubscriptionChange?.();
         externalCheckout.current = true;
+        setProviderOpen(true);
         onOpenChange(false);
         await openRazorpayCheckout({
           keyId: data.razorpayKeyId,
@@ -228,12 +327,15 @@ function ScopedCheckoutFlow({
           onDismiss: () => {
             if (!mounted.current) return;
             externalCheckout.current = false;
+            setProviderOpen(false);
             setMessage(`Checkout closed. ${PLAN_MAP[target].label} is still selected.`);
             setStep('error');
+            previousInput.current = { open: true, target: initialTargetTier };
             onOpenChange(true);
           },
           onSuccess: async (payment) => {
             if (!mounted.current) return;
+            setProviderOpen(false);
             onOpenChange(true);
             setStep('pending');
             try {
@@ -246,15 +348,10 @@ function ScopedCheckoutFlow({
               });
               if (!response.ok)
                 throw new Error(
-                  'Payment verification is pending. Refresh billing before another attempt.',
+                  'Payment verification is pending. This status updates automatically.',
                 );
               if (!mounted.current) return;
-              const activated = await waitForSubscriptionActivation(target, {
-                isCurrent: () => mounted.current,
-              });
-              if (!mounted.current) return;
-              setStep(activated ? 'activated' : 'pending');
-              onSubscriptionChange?.();
+              await onSubscriptionChange?.();
             } catch (error) {
               if (mounted.current) {
                 setMessage(error instanceof Error ? error.message : 'Payment status is pending.');
@@ -275,9 +372,7 @@ function ScopedCheckoutFlow({
         const parsedOutcome = billingMutationOutcomeSchema.safeParse(await response.json());
         if (!mounted.current) return;
         if (!parsedOutcome.success) {
-          setMessage(
-            'We could not confirm this change. Refresh billing before trying again.',
-          );
+          setMessage('We could not confirm this change. This status updates automatically.');
           setStep('pending');
           return;
         }
@@ -293,12 +388,14 @@ function ScopedCheckoutFlow({
                 : 'pending',
         );
         if (data.outcome === 'failed')
-          setMessage('The plan change failed. Refresh billing to verify your current access.');
+          setMessage('The plan change failed. Your current access is being checked automatically.');
         onSubscriptionChange?.();
       }
     } catch (error) {
       if (mounted.current) {
         externalCheckout.current = false;
+        setProviderOpen(false);
+        previousInput.current = { open: true, target: initialTargetTier };
         onOpenChange(true);
         setMessage(error instanceof Error ? error.message : 'Unable to complete billing request.');
         setStep(acknowledged ? 'error' : 'pending');
@@ -351,9 +448,7 @@ function ScopedCheckoutFlow({
             )}
             {(step === 'loading' || step === 'processing') && (
               <p role="status">
-                {step === 'loading'
-                  ? 'Checking your plan…'
-                  : 'Updating your billing…'}
+                {step === 'loading' ? 'Checking your plan…' : 'Updating your billing…'}
               </p>
             )}
             {step === 'review' && preview && (
@@ -365,18 +460,14 @@ function ScopedCheckoutFlow({
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   <dt>Effective date</dt>
                   <dd>
-                    {preview.timing === 'now'
-                      ? 'Once confirmed'
-                      : dateLabel(preview.effectiveAt)}
+                    {preview.timing === 'now' ? 'Once confirmed' : dateLabel(preview.effectiveAt)}
                   </dd>
                   <dt>Next renewal</dt>
                   <dd>{dateLabel(preview.nextRenewalAt)}</dd>
                   <dt>Monthly price</dt>
                   <dd>{money(preview.recurringAmount, preview.currency)}</dd>
                   <dt>
-                    {preview.adjustmentDirection === 'refund'
-                      ? 'Refund'
-                      : 'Additional charge'}
+                    {preview.adjustmentDirection === 'refund' ? 'Refund' : 'Additional charge'}
                   </dt>
                   <dd>
                     {money(preview.adjustmentAmount, preview.currency)}
@@ -401,14 +492,14 @@ function ScopedCheckoutFlow({
                   <p className="text-sm">
                     Confirming schedules cancellation of your current paid subscription at the end
                     of its billing period and saves {label} for a future checkout. Your current
-                    access continues until your subscription ends. No replacement
-                    subscription is purchased now.
+                    access continues until your subscription ends. No replacement subscription is
+                    purchased now.
                   </p>
                 )}
                 {recovery && preview.action === 'recover' && (
                   <p className="text-sm">
-                    Previously selected: {PLAN_MAP[recovery.targetTier].label}. This will be replaced
-                    with {label}.
+                    Previously selected: {PLAN_MAP[recovery.targetTier].label}. This will be
+                    replaced with {label}.
                   </p>
                 )}
                 {preview.confirmationAllowed && (
@@ -443,20 +534,18 @@ function ScopedCheckoutFlow({
                     ? `Cancellation is scheduled; current access remains until ${dateLabel(recovery.eligibleAt)}. Continue to ${label} checkout after the current subscription ends.`
                     : recovery?.status === 'eligible'
                       ? 'The previous subscription has ended. Review your selected plan to continue checkout.'
-                      : 'Cancellation is still being confirmed. Refresh billing before continuing.'}
+                      : recovery?.status === 'dismissed' || recovery?.status === 'superseded'
+                        ? 'This saved selection is no longer active. Close this dialog to review your available plans.'
+                        : 'Cancellation is still being confirmed. This status updates automatically.'}
                 </p>
+                {message && <p>{message}</p>}
                 <p>
                   No replacement purchase will start automatically. Unused value does not
                   automatically transfer to a new subscription.
                 </p>
-                <Button
-                  onClick={() => {
-                    onSubscriptionChange?.();
-                    onOpenChange(false);
-                  }}
-                >
-                  Refresh billing status
-                </Button>
+                {recovery?.status === 'eligible' && !message && target && (
+                  <Button onClick={() => void review(target)}>Review {label}</Button>
+                )}
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   Done
                 </Button>
@@ -479,13 +568,12 @@ function ScopedCheckoutFlow({
                   {message ||
                     'This change is still being confirmed. Your access will update once confirmed.'}
                 </p>
-                <Button
-                  onClick={() => {
-                    onSubscriptionChange?.();
-                    onOpenChange(false);
-                  }}
-                >
-                  Refresh billing status
+                <p className="text-sm text-muted-foreground">
+                  We’ll keep checking automatically. You can close this dialog while confirmation is
+                  pending.
+                </p>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close
                 </Button>
               </div>
             )}

@@ -148,7 +148,7 @@ describe('real payment controls', () => {
   it('does not present a history failure as zero payments', async () => {
     mocks.history.mockRejectedValue(new Error('offline'));
     render(<PaymentHistory />);
-    expect(await screen.findByText(/Payment history could not be loaded/)).toBeInTheDocument();
+    expect(await screen.findByText(/We could not update your payments/)).toBeInTheDocument();
     expect(screen.queryByText('No payments recorded yet.')).not.toBeInTheDocument();
   });
 });
