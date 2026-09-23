@@ -342,6 +342,33 @@ test('designer onboarding and media processing connects to visitor onboarding an
     );
     await designer.screenshot({ path: testInfo.outputPath('dashboard-saved-logo.png') });
 
+    await designer.goto('/designer/profile');
+    const profileLogo = designer
+      .getByRole('button', { name: 'Edit logo' })
+      .getByRole('img', { name: `Journey Studio ${suffix} logo` });
+    await expect(profileLogo).toBeVisible();
+    await expect(profileLogo).toHaveAttribute(
+      'src',
+      new RegExp(activeProfile!.logoImageId!.replaceAll('/', '\\/')),
+    );
+    await designer.getByRole('button', { name: 'Edit logo' }).click();
+    await designer
+      .getByRole('dialog', { name: 'Studio logo' })
+      .getByRole('button', { name: 'Edit' })
+      .click();
+    const profileCropDialog = designer.getByRole('dialog', { name: 'Crop logo' });
+    await expect(
+      profileCropDialog.getByRole('img', { name: 'Logo being cropped' }),
+    ).toHaveAttribute('src', new RegExp(activeProfile!.logoSourceImageId!.replaceAll('/', '\\/')));
+    await profileCropDialog.screenshot({ path: testInfo.outputPath('profile-logo-editor.png') });
+    await designer.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() => designer.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await designer.screenshot({ path: testInfo.outputPath('profile-logo-mobile.png') });
+    await designer.keyboard.press('Escape');
+    await designer.setViewportSize({ width: 1280, height: 720 });
+
     await visitor.goto('/login');
     await visitor.getByPlaceholder('9123456789').fill(visitorPhone.slice(3));
     await visitor.getByRole('button', { name: 'Get OTP', exact: true }).click();

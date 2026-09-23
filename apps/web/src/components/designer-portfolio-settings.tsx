@@ -11,37 +11,26 @@ import {
   Copy,
   Globe,
   Info,
-  ImagePlus,
   LayoutList,
   Loader2,
-  Pencil,
   RefreshCw,
   Star,
-  Upload,
   X,
 } from 'lucide-react';
 import {
   PORTFOLIO_BADGE_ORDER,
   PORTFOLIO_BADGE_PRESENTATION,
   type GoogleReviewsResponse,
-  type LogoCropArea,
   type PortfolioProjectItem,
   type PortfolioResponse,
   type RequiredPortfolioField,
   type UpdatePortfolioInput,
+  type UploadLogoResponse,
 } from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@repo/ui/components/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,7 +44,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
-import { LogoCropDialog } from '@/components/logo-crop-dialog';
+import { DesignerLogoInput } from '@/components/designer-logo-input';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -65,7 +54,6 @@ import {
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { env } from '@/env';
-import { cropImageToFile } from '@/lib/crop-image';
 import {
   checkSlugAvailability,
   connectGoogleReviews,
@@ -75,7 +63,6 @@ import {
   fetchPortfolio,
   refreshGoogleReviews,
   updatePortfolio,
-  uploadLogo,
 } from '@/lib/portfolio-api';
 
 // ---------------------------------------------------------------------------
@@ -117,17 +104,6 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
 const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
-const ALLOWED_LOGO_SOURCE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
-const MAX_LOGO_SOURCE_BYTES = 10_000_000;
-
-type LogoCropSource = {
-  source: string;
-  fileName: string;
-  revokeOnRelease: boolean;
-  originalFile?: File;
-  initialCrop: LogoCropArea | null;
-};
-
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
 type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
 
@@ -292,12 +268,6 @@ export function DesignerPortfolioSettings() {
   const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSlugRef = useRef<string>('');
 
-  // Logo
-  const [isUploadingLogo, startLogoUploadTransition] = useTransition();
-  const [logoError, setLogoError] = useState<string | null>(null);
-  const [logoManagerOpen, setLogoManagerOpen] = useState(false);
-  const [logoCropSource, setLogoCropSource] = useState<LogoCropSource | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
   // Google reviews connection (fetched separately from portfolio settings)
@@ -559,12 +529,6 @@ export function DesignerPortfolioSettings() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (logoCropSource?.revokeOnRelease) URL.revokeObjectURL(logoCropSource.source);
-    };
-  }, [logoCropSource]);
-
   // -------------------------------------------------------------------------
   // Save
   // -------------------------------------------------------------------------
@@ -638,113 +602,25 @@ export function DesignerPortfolioSettings() {
   // Logo upload
   // -------------------------------------------------------------------------
 
-  function handleLogoUploadClick() {
-    setLogoError(null);
-    if (portfolio?.logoUrl) {
-      setLogoManagerOpen(true);
-      return;
+  async function handleLogoUploaded(result: UploadLogoResponse): Promise<string | null> {
+    try {
+      setPortfolio(await fetchPortfolio());
+      router.refresh();
+      return null;
+    } catch {
+      setPortfolio((previous) =>
+        previous
+          ? {
+              ...previous,
+              logoUrl: result.logoUrl,
+              logoSourceUrl: result.logoSourceUrl,
+              logoCrop: result.logoCrop,
+            }
+          : previous,
+      );
+      router.refresh();
+      return "Logo updated successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.";
     }
-    fileInputRef.current?.click();
-  }
-
-  function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Reset input so the same file can be re-selected
-    event.target.value = '';
-
-    setLogoError(null);
-    if (!ALLOWED_LOGO_SOURCE_TYPES.has(file.type)) {
-      setLogoError('Choose a JPEG, PNG, WebP, or AVIF image.');
-      return;
-    }
-    if (file.size > MAX_LOGO_SOURCE_BYTES) {
-      setLogoError('Choose an image smaller than 10 MB.');
-      return;
-    }
-
-    const source = URL.createObjectURL(file);
-    setLogoCropSource({
-      source,
-      fileName: file.name,
-      revokeOnRelease: true,
-      originalFile: file,
-      initialCrop: null,
-    });
-    setLogoManagerOpen(false);
-  }
-
-  function handleEditExistingLogo() {
-    if (!portfolio?.logoUrl) return;
-    setLogoError(null);
-    setLogoCropSource({
-      source: portfolio.logoSourceUrl ?? portfolio.logoUrl,
-      fileName: 'studio-logo.webp',
-      revokeOnRelease: false,
-      initialCrop: portfolio.logoCrop,
-    });
-    setLogoManagerOpen(false);
-  }
-
-  function handleChooseAnotherLogo() {
-    fileInputRef.current?.click();
-  }
-
-  function handleCropDialogOpenChange(open: boolean) {
-    if (!open) {
-      setLogoCropSource(null);
-      setLogoError(null);
-    }
-  }
-
-  function handleCroppedLogoSave({
-    pixels,
-    percentages,
-  }: {
-    pixels: Parameters<typeof cropImageToFile>[1];
-    percentages: LogoCropArea;
-  }) {
-    if (!logoCropSource) return;
-
-    startLogoUploadTransition(async () => {
-      setLogoError(null);
-      try {
-        const croppedFile = await cropImageToFile(
-          logoCropSource.source,
-          pixels,
-          logoCropSource.fileName,
-        );
-        const result = await uploadLogo(croppedFile, logoCropSource.originalFile, percentages);
-        // Refresh portfolio to get the canonical signed URL and all server-derived fields.
-        try {
-          const refreshed = await fetchPortfolio();
-          setPortfolio(refreshed);
-        } catch {
-          setPortfolio((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  logoUrl: result.logoUrl,
-                  logoSourceUrl: result.logoSourceUrl,
-                  logoCrop: result.logoCrop,
-                }
-              : prev,
-          );
-          setLogoError(
-            "Logo updated successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.",
-          );
-        }
-        setLogoCropSource(null);
-        router.refresh();
-      } catch (err) {
-        setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
-      }
-    });
-  }
-
-  function handleLogoDelete() {
-    setLogoError('Upload a replacement before removing the logo from your saved portfolio.');
   }
 
   // -------------------------------------------------------------------------
@@ -1031,63 +907,23 @@ export function DesignerPortfolioSettings() {
                   <div className="space-y-4">
                     {/* Logo upload + Studio name */}
                     <div className="flex items-start gap-3">
-                      <div className="flex shrink-0 flex-col gap-1.5">
-                        <Label className="gap-0 text-sm font-medium text-muted-foreground">
-                          Logo
-                          <RequiredFieldIndicator />
-                        </Label>
-                        <div className="relative size-16.5">
-                          <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
-                            {portfolio.logoUrl ? (
-                              <button
-                                ref={(node) => {
-                                  heroFieldRefs.current.logo = node;
-                                }}
-                                type="button"
-                                onClick={handleLogoUploadClick}
-                                disabled={isUploadingLogo}
-                                className="relative block size-full disabled:opacity-50"
-                                aria-label="Edit logo"
-                              >
-                                <Image
-                                  src={portfolio.logoUrl}
-                                  alt="Portfolio logo"
-                                  fill
-                                  unoptimized
-                                  className="object-cover"
-                                />
-                              </button>
-                            ) : (
-                              <button
-                                ref={(node) => {
-                                  heroFieldRefs.current.logo = node;
-                                }}
-                                type="button"
-                                onClick={handleLogoUploadClick}
-                                disabled={isUploadingLogo}
-                                className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                                aria-label="Upload logo"
-                              >
-                                {isUploadingLogo ? (
-                                  <Loader2 className="size-6 animate-spin" />
-                                ) : (
-                                  <ImagePlus className="size-6" aria-hidden />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                          {portfolio.logoUrl && (
-                            <button
-                              type="button"
-                              onClick={handleLogoDelete}
-                              className="absolute -right-1 -top-1 z-10 flex size-4 items-center justify-center rounded-full bg-muted-foreground/80 text-white"
-                              aria-label="Remove logo"
-                            >
-                              <X className="size-2.5" aria-hidden />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      <DesignerLogoInput
+                        buttonRef={(node) => {
+                          heroFieldRefs.current.logo = node;
+                        }}
+                        id="portfolio-logo"
+                        value={{
+                          logoUrl: portfolio.logoUrl,
+                          logoSourceUrl: portfolio.logoSourceUrl,
+                          logoCrop: portfolio.logoCrop,
+                        }}
+                        displayName={form.displayName}
+                        imageAlt="Portfolio logo"
+                        onUploaded={handleLogoUploaded}
+                        sizeClassName="size-16.5"
+                        showLabel
+                        required
+                      />
                       <div className="flex-1 space-y-1.5">
                         <Label className="gap-0 text-sm font-medium text-muted-foreground">
                           Studio name
@@ -1110,9 +946,6 @@ export function DesignerPortfolioSettings() {
                         )}
                       </div>
                     </div>
-                    {logoError && (
-                      <p className="text-[13px] font-medium text-destructive">{logoError}</p>
-                    )}
                     <div className="space-y-1.5">
                       <Label className="gap-0 text-sm font-medium text-muted-foreground">
                         Tagline
@@ -1752,60 +1585,6 @@ export function DesignerPortfolioSettings() {
           Save changes
         </Button>
       </div>
-
-      <Dialog open={logoManagerOpen} onOpenChange={setLogoManagerOpen}>
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="border-b border-border px-5 py-4 pr-14 text-left sm:px-6">
-            <DialogTitle>Studio logo</DialogTitle>
-            <DialogDescription>
-              Review your saved logo, refine its crop, or choose a replacement.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-5 p-6 sm:p-8">
-            <div className="relative aspect-square w-full max-w-64 overflow-hidden rounded-xl border border-border bg-muted">
-              {portfolio.logoUrl ? (
-                <Image
-                  src={portfolio.logoUrl}
-                  alt={`${form.displayName || 'Studio'} logo`}
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              ) : null}
-            </div>
-          </div>
-          <DialogFooter className="border-t border-border px-5 py-4 sm:px-6">
-            <Button type="button" variant="outline" onClick={handleChooseAnotherLogo}>
-              <Upload className="size-4" aria-hidden />
-              Choose another logo
-            </Button>
-            <Button type="button" onClick={handleEditExistingLogo}>
-              <Pencil className="size-4" aria-hidden />
-              Edit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <LogoCropDialog
-        open={logoCropSource !== null}
-        imageSource={logoCropSource?.source ?? null}
-        initialCrop={logoCropSource?.initialCrop ?? null}
-        isSaving={isUploadingLogo}
-        error={logoError}
-        onOpenChange={handleCropDialogOpenChange}
-        onChooseAnother={handleChooseAnotherLogo}
-        onSave={handleCroppedLogoSave}
-      />
-
-      {/* Hidden file input for logo upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
     </div>
   );
 }

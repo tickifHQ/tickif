@@ -27,13 +27,15 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
 
 vi.mock('../../../src/modules/profiles/portfolio-service.js', () => ({
   presignProfileLogo: vi.fn(),
+  presignProfileLogoSource: vi.fn(),
 }));
 
 // Import AFTER mock registration.
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
 const { profilesRepository } = await import('../../../src/modules/profiles/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
-const { presignProfileLogo } = await import('../../../src/modules/profiles/portfolio-service.js');
+const { presignProfileLogo, presignProfileLogoSource } =
+  await import('../../../src/modules/profiles/portfolio-service.js');
 
 const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
@@ -76,6 +78,7 @@ beforeEach(() => {
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
   vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
   vi.mocked(presignProfileLogo).mockResolvedValue(null);
+  vi.mocked(presignProfileLogoSource).mockResolvedValue(null);
 });
 
 describe('profilesService.getCompletion', () => {
@@ -298,6 +301,9 @@ describe('profilesService.getCurrentProfile', () => {
     vi.mocked(presignProfileLogo).mockResolvedValue(
       'https://storage.example.com/signed-profile-logo.webp',
     );
+    vi.mocked(presignProfileLogoSource).mockResolvedValue(
+      'https://storage.example.com/signed-profile-logo-source.png',
+    );
 
     const result = await profilesService.getCurrentProfile('user-1', 'org-1', 'team-1');
 
@@ -308,7 +314,12 @@ describe('profilesService.getCurrentProfile', () => {
       slug: 'test-studio',
     });
     expect(result.logoUrl).toBe('https://storage.example.com/signed-profile-logo.webp');
+    expect(result.logoSourceUrl).toBe('https://storage.example.com/signed-profile-logo-source.png');
+    expect(result.logoCrop).toBeNull();
     expect(presignProfileLogo).toHaveBeenCalledWith(
+      expect.objectContaining({ id: profileRow().id }),
+    );
+    expect(presignProfileLogoSource).toHaveBeenCalledWith(
       expect.objectContaining({ id: profileRow().id }),
     );
   });

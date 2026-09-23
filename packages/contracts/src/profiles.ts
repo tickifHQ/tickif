@@ -221,6 +221,37 @@ const footprintEntrySchema = z.object({
 });
 
 /**
+ * Selected logo area as percentages of the untouched source image. Percentage
+ * coordinates survive viewport changes, unlike cropper screen pixels.
+ */
+export const logoCropAreaSchema = z
+  .object({
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100),
+    width: z.number().positive().max(100),
+    height: z.number().positive().max(100),
+  })
+  .superRefine((area, context) => {
+    const tolerance = 0.01;
+    if (area.x + area.width > 100 + tolerance) {
+      context.addIssue({
+        code: 'custom',
+        path: ['width'],
+        message: 'Logo crop extends beyond the source width',
+      });
+    }
+    if (area.y + area.height > 100 + tolerance) {
+      context.addIssue({
+        code: 'custom',
+        path: ['height'],
+        message: 'Logo crop extends beyond the source height',
+      });
+    }
+  })
+  .meta({ id: 'LogoCropArea' });
+export type LogoCropArea = z.infer<typeof logoCropAreaSchema>;
+
+/**
  * Base profile fields — single source of truth for both projections.
  * Public and owner projections are derived via .omit/.extend to prevent drift.
  */
@@ -283,6 +314,10 @@ export const currentProfileResponseSchema = profileOwnerResponseSchema
   .extend({
     /** Short-lived display URL for the active branch's saved portfolio logo. */
     logoUrl: z.string().url().nullable().optional(),
+    /** Short-lived untouched source URL used only by authenticated logo editors. */
+    logoSourceUrl: z.string().url().nullable().optional(),
+    /** Persisted crop selection used to restore the logo editor. */
+    logoCrop: logoCropAreaSchema.nullable().optional(),
     organization: z.object({
       id: z.string(),
       name: z.string(),
@@ -523,37 +558,6 @@ export const portfolioReviewSettingsSchema = z
   })
   .meta({ id: 'PortfolioReviewSettings' });
 export type PortfolioReviewSettings = z.infer<typeof portfolioReviewSettingsSchema>;
-
-/**
- * Selected logo area as percentages of the untouched source image. Percentage
- * coordinates survive viewport changes, unlike cropper screen pixels.
- */
-export const logoCropAreaSchema = z
-  .object({
-    x: z.number().min(0).max(100),
-    y: z.number().min(0).max(100),
-    width: z.number().positive().max(100),
-    height: z.number().positive().max(100),
-  })
-  .superRefine((area, context) => {
-    const tolerance = 0.01;
-    if (area.x + area.width > 100 + tolerance) {
-      context.addIssue({
-        code: 'custom',
-        path: ['width'],
-        message: 'Logo crop extends beyond the source width',
-      });
-    }
-    if (area.y + area.height > 100 + tolerance) {
-      context.addIssue({
-        code: 'custom',
-        path: ['height'],
-        message: 'Logo crop extends beyond the source height',
-      });
-    }
-  })
-  .meta({ id: 'LogoCropArea' });
-export type LogoCropArea = z.infer<typeof logoCropAreaSchema>;
 
 export const portfolioResponseSchema = z
   .object({

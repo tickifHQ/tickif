@@ -69,18 +69,15 @@ vi.mock('@/components/initials-avatar', () => ({
 
 vi.mock('@/components/designer-organization-switcher', () => ({
   DesignerOrganizationSwitcher: ({
-    logoUrl,
     isWorkspaceRefreshing,
     onSwitchSuccess,
   }: {
-    logoUrl?: string | null;
     isWorkspaceRefreshing?: boolean;
     onSwitchSuccess?: (organizationId: string) => void;
   }) => (
     <button
       type="button"
       data-testid="organization-switcher"
-      data-logo-url={logoUrl ?? ''}
       data-refreshing={isWorkspaceRefreshing ? 'true' : 'false'}
       onClick={() => onSwitchSuccess?.('org-2')}
     >
@@ -98,27 +95,6 @@ vi.mock('@/components/designer-branch-selector', () => ({
 }));
 
 describe('DesignerWorkspaceShell', () => {
-  it('passes the active portfolio logo to the organization switcher', () => {
-    mock.pathname = '/designer/dashboard';
-
-    render(
-      <DesignerWorkspaceShell
-        capabilities={RESTRICTED_CAPABILITIES}
-        activeOrganizationId="org-1"
-        studioName="Studio One"
-        logoUrl="https://storage.example.com/studio-one.webp"
-        planLabel="Hobby plan"
-      >
-        <div>Dashboard content</div>
-      </DesignerWorkspaceShell>,
-    );
-
-    expect(screen.getByTestId('organization-switcher')).toHaveAttribute(
-      'data-logo-url',
-      'https://storage.example.com/studio-one.webp',
-    );
-  });
-
   it('hides links and project creation when the active organization role lacks access', () => {
     mock.pathname = '/designer/dashboard';
 
