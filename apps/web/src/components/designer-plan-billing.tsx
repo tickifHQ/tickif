@@ -31,6 +31,7 @@ import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import type { SubscriptionResponse } from '@repo/contracts';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -702,7 +703,7 @@ function HelpCard() {
           Our support team is here to help you with any billing queries.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-4 w-full">
-          <a href="mailto:support@tickif.in">
+          <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
             <Receipt className="size-4" />
             Contact Support
           </a>
