@@ -775,11 +775,11 @@ describe('projectsService.getPublicImageDetail', () => {
         roomId: null,
         derivatives: [
           {
-            variant: 'large',
+            variant: 'small',
             format: 'webp',
-            key: 'deriv/living.webp',
-            width: 1200,
-            height: 900,
+            key: 'deriv/living-small.webp',
+            width: 640,
+            height: 480,
           },
         ],
         width: 1200,
@@ -867,7 +867,7 @@ describe('projectsService.getPublicImageDetail', () => {
     expect(result.images).toEqual([
       {
         id: activeImageId,
-        url: 'https://signed.example/deriv/living.webp',
+        url: 'https://signed.example/deriv/living-small.webp',
         width: 1200,
         height: 900,
         roomId: null,
@@ -1066,7 +1066,27 @@ describe('projectsService.designerProjects', () => {
       status: 'active',
     });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
-      makeFeedRow({ propertySubtypeSlug: 'apartment', sizeSqft: 2400, completedMonth: '2024-06' }),
+      makeFeedRow({
+        propertySubtypeSlug: 'apartment',
+        sizeSqft: 2400,
+        completedMonth: '2024-06',
+        coverDerivatives: [
+          {
+            variant: 'medium',
+            format: 'webp',
+            key: 'derivatives/portfolio/medium.webp',
+            width: 1024,
+            height: 768,
+          },
+          {
+            variant: 'large',
+            format: 'webp',
+            key: 'derivatives/portfolio/large.webp',
+            width: 1600,
+            height: 1200,
+          },
+        ],
+      }),
     ]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
       new Map([
@@ -1085,6 +1105,8 @@ describe('projectsService.designerProjects', () => {
       theme: 'Contemporary',
       completionYear: 2024,
       sizeSqft: 2400,
+      coverImageUrl: 'https://signed.example/derivatives/portfolio/medium.webp',
+      heroImageUrl: 'https://signed.example/derivatives/portfolio/large.webp',
     });
   });
 

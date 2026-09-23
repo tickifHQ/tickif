@@ -643,6 +643,8 @@ export type DesignerProjectsQuery = z.infer<typeof designerProjectsQuerySchema>;
  */
 export const designerProjectCardSchema = feedProjectSchema
   .extend({
+    /** Large derivative reserved for the wide portfolio hero. */
+    heroImageUrl: z.url().nullable().optional(),
     /** e.g. "4 BHK · Apartment" — composed from the bhk + property subtype labels. */
     propertyType: z.string().nullable(),
     /** BHK label used independently in design-led recommendation cards. */

@@ -10,6 +10,14 @@ const environment = {
   R2_BUCKET: 'staging-media',
 };
 
+describe('watermark configuration', () => {
+  it.each(['0.21', '0.3'])('accepts the previously supported scale %s', (WATERMARK_SCALE) => {
+    expect(parseConfig({ ...environment, NODE_ENV: 'test', WATERMARK_SCALE }).WATERMARK_SCALE).toBe(
+      Number(WATERMARK_SCALE),
+    );
+  });
+});
+
 describe('production R2 endpoint', () => {
   it.each([
     'http://localhost:9000',

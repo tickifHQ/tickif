@@ -84,6 +84,7 @@ function uniqueSorted(values: Iterable<string>): string[] {
   );
 }
 
+/** Index a cover large enough for high-density discovery cards without serving the 1600px gallery. */
 function pickCoverDerivative(derivatives: SearchImageDerivative[]): SearchImageDerivative | null {
   return (
     derivatives.find(

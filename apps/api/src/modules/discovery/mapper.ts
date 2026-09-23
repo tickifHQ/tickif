@@ -118,15 +118,17 @@ export function normalizePostgresRow(row: FeedProjectRow): NormalizedFeedItem {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pick the small (640px) derivative for card display.
+ * Pick the medium (1024px) derivative for card display.
  * Prefers WebP format when available.
- * Fixes the phase-1 low-resolution bug by using the correct variant.
+ * The smaller variants remain fallbacks for media processed by older pipelines.
  *
  * @see Requirement 7.3, 7.4, 7.5
  */
 function pickPreviewDerivative(derivatives: Derivative[] | null): Derivative | null {
   if (!derivatives) return null;
   return (
+    derivatives.find((d) => d.variant === 'medium' && d.format === 'webp') ??
+    derivatives.find((d) => d.variant === 'medium') ??
     derivatives.find((d) => d.variant === 'small' && d.format === 'webp') ??
     derivatives.find((d) => d.variant === 'small') ??
     derivatives.find((d) => d.variant === 'thumb' && d.format === 'webp') ??

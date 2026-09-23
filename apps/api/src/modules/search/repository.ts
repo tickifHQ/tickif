@@ -151,6 +151,7 @@ export interface TypesenseSearchParams {
  * means a fallback hit and an indexed hit render the same image. The worker helper is
  * not importable from apps/api, so the policy is duplicated rather than shared —
  * change both together.
+ * Medium avoids stretching a 320px thumbnail across high-density discovery cards.
  */
 function pickCoverDerivativeKey(derivatives: Derivative[] | null): string | null {
   if (!derivatives) return null;
