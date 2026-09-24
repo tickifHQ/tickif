@@ -1624,7 +1624,10 @@ export function DesignerPortfolioSettings() {
                     ) : null}
                   </div>
                   <div className="space-y-3 px-5 py-4 text-center">
-                    <div className="mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl border border-border bg-amber-700 shadow-sm">
+                    <div
+                      data-testid="portfolio-preview-logo"
+                      className="relative z-10 mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl bg-amber-700 shadow-sm"
+                    >
                       {portfolio.logoUrl ? (
                         <Image
                           src={portfolio.logoUrl}

@@ -834,6 +834,18 @@ describe('DesignerPortfolioSettings', () => {
     expect(removeLogo.parentElement).not.toHaveClass('overflow-hidden');
   });
 
+  it('layers the live-preview logo above the portfolio cover', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      heroCoverUrl: 'https://cdn.tickif.test/portfolio-cover.jpg',
+      logoUrl: 'https://cdn.tickif.test/logo.jpg',
+    });
+    await renderSettings();
+
+    expect(screen.getByTestId('portfolio-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('portfolio-preview-logo')).not.toHaveClass('border');
+  });
+
   it('keeps collapsible content mounted while the close transition runs', async () => {
     const slugInput = await renderSettings();
     const linkSectionToggle = screen.getByRole('button', { name: /link & url/i });
