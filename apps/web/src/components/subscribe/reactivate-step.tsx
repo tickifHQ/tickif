@@ -43,7 +43,7 @@ export function ReactivateStep({ currentTier, onConfirm }: ReactivateStepProps) 
       </Alert>
 
       <Button className="mt-5 w-full" onClick={onConfirm}>
-        Proceed to Checkout
+        Continue to payment
         <ArrowRight className="size-4" />
       </Button>
     </div>

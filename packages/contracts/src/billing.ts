@@ -57,6 +57,7 @@ export type SubscriptionState = z.infer<typeof subscriptionStateSchema>;
  * `event` field. Only subscription-related events are handled by E-117.
  */
 export const RAZORPAY_EVENT = {
+  SUBSCRIPTION_UPDATED: 'subscription.updated',
   SUBSCRIPTION_ACTIVATED: 'subscription.activated',
   SUBSCRIPTION_CHARGED: 'subscription.charged',
   PAYMENT_FAILED: 'payment.failed',
@@ -66,6 +67,7 @@ export const RAZORPAY_EVENT = {
 } as const;
 
 export const RAZORPAY_EVENT_VALUES = [
+  RAZORPAY_EVENT.SUBSCRIPTION_UPDATED,
   RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
   RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
   RAZORPAY_EVENT.PAYMENT_FAILED,
@@ -91,8 +93,7 @@ export const BILLING_ERROR_CODE = {
   PAYMENT_MODE_CHANGE_UNSUPPORTED: 'payment_mode_change_unsupported',
 } as const;
 
-export type BillingErrorCode =
-  (typeof BILLING_ERROR_CODE)[keyof typeof BILLING_ERROR_CODE];
+export type BillingErrorCode = (typeof BILLING_ERROR_CODE)[keyof typeof BILLING_ERROR_CODE];
 
 /** Razorpay payment entity creation time in Unix seconds. */
 export const razorpayPaymentCreatedAtSchema = z

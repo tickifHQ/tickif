@@ -16,9 +16,9 @@ interface ReviewPayStepProps {
 /**
  * Review & Pay step — order summary before checkout handoff.
  *
- * Shows the plan amount as charged by Razorpay. Tax (GST) is included in the
- * Razorpay plan price — we do NOT add a separate tax estimate because the
- * plan amounts (₹2,999 / ₹7,999) are what Razorpay charges directly.
+ * Shows repository display pricing only; provider checkout confirms the
+ * recurring price and payment authorization. Do not use this display amount
+ * as an adjustment quote or as verified merchant tax configuration.
  */
 export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPayStepProps) {
   const plan = PLAN_MAP[targetTier];
@@ -38,7 +38,8 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
       <div>
         <h2 className="text-xl font-semibold text-foreground">Review Order</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Review your subscription details before proceeding to payment.
+          Review display pricing before proceeding. The final payment authorization is shown at
+          checkout.
         </p>
       </div>
 
@@ -56,7 +57,9 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
           </div>
           <Separator />
           <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-foreground">Amount</span>
+            <span className="text-base font-semibold text-foreground">
+              Display recurring amount
+            </span>
             <div className="text-right">
               <span className="text-lg font-bold text-foreground">
                 {formatCurrency(plan.price)}
@@ -71,7 +74,7 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
 
       {/* Checkout handoff */}
       <Button className="w-full" size="lg" onClick={onPay} disabled={isLoading}>
-        {isLoading ? 'Setting up checkout...' : 'Proceed to Checkout'}
+        {isLoading ? 'Setting up checkout...' : 'Continue to payment'}
         {!isLoading && <ArrowRight className="size-4" />}
       </Button>
 

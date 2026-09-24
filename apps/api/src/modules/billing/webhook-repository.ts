@@ -1,5 +1,64 @@
 import { and, db, eq, gte, schema } from '@repo/db';
-import { SUBSCRIPTION_STATE } from '@repo/contracts';
+import { SUBSCRIPTION_STATE, type PlanTier, type RazorpaySubscription } from '@repo/contracts';
+import { recordSearchProjectionEvents } from '../search-index/repository.js';
+
+/** Fetch authoritative state inside the row lock: delayed updates cannot restore an old plan. */
+export async function reconcileUpdatedSubscription(
+  id: string,
+  providerId: string,
+  fetchCurrent: () => Promise<RazorpaySubscription & { tier: PlanTier | null }>,
+): Promise<{ outcome: 'processed' | 'duplicate' } | { outcome: 'ignored'; reason: string }> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(schema.subscription)
+      .where(
+        and(
+          eq(schema.subscription.id, id),
+          eq(schema.subscription.razorpaySubscriptionId, providerId),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    if (!current) return { outcome: 'ignored', reason: 'Subscription is no longer current' };
+    const live = await fetchCurrent();
+    if (
+      live.id !== providerId ||
+      live.status !== 'active' ||
+      !live.tier ||
+      live.has_scheduled_changes
+    ) {
+      return {
+        outcome: 'ignored',
+        reason: 'Current paid plan is not confirmed or change is still scheduled',
+      };
+    }
+    // Lifecycle recovery requires the activation/payment path, not an update notification.
+    if (current.subscriptionState !== SUBSCRIPTION_STATE.ACTIVE || current.planTier === 'hobby') {
+      return { outcome: 'ignored', reason: 'Update cannot activate or recover a subscription' };
+    }
+    if (current.planTier === live.tier) return { outcome: 'duplicate' };
+    await tx
+      .update(schema.subscription)
+      .set({ planTier: live.tier, razorpayStatus: live.status })
+      .where(eq(schema.subscription.id, id));
+    const profiles = await tx
+      .select({ id: schema.designerProfile.id })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.orgId, current.organizationId));
+    await recordSearchProjectionEvents(
+      tx,
+      profiles.map((profile) => ({
+        entityKind: 'designer' as const,
+        entityId: profile.id,
+        operation: 'index' as const,
+        sourceUpdatedAt: new Date(),
+      })),
+    );
+    // No payment is manufactured: charge/refund events retain their own financial records.
+    return { outcome: 'processed' };
+  });
+}
 
 type FailedPaymentInput = {
   subscriptionId: string;

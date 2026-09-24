@@ -1,13 +1,19 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // Hoist mock functions so they're available when vi.mock factories run.
-const { mockFetchInvoice, mockInvalidateEntitlementCache } = vi.hoisted(() => ({
-  mockFetchInvoice: vi.fn(),
-  mockInvalidateEntitlementCache: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockFetchInvoice, mockFetchSubscription, mockInvalidateEntitlementCache } = vi.hoisted(
+  () => ({
+    mockFetchInvoice: vi.fn(),
+    mockFetchSubscription: vi.fn(),
+    mockInvalidateEntitlementCache: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
-vi.mock('../../../src/modules/billing/razorpay-client.js', () => ({
+vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal) => ({
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  ...(await importOriginal<typeof import('../../../src/modules/billing/razorpay-client.js')>()),
   fetchInvoice: mockFetchInvoice,
+  fetchSubscription: mockFetchSubscription,
 }));
 
 // Mock Redis — avoid requiring a live Redis connection in CI.
@@ -105,6 +111,151 @@ function buildPayload(
 }
 
 // ─── Signature Verification ──────────────────────────────────────────────────
+
+describe('subscription.updated reconciliation', () => {
+  it('records an old same-cycle charge without reverting the live tier', async () => {
+    const sub = await makeSubscription({
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_oldcharge',
+      razorpayStatus: 'active',
+    });
+    mockFetchSubscription.mockResolvedValue({
+      id: 'sub_oldcharge',
+      status: 'active',
+      plan_id: 'plan_test_corporate',
+      has_scheduled_changes: false,
+    });
+    const result = await processWebhookEvent(
+      'subscription.charged',
+      buildPayload('subscription.charged', {
+        subscriptionId: 'sub_oldcharge',
+        planId: 'plan_test_pro_plus',
+        paymentId: 'pay_oldadjustment',
+        amount: 50,
+      }),
+    );
+    expect(result.outcome).toBe('processed');
+    const [updated] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(updated!.planTier).toBe('corporate');
+    const [payment] = await db
+      .select()
+      .from(schema.paymentTransaction)
+      .where(eq(schema.paymentTransaction.subscriptionId, sub.id));
+    expect(payment!.amount).toBe(50);
+  });
+
+  it('keeps current tier when an adjustment amount resembles another plan price', async () => {
+    const sub = await makeSubscription({
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_amount',
+      razorpayStatus: 'active',
+    });
+    await processWebhookEvent(
+      'subscription.charged',
+      buildPayload('subscription.charged', {
+        subscriptionId: 'sub_amount',
+        planId: 'plan_unknown',
+        paymentId: 'pay_amount',
+        amount: 299900,
+      }),
+    );
+    const [updated] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(updated!.planTier).toBe('corporate');
+  });
+
+  it('uses live plan for stale events, creates no payment and handles duplicate delivery', async () => {
+    const sub = await makeSubscription({
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_updated',
+      razorpayStatus: 'active',
+    });
+    mockFetchSubscription.mockResolvedValue({
+      id: 'sub_updated',
+      status: 'active',
+      plan_id: 'plan_test_corporate',
+      has_scheduled_changes: false,
+    });
+    const payload = buildPayload('subscription.updated', {
+      subscriptionId: 'sub_updated',
+      planId: 'plan_test_pro_plus',
+      amount: 299900,
+    });
+    expect((await processWebhookEvent('subscription.updated', payload)).outcome).toBe('processed');
+    expect((await processWebhookEvent('subscription.updated', payload)).outcome).toBe('duplicate');
+    const [updated] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(updated!.planTier).toBe('corporate');
+    expect(
+      await db
+        .select()
+        .from(schema.paymentTransaction)
+        .where(eq(schema.paymentTransaction.subscriptionId, sub.id)),
+    ).toHaveLength(0);
+  });
+
+  it.each([
+    { plan_id: 'plan_test_corporate', has_scheduled_changes: true },
+    { plan_id: 'plan_unknown', has_scheduled_changes: false },
+  ])('does not activate scheduled or unmapped target %j', async (provider) => {
+    const sub = await makeSubscription({
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_pendingupdate',
+      razorpayStatus: 'active',
+    });
+    mockFetchSubscription.mockResolvedValue({
+      id: 'sub_pendingupdate',
+      status: 'active',
+      ...provider,
+    });
+    const result = await processWebhookEvent(
+      'subscription.updated',
+      buildPayload('subscription.updated', { subscriptionId: 'sub_pendingupdate' }),
+    );
+    expect(result.outcome).toBe('ignored');
+    const [updated] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(updated!.planTier).toBe('professional_plus');
+  });
+
+  it('never infers a tier from adjustment amount or stale notes', async () => {
+    const sub = await makeSubscription({
+      planTier: 'hobby',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_unknownplan',
+      razorpayStatus: 'created',
+    });
+    const result = await processWebhookEvent(
+      'subscription.activated',
+      buildPayload('subscription.activated', {
+        subscriptionId: 'sub_unknownplan',
+        planId: 'plan_unknown',
+        paymentId: 'pay_adjustment',
+        amount: 799900,
+        notes: { tier: 'corporate' },
+      }),
+    );
+    expect(result.outcome).toBe('ignored');
+    const [updated] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(updated!.planTier).toBe('hobby');
+  });
+});
 
 describe('E-117: webhook signature verification', () => {
   const secret = 'test_webhook_secret';
@@ -316,6 +467,12 @@ describe('E-117: subscription.charged', () => {
       razorpayStatus: 'active',
     });
 
+    mockFetchSubscription.mockResolvedValue({
+      id: sub.razorpaySubscriptionId,
+      status: 'active',
+      plan_id: 'plan_test_corporate',
+      has_scheduled_changes: false,
+    });
     const payload = buildPayload('subscription.charged', {
       subscriptionId: sub.razorpaySubscriptionId!,
       planId: 'plan_test_corporate',

@@ -1,6 +1,48 @@
 import { z } from 'zod';
 
+const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
+  ['Hobby', 'Professional+', 'Corporate'].flatMap((current) =>
+    ['Hobby', 'Professional+', 'Corporate'].map((target): [string, string] => {
+      const semantics =
+        current === target
+          ? 'no-op'
+          : current === 'Hobby'
+            ? 'checkout activation'
+            : target === 'Hobby'
+              ? 'cycle-end cancellation'
+              : 'explicit deferred recovery';
+      return ['billing-plan-matrix.spec.ts', `${entry}: ${current} -> ${target}: ${semantics}`];
+    }),
+  ),
+);
+
 const requiredEntries: [file: string, title: string][] = [
+  ...billingMatrixEntries,
+  ...(['Professional+', 'Corporate'] as const).flatMap((initial) =>
+    ['Hobby cancellation', 'paid-plan recovery'].map((flow): [string, string] => [
+      'billing-same-cycle.spec.ts',
+      `Hobby purchase to ${initial} preserves the paid cycle through ${flow}, repeat purchase attempts, and ${initial === 'Corporate' ? 'Professional+' : 'Corporate'} recovery`,
+    ]),
+  ),
+  ...[
+    'preview authorization rejects tampering, expiry and a different target or organization before provider mutation',
+    'simultaneous submissions and completed-operation replay create exactly one provider checkout',
+    'recovery revisions protect replacement and dismissal never reverses provider cancellation',
+    'choosing another eligible saved plan requires confirmation before its replacement checkout',
+    'revoked billing permission blocks saved preview execution and billing reads',
+  ].map((title): [string, string] => ['billing-boundaries.spec.ts', title]),
+  ...[
+    'provider outage blocks a paid change preview without mutating billing',
+    'lost checkout creation response remains uncertain across reload and cannot create twice',
+    'lost cancellation response reconciles from live provider state without a second cancellation',
+    'invalid duplicate and stale signed webhooks cannot grant or roll back a paid tier',
+    'lost recovery cancellation retains the accepted target and reconciles without cancelling twice',
+    'unfinished checkout rejects another tier and resumes the same provider subscription',
+    'authenticated checkout waits for activation and cannot create a second subscription',
+    'pending mandate requires payment recovery and blocks a replacement purchase',
+    'halted mandate requires payment recovery and blocks a replacement purchase',
+    'scheduled provider plan update retains current access and blocks conflicting selections',
+  ].map((title): [string, string] => ['billing-provider-failures.spec.ts', title]),
   [
     'authentication.spec.ts',
     'anonymous designer routes never paint protected workspace content and retain the callback',
@@ -32,6 +74,18 @@ const requiredEntries: [file: string, title: string][] = [
   [
     'billing-management.spec.ts',
     'fresh Hobby organization shows actual seat and branch usage without a subscription',
+  ],
+  ...(['Hobby', 'Professional+', 'Corporate'] as const).map((label): [string, string] => [
+    'billing-management.spec.ts',
+    `${label} owner can compare all plans on both billing pages at desktop and mobile widths`,
+  ]),
+  [
+    'billing-management.spec.ts',
+    'direct Corporate checkout survives provider dismissal and reload, then activates only from provider evidence',
+  ],
+  [
+    'billing-management.spec.ts',
+    'paid recovery preserves the accepted downgrade across session loss and cancellation requires a fresh preview',
   ],
   [
     'consultation-participants.spec.ts',

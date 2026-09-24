@@ -14,7 +14,9 @@ import {
  * They require RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.
  * Skipped when credentials are not configured.
  */
-const hasCredentials = Boolean(config.RAZORPAY_KEY_ID && config.RAZORPAY_KEY_SECRET);
+const hasCredentials = Boolean(
+  config.RAZORPAY_KEY_ID?.startsWith('rzp_test_') && config.RAZORPAY_KEY_SECRET,
+);
 
 describe.skipIf(!hasCredentials)('Razorpay Test Mode integration', () => {
   it('verifies Test Mode credentials are valid', async () => {
@@ -58,8 +60,8 @@ describe.skipIf(!hasCredentials)('Razorpay Test Mode integration', () => {
   }, 15000);
 
   it('rejects creation with an invalid plan ID', async () => {
-    await expect(
-      createSubscription({ planId: 'plan_invalid_does_not_exist' }),
-    ).rejects.toThrow(/Razorpay createSubscription failed/);
+    await expect(createSubscription({ planId: 'plan_invalid_does_not_exist' })).rejects.toThrow(
+      /Razorpay createSubscription failed/,
+    );
   }, 10000);
 });

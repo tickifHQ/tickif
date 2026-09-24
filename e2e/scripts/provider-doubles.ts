@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { z } from 'zod';
 import { environment, providerUrl } from '../lib/environment.js';
+import { handleBillingProvider } from './billing-provider-fixture.js';
 
 if (
   environment.NODE_ENV !== 'test' ||
@@ -26,6 +27,11 @@ export function installProviderDoubles(serveMailbox: boolean) {
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
+    if (url.origin === 'https://api.razorpay.com') {
+      return originalFetch(
+        new Request(`${providerUrl}/razorpay${url.pathname}${url.search}`, request),
+      );
+    }
     if (url.origin === 'https://api.resend.com' && url.pathname === '/emails') {
       const message = emailMessage.parse(await request.json());
       const recipients = Array.isArray(message.to) ? message.to : [message.to];
@@ -74,6 +80,10 @@ export function installProviderDoubles(serveMailbox: boolean) {
   if (!serveMailbox) return;
   const mailbox = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname.startsWith('/razorpay/') || url.pathname.startsWith('/billing-fixture/')) {
+      void handleBillingProvider(request, response, url);
+      return;
+    }
     if (request.method === 'GET' && url.pathname === '/health')
       return void response.writeHead(200).end('provider doubles ready');
     if (request.method === 'GET' && url.pathname === '/emails') {
