@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   plan: vi.fn(),
   access: vi.fn(),
   recovery: vi.fn(),
+  pending: vi.fn(),
+  updateOperation: vi.fn(),
 }));
 vi.mock('@repo/config', () => ({
   config: {
@@ -21,7 +23,7 @@ vi.mock('@repo/config', () => ({
   },
 }));
 vi.mock('../../../src/modules/billing/operation-repository.js', () => ({
-  operationRepository: { findOpenOperation: vi.fn().mockResolvedValue(undefined) },
+  operationRepository: { findOpenOperation: mocks.pending, updateOperation: mocks.updateOperation },
 }));
 vi.mock('../../../src/modules/billing/subscribe-repository.js', () => ({
   subscribeRepository: { find: mocks.find },
