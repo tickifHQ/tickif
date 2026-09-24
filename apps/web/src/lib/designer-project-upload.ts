@@ -216,6 +216,8 @@ export function buildCreateProjectPayload(input: {
   bhkSlug: string;
   sizeSqft: string;
   citySlug: string;
+  cityName?: string;
+  customCity?: boolean;
   cityLabel: string;
   localitySlug?: string;
   localityLabel: string;
@@ -227,6 +229,16 @@ export function buildCreateProjectPayload(input: {
   selectedProjectSubtypeLabel: string;
   selectedScopes: string[];
 }): CreateProjectInput {
+  // Custom city and taxonomy city are mutually exclusive. When the designer
+  // enters a custom city we send `cityName` and never a taxonomy `citySlug`
+  // (nor a taxonomy `localitySlug`, which only makes sense within a taxonomy
+  // city). The backend enforces the same exclusivity on its side.
+  const customCityName = input.customCity ? (input.cityName ?? '').trim() : '';
+  const useCustomCity = customCityName.length > 0;
+  const effectiveCitySlug = useCustomCity ? '' : input.citySlug;
+  const effectiveCityLabel = useCustomCity ? customCityName : input.cityLabel;
+  const effectiveLocalitySlug = useCustomCity ? undefined : input.localitySlug;
+
   return {
     title: projectTitle(
       input.projectName,
@@ -236,8 +248,8 @@ export function buildCreateProjectPayload(input: {
         selectedProjectSubtypeLabel: input.selectedProjectSubtypeLabel,
         selectedProjectTypeLabel: input.selectedProjectTypeLabel,
         localityLabel: input.localityLabel,
-        cityLabel: input.cityLabel,
-        citySlug: input.citySlug,
+        cityLabel: effectiveCityLabel,
+        citySlug: effectiveCitySlug,
       }),
       [
         input.selectedProjectTypeLabel,
@@ -253,8 +265,9 @@ export function buildCreateProjectPayload(input: {
     scopeSlug: input.selectedScopeSlug || undefined,
     bhkSlug: input.primaryField === 'bhk' ? input.bhkSlug || undefined : undefined,
     sizeSqft: parsePositiveInteger(input.sizeSqft),
-    citySlug: input.citySlug || undefined,
-    localitySlug: input.localitySlug,
+    citySlug: useCustomCity ? undefined : input.citySlug || undefined,
+    cityName: useCustomCity ? customCityName : undefined,
+    localitySlug: effectiveLocalitySlug,
     buildingName: input.buildingName.trim() || undefined,
     budgetBandSlug: input.budgetBandSlug || undefined,
     completedMonth: input.completedByMonth || undefined,

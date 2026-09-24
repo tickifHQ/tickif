@@ -138,6 +138,107 @@ describe('designer project upload helpers', () => {
     });
   });
 
+  it('emits cityName and clears citySlug/localitySlug for a custom city', () => {
+    const payload = buildCreateProjectPayload({
+      projectName: '',
+      selectedProjectTypeLabel: 'Villa',
+      aboutProject: '',
+      backendProjectSelection: {
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'villa',
+      },
+      selectedScopeSlug: 'design',
+      primaryField: 'bhk',
+      bhkSlug: '3-bhk',
+      sizeSqft: '',
+      // A stale taxonomy selection must be ignored once custom mode is on.
+      citySlug: 'bengaluru',
+      cityName: ' Pondicherry ',
+      customCity: true,
+      cityLabel: 'Bengaluru',
+      localitySlug: 'indiranagar',
+      localityLabel: '',
+      buildingName: '',
+      budgetBandSlug: '',
+      completedByMonth: '',
+      projectDuration: '',
+      projectType: 'villa',
+      selectedProjectSubtypeLabel: 'Villa',
+      selectedScopes: ['design'],
+    });
+
+    expect(payload.cityName).toBe('Pondicherry');
+    expect(payload.citySlug).toBeUndefined();
+    expect(payload.localitySlug).toBeUndefined();
+    // The custom city name feeds the derived title location.
+    expect(payload.title).toBe('3 BHK in Pondicherry');
+  });
+
+  it('keeps citySlug and omits cityName for a taxonomy city', () => {
+    const payload = buildCreateProjectPayload({
+      projectName: 'Taxonomy City Project',
+      selectedProjectTypeLabel: 'Apartment',
+      aboutProject: '',
+      backendProjectSelection: {
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+      },
+      selectedScopeSlug: 'construction',
+      primaryField: 'bhk',
+      bhkSlug: '2-bhk',
+      sizeSqft: '',
+      citySlug: 'bengaluru',
+      cityName: '',
+      customCity: false,
+      cityLabel: 'Bengaluru',
+      localitySlug: 'indiranagar',
+      localityLabel: 'Indiranagar',
+      buildingName: '',
+      budgetBandSlug: '',
+      completedByMonth: '',
+      projectDuration: '',
+      projectType: 'apartment',
+      selectedProjectSubtypeLabel: 'Apartment',
+      selectedScopes: ['construction'],
+    });
+
+    expect(payload.citySlug).toBe('bengaluru');
+    expect(payload.cityName).toBeUndefined();
+    expect(payload.localitySlug).toBe('indiranagar');
+  });
+
+  it('ignores a custom city with only whitespace and keeps the taxonomy city', () => {
+    const payload = buildCreateProjectPayload({
+      projectName: 'Whitespace City',
+      selectedProjectTypeLabel: 'Apartment',
+      aboutProject: '',
+      backendProjectSelection: {
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+      },
+      selectedScopeSlug: 'construction',
+      primaryField: 'bhk',
+      bhkSlug: '2-bhk',
+      sizeSqft: '',
+      citySlug: 'chennai',
+      cityName: '   ',
+      customCity: true,
+      cityLabel: 'Chennai',
+      localitySlug: 'adyar',
+      localityLabel: 'Adyar',
+      buildingName: '',
+      budgetBandSlug: '',
+      completedByMonth: '',
+      projectDuration: '',
+      projectType: 'apartment',
+      selectedProjectSubtypeLabel: 'Apartment',
+      selectedScopes: ['construction'],
+    });
+
+    expect(payload.citySlug).toBe('chennai');
+    expect(payload.cityName).toBeUndefined();
+  });
+
   it('derives a default project title from the selected BHK/type and location when the field is blank', () => {
     const apartmentPayload = buildCreateProjectPayload({
       projectName: '   ',

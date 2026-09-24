@@ -1014,7 +1014,7 @@ export const projectsRepository = {
         if (!hasCover) return { project: aggregate.project, counts, submitted: null, missingCover: true };
         if (
           !aggregate.project.title.trim() ||
-          !aggregate.project.citySlug ||
+          !(aggregate.project.citySlug || aggregate.project.cityName) ||
           !aggregate.project.propertyTypeSlug ||
           !aggregate.project.scopeSlug ||
           !aggregate.project.budgetBandSlug ||
@@ -1129,7 +1129,7 @@ export const projectsRepository = {
       // service's earlier read, before recording the submission transition.
       const hasRequiredMetadata =
         project.title.trim().length > 0 &&
-        !!project.citySlug &&
+        !!(project.citySlug || project.cityName) &&
         !!project.propertyTypeSlug &&
         !!project.scopeSlug &&
         !!project.budgetBandSlug;
