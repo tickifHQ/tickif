@@ -26,6 +26,7 @@ const dashboard: ProfileDashboardResponse = {
     new: 0,
   },
   shareUrl: 'https://tickif.com/d/livspace',
+  heroCoverUrl: 'https://cdn.example.com/livspace-cover.jpg',
   publiclyVisible: true,
   verificationStatus: null,
 };
@@ -92,6 +93,8 @@ describe('DesignerDashboardOverview', () => {
       'src',
       'https://storage.example.com/livspace.webp',
     );
+    expect(screen.getByTestId('dashboard-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('dashboard-preview-logo')).not.toHaveClass('border');
     expect(
       screen.queryByRole('img', { name: 'Livspace generated profile initials' }),
     ).not.toBeInTheDocument();
@@ -111,7 +114,38 @@ describe('DesignerDashboardOverview', () => {
     expect(
       screen.getByRole('img', { name: 'Livspace generated profile initials' }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('dashboard-preview-logo')).not.toHaveClass('border');
     expect(screen.queryByRole('img', { name: 'Livspace logo' })).not.toBeInTheDocument();
+  });
+
+  it('renders the saved portfolio cover in the dashboard share preview', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Livspace portfolio cover' })).toHaveAttribute(
+      'src',
+      expect.stringContaining('livspace-cover.jpg'),
+    );
+  });
+
+  it('uses the existing gradient fallback when no portfolio cover is saved', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{ ...dashboard, heroCoverUrl: null }}
+      />,
+    );
+
+    expect(screen.queryByRole('img', { name: 'Livspace portfolio cover' })).not.toBeInTheDocument();
   });
 
   it('links the shipped project, profile, and share actions', () => {

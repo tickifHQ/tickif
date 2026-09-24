@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import Image from 'next/image';
+import Link from 'next/link';
 import type {
   CompletionStep,
   ProfileCompletionResponse,
@@ -430,9 +430,23 @@ export function DesignerDashboardOverview({
             <Card variant="accent" radius="3xl" className="overflow-hidden">
               <div className="px-4 pt-4">
                 <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
-                  <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
+                  <div className="relative h-32 overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))]">
+                    {dashboard.heroCoverUrl ? (
+                      <Image
+                        src={dashboard.heroCoverUrl}
+                        alt={`${studioName} portfolio cover`}
+                        fill
+                        unoptimized
+                        sizes="(max-width: 1024px) 100vw, 22rem"
+                        className="object-cover"
+                      />
+                    ) : null}
+                  </div>
                   <div className="space-y-3 px-5 py-4 text-center">
-                    <div className="mx-auto -mt-10 size-16 overflow-hidden rounded-2xl border border-border bg-primary/10 shadow-sm">
+                    <div
+                      data-testid="dashboard-preview-logo"
+                      className="relative z-10 mx-auto -mt-10 size-16 overflow-hidden rounded-2xl bg-primary/10 shadow-sm"
+                    >
                       {logoUrl ? (
                         <Image
                           src={logoUrl}
