@@ -53,7 +53,8 @@ describe('LogoCropDialog', () => {
       />,
     );
 
-    expect(screen.getByRole('dialog', { name: 'Crop logo' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Crop logo' })).toHaveClass('sm:max-w-md');
+    expect(screen.getByTestId('logo-crop-surface')).toHaveClass('h-[min(42dvh,22rem)]', 'min-h-56');
     expect(screen.getByTestId('cropper')).toHaveAttribute('data-aspect', '1');
     expect(screen.getByTestId('cropper')).toHaveAttribute('data-crop-shape', 'rect');
     const zoom = screen.getByRole('slider', { name: 'Logo zoom' });
@@ -61,8 +62,12 @@ describe('LogoCropDialog', () => {
     const saveLogo = screen.getByRole('button', { name: 'Save logo' });
 
     expect(zoom).toBeInTheDocument();
+    expect(screen.getByTestId('logo-zoom-row')).toHaveClass('mx-auto', 'max-w-xs', 'items-center');
+    expect(screen.getByTestId('logo-zoom-control')).toHaveClass('flex-1');
     expect(zoom.compareDocumentPosition(chooseAnother)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(chooseAnother.compareDocumentPosition(saveLogo)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(chooseAnother).toHaveClass('h-9');
+    expect(saveLogo).toHaveClass('h-9');
     expect(screen.queryByText(/saved logo will be square and optimized/i)).not.toBeInTheDocument();
     expect(saveLogo).toBeDisabled();
 

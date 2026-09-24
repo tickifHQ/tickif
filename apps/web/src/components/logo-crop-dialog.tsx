@@ -55,8 +55,8 @@ export function LogoCropDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !isSaving && onOpenChange(nextOpen)}>
-      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-full flex-col gap-0 overflow-hidden p-0 data-[state=closed]:animate-none data-[state=open]:animate-none sm:max-w-xl">
-        <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-14 text-left sm:px-6">
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-full flex-col gap-0 overflow-hidden p-0 data-[state=closed]:animate-none data-[state=open]:animate-none sm:max-w-md">
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-3.5 pr-14 text-left">
           <DialogTitle>Crop logo</DialogTitle>
           <DialogDescription>
             Drag to position your logo, then zoom until the square preview looks right.
@@ -64,7 +64,10 @@ export function LogoCropDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="relative h-[min(52dvh,30rem)] min-h-64 overflow-hidden bg-muted">
+          <div
+            data-testid="logo-crop-surface"
+            className="relative h-[min(42dvh,22rem)] min-h-56 overflow-hidden bg-muted"
+          >
             {imageSource ? (
               <Cropper
                 image={imageSource}
@@ -90,15 +93,18 @@ export function LogoCropDialog({
             )}
           </div>
 
-          <div className="space-y-4 border-t border-border bg-card px-5 py-4 sm:px-6">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="logo-zoom">Zoom</Label>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {Math.round(zoom * 100)}%
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
+          <div className="space-y-3 border-t border-border bg-card px-5 py-3.5">
+            <div
+              data-testid="logo-zoom-row"
+              className="mx-auto flex w-full max-w-xs items-center gap-3"
+            >
+              <Label htmlFor="logo-zoom" className="shrink-0">
+                Zoom
+              </Label>
+              <div
+                data-testid="logo-zoom-control"
+                className="flex min-w-0 flex-1 items-center gap-2"
+              >
                 <ZoomIn className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <Slider
                   id="logo-zoom"
@@ -110,6 +116,9 @@ export function LogoCropDialog({
                   onValueChange={(value) => setZoom(value[0] ?? 1)}
                 />
               </div>
+              <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                {Math.round(zoom * 100)}%
+              </span>
             </div>
 
             {error ? (
@@ -120,12 +129,19 @@ export function LogoCropDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border bg-card px-5 py-4 sm:px-6">
-          <Button type="button" variant="outline" onClick={onChooseAnother} disabled={isSaving}>
+        <DialogFooter className="shrink-0 border-t border-border bg-card px-5 py-3.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onChooseAnother}
+            disabled={isSaving}
+          >
             Choose another
           </Button>
           <Button
             type="button"
+            size="sm"
             onClick={() =>
               croppedArea &&
               croppedAreaPercentages &&
