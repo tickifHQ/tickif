@@ -397,6 +397,7 @@ describe('DesignerProjectRowActions', () => {
     expect(
       screen.queryByRole('menuitem', { name: /duplicate project/i }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('separator')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: /restore to drafts/i }));
 
     await waitFor(() => {

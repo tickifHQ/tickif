@@ -79,11 +79,12 @@ export function DesignerProjectRowActions({
   // Only a published project has a live public page. Its relative path is what
   // the public site links to elsewhere (showcase card, image detail, etc.).
   const isPublished = projectStatus === 'published';
+  const duplicateEnabled = !isTerminal && projectStatus !== 'archived';
   const publicPath = `/projects/${projectId}`;
   // Copy Link shares an absolute URL, so build it from the public web origin.
   const publicUrl = `${env.NEXT_PUBLIC_WEB_URL.replace(/\/$/, '')}${publicPath}`;
-  // A separator only belongs before the state-changing group when that group
-  // renders anything — this avoids leading/stacked dividers in the menu.
+  // Only separate nonempty groups so archived rows have no leading divider.
+  const hasQuickActions = isPublished || duplicateEnabled;
   const hasStateActions = withdrawEnabled || archiveEnabled || restoreEnabled || deleteEnabled;
 
   function handleMenuOpenChange(open: boolean) {
@@ -250,13 +251,13 @@ export function DesignerProjectRowActions({
               {copied ? 'Copied' : 'Copy link'}
             </DropdownMenuItem>
           ) : null}
-          {!isTerminal && projectStatus !== 'archived' ? (
+          {duplicateEnabled ? (
             <DropdownMenuItem disabled={isPending} onSelect={duplicateProject}>
               <Copy className="size-4" />
               Duplicate project
             </DropdownMenuItem>
           ) : null}
-          {hasStateActions ? <DropdownMenuSeparator /> : null}
+          {hasQuickActions && hasStateActions ? <DropdownMenuSeparator /> : null}
           {withdrawEnabled ? (
             <DropdownMenuItem
               onSelect={() => {
