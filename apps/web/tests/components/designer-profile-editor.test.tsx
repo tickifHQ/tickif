@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   CurrentProfileResponse,
@@ -17,6 +18,35 @@ const mock = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: mock.refresh }),
+}));
+
+vi.mock('next/image', () => ({
+  default: ({
+    fill: _fill,
+    unoptimized: _unoptimized,
+    ...imageProps
+  }: ComponentProps<'img'> & { fill?: boolean; unoptimized?: boolean }) =>
+    createElement('img', imageProps),
+}));
+
+vi.mock('@/components/logo-crop-dialog', () => ({
+  LogoCropDialog: ({
+    imageSource,
+    initialCrop,
+    open,
+  }: {
+    imageSource: string | null;
+    initialCrop: unknown;
+    open: boolean;
+  }) =>
+    open ? (
+      <div
+        role="dialog"
+        aria-label="Crop logo"
+        data-image-source={imageSource}
+        data-initial-crop={JSON.stringify(initialCrop)}
+      />
+    ) : null,
 }));
 
 vi.mock('@/lib/profile-editor-api', () => ({
@@ -71,6 +101,7 @@ const profile: CurrentProfileResponse = {
   entityType: 'company',
   bio: 'Warm, practical homes.',
   logoImageId: null,
+  logoUrl: null,
   status: 'active',
   yearsExperience: 5,
   projectCount: 8,
@@ -106,7 +137,7 @@ const completion: ProfileCompletionResponse = {
 };
 
 function ownerProfile(overrides: Partial<ProfileOwnerResponse> = {}): ProfileOwnerResponse {
-  const { organization: _organization, shareUrl: _shareUrl, ...owner } = profile;
+  const { organization: _organization, shareUrl: _shareUrl, logoUrl: _logoUrl, ...owner } = profile;
   return { ...owner, ...overrides };
 }
 
@@ -145,6 +176,53 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('70% complete')).toBeInTheDocument();
   });
 
+  it('shows the saved portfolio logo instead of generated initials', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{
+          ...profile,
+          logoUrl: 'https://storage.example.com/studio-logo.webp',
+        }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Edit logo' })).toHaveClass('cursor-pointer');
+    expect(screen.getByAltText('Mahi Studio logo')).toHaveAttribute(
+      'src',
+      'https://storage.example.com/studio-logo.webp',
+    );
+    expect(screen.queryByAltText('Generated profile initials')).not.toBeInTheDocument();
+  });
+
+  it('opens the shared logo crop workflow with the saved source and crop', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{
+          ...profile,
+          logoUrl: 'https://storage.example.com/studio-logo.webp',
+          logoSourceUrl: 'https://storage.example.com/studio-logo-source.png',
+          logoCrop: { x: 10, y: 15, width: 60, height: 60 },
+        }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit logo' }));
+    expect(await screen.findByRole('dialog', { name: 'Studio logo' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByRole('dialog', { name: 'Crop logo' })).toHaveAttribute(
+      'data-image-source',
+      'https://storage.example.com/studio-logo-source.png',
+    );
+  });
+
   it('names each missing requirement with a direct action, including logo upload', () => {
     render(
       <DesignerProfileEditor
@@ -159,7 +237,7 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('Logo')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upload your logo' })).toHaveAttribute(
       'href',
-      '/designer/portfolio',
+      '/designer/profile#profile-logo',
     );
   });
 

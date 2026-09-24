@@ -44,6 +44,8 @@ describe('profile search projection events', () => {
         designer.id,
         'originals/logos/stale',
         'originals/logos/new',
+        null,
+        null,
       ),
     ).resolves.toBe(false);
 

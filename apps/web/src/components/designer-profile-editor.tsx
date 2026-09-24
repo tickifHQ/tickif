@@ -20,6 +20,7 @@ import {
   type ProfileCompletionResponse,
   type ProfileOwnerResponse,
   type UpdateProfileInput,
+  type UploadLogoResponse,
 } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
@@ -28,7 +29,7 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
-import { InitialsAvatar } from '@/components/initials-avatar';
+import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
 import {
   PhoneNumberInput,
   countries,
@@ -289,7 +290,7 @@ const COMPLETION_REQUIREMENT_ACTIONS: Record<
     href: '/designer/profile#profile-display-name',
   },
   bio: { label: 'Bio', action: 'Write your bio', href: '/designer/profile#profile-bio' },
-  logo: { label: 'Logo', action: 'Upload your logo', href: '/designer/portfolio' },
+  logo: { label: 'Logo', action: 'Upload your logo', href: '/designer/profile#profile-logo' },
   location: {
     label: 'Location',
     action: 'Add your location',
@@ -331,6 +332,11 @@ export function DesignerProfileEditor({
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [logo, setLogo] = useState<DesignerLogoValue>(() => ({
+    logoUrl: initialProfile.logoUrl ?? null,
+    logoSourceUrl: initialProfile.logoSourceUrl ?? null,
+    logoCrop: initialProfile.logoCrop ?? null,
+  }));
   const [isSaving, startSaveTransition] = useTransition();
   const formRevisionRef = useRef(0);
   const isDirty = !formsEqual(form, savedForm);
@@ -380,6 +386,23 @@ export function DesignerProfileEditor({
         setSaveError(error instanceof Error ? error.message : 'Could not save profile settings.');
       }
     });
+  }
+
+  async function handleLogoUploaded(result: UploadLogoResponse): Promise<null> {
+    setLogo({
+      logoUrl: result.logoUrl,
+      logoSourceUrl: result.logoSourceUrl,
+      logoCrop: result.logoCrop,
+    });
+    router.refresh();
+
+    try {
+      setCompletion(await fetchProfileCompletion());
+    } catch {
+      // The logo is already saved. Preserve the last known completion score if refresh fails.
+    }
+
+    return null;
   }
 
   const cityLimitError =
@@ -475,14 +498,13 @@ export function DesignerProfileEditor({
         </CardHeader>
         <CardContent className="grid gap-5">
           <div className="flex flex-col items-start gap-5 sm:flex-row">
-            <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
-              <InitialsAvatar
-                seed={form.displayName}
-                fallbackSeed="Tickif Designer"
-                alt="Generated profile initials"
-                size={64}
-              />
-            </div>
+            <DesignerLogoInput
+              id="profile-logo"
+              value={logo}
+              displayName={form.displayName}
+              onUploaded={handleLogoUploaded}
+              sizeClassName="size-16"
+            />
 
             <div className="grid w-full flex-1 gap-4 sm:grid-cols-2">
               <Field
