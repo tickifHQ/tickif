@@ -14,7 +14,9 @@ record_dir=/opt/tickif/storage-migration
 mountpoint -q /var/lib/docker
 [[ "$(stat -c %d /var/lib/docker)" != "$(stat -c %d /)" ]]
 [[ -d "$source_dir" && ! -L "$source_dir" && ! -e "$backup_dir" && ! -e "$target_dir" ]]
-! mountpoint -q "$source_dir"
+if mountpoint -q "$source_dir"; then
+  echo 'Containerd source is already mounted; migration aborted' >&2; exit 1
+fi
 [[ "$(df -B1 --output=avail /var/lib/docker | tail -1)" -gt 21474836480 ]]
 command -v rsync >/dev/null
 [[ "$(docker node ls -q | wc -l)" -eq 1 ]]
@@ -34,7 +36,9 @@ while [[ -n "$(docker ps -q)" || -n "$(docker ps -aq --filter label=com.docker.s
   sleep 2
 done
 systemctl stop docker.socket docker.service containerd.service
-! pgrep -f '^/usr/bin/containerd-shim' >/dev/null
+if pgrep -f '^/usr/bin/containerd-shim' >/dev/null; then
+  echo 'Containerd shims remain; migration aborted' >&2; exit 1
+fi
 if findmnt -rn -o TARGET | grep -q '^/var/lib/containerd/'; then
   echo 'Container mounts remain; refusing copy' >&2; exit 1
 fi
