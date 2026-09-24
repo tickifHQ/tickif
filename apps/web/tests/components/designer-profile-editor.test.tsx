@@ -135,7 +135,11 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByLabelText(/address/i)).toHaveValue('Bandra West, Mumbai');
     expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('9876543210');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://mahi.example.com');
-    expect(screen.queryByLabelText(/google business url/i)).not.toBeInTheDocument();
+    // The Google Business Profile link is now editable in settings and prefilled
+    // from the saved googleBusinessUrl.
+    expect(screen.getByLabelText(/google business profile/i)).toHaveValue(
+      'https://g.page/mahi-studio',
+    );
     expect(screen.getByLabelText(/firm type/i)).toHaveValue('Private Limited');
     expect(screen.getByRole('button', { name: /cities: mumbai/i })).toBeInTheDocument();
     expect(
@@ -315,6 +319,83 @@ describe('DesignerProfileEditor', () => {
 
     expect(await screen.findByText(/enter a valid url/i)).toBeInTheDocument();
     expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it('normalizes and saves an edited Google Business Profile link', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const googleField = screen.getByLabelText(/google business profile/i);
+    await user.clear(googleField);
+    await user.type(googleField, 'g.page/mahi-updated');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        googleBusinessUrl: 'https://g.page/mahi-updated',
+      });
+    });
+  });
+
+  it('clears the Google Business Profile link by sending null when emptied', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText(/google business profile/i));
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ googleBusinessUrl: null });
+    });
+  });
+
+  it('rejects an invalid Google Business Profile link without sending an update', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const googleField = screen.getByLabelText(/google business profile/i);
+    await user.clear(googleField);
+    await user.type(googleField, 'not-a-url');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText(/enter a valid url/i)).toBeInTheDocument();
+    expect(googleField).toHaveAttribute('aria-invalid', 'true');
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it('leaves the Google Business Profile link untouched when a profile has none', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, googleBusinessUrl: null }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByLabelText(/google business profile/i)).toHaveValue('');
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
   it('wires the remaining contact, social, company, and footprint fields without touching the stored business URL', async () => {
