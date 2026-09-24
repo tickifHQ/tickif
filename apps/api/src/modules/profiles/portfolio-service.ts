@@ -609,7 +609,10 @@ export const portfolioService = {
     const previousKey = profile.logoImageId;
     const previousSourceKey = profile.logoSourceImageId;
     const nextLogoCrop = input.logoCrop ?? null;
-    let nextSourceKey = input.sourceObjectKey ?? previousSourceKey;
+    // Before source tracking existed, the displayed image is the crop editor's
+    // original. Keep it so saved percentages still refer to the same pixels.
+    const cropSourceKey = previousSourceKey ?? (input.logoCrop ? previousKey : null);
+    let nextSourceKey = input.sourceObjectKey ?? cropSourceKey;
     const updated = await portfolioRepository.setLogoIfMatch(
       profile.id,
       previousKey,
@@ -620,7 +623,12 @@ export const portfolioService = {
     if (!updated) {
       // Concurrent modification — retry CAS once with fresh state
       const freshProfile = await resolveProfile(caller);
-      nextSourceKey = input.sourceObjectKey ?? freshProfile.logoSourceImageId;
+      const freshSourceKey =
+        freshProfile.logoSourceImageId ?? (input.logoCrop ? freshProfile.logoImageId : null);
+      if (!input.sourceObjectKey && input.logoCrop && freshSourceKey !== cropSourceKey) {
+        throw AppError.conflict('Logo source was modified concurrently, please reopen the editor');
+      }
+      nextSourceKey = input.sourceObjectKey ?? freshSourceKey;
       const retried = await portfolioRepository.setLogoIfMatch(
         freshProfile.id,
         freshProfile.logoImageId,
@@ -648,7 +656,12 @@ export const portfolioService = {
     }
 
     // Clean up the previous storage object (non-critical — orphan is acceptable)
-    if (previousKey && previousKey !== input.objectKey && previousKey.startsWith(expectedPrefix)) {
+    if (
+      previousKey &&
+      previousKey !== input.objectKey &&
+      previousKey !== nextSourceKey &&
+      previousKey.startsWith(expectedPrefix)
+    ) {
       try {
         await deleteObject(previousKey);
       } catch (err) {

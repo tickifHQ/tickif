@@ -693,6 +693,61 @@ describe('portfolioService.commitLogoUpload', () => {
     expect(deleteObject).not.toHaveBeenCalledWith('originals/logos/profile-1/source-key');
   });
 
+  it('preserves a legacy logo as the source on its first crop', async () => {
+    setupResolveProfile();
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload).mockImplementation(
+      async ({ key }) => `https://r2.example.com/${key}`,
+    );
+    const logoCrop = { x: 10, y: 10, width: 80, height: 80 };
+
+    const result = await portfolioService.commitLogoUpload(
+      { objectKey: 'originals/logos/profile-1/cropped', logoCrop },
+      caller,
+    );
+
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/abc',
+      'originals/logos/profile-1/cropped',
+      'originals/logos/profile-1/abc',
+      logoCrop,
+    );
+    expect(result.logoSourceUrl).toBe('https://r2.example.com/originals/logos/profile-1/abc');
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('rejects a crop retry when a concurrent replacement changed its source', async () => {
+    setupResolveProfile(makeProfile({ logoSourceImageId: 'originals/logos/profile-1/source-a' }));
+    vi.mocked(profilesRepository.findByTeamId)
+      .mockResolvedValueOnce(
+        makeProfile({ logoSourceImageId: 'originals/logos/profile-1/source-a' }),
+      )
+      .mockResolvedValueOnce(
+        makeProfile({
+          logoImageId: 'originals/logos/profile-1/display-b',
+          logoSourceImageId: 'originals/logos/profile-1/source-b',
+        }),
+      );
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    await expect(
+      portfolioService.commitLogoUpload(
+        {
+          objectKey: 'originals/logos/profile-1/cropped-a',
+          logoCrop: { x: 10, y: 10, width: 80, height: 80 },
+        },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledTimes(1);
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
   it('rejects a source object key owned by another profile', async () => {
     setupResolveProfile();
 
