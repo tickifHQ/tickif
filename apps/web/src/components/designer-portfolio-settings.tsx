@@ -20,6 +20,7 @@ import {
 import {
   PORTFOLIO_BADGE_ORDER,
   PORTFOLIO_BADGE_PRESENTATION,
+  type ExperienceCenter,
   type GoogleReviewsResponse,
   type PortfolioProjectItem,
   type PortfolioResponse,
@@ -44,6 +45,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import { ExperienceCentersEditor } from '@/components/experience-centers-editor';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
 import {
   GoogleBrandIcon,
@@ -95,6 +97,7 @@ type FormState = {
   showGoogleOverallRating: boolean;
   showGooglePositiveReviewsOnly: boolean;
   showTickifBadge: boolean;
+  experienceCenters: ExperienceCenter[];
 };
 
 type SlugStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'invalid' | 'error';
@@ -107,7 +110,12 @@ const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
 type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
 
-type SectionKey = 'linkUrl' | 'customizations' | 'hero' | ToggleableSectionKey;
+type SectionKey =
+  | 'linkUrl'
+  | 'customizations'
+  | 'hero'
+  | 'experienceCenters'
+  | ToggleableSectionKey;
 
 /** Hero fields that have to be filled before the public page goes live. */
 const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
@@ -157,6 +165,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     showGoogleOverallRating: data.reviewSettings.google.showOverallRating,
     showGooglePositiveReviewsOnly: data.reviewSettings.google.showPositiveReviewsOnly,
     showTickifBadge: data.showTickifBadge,
+    experienceCenters: data.experienceCenters ?? [],
   };
 }
 
@@ -177,11 +186,18 @@ function computeChangedFields(current: FormState, saved: FormState): UpdatePortf
     patch.reviewSettings = { google: googleReviewSettings };
   }
 
+  // Experience Centers is an array (full-array replace on the contract), so it
+  // needs a structural diff rather than the scalar `!==` used below.
+  if (JSON.stringify(current.experienceCenters) !== JSON.stringify(saved.experienceCenters)) {
+    patch.experienceCenters = current.experienceCenters;
+  }
+
   for (const key of Object.keys(current) as Array<keyof FormState>) {
     if (
       key === 'showGoogleReviews' ||
       key === 'showGoogleOverallRating' ||
-      key === 'showGooglePositiveReviewsOnly'
+      key === 'showGooglePositiveReviewsOnly' ||
+      key === 'experienceCenters'
     ) {
       continue;
     }
@@ -288,6 +304,7 @@ export function DesignerPortfolioSettings() {
     linkUrl: true,
     customizations: true,
     hero: true,
+    experienceCenters: false,
     trust: false,
     testimonial: false,
     reviews: false,
@@ -1421,6 +1438,24 @@ export function DesignerPortfolioSettings() {
                   </div>
                 </div>
               </ToggleableSection>
+
+              {/* Experience Centers — grouped by state on the public page */}
+              <CollapsibleSection
+                title="Experience Centers"
+                subtitle="List your physical experience centers. They appear grouped by state on your public page."
+                expanded={sectionExpanded.experienceCenters}
+                onToggleExpanded={() => toggleExpanded('experienceCenters')}
+              >
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
+                >
+                  <ExperienceCentersEditor
+                    value={form.experienceCenters}
+                    onChange={(centers) => updateField('experienceCenters', centers)}
+                  />
+                </div>
+              </CollapsibleSection>
             </div>
           </div>
         </div>
