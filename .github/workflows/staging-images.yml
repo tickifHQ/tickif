@@ -27,6 +27,7 @@ jobs:
         run: |
           for script in infra/staging/scripts/*.sh; do bash -n "$script"; done
           bash infra/staging/scripts/test-deploy-preflight.sh
+          python3 infra/staging/scripts/test-storage.py
           bash infra/staging/scripts/test-restore-gate.sh
       - name: Build all release images without runtime secrets
         env:
