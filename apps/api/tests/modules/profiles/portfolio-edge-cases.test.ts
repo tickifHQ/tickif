@@ -90,6 +90,8 @@ const fakePortfolioResponse: PortfolioResponse = {
   bio: null,
   logoUrl: null,
   heroCoverUrl: null,
+  logoSourceUrl: null,
+  logoCrop: null,
   websiteUrl: null,
   instagramHandle: null,
   linkedinHandle: null,

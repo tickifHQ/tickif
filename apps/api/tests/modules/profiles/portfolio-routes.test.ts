@@ -92,6 +92,8 @@ const fakePortfolioResponse: PortfolioResponse = {
   bio: 'We design things',
   logoUrl: null,
   heroCoverUrl: null,
+  logoSourceUrl: null,
+  logoCrop: null,
   websiteUrl: null,
   instagramHandle: null,
   linkedinHandle: null,
@@ -388,15 +390,30 @@ describe('POST /me/portfolio/logo/commit', () => {
     mockAuthed();
     vi.mocked(portfolioService.commitLogoUpload).mockResolvedValue({
       logoUrl: 'https://r2.example.com/presigned-download',
+      logoSourceUrl: 'https://r2.example.com/presigned-source',
+      logoCrop: { x: 10, y: 20, width: 50, height: 50 },
     });
 
     const res = await request('POST', '/me/portfolio/logo/commit', {
-      body: { objectKey: 'originals/logos/profile-1/uuid-123' },
+      body: {
+        objectKey: 'originals/logos/profile-1/uuid-123',
+        logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+      },
     });
 
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.logoUrl).toBe('https://r2.example.com/presigned-download');
+    expect(body.logoSourceUrl).toBe('https://r2.example.com/presigned-source');
+    expect(body.logoCrop).toEqual({ x: 10, y: 20, width: 50, height: 50 });
+    expect(portfolioService.commitLogoUpload).toHaveBeenCalledWith(
+      {
+        objectKey: 'originals/logos/profile-1/uuid-123',
+        sourceObjectKey: undefined,
+        logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+      },
+      expect.any(Object),
+    );
   });
 
   it('returns 401 without authentication', async () => {

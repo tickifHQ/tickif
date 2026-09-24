@@ -61,6 +61,8 @@ const portfolio: PortfolioResponse = {
   bio: 'Interiors for real life.',
   logoUrl: null,
   heroCoverUrl: null,
+  logoSourceUrl: null,
+  logoCrop: null,
   websiteUrl: 'https://mahistudio.com',
   instagramHandle: '@mahistudio',
   linkedinHandle: '/company/mahistudio',
@@ -202,15 +204,21 @@ describe('portfolio-api', () => {
       const storagePut = vi.fn().mockResolvedValue({ ok: true });
       vi.stubGlobal('fetch', storagePut);
       mock.logoCommitPost.mockResolvedValue(
-        jsonResponse({ logoUrl: 'https://cdn.example.com/logo.png' }),
+        jsonResponse({
+          logoUrl: 'https://cdn.example.com/logo.png',
+          logoSourceUrl: null,
+          logoCrop: null,
+        }),
       );
 
       await expect(uploadLogo(file)).resolves.toEqual({
         logoUrl: 'https://cdn.example.com/logo.png',
+        logoSourceUrl: null,
+        logoCrop: null,
       });
 
       expect(mock.logoUploadPost).toHaveBeenCalledWith({
-        json: { contentType: 'image/png', contentLength: file.size },
+        json: { contentType: 'image/png', contentLength: file.size, variant: 'display' },
       });
       expect(storagePut).toHaveBeenCalledWith('https://storage.example.com/presigned-put', {
         method: 'PUT',
@@ -218,7 +226,55 @@ describe('portfolio-api', () => {
         body: file,
       });
       expect(mock.logoCommitPost).toHaveBeenCalledWith({
-        json: { objectKey: 'originals/logos/profile-1/object-1' },
+        json: {
+          objectKey: 'originals/logos/profile-1/object-1',
+          sourceObjectKey: undefined,
+          logoCrop: undefined,
+        },
+      });
+    });
+
+    it('uploads a new untouched source alongside the display crop', async () => {
+      const sourceFile = new File([new Uint8Array([5, 6, 7])], 'wide-logo.png', {
+        type: 'image/png',
+      });
+      mock.logoUploadPost
+        .mockResolvedValueOnce(
+          jsonResponse({
+            uploadUrl: 'https://storage.example.com/display-put',
+            key: 'originals/logos/profile-1/display-key',
+          }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            uploadUrl: 'https://storage.example.com/source-put',
+            key: 'originals/logos/profile-1/source-key',
+          }),
+        );
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+      mock.logoCommitPost.mockResolvedValue(
+        jsonResponse({
+          logoUrl: 'https://cdn.example.com/logo.webp',
+          logoSourceUrl: 'https://cdn.example.com/source.png',
+          logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+        }),
+      );
+
+      const logoCrop = { x: 10, y: 20, width: 50, height: 50 };
+      await uploadLogo(file, sourceFile, logoCrop);
+
+      expect(mock.logoUploadPost).toHaveBeenNthCalledWith(1, {
+        json: { contentType: 'image/png', contentLength: file.size, variant: 'display' },
+      });
+      expect(mock.logoUploadPost).toHaveBeenNthCalledWith(2, {
+        json: { contentType: 'image/png', contentLength: sourceFile.size, variant: 'source' },
+      });
+      expect(mock.logoCommitPost).toHaveBeenCalledWith({
+        json: {
+          objectKey: 'originals/logos/profile-1/display-key',
+          sourceObjectKey: 'originals/logos/profile-1/source-key',
+          logoCrop,
+        },
       });
     });
 

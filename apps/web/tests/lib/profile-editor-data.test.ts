@@ -35,6 +35,7 @@ const profile: CurrentProfileResponse = {
   entityType: 'individual',
   bio: null,
   logoImageId: null,
+  logoUrl: null,
   status: 'draft',
   yearsExperience: 0,
   projectCount: 0,
@@ -91,9 +92,7 @@ describe('profile editor SSR data', () => {
 
     expect(result.profile).toEqual(profile);
     expect(result.completion?.score).toBe(60);
-    expect(result.taxonomy.cities).toEqual([
-      { id: selectedCity.id, label: 'Mumbai' },
-    ]);
+    expect(result.taxonomy.cities).toEqual([{ id: selectedCity.id, label: 'Mumbai' }]);
     expect(result.taxonomyError).toBeNull();
     expect(mock.taxonomyGet).toHaveBeenCalledTimes(3);
     expect(mock.taxonomyGet).toHaveBeenCalledWith({ query: { kind: 'city' } });

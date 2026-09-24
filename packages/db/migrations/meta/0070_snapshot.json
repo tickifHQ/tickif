@@ -1,6 +1,6 @@
 {
-  "id": "ebee3f4b-4bb8-450a-abfd-437046fca65c",
-  "prevId": "0f11f890-87de-4dea-af36-287dd581cc58",
+  "id": "270a036c-691d-4260-8526-c8bd42dfe257",
+  "prevId": "ebee3f4b-4bb8-450a-abfd-437046fca65c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1736,6 +1736,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "hero_image_id": {
+          "name": "hero_image_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "tagline": {
           "name": "tagline",

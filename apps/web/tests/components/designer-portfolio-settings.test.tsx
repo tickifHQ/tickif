@@ -19,6 +19,8 @@ const mock = vi.hoisted(() => ({
   refreshGoogleReviews: vi.fn(),
   disconnectGoogleReviews: vi.fn(),
   fetchPublishedProjects: vi.fn(),
+  cropImageToFile: vi.fn(),
+  router: { refresh: vi.fn() },
 }));
 
 vi.mock('@/lib/portfolio-api', () => ({
@@ -34,6 +36,49 @@ vi.mock('@/lib/portfolio-api', () => ({
   refreshGoogleReviews: mock.refreshGoogleReviews,
   disconnectGoogleReviews: mock.disconnectGoogleReviews,
   fetchPublishedProjects: mock.fetchPublishedProjects,
+}));
+
+vi.mock('@/lib/crop-image', () => ({
+  cropImageToFile: mock.cropImageToFile,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => mock.router,
+}));
+
+vi.mock('@/components/logo-crop-dialog', () => ({
+  LogoCropDialog: ({
+    open,
+    initialCrop,
+    onSave,
+    onChooseAnother,
+  }: {
+    open: boolean;
+    initialCrop: { x: number; y: number; width: number; height: number } | null;
+    onSave: (selection: {
+      pixels: { x: number; y: number; width: number; height: number };
+      percentages: { x: number; y: number; width: number; height: number };
+    }) => void;
+    onChooseAnother: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Crop logo" data-initial-crop={JSON.stringify(initialCrop)}>
+        <button
+          type="button"
+          onClick={() =>
+            onSave({
+              pixels: { x: 0, y: 0, width: 512, height: 512 },
+              percentages: { x: 10, y: 20, width: 50, height: 50 },
+            })
+          }
+        >
+          Save logo
+        </button>
+        <button type="button" onClick={onChooseAnother}>
+          Choose another
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('next/image', () => ({
@@ -61,6 +106,8 @@ const basePortfolio: PortfolioResponse = {
   bio: 'Interiors for real life.',
   logoUrl: null,
   heroCoverUrl: 'https://cdn.tickif.test/portfolio-cover.jpg',
+  logoSourceUrl: null,
+  logoCrop: null,
   websiteUrl: 'https://mahistudio.com',
   instagramHandle: '@mahistudio',
   linkedinHandle: '/company/mahistudio',
@@ -157,6 +204,10 @@ describe('DesignerPortfolioSettings', () => {
       { id: '22222222-2222-4222-8222-222222222222', title: 'Modern Living Room' },
       { id: '33333333-3333-4333-8333-333333333333', title: 'Kitchen Renovation' },
     ]);
+    mock.cropImageToFile.mockResolvedValue(
+      new File(['cropped-logo'], 'studio-logo.webp', { type: 'image/webp' }),
+    );
+    mock.router.refresh.mockReset();
   });
 
   afterEach(() => {
@@ -171,6 +222,163 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
     expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
     expect(screen.queryByText('https://tickif.com/d/mahi-studio')).not.toBeInTheDocument();
+  });
+
+  it('opens a square crop step before uploading a selected logo', async () => {
+    await renderSettings();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['logo-data'], 'logo.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(await screen.findByRole('dialog', { name: 'Crop logo' })).toBeInTheDocument();
+    expect(mock.uploadLogo).not.toHaveBeenCalled();
+  });
+
+  it('opens a compact square drop zone when an empty logo is selected', async () => {
+    await renderSettings();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Upload logo' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Upload logo' })).toBeInTheDocument();
+    const dropzone = screen.getByTestId('logo-upload-dropzone');
+    const browseButton = screen.getByRole('button', { name: 'Browse image' });
+
+    expect(dropzone).toHaveClass('aspect-square', 'max-w-56');
+    expect(dropzone).not.toContainElement(browseButton);
+    expect(browseButton).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
+    expect(screen.getByText('Drag & drop an image')).toHaveClass('text-sm');
+    expect(
+      screen.queryByText(/you'll be able to zoom and position it before uploading/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens the cropper when an image is dropped into the empty logo state', async () => {
+    await renderSettings();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Upload logo' }));
+
+    const sourceFile = new File(['source'], 'wide-logo.png', { type: 'image/png' });
+    fireEvent.drop(screen.getByTestId('logo-upload-dropzone'), {
+      dataTransfer: { files: [sourceFile] },
+    });
+
+    expect(await screen.findByRole('dialog', { name: 'Crop logo' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Upload logo' })).not.toBeInTheDocument();
+  });
+
+  it('uploads the generated square WebP with the untouched source and refreshes the workspace shell', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce(basePortfolio);
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://storage.example.com/cropped-logo.webp',
+      logoSourceUrl: 'https://storage.example.com/source-logo.png',
+      logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+    });
+    mock.uploadLogo.mockResolvedValue({
+      logoUrl: 'https://storage.example.com/cropped-logo.webp',
+      logoSourceUrl: 'https://storage.example.com/source-logo.png',
+      logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+    });
+    await renderSettings();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const sourceFile = new File(['source'], 'wide-logo.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [sourceFile] } });
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Save logo' }));
+
+    await waitFor(() => {
+      expect(mock.uploadLogo).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'studio-logo.webp', type: 'image/webp' }),
+        sourceFile,
+        { x: 10, y: 20, width: 50, height: 50 },
+      );
+    });
+    expect(mock.router.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('rejects unsupported source files before opening the cropper', async () => {
+    await renderSettings();
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['not-an-image'], 'notes.txt', { type: 'text/plain' })] },
+    });
+
+    expect(screen.getByText('Choose a JPEG, PNG, WebP, or AVIF image.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Crop logo' })).not.toBeInTheDocument();
+    expect(mock.uploadLogo).not.toHaveBeenCalled();
+  });
+
+  it('opens the existing logo manager before replacing a saved logo', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://storage.example.com/existing-logo.webp',
+      logoSourceUrl: 'https://storage.example.com/untouched-logo.png',
+      logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+    });
+
+    await renderSettings();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Edit logo' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Studio logo' })).toHaveClass('sm:max-w-md');
+    expect(screen.getByTestId('saved-logo-preview')).toHaveClass('max-w-48');
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveClass('h-9');
+    expect(screen.getByRole('button', { name: 'Choose another logo' })).toHaveClass('h-9');
+    expect(mock.uploadLogo).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByRole('dialog', { name: 'Crop logo' })).toHaveAttribute(
+      'data-initial-crop',
+      JSON.stringify({ x: 10, y: 20, width: 50, height: 50 }),
+    );
+    expect(mock.cropImageToFile).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Save logo' }));
+    await waitFor(() => {
+      expect(mock.cropImageToFile).toHaveBeenCalledWith(
+        'https://storage.example.com/untouched-logo.png',
+        expect.any(Object),
+        'studio-logo.webp',
+      );
+    });
+    expect(mock.uploadLogo).toHaveBeenCalledWith(expect.any(File), undefined, {
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 50,
+    });
+  });
+
+  it('falls back to the saved display logo when an older logo has no retained source', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://storage.example.com/legacy-logo.webp',
+      logoSourceUrl: null,
+    });
+    mock.uploadLogo.mockResolvedValue({
+      logoUrl: 'https://storage.example.com/recropped-logo.webp',
+      logoSourceUrl: null,
+      logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+    });
+
+    await renderSettings();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Edit logo' }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Save logo' }));
+
+    await waitFor(() => {
+      expect(mock.cropImageToFile).toHaveBeenCalledWith(
+        'https://storage.example.com/legacy-logo.webp',
+        expect.any(Object),
+        'studio-logo.webp',
+      );
+    });
   });
 
   it('marks every required portfolio field and explains the marker on hover', async () => {
@@ -232,7 +440,7 @@ describe('DesignerPortfolioSettings', () => {
     );
   });
 
-  it('opens the file picker to replace an existing saved logo', async () => {
+  it('opens the file picker from the saved logo manager', async () => {
     mock.fetchPortfolio.mockResolvedValueOnce({
       ...basePortfolio,
       logoUrl: 'https://cdn.tickif.test/logo.jpg',
@@ -240,7 +448,9 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const openPicker = vi.spyOn(fileInput, 'click');
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Replace logo' }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Edit logo' }));
+    await user.click(screen.getByRole('button', { name: 'Choose another logo' }));
     expect(openPicker).toHaveBeenCalledOnce();
     expect(mock.deleteLogo).not.toHaveBeenCalled();
   });
@@ -1123,6 +1333,7 @@ describe('DesignerPortfolioSettings', () => {
       await act(async () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Save logo' }));
 
       // Assert: after upload, the component should have refreshed portfolio state
       // and the "not public" notice should be gone (missingRequiredFields is now [])
@@ -1173,6 +1384,7 @@ describe('DesignerPortfolioSettings', () => {
       await act(async () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Save logo' }));
 
       // Assert: form tagline still shows the user's unsaved edit, NOT the server value
       await waitFor(() => {
@@ -1192,6 +1404,7 @@ describe('DesignerPortfolioSettings', () => {
       await act(async () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Save logo' }));
     }
 
     it('enables Save changes after uploading a logo when none existed', async () => {

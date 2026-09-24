@@ -9,6 +9,7 @@ import {
   uploadLogoResponseSchema,
   uploadPortfolioCoverResponseSchema,
   type GoogleReviewsResponse,
+  type LogoCropArea,
   type PortfolioProjectsResponse,
   type PortfolioResponse,
   type SlugAvailabilityResponse,
@@ -83,12 +84,12 @@ export async function checkSlugAvailability(slug: string): Promise<SlugAvailabil
  * 2. PUT the file directly to the presigned URL (R2 / S3)
  * 3. Commit the upload so the API persists the association
  */
-export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
-  // Step 1: Get presigned upload URL
+async function uploadLogoObject(file: File, variant: 'display' | 'source'): Promise<string> {
   const presignResponse = await api.api.profiles.me.portfolio.logo.upload.$post({
     json: {
       contentType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif',
       contentLength: file.size,
+      variant,
     },
   });
 
@@ -98,7 +99,6 @@ export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
     'Could not prepare logo upload.',
   );
 
-  // Step 2: Upload the file directly to storage via presigned URL
   const storageResponse = await fetch(uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': file.type },
@@ -109,9 +109,23 @@ export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
     throw new Error('Could not upload logo to storage.');
   }
 
-  // Step 3: Commit the upload
+  return key;
+}
+
+export async function uploadLogo(
+  displayFile: File,
+  sourceFile?: File,
+  logoCrop?: LogoCropArea,
+): Promise<UploadLogoResponse> {
+  // Preserve the untouched source only when the user chose a new image. When
+  // editing an existing logo, omitting it tells the API to keep the saved source.
+  const [objectKey, sourceObjectKey] = await Promise.all([
+    uploadLogoObject(displayFile, 'display'),
+    sourceFile ? uploadLogoObject(sourceFile, 'source') : Promise.resolve(undefined),
+  ]);
+
   const commitResponse = await api.api.profiles.me.portfolio.logo.commit.$post({
-    json: { objectKey: key },
+    json: { objectKey, sourceObjectKey, logoCrop },
   });
 
   return handleApiResponse(
