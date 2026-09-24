@@ -77,6 +77,43 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.queryByText(/share the portfolio link in socials/i)).not.toBeInTheDocument();
   });
 
+  it('shows the saved portfolio logo in the sharing preview', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        logoUrl="https://storage.example.com/livspace.webp"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Livspace logo' })).toHaveAttribute(
+      'src',
+      'https://storage.example.com/livspace.webp',
+    );
+    expect(
+      screen.queryByRole('img', { name: 'Livspace generated profile initials' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps generated initials as the sharing preview fallback when no logo is saved', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        logoUrl={null}
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(
+      screen.getByRole('img', { name: 'Livspace generated profile initials' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Livspace logo' })).not.toBeInTheDocument();
+  });
+
   it('links the shipped project, profile, and share actions', () => {
     render(
       <DesignerDashboardOverview

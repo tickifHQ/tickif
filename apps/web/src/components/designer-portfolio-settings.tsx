@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
@@ -10,7 +11,6 @@ import {
   Copy,
   Globe,
   Info,
-  ImagePlus,
   LayoutList,
   Loader2,
   RefreshCw,
@@ -25,6 +25,7 @@ import {
   type PortfolioResponse,
   type RequiredPortfolioField,
   type UpdatePortfolioInput,
+  type UploadLogoResponse,
 } from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
@@ -43,6 +44,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import { DesignerLogoInput } from '@/components/designer-logo-input';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -61,7 +63,6 @@ import {
   fetchPortfolio,
   refreshGoogleReviews,
   updatePortfolio,
-  uploadLogo,
 } from '@/lib/portfolio-api';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +104,6 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
 const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
-
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
 type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
 
@@ -241,6 +241,7 @@ function getClearedSavedHeroFields(current: FormState, saved: FormState) {
 // ---------------------------------------------------------------------------
 
 export function DesignerPortfolioSettings() {
+  const router = useRouter();
   // Data states
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -267,10 +268,6 @@ export function DesignerPortfolioSettings() {
   const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSlugRef = useRef<string>('');
 
-  // Logo
-  const [isUploadingLogo, startLogoUploadTransition] = useTransition();
-  const [logoError, setLogoError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
   // Google reviews connection (fetched separately from portfolio settings)
@@ -605,39 +602,25 @@ export function DesignerPortfolioSettings() {
   // Logo upload
   // -------------------------------------------------------------------------
 
-  function handleLogoUploadClick() {
-    fileInputRef.current?.click();
-  }
-
-  function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Reset input so the same file can be re-selected
-    event.target.value = '';
-
-    startLogoUploadTransition(async () => {
-      setLogoError(null);
-      try {
-        const result = await uploadLogo(file);
-        // Refresh portfolio to get new logoUrl and all server-derived fields
-        try {
-          const refreshed = await fetchPortfolio();
-          setPortfolio(refreshed);
-        } catch {
-          setPortfolio((prev) => (prev ? { ...prev, logoUrl: result.logoUrl } : prev));
-          setLogoError(
-            "Logo updated successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.",
-          );
-        }
-      } catch (err) {
-        setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
-      }
-    });
-  }
-
-  function handleLogoDelete() {
-    setLogoError('Upload a replacement before removing the logo from your saved portfolio.');
+  async function handleLogoUploaded(result: UploadLogoResponse): Promise<string | null> {
+    try {
+      setPortfolio(await fetchPortfolio());
+      router.refresh();
+      return null;
+    } catch {
+      setPortfolio((previous) =>
+        previous
+          ? {
+              ...previous,
+              logoUrl: result.logoUrl,
+              logoSourceUrl: result.logoSourceUrl,
+              logoCrop: result.logoCrop,
+            }
+          : previous,
+      );
+      router.refresh();
+      return "Logo updated successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.";
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -924,63 +907,23 @@ export function DesignerPortfolioSettings() {
                   <div className="space-y-4">
                     {/* Logo upload + Studio name */}
                     <div className="flex items-start gap-3">
-                      <div className="flex shrink-0 flex-col gap-1.5">
-                        <Label className="gap-0 text-sm font-medium text-muted-foreground">
-                          Logo
-                          <RequiredFieldIndicator />
-                        </Label>
-                        <div className="relative size-16.5">
-                          <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
-                            {portfolio.logoUrl ? (
-                              <button
-                                ref={(node) => {
-                                  heroFieldRefs.current.logo = node;
-                                }}
-                                type="button"
-                                onClick={handleLogoUploadClick}
-                                disabled={isUploadingLogo}
-                                className="relative block size-full disabled:opacity-50"
-                                aria-label="Replace logo"
-                              >
-                                <Image
-                                  src={portfolio.logoUrl}
-                                  alt="Portfolio logo"
-                                  fill
-                                  unoptimized
-                                  className="object-cover"
-                                />
-                              </button>
-                            ) : (
-                              <button
-                                ref={(node) => {
-                                  heroFieldRefs.current.logo = node;
-                                }}
-                                type="button"
-                                onClick={handleLogoUploadClick}
-                                disabled={isUploadingLogo}
-                                className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                                aria-label="Upload logo"
-                              >
-                                {isUploadingLogo ? (
-                                  <Loader2 className="size-6 animate-spin" />
-                                ) : (
-                                  <ImagePlus className="size-6" aria-hidden />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                          {portfolio.logoUrl && (
-                            <button
-                              type="button"
-                              onClick={handleLogoDelete}
-                              className="absolute -right-1 -top-1 z-10 flex size-4 items-center justify-center rounded-full bg-muted-foreground/80 text-white"
-                              aria-label="Remove logo"
-                            >
-                              <X className="size-2.5" aria-hidden />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      <DesignerLogoInput
+                        buttonRef={(node) => {
+                          heroFieldRefs.current.logo = node;
+                        }}
+                        id="portfolio-logo"
+                        value={{
+                          logoUrl: portfolio.logoUrl,
+                          logoSourceUrl: portfolio.logoSourceUrl,
+                          logoCrop: portfolio.logoCrop,
+                        }}
+                        displayName={form.displayName}
+                        imageAlt="Portfolio logo"
+                        onUploaded={handleLogoUploaded}
+                        sizeClassName="size-16.5"
+                        showLabel
+                        required
+                      />
                       <div className="flex-1 space-y-1.5">
                         <Label className="gap-0 text-sm font-medium text-muted-foreground">
                           Studio name
@@ -1003,9 +946,6 @@ export function DesignerPortfolioSettings() {
                         )}
                       </div>
                     </div>
-                    {logoError && (
-                      <p className="text-[13px] font-medium text-destructive">{logoError}</p>
-                    )}
                     <div className="space-y-1.5">
                       <Label className="gap-0 text-sm font-medium text-muted-foreground">
                         Tagline
@@ -1645,15 +1585,6 @@ export function DesignerPortfolioSettings() {
           Save changes
         </Button>
       </div>
-
-      {/* Hidden file input for logo upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
     </div>
   );
 }

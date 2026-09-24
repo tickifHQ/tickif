@@ -214,7 +214,104 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await designer
       .locator('input[type="file"]')
       .setInputFiles(resolve('../apps/web/public/images/home-hero/bright-kitchen-living-room.jpg'));
+    await expect(designer.getByRole('dialog', { name: 'Crop logo' })).toBeVisible();
+    await designer
+      .getByRole('dialog', { name: 'Crop logo' })
+      .getByRole('button', { name: 'Save logo' })
+      .click();
     expect((await logoCommit).ok()).toBeTruthy();
+    await expect(
+      designer.getByRole('img', { name: `Journey Studio ${suffix} logo` }),
+    ).toBeVisible();
+
+    const [firstLogoProfile] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, onboarded.profile.id));
+    expect(firstLogoProfile?.logoImageId).toBeTruthy();
+    expect(firstLogoProfile?.logoSourceImageId).toBeTruthy();
+    expect(firstLogoProfile?.logoSourceImageId).not.toBe(firstLogoProfile?.logoImageId);
+    expect(firstLogoProfile?.logoCrop).toBeTruthy();
+
+    await designer.getByRole('button', { name: 'Edit logo' }).click();
+    await designer
+      .getByRole('dialog', { name: 'Studio logo' })
+      .getByRole('button', { name: 'Edit' })
+      .click();
+    const recropDialog = designer.getByRole('dialog', { name: 'Crop logo' });
+    await expect(recropDialog.getByRole('img', { name: 'Logo being cropped' })).toHaveAttribute(
+      'src',
+      new RegExp(firstLogoProfile!.logoSourceImageId!.replaceAll('/', '\\/')),
+    );
+    await recropDialog.screenshot({ path: testInfo.outputPath('logo-recrop-desktop.png') });
+    await designer.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() => designer.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await designer.screenshot({ path: testInfo.outputPath('logo-recrop-mobile.png') });
+    await designer.setViewportSize({ width: 1280, height: 720 });
+    const zoomSlider = recropDialog.getByRole('slider', { name: 'Logo zoom' });
+    for (let step = 0; step < 15; step += 1) await zoomSlider.press('ArrowRight');
+    const cropImage = recropDialog.getByRole('img', { name: 'Logo being cropped' });
+    const cropImageBox = await cropImage.boundingBox();
+    expect(cropImageBox).toBeTruthy();
+    await designer.mouse.move(
+      cropImageBox!.x + cropImageBox!.width / 2,
+      cropImageBox!.y + cropImageBox!.height / 2,
+    );
+    await designer.mouse.down();
+    await designer.mouse.move(
+      cropImageBox!.x + cropImageBox!.width / 2 + 45,
+      cropImageBox!.y + cropImageBox!.height / 2 + 20,
+      { steps: 5 },
+    );
+    await designer.mouse.up();
+    const recropCommit = designer.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/profiles/me/portfolio/logo/commit'),
+    );
+    await recropDialog.getByRole('button', { name: 'Save logo' }).click();
+    expect((await recropCommit).ok()).toBeTruthy();
+
+    const [recroppedProfile] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, onboarded.profile.id));
+    expect(recroppedProfile?.logoSourceImageId).toBe(firstLogoProfile?.logoSourceImageId);
+    expect(recroppedProfile?.logoImageId).not.toBe(firstLogoProfile?.logoImageId);
+    expect(recroppedProfile?.logoCrop).toBeTruthy();
+    expect(recroppedProfile?.logoCrop).not.toEqual(firstLogoProfile?.logoCrop);
+
+    await designer.getByRole('button', { name: 'Edit logo' }).click();
+    await designer
+      .getByRole('dialog', { name: 'Studio logo' })
+      .getByRole('button', { name: 'Edit' })
+      .click();
+    const restoredCropDialog = designer.getByRole('dialog', { name: 'Crop logo' });
+    await expect(restoredCropDialog).toBeVisible();
+    await restoredCropDialog.screenshot({ path: testInfo.outputPath('logo-crop-restored.png') });
+
+    const restoredCommit = designer.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/profiles/me/portfolio/logo/commit'),
+    );
+    await restoredCropDialog.getByRole('button', { name: 'Save logo' }).click();
+    expect((await restoredCommit).ok()).toBeTruthy();
+
+    const [restoredProfile] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, onboarded.profile.id));
+    expect(restoredProfile?.logoCrop).toBeTruthy();
+    for (const coordinate of ['x', 'y', 'width', 'height'] as const) {
+      expect(restoredProfile!.logoCrop![coordinate]).toBeCloseTo(
+        recroppedProfile!.logoCrop![coordinate],
+        3,
+      );
+    }
+
     await designer.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect
       .poll(
@@ -232,6 +329,45 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .from(schema.designerProfile)
       .where(eq(schema.designerProfile.id, onboarded.profile.id));
     if (activeProfile?.logoImageId) objectKeys.push(activeProfile.logoImageId);
+    if (activeProfile?.logoSourceImageId) objectKeys.push(activeProfile.logoSourceImageId);
+
+    await designer.goto('/designer/dashboard');
+    const dashboardLogo = designer.getByTestId('dashboard-share-card').getByRole('img', {
+      name: `Journey Studio ${suffix} logo`,
+    });
+    await expect(dashboardLogo).toBeVisible();
+    await expect(dashboardLogo).toHaveAttribute(
+      'src',
+      new RegExp(activeProfile!.logoImageId!.replaceAll('/', '\\/')),
+    );
+    await designer.screenshot({ path: testInfo.outputPath('dashboard-saved-logo.png') });
+
+    await designer.goto('/designer/profile');
+    const profileLogo = designer
+      .getByRole('button', { name: 'Edit logo' })
+      .getByRole('img', { name: `Journey Studio ${suffix} logo` });
+    await expect(profileLogo).toBeVisible();
+    await expect(profileLogo).toHaveAttribute(
+      'src',
+      new RegExp(activeProfile!.logoImageId!.replaceAll('/', '\\/')),
+    );
+    await designer.getByRole('button', { name: 'Edit logo' }).click();
+    await designer
+      .getByRole('dialog', { name: 'Studio logo' })
+      .getByRole('button', { name: 'Edit' })
+      .click();
+    const profileCropDialog = designer.getByRole('dialog', { name: 'Crop logo' });
+    await expect(
+      profileCropDialog.getByRole('img', { name: 'Logo being cropped' }),
+    ).toHaveAttribute('src', new RegExp(activeProfile!.logoSourceImageId!.replaceAll('/', '\\/')));
+    await profileCropDialog.screenshot({ path: testInfo.outputPath('profile-logo-editor.png') });
+    await designer.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() => designer.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await designer.screenshot({ path: testInfo.outputPath('profile-logo-mobile.png') });
+    await designer.keyboard.press('Escape');
+    await designer.setViewportSize({ width: 1280, height: 720 });
 
     await visitor.goto('/login');
     await visitor.getByPlaceholder('9123456789').fill(visitorPhone.slice(3));

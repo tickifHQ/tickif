@@ -86,6 +86,8 @@ const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfile
   displayName: 'Test Studio',
   bio: 'We design beautiful spaces',
   logoImageId: 'originals/logos/profile-1/abc',
+  logoSourceImageId: null,
+  logoCrop: null,
   status: 'active',
   yearsExperience: 5,
   projectCount: 0,
@@ -517,6 +519,19 @@ describe('portfolioService.getPortfolio logo resolution', () => {
     expect(result.logoUrl).toBeNull();
     expect(presignDownload).not.toHaveBeenCalled();
   });
+
+  it('returns the untouched source only to the owner portfolio response', async () => {
+    setupResolveProfile(makeProfile({ logoSourceImageId: 'originals/logos/profile-1/source-key' }));
+    setupGetPortfolio();
+    vi.mocked(presignDownload)
+      .mockResolvedValueOnce('https://r2.example.com/display')
+      .mockResolvedValueOnce('https://r2.example.com/source');
+
+    const result = await portfolioService.getPortfolio(caller);
+
+    expect(result.logoUrl).toBe('https://r2.example.com/display');
+    expect(result.logoSourceUrl).toBe('https://r2.example.com/source');
+  });
 });
 
 describe('portfolioService.getPortfolio publication state', () => {
@@ -618,7 +633,134 @@ describe('portfolioService.commitLogoUpload', () => {
       'profile-1',
       'originals/logos/profile-1/abc',
       'originals/logos/profile-1/uuid',
+      null,
+      null,
     );
+  });
+
+  it('persists an untouched source separately from the display crop', async () => {
+    setupResolveProfile();
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload)
+      .mockResolvedValueOnce('https://r2.example.com/display')
+      .mockResolvedValueOnce('https://r2.example.com/source');
+
+    const result = await portfolioService.commitLogoUpload(
+      {
+        objectKey: 'originals/logos/profile-1/display-key',
+        sourceObjectKey: 'originals/logos/profile-1/source-key',
+      },
+      caller,
+    );
+
+    expect(objectExists).toHaveBeenCalledTimes(2);
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/abc',
+      'originals/logos/profile-1/display-key',
+      'originals/logos/profile-1/source-key',
+      null,
+    );
+    expect(result).toEqual({
+      logoUrl: 'https://r2.example.com/display',
+      logoSourceUrl: 'https://r2.example.com/source',
+      logoCrop: null,
+    });
+  });
+
+  it('retains the untouched source when only the crop changes', async () => {
+    setupResolveProfile(makeProfile({ logoSourceImageId: 'originals/logos/profile-1/source-key' }));
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
+
+    const logoCrop = { x: 12, y: 18, width: 54, height: 60 };
+    const result = await portfolioService.commitLogoUpload(
+      { objectKey: 'originals/logos/profile-1/new-display-key', logoCrop },
+      caller,
+    );
+
+    expect(objectExists).toHaveBeenCalledTimes(1);
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/abc',
+      'originals/logos/profile-1/new-display-key',
+      'originals/logos/profile-1/source-key',
+      logoCrop,
+    );
+    expect(result.logoCrop).toEqual(logoCrop);
+    expect(deleteObject).not.toHaveBeenCalledWith('originals/logos/profile-1/source-key');
+  });
+
+  it('preserves a legacy logo as the source on its first crop', async () => {
+    setupResolveProfile();
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload).mockImplementation(
+      async ({ key }) => `https://r2.example.com/${key}`,
+    );
+    const logoCrop = { x: 10, y: 10, width: 80, height: 80 };
+
+    const result = await portfolioService.commitLogoUpload(
+      { objectKey: 'originals/logos/profile-1/cropped', logoCrop },
+      caller,
+    );
+
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/abc',
+      'originals/logos/profile-1/cropped',
+      'originals/logos/profile-1/abc',
+      logoCrop,
+    );
+    expect(result.logoSourceUrl).toBe('https://r2.example.com/originals/logos/profile-1/abc');
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('rejects a crop retry when a concurrent replacement changed its source', async () => {
+    setupResolveProfile(makeProfile({ logoSourceImageId: 'originals/logos/profile-1/source-a' }));
+    vi.mocked(profilesRepository.findByTeamId)
+      .mockResolvedValueOnce(
+        makeProfile({ logoSourceImageId: 'originals/logos/profile-1/source-a' }),
+      )
+      .mockResolvedValueOnce(
+        makeProfile({
+          logoImageId: 'originals/logos/profile-1/display-b',
+          logoSourceImageId: 'originals/logos/profile-1/source-b',
+        }),
+      );
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    await expect(
+      portfolioService.commitLogoUpload(
+        {
+          objectKey: 'originals/logos/profile-1/cropped-a',
+          logoCrop: { x: 10, y: 10, width: 80, height: 80 },
+        },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledTimes(1);
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('rejects a source object key owned by another profile', async () => {
+    setupResolveProfile();
+
+    await expect(
+      portfolioService.commitLogoUpload(
+        {
+          objectKey: 'originals/logos/profile-1/display-key',
+          sourceObjectKey: 'originals/logos/other-profile/source-key',
+        },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(objectExists).not.toHaveBeenCalled();
   });
 
   it('throws 403 when object key does not belong to profile', async () => {
