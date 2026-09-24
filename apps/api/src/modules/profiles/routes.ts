@@ -21,6 +21,10 @@ import {
   logoUploadUrlResponseSchema,
   logoCommitRequestSchema,
   uploadLogoResponseSchema,
+  portfolioCoverUploadRequestSchema,
+  portfolioCoverUploadUrlResponseSchema,
+  portfolioCoverCommitRequestSchema,
+  uploadPortfolioCoverResponseSchema,
   connectGooglePlaceSchema,
   googleReviewsResponseSchema,
   designerProjectsQuerySchema,
@@ -672,6 +676,100 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
         activeTeamId: session?.activeTeamId ?? null,
       });
       return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/cover/upload',
+      tags: ['Portfolio'],
+      summary: 'Get a presigned upload URL for the portfolio Hero cover',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: portfolioCoverUploadRequestSchema } },
+        },
+      },
+      responses: {
+        201: {
+          description: 'Presigned upload URL and object key',
+          content: { 'application/json': { schema: portfolioCoverUploadUrlResponseSchema } },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Validation error',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await portfolioService.createHeroCoverUploadUrl(c.req.valid('json'), {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
+      });
+      return c.json(result, 201);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/cover/commit',
+      tags: ['Portfolio'],
+      summary: 'Commit an uploaded portfolio Hero cover',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: portfolioCoverCommitRequestSchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Portfolio Hero cover committed successfully',
+          content: { 'application/json': { schema: uploadPortfolioCoverResponseSchema } },
+        },
+        400: {
+          description: 'No uploaded object found in storage',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        409: {
+          description: 'Cover was modified concurrently',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Validation error',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await portfolioService.commitHeroCoverUpload(c.req.valid('json'), {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
+      });
+      return c.json(result, 200);
     },
   )
   // --- Google reviews (portfolio Google Business integration) ---

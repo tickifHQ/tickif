@@ -6,6 +6,7 @@ import {
   fetchPortfolio,
   updatePortfolio,
   uploadLogo,
+  uploadPortfolioCover,
 } from '../../src/lib/portfolio-api';
 
 const mock = vi.hoisted(() => ({
@@ -14,6 +15,8 @@ const mock = vi.hoisted(() => ({
   slugCheckPost: vi.fn(),
   logoUploadPost: vi.fn(),
   logoCommitPost: vi.fn(),
+  coverUploadPost: vi.fn(),
+  coverCommitPost: vi.fn(),
   logoDelete: vi.fn(),
 }));
 
@@ -30,6 +33,10 @@ vi.mock('@/lib/api', () => ({
               $delete: mock.logoDelete,
               upload: { $post: mock.logoUploadPost },
               commit: { $post: mock.logoCommitPost },
+            },
+            cover: {
+              upload: { $post: mock.coverUploadPost },
+              commit: { $post: mock.coverCommitPost },
             },
           },
         },
@@ -53,6 +60,7 @@ const portfolio: PortfolioResponse = {
   displayName: 'Mahi Studio',
   bio: 'Interiors for real life.',
   logoUrl: null,
+  heroCoverUrl: null,
   websiteUrl: 'https://mahistudio.com',
   instagramHandle: '@mahistudio',
   linkedinHandle: '/company/mahistudio',
@@ -237,6 +245,71 @@ describe('portfolio-api', () => {
       await expect(uploadLogo(file)).rejects.toThrow('File exceeds 5 MB');
       expect(storagePut).not.toHaveBeenCalled();
       expect(mock.logoCommitPost).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('uploadPortfolioCover', () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4])], 'cover.webp', {
+      type: 'image/webp',
+    });
+
+    it('presigns, PUTs to storage, then commits the dedicated cover key', async () => {
+      mock.coverUploadPost.mockResolvedValue(
+        jsonResponse({
+          uploadUrl: 'https://storage.example.com/presigned-cover-put',
+          key: 'originals/portfolio-covers/profile-1/object-1',
+        }),
+      );
+      const storagePut = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', storagePut);
+      mock.coverCommitPost.mockResolvedValue(
+        jsonResponse({ heroCoverUrl: 'https://cdn.example.com/cover.webp' }),
+      );
+
+      await expect(uploadPortfolioCover(file)).resolves.toEqual({
+        heroCoverUrl: 'https://cdn.example.com/cover.webp',
+      });
+      expect(mock.coverUploadPost).toHaveBeenCalledWith({
+        json: { contentType: 'image/webp', contentLength: file.size },
+      });
+      expect(storagePut).toHaveBeenCalledWith('https://storage.example.com/presigned-cover-put', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/webp' },
+        body: file,
+      });
+      expect(mock.coverCommitPost).toHaveBeenCalledWith({
+        json: { objectKey: 'originals/portfolio-covers/profile-1/object-1' },
+      });
+    });
+
+    it('does not commit when the storage upload fails', async () => {
+      mock.coverUploadPost.mockResolvedValue(
+        jsonResponse({
+          uploadUrl: 'https://storage.example.com/presigned-cover-put',
+          key: 'originals/portfolio-covers/profile-1/object-1',
+        }),
+      );
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+      await expect(uploadPortfolioCover(file)).rejects.toThrow(
+        'Could not upload portfolio cover to storage.',
+      );
+      expect(mock.coverCommitPost).not.toHaveBeenCalled();
+    });
+
+    it('stops before storage when presigning is rejected', async () => {
+      mock.coverUploadPost.mockResolvedValue(
+        jsonResponse(
+          { error: { code: 'PAYLOAD_TOO_LARGE', message: 'File exceeds 10 MB' } },
+          false,
+        ),
+      );
+      const storagePut = vi.fn();
+      vi.stubGlobal('fetch', storagePut);
+
+      await expect(uploadPortfolioCover(file)).rejects.toThrow('File exceeds 10 MB');
+      expect(storagePut).not.toHaveBeenCalled();
+      expect(mock.coverCommitPost).not.toHaveBeenCalled();
     });
   });
 

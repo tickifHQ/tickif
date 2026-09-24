@@ -13,6 +13,8 @@ export type DashboardProfileContext = {
   displayName: string;
   bio: string | null;
   tagline: string | null;
+  heroImageId: string | null;
+  showHero: boolean | null;
   // Publication inputs are selected with the dashboard context so the service
   // can use the same completeness gate as the owner and anonymous portfolio
   // endpoints without a second query. `publicLinkEnabled` is null only when the
@@ -48,6 +50,8 @@ export const dashboardRepository = {
         displayName: schema.designerProfile.displayName,
         bio: schema.designerProfile.bio,
         tagline: schema.designerPortfolio.tagline,
+        heroImageId: schema.designerPortfolio.heroImageId,
+        showHero: schema.designerPortfolio.showHero,
         profileStatus: schema.designerProfile.status,
         publicLinkEnabled: schema.designerPortfolio.publicLinkEnabled,
         verificationStatus: schema.verificationApplication.status,

@@ -62,6 +62,7 @@ import {
   refreshGoogleReviews,
   updatePortfolio,
   uploadLogo,
+  uploadPortfolioCover,
 } from '@/lib/portfolio-api';
 
 // ---------------------------------------------------------------------------
@@ -111,6 +112,7 @@ type SectionKey = 'linkUrl' | 'customizations' | 'hero' | ToggleableSectionKey;
 
 /** Hero fields that have to be filled before the public page goes live. */
 const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
+  heroCover: 'a cover image',
   logo: 'a logo',
   displayName: 'a studio name',
   tagline: 'a tagline',
@@ -271,6 +273,9 @@ export function DesignerPortfolioSettings() {
   const [isUploadingLogo, startLogoUploadTransition] = useTransition();
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingHeroCover, startHeroCoverUploadTransition] = useTransition();
+  const [heroCoverError, setHeroCoverError] = useState<string | null>(null);
+  const heroCoverInputRef = useRef<HTMLInputElement>(null);
   const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
   // Google reviews connection (fetched separately from portfolio settings)
@@ -640,6 +645,33 @@ export function DesignerPortfolioSettings() {
     setLogoError('Upload a replacement before removing the logo from your saved portfolio.');
   }
 
+  function handleHeroCoverUploadClick() {
+    heroCoverInputRef.current?.click();
+  }
+
+  function handleHeroCoverSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = '';
+
+    startHeroCoverUploadTransition(async () => {
+      setHeroCoverError(null);
+      try {
+        const result = await uploadPortfolioCover(file);
+        try {
+          setPortfolio(await fetchPortfolio());
+        } catch {
+          setPortfolio((prev) => (prev ? { ...prev, heroCoverUrl: result.heroCoverUrl } : prev));
+          setHeroCoverError(
+            "Cover updated successfully. We couldn't refresh your portfolio status, so refresh the page to see the latest publish status.",
+          );
+        }
+      } catch (err) {
+        setHeroCoverError(err instanceof Error ? err.message : 'Could not upload portfolio cover.');
+      }
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Loading state
   // -------------------------------------------------------------------------
@@ -792,7 +824,9 @@ export function DesignerPortfolioSettings() {
                   >
                     <AlertCircle className="mt-px size-4 shrink-0 text-destructive" aria-hidden />
                     <p className="text-xs leading-relaxed text-foreground">
-                      Your portfolio isn&apos;t public yet. Add{' '}
+                      {portfolio.publiclyVisible
+                        ? 'Your portfolio is live, but it still needs '
+                        : "Your portfolio isn't public yet. Add "}
                       {portfolio.missingRequiredFields.map((field, index, fields) => (
                         <Fragment key={field}>
                           {index > 0 ? (index === fields.length - 1 ? ' and ' : ', ') : null}
@@ -805,7 +839,8 @@ export function DesignerPortfolioSettings() {
                           </button>
                         </Fragment>
                       ))}{' '}
-                      in the Hero section and save to publish it.
+                      in the Hero section
+                      {portfolio.publiclyVisible ? '.' : ' and save to publish it.'}
                     </p>
                   </div>
                 )}
@@ -912,7 +947,7 @@ export function DesignerPortfolioSettings() {
               {/* Hero */}
               <CollapsibleSection
                 title="Hero"
-                subtitle="Logo, studio name, tagline and bio"
+                subtitle="Cover, logo, studio name, tagline and bio"
                 expanded={sectionExpanded.hero}
                 onToggleExpanded={() => toggleExpanded('hero')}
                 compact
@@ -922,6 +957,69 @@ export function DesignerPortfolioSettings() {
                   className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
                 >
                   <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="gap-0 text-sm font-medium text-muted-foreground">
+                        Cover image
+                        <RequiredFieldIndicator />
+                      </Label>
+                      <button
+                        ref={(node) => {
+                          heroFieldRefs.current.heroCover = node;
+                        }}
+                        type="button"
+                        onClick={handleHeroCoverUploadClick}
+                        disabled={isUploadingHeroCover}
+                        aria-label={
+                          portfolio.heroCoverUrl
+                            ? 'Replace portfolio cover'
+                            : 'Upload portfolio cover'
+                        }
+                        className="group relative flex aspect-[16/9] w-full overflow-hidden rounded-xl border border-dashed border-border bg-muted/50 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                      >
+                        {portfolio.heroCoverUrl ? (
+                          <>
+                            <Image
+                              src={portfolio.heroCoverUrl}
+                              alt="Portfolio cover"
+                              fill
+                              loading="eager"
+                              unoptimized
+                              className="object-cover"
+                            />
+                            <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-surface-inverse/80 px-4 py-2 text-sm font-medium text-surface-inverse-foreground backdrop-blur-sm">
+                              {isUploadingHeroCover ? (
+                                <Loader2 className="size-4 animate-spin" aria-hidden />
+                              ) : (
+                                <ImagePlus className="size-4" aria-hidden />
+                              )}
+                              Replace cover
+                            </span>
+                          </>
+                        ) : (
+                          <span className="m-auto flex flex-col items-center gap-2 p-6 text-center">
+                            {isUploadingHeroCover ? (
+                              <Loader2 className="size-7 animate-spin text-primary" aria-hidden />
+                            ) : (
+                              <ImagePlus className="size-7 text-primary" aria-hidden />
+                            )}
+                            <span className="text-sm font-medium text-foreground">
+                              Upload a portfolio cover
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              JPG, PNG, WebP or AVIF up to 10 MB
+                            </span>
+                          </span>
+                        )}
+                      </button>
+                      {heroCoverError ? (
+                        <p className="text-[13px] font-medium text-destructive">{heroCoverError}</p>
+                      ) : !portfolio.heroCoverUrl ? (
+                        <p className="text-xs text-muted-foreground">
+                          Use a wide image that represents your studio rather than a single project.
+                        </p>
+                      ) : null}
+                    </div>
+
                     {/* Logo upload + Studio name */}
                     <div className="flex items-start gap-3">
                       <div className="flex shrink-0 flex-col gap-1.5">
@@ -1539,7 +1637,18 @@ export function DesignerPortfolioSettings() {
             <Card className="w-full overflow-hidden rounded-3xl bg-primary/5">
               <div className="px-4 pt-4">
                 <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-lg -rotate-2">
-                  <div className="h-24 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
+                  <div className="relative h-24 overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))]">
+                    {portfolio.heroCoverUrl ? (
+                      <Image
+                        src={portfolio.heroCoverUrl}
+                        alt="Portfolio cover preview"
+                        fill
+                        loading="eager"
+                        unoptimized
+                        className="object-cover"
+                      />
+                    ) : null}
+                  </div>
                   <div className="space-y-3 px-5 py-4 text-center">
                     <div className="mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl border border-border bg-amber-700 shadow-sm">
                       {portfolio.logoUrl ? (
@@ -1651,8 +1760,17 @@ export function DesignerPortfolioSettings() {
         ref={fileInputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/avif"
+        aria-label="Portfolio logo file"
         className="hidden"
         onChange={handleFileSelected}
+      />
+      <input
+        ref={heroCoverInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        aria-label="Portfolio cover file"
+        className="hidden"
+        onChange={handleHeroCoverSelected}
       />
     </div>
   );

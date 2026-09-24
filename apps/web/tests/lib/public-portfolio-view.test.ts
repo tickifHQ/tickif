@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatRating,
-  heroCaption,
-  heroProject,
   projectFilters,
   socialHref,
   socialLabel,
@@ -70,25 +68,6 @@ describe('strapline', () => {
     expect(strapline({ tagline: 'Calm homes', bio: 'A studio' })).toBe('Calm homes');
     expect(strapline({ tagline: null, bio: 'A studio' })).toBe('A studio');
     expect(strapline({ tagline: '  ', bio: '  ' })).toBeNull();
-  });
-});
-
-describe('heroProject and heroCaption', () => {
-  it('picks the first project that actually has a cover image', () => {
-    const withCover = makeProject({ id: 'b', coverImageUrl: 'https://cdn.test/b.jpg' });
-    const hero = heroProject([makeProject({ id: 'a', coverImageUrl: null }), withCover]);
-
-    expect(hero?.id).toBe('b');
-  });
-
-  it('captions with the project title and its nearest place name', () => {
-    expect(heroCaption(makeProject({ title: 'Adyar Penthouse', locality: 'Adyar' }))).toBe(
-      'Adyar Penthouse · Adyar',
-    );
-    expect(
-      heroCaption(makeProject({ title: 'Adyar Penthouse', locality: null, city: 'Chennai' })),
-    ).toBe('Adyar Penthouse · Chennai');
-    expect(heroCaption(null)).toBeNull();
   });
 });
 

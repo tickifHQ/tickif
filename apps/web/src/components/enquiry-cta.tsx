@@ -15,6 +15,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { Button, buttonVariants } from '@repo/ui/components/button';
 import type { ButtonVariantProps } from '@repo/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components/tooltip';
 import { MessageSquare } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { EnquiryDialog } from '@/components/enquiry-dialog';
@@ -239,18 +240,33 @@ export function EnquiryCta({
       sharedAvailability.result.unavailableReason === 'own_studio');
   const availabilityChecking = sharedAvailability?.status === 'checking';
 
+  const enquiryButton = (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      aria-disabled={ownStudio || undefined}
+      disabled={checking || availabilityChecking}
+      className={cn(
+        buttonVariants({ variant, size }),
+        ownStudio && 'cursor-not-allowed opacity-50 active:translate-y-0',
+        className,
+      )}
+      onClick={ownStudio ? undefined : handleClick}
+    >
+      {children}
+    </button>
+  );
+
   return (
     <>
-      <button
-        type="button"
-        aria-label={ariaLabel}
-        disabled={checking || availabilityChecking || ownStudio}
-        title={ownStudio ? 'You cannot enquire with your own studio' : undefined}
-        className={cn(buttonVariants({ variant, size }), className)}
-        onClick={handleClick}
-      >
-        {children}
-      </button>
+      {ownStudio ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{enquiryButton}</TooltipTrigger>
+          <TooltipContent side="top">You can&apos;t enquire about your own studio.</TooltipContent>
+        </Tooltip>
+      ) : (
+        enquiryButton
+      )}
 
       {/* Already sent modal */}
       <Dialog open={alreadySentOpen} onOpenChange={setAlreadySentOpen}>

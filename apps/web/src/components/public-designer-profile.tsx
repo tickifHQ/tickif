@@ -6,7 +6,6 @@ import {
   Check,
   Globe,
   Link2,
-  MessageCircle,
   MessageSquare,
   Quote,
   Shield,
@@ -37,8 +36,6 @@ import { PublicProjectGallery } from '@/components/public-project-gallery';
 import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
 import {
   formatRating,
-  heroCaption,
-  heroProject,
   socialHref,
   socialLabel,
   strapline,
@@ -60,8 +57,6 @@ type ProfileView = {
   type: string;
   location: string | null;
   pitch: string | null;
-  hero: ReturnType<typeof heroProject>;
-  heroCaption: string | null;
   publicProfileHref: string;
   publicProfileLabel: string;
   loginHref: string;
@@ -171,23 +166,6 @@ function StudioBar({ portfolio, view }: SectionProps) {
               className="hidden h-9 rounded-full px-4 sm:inline-flex"
             />
           ) : null}
-          <EnquiryCta
-            context={{
-              type: 'designer',
-              designerName: portfolio.displayName,
-              designerLocation: view.location,
-              designerLogoUrl: portfolio.logoUrl,
-            }}
-            designerProfileId={portfolio.profileId}
-            loginHref={view.loginHref}
-            variant="emphasis"
-            ariaLabel="Start a conversation"
-            className="h-9 rounded-full px-4"
-          >
-            <MessageCircle className="size-4" />
-            <span className="hidden sm:inline">Start a conversation</span>
-            <span className="sm:hidden">Start</span>
-          </EnquiryCta>
         </div>
       </div>
     </div>
@@ -199,44 +177,31 @@ type HeroStatTile = { value: string; label: string; detail: string };
 
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
-  const headlineRating = portfolio.sections.overallRating ? headlineReviewAggregate(stats) : null;
-
-  // Only stats the designer actually has data for — an empty tile reads as broken.
-  const candidates: (HeroStatTile | null)[] = [
-    headlineRating && headlineRating.reviewCount > 0
-      ? {
-          value: formatRating(headlineRating.rating),
-          label: 'Rating',
-          detail:
-            headlineRating.source === 'tickif'
-              ? `${headlineRating.reviewCount} verified reviews`
-              : `${headlineRating.reviewCount} Google reviews`,
-        }
-      : null,
-    stats.projectCount > 0
-      ? { value: String(stats.projectCount), label: 'Projects', detail: 'Published on Tickif' }
-      : null,
-    portfolio.foundedYear
-      ? {
-          value: String(portfolio.foundedYear),
-          label: 'Established',
-          detail:
-            stats.yearsExperience > 0 ? `${stats.yearsExperience}+ years experience` : 'Studio',
-        }
-      : null,
-    stats.startingBudget
-      ? {
-          value: formatCompactBudgetLabel(stats.startingBudget),
-          label: 'Typical budget',
-          detail: 'Across published work',
-        }
-      : null,
+  const tiles: HeroStatTile[] = [
+    {
+      value: String(stats.yearsExperience),
+      label: 'Years experience',
+      detail: 'Industry experience',
+    },
+    {
+      value: String(stats.projectCount),
+      label: 'Projects',
+      detail: 'Published on Tickif',
+    },
+    {
+      value: String(stats.cityPresenceCount),
+      label: 'Cities present',
+      detail: 'Service footprint',
+    },
   ];
-  const tiles = candidates.filter((tile): tile is HeroStatTile => tile !== null);
 
   return (
-    <section className="grid border-b lg:grid-cols-12">
-      <div className="flex items-center px-4 py-14 sm:px-8 lg:col-span-7 lg:px-12">
+    <section aria-label="Portfolio hero" className="grid border-b lg:grid-cols-12">
+      <div
+        className={`flex items-center px-4 py-14 sm:px-8 lg:px-12 ${
+          portfolio.heroCoverUrl ? 'lg:col-span-7' : 'lg:col-span-12'
+        }`}
+      >
         <div className="mx-auto w-full max-w-xl">
           <div className="mb-7 flex items-start justify-between gap-4 border-b pb-7">
             <div className="flex min-w-0 items-center gap-3">
@@ -275,20 +240,20 @@ function HeroSection({ portfolio, view }: SectionProps) {
             </p>
           ) : null}
 
-          {tiles.length > 0 ? (
-            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded border bg-border p-px sm:grid-cols-4">
-              {tiles.map((tile) => (
-                <div
-                  key={tile.label}
-                  className="flex min-h-20 flex-col justify-center bg-background px-3 py-4"
-                >
-                  <dd className="text-2xl leading-none">{tile.value}</dd>
-                  <dt className="mt-2 text-xs font-medium">{tile.label}</dt>
-                  <p className="mt-1 text-xs leading-tight text-muted-foreground">{tile.detail}</p>
-                </div>
-              ))}
-            </dl>
-          ) : null}
+          <dl className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded border bg-border p-px">
+            {tiles.map((tile) => (
+              <div
+                key={tile.label}
+                className="flex min-h-20 min-w-0 flex-col justify-center bg-background px-3 py-4"
+              >
+                <dd className="text-2xl leading-none">{tile.value}</dd>
+                <dt className="mt-2 text-xs font-medium">{tile.label}</dt>
+                <p className="mt-1 hidden text-xs leading-tight text-muted-foreground sm:block">
+                  {tile.detail}
+                </p>
+              </div>
+            ))}
+          </dl>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <EnquiryCta
@@ -310,24 +275,20 @@ function HeroSection({ portfolio, view }: SectionProps) {
         </div>
       </div>
 
-      {view.hero?.coverImageUrl ? (
+      {portfolio.heroCoverUrl ? (
         <figure className="flex min-h-96 flex-col bg-muted lg:col-span-5 lg:min-h-full">
           <div className="relative min-h-96 flex-1">
             <Image
-              src={view.hero.heroImageUrl ?? view.hero.coverImageUrl}
-              alt={`${view.hero.title} by ${portfolio.displayName}`}
+              src={portfolio.heroCoverUrl}
+              alt={`${portfolio.displayName} portfolio cover`}
               fill
               priority
+              loading="eager"
               unoptimized
               sizes="(min-width: 1024px) 42vw, 100vw"
               className="object-cover"
             />
           </div>
-          {view.heroCaption ? (
-            <figcaption className="border-t bg-muted px-5 py-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
-              {view.heroCaption}
-            </figcaption>
-          ) : null}
         </figure>
       ) : null}
     </section>
@@ -872,10 +833,10 @@ function ShareSection({ portfolio, view }: SectionProps) {
       <div className="mx-auto grid max-w-6xl gap-16 lg:grid-cols-5 lg:items-center">
         <div className="mx-auto w-full max-w-sm py-6 lg:col-span-2">
           <Card className="-rotate-2 overflow-hidden shadow-2xl" radius="2xl">
-            {view.hero?.coverImageUrl ? (
+            {portfolio.heroCoverUrl ? (
               <div className="relative h-56">
                 <Image
-                  src={view.hero.coverImageUrl}
+                  src={portfolio.heroCoverUrl}
                   alt={`${portfolio.displayName} portfolio preview`}
                   fill
                   unoptimized
@@ -981,25 +942,16 @@ function ConsultationSection({ portfolio, view }: SectionProps) {
           <span className="block">living without.</span>
         </h2>
         <p className="mt-6 max-w-md leading-6 text-surface-inverse-foreground/80">
-          Start a conversation with {portfolio.displayName} on Tickif. The first conversation is
-          always free.
+          Book a consultation with {portfolio.displayName} on Tickif. The first consultation is
+          free.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <EnquiryCta
-            context={{
-              type: 'designer',
-              designerName: portfolio.displayName,
-              designerLocation: view.location,
-              designerLogoUrl: portfolio.logoUrl,
-            }}
+          <BookingCta
             designerProfileId={portfolio.profileId}
+            designerName={portfolio.displayName}
             loginHref={view.loginHref}
             className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse hover:bg-surface-inverse-foreground/90"
-            ariaLabel="Get free consultation"
-          >
-            <MessageSquare className="size-5" />
-            Get free consultation
-          </EnquiryCta>
+          />
         </div>
         <p className="mt-7 font-mono text-xs tracking-wider text-surface-inverse-foreground/55 uppercase">
           No commitment · No middlemen · No sales calls
@@ -1018,15 +970,12 @@ export function PublicDesignerProfile({
 }) {
   const projects = portfolio.projects.projects;
   const canonical = new URL(portfolio.canonicalUrl);
-  const hero = heroProject(projects);
 
   const view: ProfileView = {
     initials: studioInitials(portfolio.displayName),
     type: studioType(portfolio),
     location: studioLocation(portfolio, projects),
     pitch: strapline(portfolio),
-    hero,
-    heroCaption: heroCaption(hero),
     publicProfileHref: portfolio.canonicalUrl,
     publicProfileLabel: `${canonical.host}${canonical.pathname}`,
     loginHref: `/login?callbackURL=${encodeURIComponent(canonical.pathname)}`,

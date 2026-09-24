@@ -68,9 +68,7 @@ vi.mock('@repo/config', () => ({
 }));
 
 // Import AFTER mock registration
-const { portfolioService } = await import(
-  '../../../src/modules/profiles/portfolio-service.js'
-);
+const { portfolioService } = await import('../../../src/modules/profiles/portfolio-service.js');
 const { getSession } = await import('@repo/auth');
 const { app } = await import('../../../src/app.js');
 
@@ -91,6 +89,7 @@ const fakePortfolioResponse: PortfolioResponse = {
   displayName: 'Test Studio',
   bio: null,
   logoUrl: null,
+  heroCoverUrl: null,
   websiteUrl: null,
   instagramHandle: null,
   linkedinHandle: null,

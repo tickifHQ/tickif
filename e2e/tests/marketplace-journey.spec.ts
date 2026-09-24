@@ -212,9 +212,18 @@ test('designer onboarding and media processing connects to visitor onboarding an
         response.url().endsWith('/api/profiles/me/portfolio/logo/commit'),
     );
     await designer
-      .locator('input[type="file"]')
+      .getByLabel('Portfolio logo file')
       .setInputFiles(resolve('../apps/web/public/images/home-hero/bright-kitchen-living-room.jpg'));
     expect((await logoCommit).ok()).toBeTruthy();
+    const coverCommit = designer.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/profiles/me/portfolio/cover/commit'),
+    );
+    await designer
+      .getByLabel('Portfolio cover file')
+      .setInputFiles(resolve('../apps/web/public/images/home-hero/neutral-living-room.jpg'));
+    expect((await coverCommit).ok()).toBeTruthy();
     await designer.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect
       .poll(

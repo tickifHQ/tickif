@@ -7,6 +7,9 @@ import {
   onboardingDraftFieldsSchema,
   onboardingDraftSchema,
   onboardingStepSchema,
+  portfolioCoverCommitRequestSchema,
+  portfolioCoverUploadRequestSchema,
+  requiredPortfolioFieldSchema,
   taxonomyKindSchema,
   updateProfileSchema,
 } from '../src';
@@ -53,6 +56,40 @@ describe('profile and taxonomy contracts', () => {
     expect(update.error.flatten().fieldErrors.staffCount).toEqual([
       `Enter ${PROFILE_STAFF_COUNT_MAX} or fewer.`,
     ]);
+  });
+});
+
+describe('portfolio cover contracts', () => {
+  it('recognizes the Hero cover as a required portfolio field', () => {
+    expect(requiredPortfolioFieldSchema.safeParse('heroCover').success).toBe(true);
+  });
+
+  it('accepts supported cover uploads up to 10 MB and rejects larger files', () => {
+    expect(
+      portfolioCoverUploadRequestSchema.safeParse({
+        contentType: 'image/webp',
+        contentLength: 10_000_000,
+      }).success,
+    ).toBe(true);
+    expect(
+      portfolioCoverUploadRequestSchema.safeParse({
+        contentType: 'image/webp',
+        contentLength: 10_000_001,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts only keys within the portfolio-cover storage namespace', () => {
+    expect(
+      portfolioCoverCommitRequestSchema.safeParse({
+        objectKey: 'originals/portfolio-covers/profile-1/object-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      portfolioCoverCommitRequestSchema.safeParse({
+        objectKey: 'originals/logos/profile-1/object-1',
+      }).success,
+    ).toBe(false);
   });
 });
 

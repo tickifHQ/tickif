@@ -14,6 +14,7 @@ import {
 import {
   computeBadges,
   getPortfolioPublicationState,
+  presignPortfolioHeroCover,
   presignProfileLogo,
   publicPortfolioSlug,
   publicPortfolioUrl,
@@ -126,25 +127,34 @@ export const publicPortfolioService = {
 
     const sections = sectionsOf(portfolio);
 
-    const [logoUrl, googleRow, tickif, cities, projects, startingBudget, testimonial] =
-      await Promise.all([
-        presignProfileLogo(profile),
-        googleReviewsRepository.findByProfileId(profile.id),
-        reviewsService.listPublished({
-          designerProfileId: profile.id,
-          page: 1,
-          limit: 50,
-        }),
-        portfolioRepository.findCityLabels(profile.id),
-        // The profile was already loaded and status-checked above.
-        projectsService.designerProjects(
-          profile.id,
-          { page: 1, limit: INITIAL_PROJECT_LIMIT },
-          { skipDesignerCheck: true },
-        ),
-        projectsService.designerStartingBudget(profile.id),
-        resolveTestimonial(profile.id, portfolio, sections),
-      ]);
+    const [
+      logoUrl,
+      heroCoverUrl,
+      googleRow,
+      tickif,
+      cities,
+      projects,
+      startingBudget,
+      testimonial,
+    ] = await Promise.all([
+      presignProfileLogo(profile),
+      presignPortfolioHeroCover(profile.id, portfolio),
+      googleReviewsRepository.findByProfileId(profile.id),
+      reviewsService.listPublished({
+        designerProfileId: profile.id,
+        page: 1,
+        limit: 50,
+      }),
+      portfolioRepository.findCityLabels(profile.id),
+      // The profile was already loaded and status-checked above.
+      projectsService.designerProjects(
+        profile.id,
+        { page: 1, limit: INITIAL_PROJECT_LIMIT },
+        { skipDesignerCheck: true },
+      ),
+      projectsService.designerStartingBudget(profile.id),
+      resolveTestimonial(profile.id, portfolio, sections),
+    ]);
 
     // `readState` applies the Places ToS read-time guard: content older than the
     // 30-day window is withheld and the row reads `stale`, so nothing expired
@@ -187,6 +197,7 @@ export const publicPortfolioService = {
       cities,
       experienceCenterGroups: groupExperienceCenters(portfolio.experienceCenters),
       logoUrl,
+      heroCoverUrl,
       accentColor: portfolio.accentColor,
       badges: sections.trustCredentials ? computeBadges(profile, isKycVerified) : [],
       isKycVerified,
@@ -207,6 +218,7 @@ export const publicPortfolioService = {
             : null,
         projectCount: profile.projectCount,
         yearsExperience: profile.yearsExperience,
+        cityPresenceCount: cities.length,
         startingBudget,
       },
       social: sections.socialLinks

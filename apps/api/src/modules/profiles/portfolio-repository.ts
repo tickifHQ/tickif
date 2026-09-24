@@ -548,4 +548,33 @@ export const portfolioRepository = {
       return true;
     });
   },
+
+  /**
+   * Compare-and-set the dedicated portfolio Hero cover.
+   *
+   * The portfolio row is created before this call. Matching the previous key
+   * prevents two concurrent uploads from silently deleting each other's cover.
+   */
+  async setHeroImageIfMatch(
+    profileId: string,
+    expectedPreviousKey: string | null,
+    newKey: string,
+  ): Promise<boolean> {
+    const condition = expectedPreviousKey
+      ? and(
+          eq(schema.designerPortfolio.profileId, profileId),
+          eq(schema.designerPortfolio.heroImageId, expectedPreviousKey),
+        )
+      : and(
+          eq(schema.designerPortfolio.profileId, profileId),
+          sql`${schema.designerPortfolio.heroImageId} IS NULL`,
+        );
+
+    const result = await db
+      .update(schema.designerPortfolio)
+      .set({ heroImageId: newKey, updatedAt: new Date() })
+      .where(condition)
+      .returning({ id: schema.designerPortfolio.id });
+    return result.length > 0;
+  },
 };

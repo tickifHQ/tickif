@@ -1,11 +1,17 @@
 import '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
 import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
 import { makePublicPortfolio } from '../lib/public-portfolio';
+
+async function openMobileNavigation(page: Page) {
+  const trigger = page.getByRole('button', { name: 'Open navigation' });
+  await trigger.focus();
+  await trigger.press('Enter');
+}
 
 test('designer workspace opens discovery via Explore Tickif and empty public review sections stay hidden', async ({
   page,
@@ -86,7 +92,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/designer/dashboard');
-    await page.getByRole('button', { name: 'Open navigation' }).click();
+    await openMobileNavigation(page);
     const mobileExplore = page
       .getByRole('dialog', { name: 'Designer navigation' })
       .getByRole('link', { name: 'Explore Tickif' });
@@ -190,7 +196,7 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
       if (role === 'member' || role === 'viewer') {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto('/designer/dashboard');
-        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await openMobileNavigation(page);
         const drawer = page.getByRole('dialog', { name: 'Designer navigation' });
         await expect(drawer.getByRole('link', { name: 'Explore Tickif' })).toBeVisible();
         await drawer.getByRole('link', { name: 'Explore Tickif' }).click();
@@ -198,7 +204,7 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
         await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
 
         await page.goto('/designer/dashboard');
-        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await openMobileNavigation(page);
         const mobileBrand = page
           .getByRole('dialog', { name: 'Designer navigation' })
           .getByRole('link', { name: 'Tickif', exact: true });

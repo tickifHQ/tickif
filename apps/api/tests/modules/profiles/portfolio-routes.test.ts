@@ -10,6 +10,8 @@ vi.mock('../../../src/modules/profiles/portfolio-service.js', () => ({
     checkSlugAvailability: vi.fn(),
     createLogoUploadUrl: vi.fn(),
     commitLogoUpload: vi.fn(),
+    createHeroCoverUploadUrl: vi.fn(),
+    commitHeroCoverUpload: vi.fn(),
     deleteLogo: vi.fn(),
   },
 }));
@@ -68,9 +70,7 @@ vi.mock('@repo/config', () => ({
 }));
 
 // Import AFTER mock registration
-const { portfolioService } = await import(
-  '../../../src/modules/profiles/portfolio-service.js'
-);
+const { portfolioService } = await import('../../../src/modules/profiles/portfolio-service.js');
 const { getSession } = await import('@repo/auth');
 const { app } = await import('../../../src/app.js');
 
@@ -91,6 +91,7 @@ const fakePortfolioResponse: PortfolioResponse = {
   displayName: 'Test Studio',
   bio: 'We design things',
   logoUrl: null,
+  heroCoverUrl: null,
   websiteUrl: null,
   instagramHandle: null,
   linkedinHandle: null,
@@ -406,6 +407,43 @@ describe('POST /me/portfolio/logo/commit', () => {
     });
 
     expect(res.status).toBe(401);
+  });
+});
+
+describe('portfolio Hero cover upload routes', () => {
+  it('presigns and commits a dedicated portfolio cover', async () => {
+    mockAuthed();
+    vi.mocked(portfolioService.createHeroCoverUploadUrl).mockResolvedValue({
+      uploadUrl: 'https://r2.example.com/presigned-put',
+      key: 'originals/portfolio-covers/profile-1/uuid-123',
+    });
+    vi.mocked(portfolioService.commitHeroCoverUpload).mockResolvedValue({
+      heroCoverUrl: 'https://r2.example.com/presigned-download',
+    });
+
+    const upload = await request('POST', '/me/portfolio/cover/upload', {
+      body: { contentType: 'image/webp', contentLength: 750000 },
+    });
+    const commit = await request('POST', '/me/portfolio/cover/commit', {
+      body: { objectKey: 'originals/portfolio-covers/profile-1/uuid-123' },
+    });
+
+    expect(upload.status).toBe(201);
+    expect(commit.status).toBe(200);
+    expect(await json(commit)).toEqual({
+      heroCoverUrl: 'https://r2.example.com/presigned-download',
+    });
+  });
+
+  it('rejects malformed cover object keys before the service', async () => {
+    mockAuthed();
+
+    const response = await request('POST', '/me/portfolio/cover/commit', {
+      body: { objectKey: 'originals/logos/profile-1/not-a-cover' },
+    });
+
+    expect(response.status).toBe(422);
+    expect(portfolioService.commitHeroCoverUpload).not.toHaveBeenCalled();
   });
 });
 

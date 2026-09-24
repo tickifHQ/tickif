@@ -53,22 +53,6 @@ export function strapline(
   return portfolio.tagline?.trim() || portfolio.bio?.trim() || null;
 }
 
-/** Cover image of the newest published project — the page's hero visual. */
-export function heroProject(projects: DesignerProjectCard[]): DesignerProjectCard | null {
-  return projects.find((project) => project.coverImageUrl) ?? projects[0] ?? null;
-}
-
-/**
- * Caption under the hero image, e.g. "Adyar Penthouse · Chennai".
- * Null when there is no project to caption.
- */
-export function heroCaption(project: DesignerProjectCard | null): string | null {
-  if (!project) return null;
-  return [project.title, project.locality ?? project.city]
-    .filter((part): part is string => !!part)
-    .join(' · ');
-}
-
 /** Distinct property-type facets across the loaded projects, for the gallery filters. */
 export function projectFilters(projects: DesignerProjectCard[]): string[] {
   const seen = new Set<string>();

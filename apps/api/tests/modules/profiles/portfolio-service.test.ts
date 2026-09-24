@@ -23,6 +23,7 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     findProjectForDesignerInTx: vi.fn(),
     updateProfileInTx: vi.fn(),
     setLogoIfMatch: vi.fn(),
+    setHeroImageIfMatch: vi.fn(),
     reserveLogoUpload: vi.fn(),
     releaseUploadLease: vi.fn(),
     activateIfDraft: vi.fn(async () => true),
@@ -114,6 +115,7 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   publicLinkEnabled: true,
   portfolioSlug: null,
   accentColor: '#FF8F73',
+  heroImageId: 'originals/portfolio-covers/profile-1/cover',
   showHero: true,
   showTrustCredentials: true,
   showFeaturedTestimonial: true,
@@ -163,6 +165,38 @@ function setupGetPortfolio(portfolio = makePortfolio()) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(portfolioRepository.reserveLogoUpload).mockResolvedValue(true);
+});
+
+describe('portfolioService.commitHeroCoverUpload', () => {
+  const objectKey = 'originals/portfolio-covers/profile-1/new-cover';
+
+  it('persists a profile-owned uploaded cover and returns its signed URL', async () => {
+    setupResolveProfile();
+    setupGetPortfolio();
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setHeroImageIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/cover');
+
+    const result = await portfolioService.commitHeroCoverUpload({ objectKey }, caller);
+
+    expect(portfolioRepository.setHeroImageIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/portfolio-covers/profile-1/cover',
+      objectKey,
+    );
+    expect(result).toEqual({ heroCoverUrl: 'https://r2.example.com/cover' });
+  });
+
+  it('rejects a cover key owned by another profile', async () => {
+    setupResolveProfile();
+
+    await expect(
+      portfolioService.commitHeroCoverUpload(
+        { objectKey: 'originals/portfolio-covers/other-profile/cover' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
 });
 
 describe('resolveProfile', () => {
@@ -515,7 +549,12 @@ describe('portfolioService.getPortfolio logo resolution', () => {
     const result = await portfolioService.getPortfolio(caller);
 
     expect(result.logoUrl).toBeNull();
-    expect(presignDownload).not.toHaveBeenCalled();
+    expect(presignDownload).not.toHaveBeenCalledWith({
+      key: 'originals/logos/other-profile/stolen-key',
+    });
+    expect(presignDownload).toHaveBeenCalledWith({
+      key: 'originals/portfolio-covers/profile-1/cover',
+    });
   });
 });
 
@@ -800,7 +839,9 @@ describe('audit event emission', () => {
 // =============================================================================
 
 /** A draft profile whose only gap is the field named by `missing`. */
-function makeDraftMissing(missing: 'logo' | 'displayName' | 'tagline' | 'bio' | 'nothing') {
+function makeDraftMissing(
+  missing: 'heroCover' | 'logo' | 'displayName' | 'tagline' | 'bio' | 'nothing',
+) {
   const profile = makeProfile({
     status: 'draft',
     logoImageId: missing === 'logo' ? null : 'originals/logos/profile-1/abc',
@@ -808,6 +849,7 @@ function makeDraftMissing(missing: 'logo' | 'displayName' | 'tagline' | 'bio' | 
     bio: missing === 'bio' ? null : 'We design beautiful spaces',
   });
   const portfolio = makePortfolio({
+    heroImageId: missing === 'heroCover' ? null : 'originals/portfolio-covers/profile-1/cover',
     tagline: missing === 'tagline' ? null : 'Warm, functional homes',
   });
   return { profile, portfolio };
@@ -819,7 +861,7 @@ describe('missingRequiredFields', () => {
     expect(missingRequiredFields(profile, portfolio)).toEqual([]);
   });
 
-  it.each([['logo'], ['displayName'], ['tagline'], ['bio']] as const)(
+  it.each([['heroCover'], ['logo'], ['displayName'], ['tagline'], ['bio']] as const)(
     'reports %s when it is blank',
     (missing) => {
       const { profile, portfolio } = makeDraftMissing(missing);

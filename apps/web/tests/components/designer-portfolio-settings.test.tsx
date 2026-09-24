@@ -12,6 +12,7 @@ const mock = vi.hoisted(() => ({
   checkSlugAvailability: vi.fn(),
   fetchPortfolioProjects: vi.fn(),
   uploadLogo: vi.fn(),
+  uploadPortfolioCover: vi.fn(),
   deleteLogo: vi.fn(),
   fetchGoogleReviews: vi.fn(),
   connectGoogleReviews: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('@/lib/portfolio-api', () => ({
   checkSlugAvailability: mock.checkSlugAvailability,
   fetchPortfolioProjects: mock.fetchPortfolioProjects,
   uploadLogo: mock.uploadLogo,
+  uploadPortfolioCover: mock.uploadPortfolioCover,
   deleteLogo: mock.deleteLogo,
   fetchGoogleReviews: mock.fetchGoogleReviews,
   connectGoogleReviews: mock.connectGoogleReviews,
@@ -58,6 +60,7 @@ const basePortfolio: PortfolioResponse = {
   displayName: 'Mahi Studio',
   bio: 'Interiors for real life.',
   logoUrl: null,
+  heroCoverUrl: 'https://cdn.tickif.test/portfolio-cover.jpg',
   websiteUrl: 'https://mahistudio.com',
   instagramHandle: '@mahistudio',
   linkedinHandle: '/company/mahistudio',
@@ -175,7 +178,7 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     const markers = screen.getAllByLabelText('Required');
-    expect(markers).toHaveLength(4);
+    expect(markers).toHaveLength(5);
     for (const marker of markers) {
       expect(marker.tagName).toBe('SUP');
       expect(marker).toHaveClass('cursor-default', 'text-destructive');
@@ -240,6 +243,33 @@ describe('DesignerPortfolioSettings', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Replace logo' }));
     expect(openPicker).toHaveBeenCalledOnce();
     expect(mock.deleteLogo).not.toHaveBeenCalled();
+  });
+
+  it('uploads a dedicated portfolio cover from the Hero section', async () => {
+    mock.uploadPortfolioCover.mockResolvedValue({
+      heroCoverUrl: 'https://cdn.tickif.test/portfolio-cover.jpg',
+    });
+    mock.fetchPortfolio
+      .mockResolvedValueOnce({
+        ...basePortfolio,
+        heroCoverUrl: null,
+        publiclyVisible: false,
+        missingRequiredFields: ['heroCover'],
+      })
+      .mockResolvedValueOnce({
+        ...basePortfolio,
+        heroCoverUrl: 'https://cdn.tickif.test/portfolio-cover.jpg',
+      });
+    await renderSettings();
+
+    const file = new File(['cover'], 'cover.jpg', { type: 'image/jpeg' });
+    await userEvent.setup().upload(screen.getByLabelText('Portfolio cover file'), file);
+
+    await waitFor(() => expect(mock.uploadPortfolioCover).toHaveBeenCalledWith(file));
+    const portfolioCover = await screen.findByAltText('Portfolio cover');
+    expect(portfolioCover).toHaveAttribute('src', 'https://cdn.tickif.test/portfolio-cover.jpg');
+    expect(portfolioCover).toHaveAttribute('loading', 'eager');
+    expect(screen.getByAltText('Portfolio cover preview')).toHaveAttribute('loading', 'eager');
   });
 
   it('moves keyboard focus to the missing Hero control', async () => {
