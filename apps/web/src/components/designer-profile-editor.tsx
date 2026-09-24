@@ -612,7 +612,10 @@ export function DesignerProfileEditor({
                   {...aria}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Used to pull your Google rating and reviews.
+                  Saving this link does not change your Google review connection.{' '}
+                  <Link href="/designer/portfolio" className="underline underline-offset-4">
+                    Manage Google reviews in portfolio settings
+                  </Link>
                 </p>
               </>
             )}

@@ -344,6 +344,24 @@ describe('DesignerProfileEditor', () => {
     });
   });
 
+  it('directs owners to portfolio settings to connect Google reviews separately', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(
+      screen.getByText(/saving this link does not change your google review connection/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /manage google reviews in portfolio settings/i }),
+    ).toHaveAttribute('href', '/designer/portfolio');
+  });
+
   it('clears the Google Business Profile link by sending null when emptied', async () => {
     const user = userEvent.setup();
     render(
