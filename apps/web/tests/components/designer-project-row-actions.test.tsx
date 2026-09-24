@@ -206,7 +206,7 @@ describe('DesignerProjectRowActions', () => {
     );
   });
 
-  it('duplicates the project without navigating away from the list', async () => {
+  it('duplicates the project from the context menu without navigating away from the list', async () => {
     render(
       <DesignerProjectRowActions
         projectId="11111111-1111-4111-8111-111111111111"
@@ -215,7 +215,16 @@ describe('DesignerProjectRowActions', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /duplicate warm walnut family home/i }));
+    // Duplicate now lives in the context menu, not as an inline icon button.
+    expect(
+      screen.queryByRole('button', { name: /duplicate warm walnut family home/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /duplicate project/i }));
 
     await waitFor(() => {
       expect(mock.duplicatePost).toHaveBeenCalledWith({
@@ -224,6 +233,69 @@ describe('DesignerProjectRowActions', () => {
     });
     expect(mock.router.push).not.toHaveBeenCalled();
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('links View project to the public project URL for a published project', () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="published"
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+
+    expect(screen.getByRole('menuitem', { name: /view project/i })).toHaveAttribute(
+      'href',
+      '/projects/11111111-1111-4111-8111-111111111111',
+    );
+  });
+
+  it('does not offer View project or Copy link for an unpublished draft', () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="draft"
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+
+    expect(screen.queryByRole('menuitem', { name: /view project/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /copy link/i })).not.toBeInTheDocument();
+  });
+
+  it('copies the absolute public project URL from the Copy link action', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="published"
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /copy link/i }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'http://localhost:3000/projects/11111111-1111-4111-8111-111111111111',
+      );
+    });
   });
 
   it('restores page interactions after deleting a draft', async () => {
@@ -315,15 +387,16 @@ describe('DesignerProjectRowActions', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: /duplicate warm walnut family home/i }),
-    ).not.toBeInTheDocument();
-    expect(
       screen.queryByRole('link', { name: /edit warm walnut family home/i }),
     ).not.toBeInTheDocument();
     fireEvent.pointerDown(
       screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
       { button: 0, ctrlKey: false },
     );
+    // Duplicate is unavailable for an archived project, even from the menu.
+    expect(
+      screen.queryByRole('menuitem', { name: /duplicate project/i }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: /restore to drafts/i }));
 
     await waitFor(() => {
