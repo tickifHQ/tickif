@@ -1550,6 +1550,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [bhkSlug, setBhkSlug] = useState('');
   const [sizeSqft, setSizeSqft] = useState('');
   const [citySlug, setCitySlug] = useState('');
+  const [cityName, setCityName] = useState('');
+  const [customCityMode, setCustomCityMode] = useState(false);
   const [locality, setLocality] = useState('');
   const [buildingName, setBuildingName] = useState('');
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['construction']);
@@ -1719,12 +1721,14 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         bhkSlug,
         selectedProjectSubtypeLabel,
         selectedProjectTypeLabel,
-        localityLabel: selectedLocality?.label ?? locality,
-        cityLabel: selectedCity?.label ?? '',
-        citySlug,
+        localityLabel: customCityMode ? '' : (selectedLocality?.label ?? locality),
+        cityLabel: customCityMode ? cityName : (selectedCity?.label ?? ''),
+        citySlug: customCityMode ? '' : citySlug,
       }),
     [
       bhkSlug,
+      cityName,
+      customCityMode,
       citySlug,
       locality,
       selectedCity?.label,
@@ -2053,7 +2057,11 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         );
         setBhkSlug(project.bhkSlug ?? '');
         setSizeSqft(metadataNumberString(project.sizeSqft));
-        setCitySlug(project.citySlug ?? '');
+        const loadedCityName = project.cityName ?? '';
+        const hasCustomCity = loadedCityName.trim().length > 0;
+        setCustomCityMode(hasCustomCity);
+        setCityName(loadedCityName);
+        setCitySlug(hasCustomCity ? '' : (project.citySlug ?? ''));
         setLocality(project.localitySlug ?? metadataString(projectMetadata.localityLabel));
         setBuildingName(project.buildingName ?? '');
         setSelectedScopes(
@@ -2488,6 +2496,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       bhkSlug,
       sizeSqft,
       citySlug,
+      cityName,
+      customCity: customCityMode,
       cityLabel: selectedCity?.label ?? '',
       localitySlug: selectedLocality?.slug,
       localityLabel: selectedLocality?.label ?? locality,
@@ -2512,6 +2522,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       bhkSlug: createPayload.bhkSlug ?? null,
       sizeSqft: createPayload.sizeSqft ?? null,
       citySlug: createPayload.citySlug ?? null,
+      cityName: createPayload.cityName ?? null,
       localitySlug: createPayload.localitySlug ?? null,
       buildingName: createPayload.buildingName ?? null,
       budgetBandSlug: createPayload.budgetBandSlug ?? null,
@@ -3512,16 +3523,70 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                   Where is this project located?
                 </p>
                 <div className="mt-5 grid gap-5 md:grid-cols-2">
-                  <FormSelect
-                    label="City"
-                    value={citySlug}
-                    onChange={(value) => {
-                      setCitySlug(value);
-                      setLocality('');
-                    }}
-                    options={cityOptions}
-                    placeholder={loadingTaxonomy ? 'Loading…' : 'Select city'}
-                  />
+                  <div className="space-y-1.5">
+                    {customCityMode ? (
+                      <>
+                        <div className="flex items-center justify-between gap-2">
+                          <Label
+                            htmlFor="project-custom-city"
+                            className={cn(typography.label, 'text-foreground')}
+                          >
+                            City
+                          </Label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomCityMode(false);
+                              setCityName('');
+                            }}
+                            className={cn(
+                              typography.bodySmall,
+                              'text-primary underline-offset-2 hover:underline',
+                            )}
+                          >
+                            Choose from the list
+                          </button>
+                        </div>
+                        <Input
+                          id="project-custom-city"
+                          value={cityName}
+                          onChange={(event) => setCityName(event.target.value)}
+                          placeholder="e.g. Pondicherry"
+                          className={typography.control}
+                        />
+                        <p className={cn(typography.bodySmall, 'text-muted-foreground')}>
+                          Entering a custom city not in the list.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <FormSelect
+                          label="City"
+                          value={citySlug}
+                          onChange={(value) => {
+                            setCitySlug(value);
+                            setLocality('');
+                          }}
+                          options={cityOptions}
+                          placeholder={loadingTaxonomy ? 'Loading…' : 'Select city'}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomCityMode(true);
+                            setCitySlug('');
+                            setLocality('');
+                          }}
+                          className={cn(
+                            typography.bodySmall,
+                            'text-primary underline-offset-2 hover:underline',
+                          )}
+                        >
+                          Can&apos;t find your city? Enter a custom city
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {localityOptions.length > 0 ? (
                     <SelectField
                       label="Locality / Area"

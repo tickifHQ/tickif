@@ -19,6 +19,14 @@ describe('material project edits', () => {
     ).toBe('material');
     expect(
       classifyProjectEdit(
+        { cityName: 'Pondicherry' },
+        { cityName: 'Auroville' },
+        approved,
+        approved,
+      ),
+    ).toBe('material');
+    expect(
+      classifyProjectEdit(
         { completedMonth: '2025-01' },
         { completedMonth: '2026-01' },
         approved,

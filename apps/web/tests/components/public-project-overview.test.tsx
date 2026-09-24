@@ -115,6 +115,37 @@ describe('PublicProjectOverview', () => {
     expect(screen.queryByText(/years of experience/)).not.toBeInTheDocument();
   });
 
+  it('renders a custom cityName when the taxonomy city is absent', () => {
+    const base = makePublicProject();
+    const project = makePublicProject({
+      specifications: {
+        ...base.specifications,
+        city: null,
+        cityName: 'Pondicherry',
+        locality: null,
+      },
+    });
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
+
+    expect(screen.getAllByText('Pondicherry').length).toBeGreaterThan(0);
+  });
+
+  it('preserves the empty location behaviour when neither taxonomy city nor cityName is present', () => {
+    const base = makePublicProject();
+    const project = makePublicProject({
+      specifications: {
+        ...base.specifications,
+        city: null,
+        cityName: null,
+        locality: null,
+      },
+    });
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
+
+    const specifications = screen.getByLabelText('Project specifications');
+    expect(within(specifications).queryByText('Location')).toBeNull();
+  });
+
   it('falls back to the property label when no building name is available', () => {
     render(
       <PublicProjectOverview
