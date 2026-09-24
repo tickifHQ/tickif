@@ -63,9 +63,9 @@ describe('search collection configuration', () => {
     );
   });
 
-  it('ranks rating before paid coverage and expires paid priority at query time', () => {
+  it('ranks relevance and rating before paid tier, which expires at query time', () => {
     expect(designerDefaultSort(1_786_000_000_000)).toBe(
-      '_text_match:desc,avgRating:desc,_eval(paidUntil:>1786000000000):desc',
+      '_text_match:desc,avgRating:desc,_eval([(rankingTier:=2 && paidUntil:>1786000000000):2, (rankingTier:=1 && paidUntil:>1786000000000):1]):desc',
     );
     expect(DESIGNER_SEARCH_SETTINGS.fields).toEqual(
       expect.arrayContaining([
