@@ -1791,7 +1791,10 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const localChecklist = useMemo(
     () => [
       { label: 'Project name', done: projectName.trim().length >= 3 },
-      { label: 'Location (city)', done: citySlug.length > 0 },
+      {
+        label: 'Location (city)',
+        done: customCityMode ? cityName.trim().length >= 2 : citySlug.length > 0,
+      },
       { label: 'Project type', done: projectType.length > 0 },
       { label: 'Scope (Design / Execution)', done: selectedScopes.length > 0 },
       { label: 'At least 3 photos', done: totalImages >= 3 },
@@ -1812,6 +1815,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     ],
     [
       budgetBandSlug,
+      cityName,
+      customCityMode,
       citySlug,
       projectName,
       projectType,
@@ -4061,7 +4066,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               <p className={cn(typography.bodySmall, 'text-muted-foreground')}>
                 {[
                   selectedProjectTypeLabel,
-                  cities.find((city) => city.slug === citySlug)?.label ?? null,
+                  customCityMode ? cityName.trim() : (selectedCity?.label ?? null),
                   locality.trim() || null,
                 ]
                   .filter(Boolean)

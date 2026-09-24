@@ -70,6 +70,31 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('submits a custom-city edit for review while preserving the live city', async () => {
+    const fixture = await publishedProject();
+    await projectsRepository.updateDraft(fixture.project.id, {
+      citySlug: null,
+      cityName: 'Pondicherry',
+      localitySlug: null,
+    });
+    const result = await projectsRepository.submitWithUploadCounts(fixture.project.id, {
+      actorUserId: fixture.actor.id,
+      expectedStatus: 'draft',
+      action: 'submit',
+      minImageCount: 3,
+    });
+    expect(result.submitted).toMatchObject({
+      status: 'submitted',
+      citySlug: null,
+      cityName: 'Pondicherry',
+    });
+    const [live] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, fixture.project.id));
+    expect(live).toMatchObject({ status: 'published', citySlug: 'mumbai', cityName: null });
+  });
+
   it.each(['minor edit', 'approved pending edit'] as const)(
     'refreshes project and designer search terms after a %s',
     async (edit) => {

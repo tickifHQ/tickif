@@ -705,6 +705,28 @@ describe('DesignerProjectUpload', () => {
       expect(mock.submitPost).not.toHaveBeenCalled();
     });
 
+    it('saves and previews a custom city before submission', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: /enter a custom city/i }));
+      await user.type(screen.getByLabelText('City'), 'Pondicherry');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+      expect(await screen.findByRole('dialog')).toHaveTextContent('Pondicherry');
+      expect(mock.projectPatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({
+            cityName: 'Pondicherry',
+            citySlug: null,
+            localitySlug: null,
+          }),
+        }),
+      );
+    });
+
     it('shows the actual project data and ready images in the preview', async () => {
       const user = userEvent.setup();
       const { project } = await renderSubmittableDraft();
