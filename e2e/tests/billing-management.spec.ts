@@ -401,6 +401,7 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       data: {
         targetTier: 'professional_plus',
         previewToken: quote.previewToken,
+        expectedRecoveryId: null,
         expectedRevision: null,
         operationId: randomUUID(),
       },

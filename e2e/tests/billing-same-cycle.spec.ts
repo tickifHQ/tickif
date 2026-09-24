@@ -150,6 +150,7 @@ for (const scenario of [
             data: {
               targetTier: scenario.targetTier,
               previewToken: quote.previewToken,
+              expectedRecoveryId: null,
               expectedRevision: null,
               operationId: randomUUID(),
             },
@@ -184,8 +185,11 @@ for (const scenario of [
             .filter({
               has: page.getByRole('heading', { name: scenario.initialLabel, exact: true }),
             })
-            .getByText('Current plan', { exact: true }),
-        ).toBeVisible();
+            .getByRole('button', {
+              name: `${scenario.initialLabel} is your current plan`,
+              exact: true,
+            }),
+        ).toBeDisabled();
         // Check the simplified waiting state on both routes and screen sizes.
         for (const route of ['/designer/plan-billing/subscribe', '/designer/plan-billing']) {
           await page.goto(route);

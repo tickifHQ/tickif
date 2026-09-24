@@ -201,8 +201,11 @@ for (const entry of entryPoints) {
                 .getByRole('region', { name: 'Choose your plan', exact: true })
                 .locator('[data-slot="card"]')
                 .filter({ has: page.getByRole('heading', { name: current.label, exact: true }) })
-                .getByText('Current plan', { exact: true }),
-            ).toBeVisible();
+                .getByRole('button', {
+                  name: `${current.label} is your current plan`,
+                  exact: true,
+                }),
+            ).toBeDisabled();
             expect(mutations).toHaveLength(1);
             const now = Math.floor(Date.now() / 1000);
             await deliverSubscriptionEvent(context, 'subscription.cancelled', {

@@ -41,6 +41,7 @@ import { AppError } from '../../../src/lib/errors.js';
 const caller = { userId: 'actor', activeOrgId: 'org' };
 const input = {
   targetTier: 'corporate' as const,
+  expectedRecoveryId: null,
   expectedRevision: null,
   previewToken: 'token',
   operationId: 'bc2ef990-1744-4f42-9e08-135282894e75',
@@ -59,6 +60,51 @@ const row = {
   updatedAt: new Date('2026-01-01'),
 };
 describe('durable recovery', () => {
+  it('acknowledges cancellation without an echoed request flag and retains it on reads', async () => {
+    mocks.findRecovery.mockResolvedValueOnce(undefined).mockResolvedValue(row);
+    mocks.find.mockResolvedValue({
+      id: 'local',
+      razorpaySubscriptionId: 'sub_old',
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+    });
+    mocks.cancel.mockResolvedValue({ id: 'sub_old', status: 'active', current_end: 1800000000 });
+    await recoveryService.save(caller, input);
+    expect(mocks.update).toHaveBeenCalledWith(
+      'local',
+      expect.objectContaining({ cancelAtPeriodEnd: true }),
+    );
+    mocks.find.mockResolvedValue({
+      id: 'local',
+      razorpaySubscriptionId: 'sub_old',
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      cancelAtPeriodEnd: true,
+    });
+    mocks.fetch.mockResolvedValue({ id: 'sub_old', status: 'active', current_end: 1800000000 });
+    await recoveryService.get(caller);
+    expect(mocks.updateRecovery).toHaveBeenLastCalledWith(
+      'org',
+      row.id,
+      1,
+      expect.objectContaining({ status: 'waiting_for_expiry' }),
+    );
+  });
+  it('rejects dismissal of a different intent with the same revision', async () => {
+    mocks.findRecovery.mockResolvedValue({ ...row, id: 'bc2ef990-1744-4f42-9e08-135282894e70' });
+    await expect(
+      recoveryService.dismiss(caller, { expectedRecoveryId: row.id, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ code: 'recovery_revision_conflict' });
+    expect(mocks.updateRecovery).not.toHaveBeenCalled();
+  });
+  it('rejects replacement of a different intent with the same revision', async () => {
+    mocks.findRecovery.mockResolvedValue({ ...row, id: 'bc2ef990-1744-4f42-9e08-135282894e70' });
+    await expect(
+      recoveryService.save(caller, { ...input, expectedRecoveryId: row.id, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ code: 'recovery_revision_conflict' });
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.updateRecovery).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.validate.mockResolvedValue({
@@ -122,7 +168,7 @@ describe('durable recovery', () => {
   });
   it('dismisses intent without reversing provider cancellation', async () => {
     mocks.findRecovery.mockResolvedValue(row);
-    await recoveryService.dismiss(caller, { expectedRevision: 1 });
+    await recoveryService.dismiss(caller, { expectedRecoveryId: row.id, expectedRevision: 1 });
     expect(mocks.updateRecovery).toHaveBeenCalledWith(
       'org',
       row.id,
@@ -264,6 +310,7 @@ describe('durable recovery', () => {
     const result = await recoveryService.save(caller, {
       ...input,
       targetTier: 'professional_plus',
+      expectedRecoveryId: row.id,
       expectedRevision: 1,
     });
     expect(result.recovery).toMatchObject({ targetTier: 'professional_plus', status: 'eligible' });
@@ -281,7 +328,7 @@ describe('durable recovery', () => {
     });
     mocks.fetch.mockResolvedValue({ id: 'sub_old', status: 'active' });
     await expect(
-      recoveryService.save(caller, { ...input, expectedRevision: 1 }),
+      recoveryService.save(caller, { ...input, expectedRecoveryId: row.id, expectedRevision: 1 }),
     ).rejects.toMatchObject({ code: 'recovery_not_eligible' });
     expect(mocks.updateRecovery).not.toHaveBeenCalled();
     expect(mocks.cancel).not.toHaveBeenCalled();

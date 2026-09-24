@@ -143,7 +143,9 @@ describe('unified billing status notice', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Saved plan options' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Remove saved plan' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Remove saved plan' }));
-    expect(mocks.dismiss).toHaveBeenCalledWith({ json: { expectedRevision: 1 } });
+    expect(mocks.dismiss).toHaveBeenCalledWith({
+      json: { expectedRecoveryId: saved.id, expectedRevision: 1 },
+    });
   });
   it('prevents removing a newer revision after the confirmation was opened', async () => {
     const view = notice();

@@ -83,6 +83,46 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.preview.mockResolvedValue({ ok: true, json: async () => preview });
   mocks.refresh.mockResolvedValue(Response.json({}));
+  mocks.getRecovery.mockImplementation(async () => Response.json({ recovery: null }));
+});
+
+it('confirms a different eligible saved plan before separately starting its checkout', async () => {
+  const saved: BillingRecovery = {
+    id: '06757c76-72c6-4fe5-b7b3-dfc9ca2a8524',
+    organizationId: 'org',
+    targetTier: 'professional_plus',
+    sourceSubscriptionId: 'sub_old',
+    actorId: 'user',
+    status: 'eligible',
+    eligibleAt: null,
+    reason: null,
+    revision: 3,
+    createdAt: '2026-09-23T00:00:00.000Z',
+    updatedAt: '2026-09-23T00:00:00.000Z',
+  };
+  mocks.getRecovery.mockImplementation(async () => Response.json({ recovery: saved }));
+  mocks.saveRecovery.mockImplementation(async () => {
+    saved.targetTier = 'corporate';
+    saved.revision += 1;
+    return Response.json({ recovery: saved });
+  });
+  render(<CheckoutFlow {...base} />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Choose Corporate' }));
+  await screen.findByRole('button', { name: 'Continue to payment' });
+  expect(mocks.saveRecovery).toHaveBeenCalledWith({
+    json: expect.objectContaining({
+      targetTier: 'corporate',
+      expectedRecoveryId: saved.id,
+      expectedRevision: 3,
+    }),
+  });
+  expect(mocks.subscribe).not.toHaveBeenCalled();
+  expect(mocks.preview).toHaveBeenCalledTimes(2);
+  mocks.subscribe.mockResolvedValue(
+    Response.json({ error: { message: 'checkout fixture' } }, { status: 409 }),
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
+  expect(mocks.subscribe).toHaveBeenCalledTimes(1);
 });
 
 function currentSubscription(tier: PlanTier) {

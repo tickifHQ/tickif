@@ -7,7 +7,11 @@ import {
   type PlanTier,
 } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
-import { createBillingOwner, providerMutationCount } from '../lib/billing';
+import {
+  createBillingOwner,
+  deliverSubscriptionEvent,
+  providerMutationCount,
+} from '../lib/billing';
 import { apiUrl, providerUrl, webUrl } from '../lib/environment';
 
 const headers = { origin: webUrl };
@@ -175,6 +179,13 @@ test('lost cancellation response reconciles from live provider state without a s
       data: input,
     });
     expect(lost.status()).toBe(502);
+    expect((await selection(context)).pendingOperation?.operationId).toBe(input.operationId);
+    // A live response without the request flag does not prove cancellation.
+    // The terminal webhook clears the current ID before context reconciles it.
+    await deliverSubscriptionEvent(context, 'subscription.cancelled', {
+      ...owner.provider,
+      status: 'cancelled',
+    });
     expect((await selection(context)).pendingOperation).toBeNull();
     const retry = await context.request.post(`${apiUrl}/api/billing/cancel`, {
       headers,
@@ -183,7 +194,7 @@ test('lost cancellation response reconciles from live provider state without a s
     expect(retry.ok(), await retry.text()).toBeTruthy();
     expect(await retry.json()).toMatchObject({ outcome: 'scheduled', alreadyCancelled: true });
     expect(await providerMutationCount(context, path)).toBe(1);
-    expect((await owner.subscription())?.planTier).toBe('corporate');
+    expect((await owner.subscription())?.planTier).toBe('hobby');
   } finally {
     await clear();
     await owner.dispose();
@@ -247,6 +258,7 @@ test('lost recovery cancellation retains the accepted target and reconciles with
     targetTier: 'professional_plus',
     previewToken: review.previewToken,
     operationId: randomUUID(),
+    expectedRecoveryId: null,
     expectedRevision: null,
   };
   const path = `/subscriptions/${owner.provider.id}/cancel`;
@@ -266,25 +278,30 @@ test('lost recovery cancellation retains the accepted target and reconciles with
       status: 'requested',
       reason: 'provider_outcome_unconfirmed',
     });
+    const uncertain = await selection(context);
+    expect(uncertain.pendingOperation?.operationId).toBe(input.operationId);
+    expect(uncertain.recovery?.status).toBe('requested');
+    await deliverSubscriptionEvent(context, 'subscription.cancelled', {
+      ...owner.provider,
+      status: 'cancelled',
+    });
     const state = await selection(context);
     expect(state.recovery).toMatchObject({
       targetTier: 'professional_plus',
-      status: 'waiting_for_expiry',
+      status: 'eligible',
       sourceSubscriptionId: owner.provider.id,
     });
-    expect(state.recovery?.eligibleAt).toBe(
-      new Date(owner.provider.current_end * 1000).toISOString(),
-    );
+    expect(state.recovery?.eligibleAt).toBeNull();
     const retry = await context.request.post(`${apiUrl}/api/billing/recovery`, {
       headers,
       data: input,
     });
     expect(retry.ok(), await retry.text()).toBeTruthy();
     expect(await retry.json()).toMatchObject({
-      recovery: { targetTier: 'professional_plus', status: 'waiting_for_expiry' },
+      recovery: { targetTier: 'professional_plus', status: 'eligible' },
     });
     expect(await providerMutationCount(context, path)).toBe(1);
-    expect((await owner.subscription())?.planTier).toBe('corporate');
+    expect((await owner.subscription())?.planTier).toBe('hobby');
   } finally {
     await clear();
     await owner.dispose();

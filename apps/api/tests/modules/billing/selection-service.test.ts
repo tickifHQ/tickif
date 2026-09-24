@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   plan: vi.fn(),
   access: vi.fn(),
   recovery: vi.fn(),
+  pending: vi.fn(),
+  updateOperation: vi.fn(),
 }));
 vi.mock('@repo/config', () => ({
   config: {
@@ -16,7 +18,7 @@ vi.mock('@repo/config', () => ({
   },
 }));
 vi.mock('../../../src/modules/billing/operation-repository.js', () => ({
-  operationRepository: { findOpenOperation: vi.fn().mockResolvedValue(undefined) },
+  operationRepository: { findOpenOperation: mocks.pending, updateOperation: mocks.updateOperation },
 }));
 vi.mock('../../../src/modules/billing/subscribe-repository.js', () => ({
   subscribeRepository: { find: mocks.find },
@@ -71,6 +73,39 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe('billing selection and signed consent', () => {
+  it('reconciles a lost cancellation after a terminal webhook cleared the local ID', async () => {
+    mocks.find.mockResolvedValue({ ...active, planTier: 'hobby', razorpaySubscriptionId: null });
+    mocks.pending.mockResolvedValue({
+      kind: 'cancel',
+      operationId,
+      sourceSubscriptionId: 'rzp1',
+      targetTier: 'hobby',
+      status: 'reconciliation_pending',
+    });
+    mocks.fetch.mockResolvedValue({ ...remote, status: 'cancelled' });
+    const context = await billingSelectionService.context(caller);
+    expect(mocks.fetch).toHaveBeenCalledWith('rzp1');
+    expect(context.pendingOperation).toBeNull();
+    expect(context.actions.find((x) => x.targetTier === 'corporate')?.action).toBe('subscribe');
+    expect(mocks.updateOperation).toHaveBeenCalledWith(
+      'org1',
+      operationId,
+      expect.objectContaining({ status: 'scheduled' }),
+    );
+  });
+  it('keeps a detached cancellation pending when its source cannot be verified', async () => {
+    mocks.pending.mockResolvedValue({
+      kind: 'cancel',
+      operationId,
+      sourceSubscriptionId: 'rzp1',
+      targetTier: 'hobby',
+      status: 'reconciliation_pending',
+    });
+    mocks.fetch.mockRejectedValue(new Error('unavailable'));
+    const context = await billingSelectionService.context(caller);
+    expect(context.pendingOperation?.operationId).toBe(operationId);
+    expect(mocks.updateOperation).not.toHaveBeenCalled();
+  });
   it('offers direct Corporate checkout without granting the target entitlement', async () => {
     const context = await billingSelectionService.context(caller);
     expect(context.currentTier).toBe('hobby');

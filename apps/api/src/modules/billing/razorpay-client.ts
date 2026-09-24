@@ -346,7 +346,7 @@ export async function cancelSubscription(params: {
   subscriptionId: string;
   cancelAtCycleEnd?: boolean;
 }): Promise<RazorpaySubscription> {
-  return requestRazorpay<RazorpaySubscription>(
+  const subscription = await requestRazorpay<RazorpaySubscription>(
     'cancelSubscription',
     `/subscriptions/${encodeURIComponent(params.subscriptionId)}/cancel`,
     {
@@ -356,6 +356,9 @@ export async function cancelSubscription(params: {
       }),
     },
   );
+  if (subscription.id !== params.subscriptionId)
+    throw AppError.badGateway('Razorpay returned a different subscription');
+  return subscription;
 }
 
 /**

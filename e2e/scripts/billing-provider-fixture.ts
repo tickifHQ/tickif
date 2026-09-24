@@ -12,7 +12,7 @@ const subscriptionSchema = z.object({
   created_at: z.number().default(1_790_000_000),
   short_url: z.null().default(null),
   notes: z.record(z.string(), z.string()).default({}),
-  cancel_at_cycle_end: z.boolean().default(false),
+  cancel_at_cycle_end: z.boolean().optional(),
   payment_method: z.string().default('card'),
   quantity: z.number().default(1),
   has_scheduled_changes: z.boolean().default(false),
@@ -139,7 +139,8 @@ export async function handleBillingProvider(
       return;
     }
     if (match?.[2] === '/cancel' && request.method === 'POST') {
-      subscription.cancel_at_cycle_end = true;
+      // This is a request parameter, not a documented subscription response field.
+      delete subscription.cancel_at_cycle_end;
     } else if (request.method === 'PATCH') {
       const update = z
         .object({

@@ -68,6 +68,13 @@ describe('durable billing recovery reconciliation', () => {
   it('does not permit checkout merely because the eligible date elapsed', () => {
     expect(resolveRecovery(intent, local, source, source).status).toBe('waiting_for_expiry');
   });
+  it('retains an acknowledged schedule when fetch omits the cancellation request field', () => {
+    const remote = { ...source, cancel_at_cycle_end: undefined };
+    expect(resolveRecovery(intent, local, remote, remote).status).toBe('waiting_for_expiry');
+    expect(
+      resolveRecovery(intent, { ...local, razorpaySubscriptionId: 'other' }, remote, remote).status,
+    ).toBe('requested');
+  });
 
   it.each(['cancelled', 'completed', 'expired'])(
     'permits explicit checkout after provider %s',

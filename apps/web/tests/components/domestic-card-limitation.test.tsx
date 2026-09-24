@@ -109,6 +109,7 @@ describe('E-289: preflight payment-method limitations', () => {
       json: {
         targetTier: 'corporate',
         previewToken: 'signed-recovery-preview',
+        expectedRecoveryId: null,
         expectedRevision: null,
         operationId: expect.any(String),
       },

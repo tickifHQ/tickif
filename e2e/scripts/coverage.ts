@@ -28,6 +28,7 @@ const requiredEntries: [file: string, title: string][] = [
     'preview authorization rejects tampering, expiry and a different target or organization before provider mutation',
     'simultaneous submissions and completed-operation replay create exactly one provider checkout',
     'recovery revisions protect replacement and dismissal never reverses provider cancellation',
+    'choosing another eligible saved plan requires confirmation before its replacement checkout',
     'revoked billing permission blocks saved preview execution and billing reads',
   ].map((title): [string, string] => ['billing-boundaries.spec.ts', title]),
   ...[

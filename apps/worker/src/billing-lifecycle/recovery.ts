@@ -41,7 +41,11 @@ export function resolveRecovery(
     return { status: 'completed', eligibleAt: null, reason: null };
   }
   if (!TERMINAL.has(source.status)) {
-    if (source.cancel_at_cycle_end && source.current_end) {
+    if (
+      source.current_end &&
+      (source.cancel_at_cycle_end ||
+        (local.razorpaySubscriptionId === source.id && local.cancelAtPeriodEnd))
+    ) {
       return {
         status: 'waiting_for_expiry',
         eligibleAt: new Date(source.current_end * 1000),

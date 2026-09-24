@@ -217,14 +217,19 @@ function ScopedCheckoutFlow({
         throw new Error('Unable to verify the selected plan.');
       if (!mounted.current || request !== sequence.current) return;
       setPreview(parsed.data);
-      if (parsed.data.action === 'recover') {
+      if (parsed.data.action === 'recover' || parsed.data.action === 'subscribe') {
         const recoveryResponse = await api.api.billing.recovery.$get();
         if (!recoveryResponse.ok)
           throw new Error('Unable to load your saved plan. Please try again.');
         const saved = billingRecoveryResponseSchema.safeParse(await recoveryResponse.json());
         if (!saved.success) throw new Error('Unable to check your saved plan. Please try again.');
         if (!mounted.current || request !== sequence.current) return;
-        setRecovery(saved.data.recovery);
+        setRecovery(
+          parsed.data.action === 'recover' ||
+            (saved.data.recovery?.status === 'eligible' && saved.data.recovery.targetTier !== tier)
+            ? saved.data.recovery
+            : null,
+        );
       }
       setStep('review');
     } catch (error) {
@@ -283,9 +288,17 @@ function ScopedCheckoutFlow({
     setStep('processing');
     let acknowledged = false;
     try {
-      if (preview.action === 'recover') {
+      const replacingSavedPlan =
+        preview.action === 'subscribe' &&
+        recovery?.status === 'eligible' &&
+        recovery.targetTier !== target;
+      if (preview.action === 'recover' || replacingSavedPlan) {
         const response = await api.api.billing.recovery.$post({
-          json: { ...json, expectedRevision: recovery?.revision ?? null },
+          json: {
+            ...json,
+            expectedRecoveryId: recovery?.id ?? null,
+            expectedRevision: recovery?.revision ?? null,
+          },
         });
         acknowledged = true;
         if (!response.ok) await failResponse(response);
@@ -295,6 +308,13 @@ function ScopedCheckoutFlow({
             'Your saved plan could not be confirmed yet. We are checking automatically.',
           );
         if (!mounted.current) return;
+        if (replacingSavedPlan) {
+          // Replacing a selection never purchases it. Obtain a new review and
+          // operation ID before the user separately confirms payment.
+          await review(target);
+          onSubscriptionChange?.();
+          return;
+        }
         setRecovery(data.data.recovery);
         setStep('recovery');
         onSubscriptionChange?.();
@@ -408,6 +428,10 @@ function ScopedCheckoutFlow({
     }
   }
   const label = target ? PLAN_MAP[target].label : '';
+  const replacingSavedPlan =
+    preview?.action === 'subscribe' &&
+    recovery?.status === 'eligible' &&
+    recovery.targetTier !== target;
   const blocking = step === 'processing';
   const title =
     target === 'hobby'
@@ -483,6 +507,12 @@ function ScopedCheckoutFlow({
                     Checkout. Monthly display pricing is not today’s charge.
                   </p>
                 )}
+                {replacingSavedPlan && recovery && (
+                  <p className="text-sm">
+                    This replaces your saved {PLAN_MAP[recovery.targetTier].label} plan with {label}
+                    . No payment is made yet.
+                  </p>
+                )}
                 {(preview.reason ||
                   preview.action === 'recover' ||
                   preview.action === 'blocked') && (
@@ -507,15 +537,17 @@ function ScopedCheckoutFlow({
                 )}
                 {preview.confirmationAllowed && (
                   <Button onClick={() => void confirm()}>
-                    {preview.action === 'subscribe'
-                      ? 'Continue to payment'
-                      : preview.action === 'cancel'
-                        ? 'Schedule cancellation'
-                        : preview.action === 'recover'
-                          ? preview.reason === 'cancellation_scheduled'
-                            ? 'Save plan'
-                            : 'Cancel & save plan'
-                          : 'Confirm plan change'}
+                    {replacingSavedPlan
+                      ? `Choose ${label}`
+                      : preview.action === 'subscribe'
+                        ? 'Continue to payment'
+                        : preview.action === 'cancel'
+                          ? 'Schedule cancellation'
+                          : preview.action === 'recover'
+                            ? preview.reason === 'cancellation_scheduled'
+                              ? 'Save plan'
+                              : 'Cancel & save plan'
+                            : 'Confirm plan change'}
                   </Button>
                 )}
                 <Button

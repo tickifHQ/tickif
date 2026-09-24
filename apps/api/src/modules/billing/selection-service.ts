@@ -203,14 +203,29 @@ export const billingSelectionService = {
     const state = await snapshot(caller);
     const context = state.context;
     let pending = await operationRepository.findOpenOperation(caller.activeOrgId!);
+    let cancellationSource = state.remote;
+    if (
+      pending?.kind === 'cancel' &&
+      pending.sourceSubscriptionId &&
+      pending.sourceSubscriptionId !== cancellationSource?.id
+    ) {
+      try {
+        cancellationSource = await fetchSubscription(pending.sourceSubscriptionId);
+      } catch {
+        cancellationSource = null;
+      }
+    }
     // A timed-out cancellation can be confirmed by an authoritative fresh fetch.
     // Unknown create outcomes have no safely discoverable provider ID: keep them
     // blocked for support reconciliation instead of risking a duplicate purchase.
     if (
       pending?.kind === 'cancel' &&
-      pending.sourceSubscriptionId === state.remote?.id &&
-      (state.remote.cancel_at_cycle_end ||
-        ['cancelled', 'completed', 'expired'].includes(state.remote.status))
+      cancellationSource &&
+      pending.sourceSubscriptionId === cancellationSource.id &&
+      (cancellationSource.cancel_at_cycle_end ||
+        (state.local?.razorpaySubscriptionId === cancellationSource.id &&
+          state.local.cancelAtPeriodEnd) ||
+        ['cancelled', 'completed', 'expired'].includes(cancellationSource.status))
     ) {
       await operationRepository.updateOperation(caller.activeOrgId!, pending.operationId, {
         status: 'scheduled',
@@ -218,9 +233,9 @@ export const billingSelectionService = {
           operationId: pending.operationId,
           targetTier: pending.targetTier,
           outcome: 'scheduled',
-          razorpaySubscriptionId: state.remote.id,
-          effectiveAt: iso(state.remote.current_end),
-          currentPeriodEnd: iso(state.remote.current_end),
+          razorpaySubscriptionId: cancellationSource.id,
+          effectiveAt: iso(cancellationSource.current_end),
+          currentPeriodEnd: iso(cancellationSource.current_end),
           alreadyCancelled: true,
         },
       });

@@ -398,18 +398,13 @@ export const subscribeService = {
 
       // Cancel at cycle end — subscription stays active until the period ends.
       // Razorpay sends subscription.cancelled webhook when the period expires.
-      let cancelled = await cancelSubscription({
+      const cancelled = await cancelSubscription({
         subscriptionId: subscription.razorpaySubscriptionId,
         cancelAtCycleEnd: true,
       });
 
-      if (params && cancelled.cancel_at_cycle_end !== true) {
-        cancelled = await fetchSubscription(subscription.razorpaySubscriptionId);
-        if (cancelled.cancel_at_cycle_end !== true)
-          throw AppError.badGateway(
-            'Cancellation outcome is not yet confirmed. Refresh billing before another request.',
-          );
-      }
+      // HTTP success acknowledges our cycle-end cancellation request. The
+      // response need not echo its cancel_at_cycle_end request parameter.
 
       // Preserve Razorpay's actual status and record the scheduled transition in
       // its own column. This keeps reconciliation able to observe the later

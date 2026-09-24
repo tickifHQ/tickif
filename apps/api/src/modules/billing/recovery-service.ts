@@ -78,7 +78,12 @@ export const recoveryService = {
             eligibleAt: null,
             reason: 'source_subscription_terminated',
           };
-        } else if (!sourceEnded && source.cancel_at_cycle_end && source.current_end) {
+        } else if (
+          !sourceEnded &&
+          source.current_end &&
+          (source.cancel_at_cycle_end ||
+            (local.razorpaySubscriptionId === source.id && local.cancelAtPeriodEnd))
+        ) {
           change = {
             status: 'waiting_for_expiry',
             eligibleAt: new Date(source.current_end * 1000),
@@ -107,11 +112,15 @@ export const recoveryService = {
       }
     });
   },
-  async dismiss(caller: BillingCaller, input: { expectedRevision: number }) {
+  async dismiss(
+    caller: BillingCaller,
+    input: { expectedRecoveryId: string; expectedRevision: number },
+  ) {
     await assertBillingAccess(caller);
     return subscribeRepository.withOrganizationLock(caller.activeOrgId!, async (repository) => {
       const row = await repository.findRecovery(caller.activeOrgId!);
-      if (!row || row.revision !== input.expectedRevision) throw revisionConflict();
+      if (!row || row.id !== input.expectedRecoveryId || row.revision !== input.expectedRevision)
+        throw revisionConflict();
       const changed = await repository.updateRecovery(caller.activeOrgId!, row.id, row.revision, {
         status: 'dismissed',
         reason: 'intent_dismissed_provider_schedule_unchanged',
@@ -137,7 +146,11 @@ export const recoveryService = {
           );
         return { replay: true, recovery: current };
       }
-      if ((current?.revision ?? null) !== input.expectedRevision) throw revisionConflict();
+      if (
+        (current?.id ?? null) !== input.expectedRecoveryId ||
+        (current?.revision ?? null) !== input.expectedRevision
+      )
+        throw revisionConflict();
       if (current?.status === 'checkout_pending')
         throw new AppError(
           'checkout_conflict',
@@ -244,9 +257,11 @@ export const recoveryService = {
           throw revisionConflict();
         const local = await repository.find(org);
         let remote = await fetchSubscription(row.sourceSubscriptionId);
+        let cancellationAccepted =
+          local?.razorpaySubscriptionId === row.sourceSubscriptionId && local.cancelAtPeriodEnd;
         if (
           !remote.cancel_at_cycle_end &&
-          !local?.cancelAtPeriodEnd &&
+          !cancellationAccepted &&
           !['cancelled', 'completed', 'expired'].includes(remote.status)
         ) {
           providerMutationStarted = true;
@@ -254,16 +269,19 @@ export const recoveryService = {
             subscriptionId: row.sourceSubscriptionId,
             cancelAtCycleEnd: true,
           });
+          // A successful cancel request acknowledges the requested schedule.
+          // Razorpay does not have to echo cancel_at_cycle_end in its response.
+          cancellationAccepted = true;
         }
         const terminal = ['cancelled', 'completed', 'expired'].includes(remote.status);
-        const verified = terminal || remote.cancel_at_cycle_end === true;
+        const verified = terminal || cancellationAccepted || remote.cancel_at_cycle_end === true;
         const eligibleAt = remote.current_end ? new Date(remote.current_end * 1000) : null;
         const changed = await repository.updateRecovery(org, row.id, row.revision, {
           status: terminal ? 'eligible' : verified ? 'waiting_for_expiry' : 'requested',
           eligibleAt,
           reason: verified ? null : 'provider_outcome_unconfirmed',
         });
-        if (local && remote.cancel_at_cycle_end)
+        if (local && verified)
           await repository.update(local.id, {
             cancelAtPeriodEnd: true,
             currentPeriodEnd: eligibleAt,

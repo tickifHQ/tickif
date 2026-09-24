@@ -149,6 +149,7 @@ test('recovery revisions protect replacement and dismissal never reverses provid
     const before = await providerMutationCount(context, cancelPath);
     const savedResponse = await post(context, '/recovery', {
       targetTier: 'professional_plus',
+      expectedRecoveryId: null,
       expectedRevision: null,
       operationId: randomUUID(),
       previewToken: quote.previewToken,
@@ -158,6 +159,7 @@ test('recovery revisions protect replacement and dismissal never reverses provid
     expect(saved).toMatchObject({ targetTier: 'professional_plus', status: 'waiting_for_expiry' });
     expect(await providerMutationCount(context, cancelPath)).toBe(before + 1);
     const staleDismiss = await post(context, '/recovery/dismiss', {
+      expectedRecoveryId: saved.id,
       expectedRevision: saved.revision - 1,
     });
     expect(staleDismiss.status()).toBe(409);
@@ -179,6 +181,7 @@ test('recovery revisions protect replacement and dismissal never reverses provid
     const replacementPreview = await preview(context, 'corporate');
     const staleReplace = await post(context, '/recovery', {
       targetTier: 'corporate',
+      expectedRecoveryId: saved.id,
       expectedRevision: saved.revision,
       operationId: randomUUID(),
       previewToken: replacementPreview.previewToken,
@@ -189,6 +192,7 @@ test('recovery revisions protect replacement and dismissal never reverses provid
     });
     const replacedResponse = await post(context, '/recovery', {
       targetTier: 'corporate',
+      expectedRecoveryId: eligible!.id,
       expectedRevision: eligible!.revision,
       operationId: randomUUID(),
       previewToken: replacementPreview.previewToken,
@@ -197,6 +201,7 @@ test('recovery revisions protect replacement and dismissal never reverses provid
     const replaced = billingRecoveryResponseSchema.parse(await replacedResponse.json()).recovery!;
     expect(replaced).toMatchObject({ targetTier: 'corporate', status: 'eligible' });
     const dismissed = await post(context, '/recovery/dismiss', {
+      expectedRecoveryId: replaced.id,
       expectedRevision: replaced.revision,
     });
     expect(dismissed.status()).toBe(200);
@@ -204,6 +209,23 @@ test('recovery revisions protect replacement and dismissal never reverses provid
       'dismissed',
     );
     expect(await recovery(context)).toBeNull();
+    // A new intent can reuse the old numerical revision, but not its identity.
+    const [newIntent] = await db
+      .insert(schema.billingRecovery)
+      .values({
+        organizationId: owner.org.id,
+        targetTier: 'corporate',
+        sourceSubscriptionId: owner.provider.id,
+        status: 'eligible',
+        revision: replaced.revision,
+      })
+      .returning();
+    const staleIdentity = await post(context, '/recovery/dismiss', {
+      expectedRecoveryId: replaced.id,
+      expectedRevision: replaced.revision,
+    });
+    expect(staleIdentity.status()).toBe(409);
+    expect((await recovery(context))?.id).toBe(newIntent!.id);
     expect(await providerMutationCount(context, cancelPath)).toBe(before + 1);
     expect(await owner.subscription()).toMatchObject({
       planTier: 'hobby',
@@ -215,6 +237,48 @@ test('recovery revisions protect replacement and dismissal never reverses provid
     );
     expect(ended.ok()).toBeTruthy();
     expect(await ended.json()).toMatchObject({ id: owner.provider.id, status: 'cancelled' });
+  } finally {
+    await owner.dispose();
+  }
+});
+
+test('choosing another eligible saved plan requires confirmation before its replacement checkout', async ({
+  page,
+  context,
+}) => {
+  const owner = await createBillingOwner(context, 'corporate');
+  try {
+    const quote = await preview(context, 'professional_plus');
+    const saved = await post(context, '/recovery', {
+      targetTier: 'professional_plus',
+      previewToken: quote.previewToken,
+      operationId: randomUUID(),
+      expectedRecoveryId: null,
+      expectedRevision: null,
+    });
+    expect(saved.ok(), await saved.text()).toBeTruthy();
+    await deliverSubscriptionEvent(context, 'subscription.cancelled', {
+      ...owner.provider,
+      status: 'cancelled',
+    });
+    const before = await providerMutationCount(context, '/subscriptions');
+    await page.goto('/designer/plan-billing/subscribe');
+    await expect(
+      page.getByRole('button', { name: 'Review Professional+', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Upgrade to Corporate', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose Corporate', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Continue to payment', exact: true }),
+    ).toBeVisible();
+    expect((await recovery(context))?.targetTier).toBe('corporate');
+    expect(await providerMutationCount(context, '/subscriptions')).toBe(before);
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Continue checkout', exact: true }),
+    ).toBeVisible();
+    expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 1);
+    expect((await owner.subscription())?.razorpaySubscriptionId).not.toBe(owner.provider.id);
   } finally {
     await owner.dispose();
   }

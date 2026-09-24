@@ -199,7 +199,7 @@ export function BillingStatusNotice({
                 setError(null);
                 try {
                   const response = await api.api.billing.recovery.dismiss.$post({
-                    json: { expectedRevision: removing.revision },
+                    json: { expectedRecoveryId: removing.id, expectedRevision: removing.revision },
                   });
                   if (!response.ok)
                     throw new Error(

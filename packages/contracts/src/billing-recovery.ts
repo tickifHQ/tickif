@@ -28,6 +28,7 @@ export type BillingRecovery = z.infer<typeof billingRecoverySchema>;
 export const billingRecoveryRequestSchema = z
   .object({
     targetTier: planTierSchema,
+    expectedRecoveryId: z.uuid().nullable(),
     expectedRevision: z.number().int().positive().nullable(),
     previewToken: z.string().min(1),
     operationId: z.uuid(),
@@ -35,7 +36,7 @@ export const billingRecoveryRequestSchema = z
   .meta({ id: 'BillingRecoveryRequest' });
 export type BillingRecoveryRequest = z.infer<typeof billingRecoveryRequestSchema>;
 export const billingRecoveryDismissRequestSchema = z
-  .object({ expectedRevision: z.number().int().positive() })
+  .object({ expectedRecoveryId: z.uuid(), expectedRevision: z.number().int().positive() })
   .meta({ id: 'BillingRecoveryDismissRequest' });
 export const billingRecoveryResponseSchema = z
   .object({ recovery: billingRecoverySchema.nullable() })
