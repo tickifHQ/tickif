@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { experienceCenterSchema, type ExperienceCenter } from '@repo/contracts';
+import {
+  experienceCenterSchema,
+  MAX_EXPERIENCE_CENTERS,
+  type ExperienceCenter,
+} from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
@@ -148,8 +152,14 @@ export function ExperienceCentersEditor({
   const [errors, setErrors] = useState<FieldErrors>({});
 
   const groups = useMemo(() => groupExperienceCentersByState(value), [value]);
+  const atLimit = value.length >= MAX_EXPERIENCE_CENTERS;
+  const stateOptions =
+    draft.state && !STATE_OPTIONS.some((option) => option.value === draft.state)
+      ? [{ label: draft.state, value: draft.state }, ...STATE_OPTIONS]
+      : STATE_OPTIONS;
 
   function openAdd() {
+    if (atLimit) return;
     setDraft(EMPTY_DRAFT);
     setErrors({});
     setEditing('new');
@@ -181,6 +191,7 @@ export function ExperienceCentersEditor({
   function removeCenter(index: number) {
     onChange(value.filter((_, position) => position !== index));
     if (editing === index) closeForm();
+    else if (typeof editing === 'number' && index < editing) setEditing(editing - 1);
   }
 
   function saveDraft() {
@@ -199,6 +210,7 @@ export function ExperienceCentersEditor({
 
     const center = parsed.data;
     if (editing === 'new') {
+      if (atLimit) return;
       onChange([...value, center]);
     } else if (typeof editing === 'number') {
       onChange(value.map((existing, position) => (position === editing ? center : existing)));
@@ -344,7 +356,7 @@ export function ExperienceCentersEditor({
               label="State"
               value={draft.state}
               onValueChange={(v) => updateDraft('state', v)}
-              options={STATE_OPTIONS}
+              options={stateOptions}
               placeholder="Select a state"
               error={errors.state}
             />
@@ -391,11 +403,16 @@ export function ExperienceCentersEditor({
           </div>
         </div>
       ) : (
-        <Button type="button" variant="outline" size="sm" onClick={openAdd}>
+        <Button type="button" variant="outline" size="sm" onClick={openAdd} disabled={atLimit}>
           <Plus className="size-4" />
           Add experience center
         </Button>
       )}
+      {atLimit ? (
+        <p className="text-xs text-muted-foreground">
+          You can add up to {MAX_EXPERIENCE_CENTERS} experience centers.
+        </p>
+      ) : null}
     </div>
   );
 }

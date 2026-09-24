@@ -51,14 +51,48 @@ describe('groupExperienceCentersByState', () => {
 });
 
 describe('ExperienceCentersEditor', () => {
+  it('keeps editing the same center after removing an earlier center', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <ExperienceCentersEditor value={[whitefield, powai, bandra]} onChange={onChange} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit Powai Studio' }));
+    await user.clear(screen.getByLabelText('Name'));
+    await user.type(screen.getByLabelText('Name'), 'Updated Powai');
+    await user.click(screen.getByRole('button', { name: 'Remove Whitefield Experience Center' }));
+    rerender(<ExperienceCentersEditor value={[powai, bandra]} onChange={onChange} />);
+    await user.click(screen.getByRole('button', { name: 'Save center' }));
+    expect(onChange).toHaveBeenLastCalledWith([{ ...powai, name: 'Updated Powai' }, bandra]);
+  });
+
+  it('disables adding centers at the portfolio contract limit', () => {
+    const centers = Array.from({ length: 20 }, (_, index) => ({
+      ...whitefield,
+      name: `Center ${index}`,
+    }));
+    render(<ExperienceCentersEditor value={centers} onChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /add experience center/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit Center 0' })).toBeEnabled();
+  });
+
+  it('displays and preserves a saved free-text state outside the dropdown list', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const center = { ...whitefield, state: 'NCT of Delhi' };
+    render(<ExperienceCentersEditor value={[center]} onChange={onChange} />);
+    await user.click(screen.getByRole('button', { name: 'Edit Whitefield Experience Center' }));
+    expect(screen.getByLabelText('State')).toHaveValue('NCT of Delhi');
+    await user.click(screen.getByRole('button', { name: 'Save center' }));
+    expect(onChange).toHaveBeenCalledWith([center]);
+  });
+
   it('shows the empty state when there are no experience centers', () => {
     render(<ExperienceCentersEditor value={[]} onChange={vi.fn()} />);
 
     expect(screen.getByTestId('experience-centers-empty')).toBeInTheDocument();
     expect(screen.getByText('No experience centers yet')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /add experience center/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add experience center/i })).toBeInTheDocument();
   });
 
   it('loads and displays existing centers grouped by state', () => {
@@ -70,7 +104,9 @@ describe('ExperienceCentersEditor', () => {
     expect(stateHeadings).toEqual(['Karnataka', 'Maharashtra']);
 
     // Maharashtra group lists both Mumbai centers under one state heading.
-    const groups = screen.getAllByRole('listitem').filter((li) => within(li).queryByText('Maharashtra'));
+    const groups = screen
+      .getAllByRole('listitem')
+      .filter((li) => within(li).queryByText('Maharashtra'));
     expect(screen.getByText('Whitefield Experience Center')).toBeInTheDocument();
     expect(screen.getByText('Powai Studio')).toBeInTheDocument();
     expect(screen.getByText('Bandra Lounge')).toBeInTheDocument();
