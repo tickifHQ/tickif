@@ -56,6 +56,7 @@ type FormState = {
   country: Country;
   phone: string;
   websiteUrl: string;
+  googleBusinessUrl: string;
   instagramHandle: string;
   linkedinHandle: string;
   youtubeHandle: string;
@@ -117,6 +118,7 @@ function profileToForm(profile: ProfileOwnerResponse): FormState {
     country: phone.country,
     phone: phone.phone,
     websiteUrl: profile.websiteUrl ?? '',
+    googleBusinessUrl: profile.googleBusinessUrl ?? '',
     instagramHandle: profile.instagramHandle ?? '',
     linkedinHandle: profile.linkedinHandle ?? '',
     youtubeHandle: profile.youtubeHandle ?? '',
@@ -168,6 +170,7 @@ function formsEqual(left: FormState, right: FormState): boolean {
     left.country.isoCode === right.country.isoCode &&
     left.phone === right.phone &&
     left.websiteUrl === right.websiteUrl &&
+    left.googleBusinessUrl === right.googleBusinessUrl &&
     left.instagramHandle === right.instagramHandle &&
     left.linkedinHandle === right.linkedinHandle &&
     left.youtubeHandle === right.youtubeHandle &&
@@ -193,6 +196,13 @@ function formToInput(
     const websiteUrl = normalizeOptionalUrl(form.websiteUrl);
     if (websiteUrl && !isPublicHttpUrl(websiteUrl)) errors.websiteUrl = 'Enter a valid URL.';
     input.websiteUrl = websiteUrl ?? null;
+  }
+  if (form.googleBusinessUrl !== saved.googleBusinessUrl) {
+    const googleBusinessUrl = normalizeOptionalUrl(form.googleBusinessUrl);
+    if (googleBusinessUrl && !isPublicHttpUrl(googleBusinessUrl)) {
+      errors.googleBusinessUrl = 'Enter a valid URL.';
+    }
+    input.googleBusinessUrl = googleBusinessUrl ?? null;
   }
   if (form.instagramHandle !== saved.instagramHandle) {
     input.instagramHandle = nullable(form.instagramHandle);
@@ -604,6 +614,32 @@ export function DesignerProfileEditor({
                 maxLength={200}
                 {...aria}
               />
+            )}
+          </Field>
+
+          <Field
+            htmlFor="profile-google-business"
+            label="Google Business Profile"
+            error={validationErrors.googleBusinessUrl}
+          >
+            {(aria) => (
+              <>
+                <Input
+                  id="profile-google-business"
+                  value={form.googleBusinessUrl}
+                  onChange={(event) => updateField('googleBusinessUrl', event.target.value)}
+                  placeholder="https://g.page/your-studio"
+                  type="url"
+                  maxLength={200}
+                  {...aria}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Saving this link does not change your Google review connection.{' '}
+                  <Link href="/designer/portfolio" className="underline underline-offset-4">
+                    Manage Google reviews in portfolio settings
+                  </Link>
+                </p>
+              </>
             )}
           </Field>
 
