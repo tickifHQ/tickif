@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import type { BillingPaymentsResponse } from '@repo/contracts';
+import { useCallback, useState } from 'react';
+import { billingPaymentsResponseSchema, type BillingPaymentsResponse } from '@repo/contracts';
 import {
   Card,
   CardContent,
@@ -20,30 +20,41 @@ import {
 } from '@repo/ui/components/table';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { api } from '@/lib/api';
+import { useBillingAutoRefresh } from './subscribe/use-billing-auto-refresh';
 
 export function PaymentHistory() {
-  const [data, setData] = useState<BillingPaymentsResponse | null>(null);
   const [offset, setOffset] = useState(0);
+  return <PaymentHistoryPage key={offset} offset={offset} setOffset={setOffset} />;
+}
+
+function PaymentHistoryPage({
+  offset,
+  setOffset,
+}: {
+  offset: number;
+  setOffset: (offset: number) => void;
+}) {
+  const [data, setData] = useState<BillingPaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
     try {
       const response = await api.api.billing.payments.$get({
         query: { offset: String(offset), limit: '20' },
       });
       if (!response.ok) throw new Error('Unable to load payments');
-      setData(await response.json());
+      const parsed = billingPaymentsResponseSchema.safeParse(await response.json());
+      if (!parsed.success) throw new Error('Invalid payment history');
+      setData(parsed.data);
+      setError(false);
     } catch {
       setError(true);
+      throw new Error('Payment history unavailable');
     } finally {
       setLoading(false);
     }
   }, [offset]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useBillingAutoRefresh(load, { urgent: error });
   return (
     <Card radius="2xl">
       <CardHeader>
@@ -53,16 +64,14 @@ export function PaymentHistory() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {error ? (
+        {error && (
           <Alert variant="destructive">
             <AlertDescription>
-              Payment history could not be loaded.{' '}
-              <Button variant="outline" size="sm" onClick={() => void load()}>
-                Retry payments
-              </Button>
+              We could not update your payments. We will try again automatically.
             </AlertDescription>
           </Alert>
-        ) : loading ? (
+        )}
+        {loading ? (
           <p role="status">Loading payments…</p>
         ) : data?.items.length ? (
           <Table>
@@ -95,9 +104,9 @@ export function PaymentHistory() {
               ))}
             </TableBody>
           </Table>
-        ) : (
+        ) : data ? (
           <p>No payments recorded yet.</p>
-        )}
+        ) : null}
         <div data-testid="payment-history-controls" className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -114,9 +123,6 @@ export function PaymentHistory() {
             onClick={() => setOffset(data?.nextOffset ?? offset)}
           >
             Next payments
-          </Button>
-          <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
-            Refresh payments
           </Button>
         </div>
       </CardContent>

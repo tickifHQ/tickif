@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   repositoryFind: vi.fn(),
   repositoryUpdate: vi.fn(),
   withOrganizationLock: vi.fn(),
+  cancel: vi.fn(),
 }));
 
 vi.mock('../../../src/modules/billing/subscribe-repository.js', () => ({
@@ -20,7 +21,7 @@ vi.mock('../../../src/modules/billing/subscribe-repository.js', () => ({
 }));
 
 vi.mock('../../../src/modules/billing/razorpay-client.js', () => ({
-  cancelSubscription: vi.fn(),
+  cancelSubscription: mocks.cancel,
   createSubscription: vi.fn(),
   fetchSubscription: mocks.fetchSubscription,
   hasPaidPlan: vi.fn(),
@@ -47,6 +48,9 @@ vi.mock('@repo/config', () => ({
 }));
 
 import { subscribeService } from '../../../src/modules/billing/subscribe-service.js';
+vi.mock('../../../src/modules/billing/selection-service.js', () => ({
+  validateBillingPreview: async () => ({ preview: { action: 'cancel' } }),
+}));
 
 const caller = { userId: 'user-1', activeOrgId: 'org-1' };
 
@@ -87,6 +91,24 @@ beforeEach(() => {
 });
 
 describe('billing provider lock boundaries', () => {
+  it('records an acknowledged cancellation without an echoed request parameter', async () => {
+    mocks.lockedFind.mockResolvedValue(localSubscription('sub-cancel', 'active'));
+    mocks.cancel.mockResolvedValue({ id: 'sub-cancel', status: 'active', current_end: 1800000000 });
+    mocks.withOrganizationLock.mockImplementation(async (_org, action) =>
+      action({ find: mocks.lockedFind, update: mocks.repositoryUpdate }),
+    );
+    const result = await subscribeService.cancelSubscription(caller, {
+      targetTier: 'hobby',
+      operationId: '06757c76-72c6-4fe5-b7b3-dfc9ca2a8524',
+      previewToken: 'signed',
+    });
+    expect(result.alreadyCancelled).toBe(false);
+    expect(mocks.repositoryUpdate).toHaveBeenCalledWith(
+      'local-subscription',
+      expect.objectContaining({ cancelAtPeriodEnd: true, razorpayStatus: 'active' }),
+    );
+    expect(mocks.fetchSubscription).not.toHaveBeenCalled();
+  });
   it('fetches payment recovery outside the DB lock and rejects a replaced provider ID', async () => {
     let insideLock = false;
     mocks.repositoryFind.mockResolvedValue(localSubscription('rzp-old'));

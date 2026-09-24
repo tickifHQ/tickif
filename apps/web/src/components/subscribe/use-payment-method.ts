@@ -26,7 +26,7 @@ export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) 
       if (!response.ok) {
         setSupportRecommended(true);
         throw new Error(
-          'Unable to open payment recovery. Refresh billing and retry. If your subscription has ended,',
+          'Unable to open payment recovery. Please try again. If your subscription has ended,',
         );
       }
       const data = await response.json();
@@ -53,7 +53,9 @@ export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) 
               },
             });
             if (!verified.ok)
-              throw new Error('Payment verification failed. Refresh billing before trying again.');
+              throw new Error(
+                'Payment verification failed. Billing status updates automatically.',
+              );
             setSupportRecommended(true);
             setMessage(
               'Payment method verified. Billing status updates after Razorpay confirms it. For help with older unpaid invoices,',

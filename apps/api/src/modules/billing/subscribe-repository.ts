@@ -2,11 +2,15 @@ import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { AppError } from '../../lib/errors.js';
+import { operationQueries } from './operation-repository.js';
+import { recoveryQueries } from './recovery-repository.js';
 
 export type SubscriptionUpdate = Partial<typeof schema.subscription.$inferInsert>;
 
 function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert' | 'execute'>) {
   return {
+    ...operationQueries(connection),
+    ...recoveryQueries(connection),
     async find(organizationId: string) {
       const [row] = await connection
         .select()

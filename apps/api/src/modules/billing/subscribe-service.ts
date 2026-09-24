@@ -5,6 +5,7 @@ import {
   type PlanTier,
   type BillingVerifyRequest,
   type BillingPaymentsResponse,
+  type BillingMutationRequest,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -32,6 +33,8 @@ import { orgsService } from '../orgs/service.js';
  * - Lifecycle state transitions (E-117/E-239)
  * - Entitlement reads (E-119)
  */
+
+import { validateBillingPreview } from './selection-service.js';
 
 type Caller = { userId: string; activeOrgId: string | null };
 
@@ -132,7 +135,9 @@ export const subscribeService = {
    */
   async createSubscription(
     caller: Caller,
-    params: { targetTier: PlanTier },
+    params: { targetTier: PlanTier } & Partial<
+      Pick<BillingMutationRequest, 'previewToken' | 'operationId'>
+    >,
   ): Promise<{ razorpaySubscriptionId: string; shortUrl: string | null }> {
     assertBillingConfigured();
     await assertOrgBillingAccess(caller);
@@ -151,6 +156,27 @@ export const subscribeService = {
     // requests for the same organization. This prevents the race where two requests
     // both pass the "no existing subscription" check and both call Razorpay.
     return withBillingUpdate(caller.activeOrgId!, async (repository) => {
+      if (params.previewToken && params.operationId) {
+        await assertOrgBillingAccess(caller);
+        const checked = await validateBillingPreview(
+          caller,
+          params as BillingMutationRequest,
+          repository,
+        );
+        if (checked.preview.action !== 'subscribe')
+          throw AppError.conflict('Subscription checkout is not available.');
+        const recovery = await repository.findRecovery(caller.activeOrgId!);
+        if (recovery && recovery.targetTier !== params.targetTier)
+          throw new AppError(
+            'recovery_revision_conflict',
+            'A different recovery target is saved. Update or dismiss that intent before checkout.',
+            409,
+          );
+        if (recovery)
+          await repository.updateRecovery(caller.activeOrgId!, recovery.id, recovery.revision, {
+            status: 'checkout_pending',
+          });
+      }
       const existing = await repository.find(caller.activeOrgId!);
 
       // Never infer abandonment from local status. In particular, Razorpay's
@@ -164,12 +190,19 @@ export const subscribeService = {
         const remoteSubscription = await fetchSubscription(existing.razorpaySubscriptionId);
 
         if (remoteSubscription.status === 'created' && existing.planTier === 'hobby') {
-          const checkoutTier =
-            inferTierFromConfig(remoteSubscription.plan_id) ??
-            inferTierFromNotes(remoteSubscription.notes);
+          const checkoutTier = inferTierFromConfig(remoteSubscription.plan_id);
+          if (!checkoutTier)
+            throw new AppError(
+              'unknown_checkout_plan',
+              'The existing checkout plan cannot be verified. Contact support.',
+              409,
+            );
           if (checkoutTier && checkoutTier !== params.targetTier) {
-            throw AppError.conflict(
+            throw new AppError(
+              'unfinished_checkout_conflict',
               'A checkout for another plan is already open. Complete or expire it before changing plans.',
+              409,
+              { targetTier: checkoutTier },
             );
           }
 
@@ -239,7 +272,9 @@ export const subscribeService = {
    */
   async changePlan(
     caller: Caller,
-    params: { targetTier: PlanTier },
+    params: { targetTier: PlanTier } & Partial<
+      Pick<BillingMutationRequest, 'previewToken' | 'operationId'>
+    >,
   ): Promise<{ razorpaySubscriptionId: string }> {
     assertBillingConfigured();
     await assertOrgBillingAccess(caller);
@@ -255,6 +290,20 @@ export const subscribeService = {
     }
 
     return withBillingUpdate(caller.activeOrgId!, async (repository) => {
+      if (params.previewToken && params.operationId) {
+        await assertOrgBillingAccess(caller);
+        const checked = await validateBillingPreview(
+          caller,
+          params as BillingMutationRequest,
+          repository,
+        );
+        if (checked.preview.action !== 'change_plan')
+          throw new AppError(
+            'billing_action_unavailable',
+            'Use the verified deferred recovery flow for this plan change.',
+            409,
+          );
+      }
       // Find existing subscription
       const subscription = await repository.find(caller.activeOrgId!);
 
@@ -308,7 +357,10 @@ export const subscribeService = {
    *
    * Only callers with organization billing access can cancel.
    */
-  async cancelSubscription(caller: Caller): Promise<{
+  async cancelSubscription(
+    caller: Caller,
+    params?: BillingMutationRequest,
+  ): Promise<{
     razorpaySubscriptionId: string;
     alreadyCancelled: boolean;
     currentPeriodEnd: string | null;
@@ -325,6 +377,13 @@ export const subscribeService = {
 
       if (subscription.planTier === 'hobby') {
         throw AppError.unprocessable('Already on the Hobby plan');
+      }
+
+      if (params) {
+        await assertOrgBillingAccess(caller);
+        const checked = await validateBillingPreview(caller, params, repository);
+        if (checked.preview.action !== 'cancel')
+          throw AppError.conflict('Cancellation is unavailable.');
       }
 
       // A scheduled cancellation is local lifecycle metadata, separate from
@@ -344,12 +403,18 @@ export const subscribeService = {
         cancelAtCycleEnd: true,
       });
 
+      // HTTP success acknowledges our cycle-end cancellation request. The
+      // response need not echo its cancel_at_cycle_end request parameter.
+
       // Preserve Razorpay's actual status and record the scheduled transition in
       // its own column. This keeps reconciliation able to observe the later
       // active -> cancelled transition even when the webhook is missed.
       await repository.update(subscription.id, {
         razorpayStatus: cancelled.status,
         cancelAtPeriodEnd: true,
+        ...(params && cancelled.current_end
+          ? { currentPeriodEnd: new Date(cancelled.current_end * 1000) }
+          : {}),
       });
 
       // Invalidate entitlement cache so GET /subscription reflects cancellationScheduled: true.
@@ -357,7 +422,11 @@ export const subscribeService = {
       return {
         razorpaySubscriptionId: subscription.razorpaySubscriptionId,
         alreadyCancelled: false,
-        currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
+        currentPeriodEnd: params
+          ? cancelled.current_end
+            ? new Date(cancelled.current_end * 1000).toISOString()
+            : null
+          : (subscription.currentPeriodEnd?.toISOString() ?? null),
       };
     });
   },

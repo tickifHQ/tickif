@@ -11,6 +11,8 @@ vi.mock('@repo/config', async (importOriginal) => {
       ...actual.config,
       RAZORPAY_KEY_ID: 'rzp_test_ci_mock',
       RAZORPAY_KEY_SECRET: 'ci_mock_secret',
+      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: 'plan_test_professional_plus',
+      RAZORPAY_PLAN_ID_CORPORATE: 'plan_test_corporate',
     },
   };
 });
@@ -397,6 +399,12 @@ vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal
     updateSubscription: vi.fn(),
     fetchSubscription: vi.fn(),
     cancelSubscription: vi.fn(),
+    fetchPlan: vi.fn(async (id: string) => ({
+      id,
+      period: 'monthly',
+      interval: 1,
+      item: { amount: id.includes('corporate') ? 799900 : 299900, currency: 'INR' },
+    })),
     // Override plan resolution to avoid depending on CI env vars
     resolveRazorpayPlanId: vi.fn((tier: string) => `plan_test_${tier}`),
   };
@@ -592,7 +600,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     vi.mocked(mockFetchSubscription).mockResolvedValue({
       id: 'sub_abandoned_old',
       entity: 'subscription',
-      plan_id: 'plan_test',
+      plan_id: 'plan_test_professional_plus',
       status: 'created',
       current_start: null,
       current_end: null,
@@ -962,5 +970,51 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     expect(sub!.razorpayStatus).toBe('active');
     expect(sub!.cancelAtPeriodEnd).toBe(false);
     expect(vi.mocked(mockUpdateSubscription)).toHaveBeenCalledOnce();
+  });
+});
+
+describe('durable reviewed checkout integration', () => {
+  it('persists uncertain provider creation before allowing another operation', async () => {
+    const { billingSelectionService } =
+      await import('../../../src/modules/billing/selection-service.js');
+    const { billingMutationService } =
+      await import('../../../src/modules/billing/mutation-service.js');
+    const { user, org } = await makeOrgWithOwner();
+    const caller = { userId: user.id, activeOrgId: org.id };
+    const preview = await billingSelectionService.preview(caller, { targetTier: 'corporate' });
+    vi.mocked(mockCreateSubscription).mockRejectedValue(
+      new (await import('../../../src/lib/errors.js')).AppError(
+        'upstream_error',
+        'Provider timed out after accepting the request',
+        502,
+      ),
+    );
+    const operationId = '790e90ab-1dd1-4567-9d94-e68109a3fba8';
+    await expect(
+      billingMutationService.execute(
+        caller,
+        { targetTier: 'corporate', previewToken: preview.previewToken, operationId },
+        'subscribe',
+      ),
+    ).rejects.toMatchObject({ status: 502 });
+    const [operation] = await db
+      .select()
+      .from(schema.billingOperation)
+      .where(eq(schema.billingOperation.operationId, operationId));
+    expect(operation?.status).toBe('reconciliation_pending');
+    await expect(
+      billingMutationService.execute(
+        caller,
+        {
+          targetTier: 'corporate',
+          previewToken: preview.previewToken,
+          operationId: '85697ce0-72de-46a8-a5f2-031a1ac66d6b',
+        },
+        'subscribe',
+      ),
+    ).rejects.toMatchObject({ code: 'reconciliation_pending' });
+    const context = await billingSelectionService.context(caller);
+    expect(context.pendingOperation?.reason).toBe('provider_outcome_support_required');
+    expect(context.currentTier).toBe('hobby');
   });
 });

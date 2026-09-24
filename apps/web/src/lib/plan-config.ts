@@ -23,7 +23,7 @@ export type PlanDefinition = {
   price: number; // monthly INR (display only)
   /**
    * Base features unique to this tier (not inherited from lower tiers).
-   * The full feature set = own baseFeatures + all lower-ranked tiers' baseFeatures.
+   * Inherited limits are replaced by the higher tier's explicit overrides.
    */
   baseFeatures: string[];
 };
@@ -41,7 +41,11 @@ export const PLANS: PlanDefinition[] = [
     label: 'Professional+',
     rank: 1,
     price: 2999,
-    baseFeatures: ['Verified Badge', 'Discovery Priority', 'Priority Support'],
+    baseFeatures: [
+      'Verified Badge (subject to approval)',
+      'Discovery Priority',
+      'Priority Support',
+    ],
   },
   {
     tier: 'corporate',
@@ -64,6 +68,74 @@ export const PLAN_MAP: Record<PlanTier, PlanDefinition> = Object.fromEntries(
   PLANS.map((p) => [p.tier, p]),
 ) as Record<PlanTier, PlanDefinition>;
 
+export type PlanFeatureGroup = {
+  label: string;
+  features: { label: string; values: Record<PlanTier, string | boolean> }[];
+};
+
+/** One source for the desktop matrix and mobile feature groups. Display only. */
+export const PLAN_FEATURE_GROUPS: PlanFeatureGroup[] = [
+  {
+    label: 'Workspace limits',
+    features: [
+      { label: 'Seats', values: { hobby: '1', professional_plus: '1', corporate: 'Unlimited' } },
+      { label: 'Branches', values: { hobby: '1', professional_plus: '1', corporate: 'Unlimited' } },
+    ],
+  },
+  {
+    label: 'Discovery & profile',
+    features: [
+      {
+        label: 'Directory listing',
+        values: { hobby: 'Standard', professional_plus: 'Standard', corporate: 'Prime placement' },
+      },
+      {
+        label: 'Discovery priority',
+        values: { hobby: false, professional_plus: true, corporate: true },
+      },
+      {
+        label: 'Verified badge',
+        values: {
+          hobby: false,
+          professional_plus: 'Subject to approval',
+          corporate: 'Subject to approval',
+        },
+      },
+    ],
+  },
+  {
+    label: 'Analytics',
+    features: [
+      {
+        label: 'Basic analytics',
+        values: { hobby: true, professional_plus: true, corporate: true },
+      },
+      {
+        label: 'Branch analytics',
+        values: { hobby: false, professional_plus: false, corporate: true },
+      },
+    ],
+  },
+  {
+    label: 'Team management',
+    features: [
+      {
+        label: 'Full role-based access control',
+        values: { hobby: false, professional_plus: false, corporate: true },
+      },
+    ],
+  },
+  {
+    label: 'Support',
+    features: [
+      {
+        label: 'Priority / dedicated support',
+        values: { hobby: false, professional_plus: 'Priority', corporate: 'Dedicated' },
+      },
+    ],
+  },
+];
+
 /** Estimated tax rate — kept for backward compatibility but no longer shown in the review step. */
 export const ESTIMATED_TAX_RATE = 0.18;
 
@@ -83,7 +155,13 @@ export function formatCurrency(amount: number): string {
 export function getCumulativeFeatures(tier: PlanTier): string[] {
   const plan = PLAN_MAP[tier];
   const lowerTiers = PLANS.filter((p) => p.rank < plan.rank);
-  const inherited = lowerTiers.flatMap((p) => p.baseFeatures);
+  const replacedFeatures =
+    tier === 'corporate'
+      ? ['1 Seat', '1 Branch', 'Standard Directory Listing', 'Priority Support']
+      : [];
+  const inherited = lowerTiers
+    .flatMap((p) => p.baseFeatures)
+    .filter((feature) => !replacedFeatures.includes(feature));
   return [...inherited, ...plan.baseFeatures];
 }
 

@@ -32,6 +32,25 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/billing/mutation-service.js', () => ({
+  billingMutationService: {
+    execute: vi.fn(async (caller, params, kind) => {
+      const mocked = subscribeService;
+      const result =
+        kind === 'subscribe'
+          ? await mocked.createSubscription(caller, { targetTier: params.targetTier })
+          : await mocked.changePlan(caller, { targetTier: params.targetTier });
+      return {
+        ...result,
+        operationId: params.operationId,
+        targetTier: params.targetTier,
+        outcome: kind === 'subscribe' ? 'processing' : 'scheduled',
+        effectiveAt: null,
+      };
+    }),
+  },
+}));
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { getSession } = await import('@repo/auth');
 const { app } = await import('../../../src/app.js');
@@ -120,7 +139,19 @@ async function post(path: string, body?: unknown): Promise<Response> {
       'content-type': 'application/json',
       cookie: 'better-auth.session_token=mock-token',
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(body
+      ? {
+          body: JSON.stringify(
+            typeof body === 'object' && body && 'targetTier' in body
+              ? {
+                  previewToken: 'signed-review-token',
+                  operationId: 'cd5cd966-dce7-4e91-81ad-6c113005c847',
+                  ...body,
+                }
+              : body,
+          ),
+        }
+      : {}),
   });
 }
 
@@ -329,5 +360,27 @@ describe('POST /api/billing/change-plan', () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('payment_mode_change_unsupported');
+  });
+});
+
+describe('billing consent boundary', () => {
+  it('rejects legacy mutation requests without a reviewed preview and operation ID', async () => {
+    mockAuthed();
+    for (const path of ['subscribe', 'change-plan', 'cancel']) {
+      const response = await app.request(`/api/billing/${path}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          cookie: 'better-auth.session_token=mock-token',
+        },
+        body: JSON.stringify({ targetTier: path === 'cancel' ? 'hobby' : 'corporate' }),
+      });
+      expect(response.status).toBe(422);
+    }
+  });
+  it('guards new context and preview routes without a session', async () => {
+    mockUnauthed();
+    expect((await app.request('/api/billing/selection-context')).status).toBe(401);
+    expect((await post('/change-preview', { targetTier: 'corporate' })).status).toBe(401);
   });
 });

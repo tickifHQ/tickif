@@ -1,9 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@repo/ui/components/button';
+import { Badge } from '@repo/ui/components/badge';
+import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
+import { PlanSelection } from './plan-selection';
+import { usePlanSelection, type BillingSelectionScope } from './use-plan-selection';
+import { useSelectionContext } from './use-selection-context';
+import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import type { SubscriptionState, SubscriptionResponse } from '@repo/contracts';
+import { subscriptionResponseSchema } from '@repo/contracts';
 import { PLAN_MAP } from '@/lib/plan-config';
 import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
@@ -26,37 +33,67 @@ import { usePaymentMethod } from './use-payment-method';
  * Does NOT duplicate the Plan & Billing lifecycle detail UI (E-179).
  * Links to /designer/plan-billing for lifecycle management.
  */
-export function SubscribePage() {
+export function SubscribePage(props: BillingSelectionScope) {
+  return (
+    <ScopedSubscribePage key={JSON.stringify([props.userId, props.organizationId])} {...props} />
+  );
+}
+
+function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) {
   const [subscription, setSubscription] = useState<SubscriptionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { selectedTier, setSelectedTier } = usePlanSelection({
+    userId,
+    organizationId,
+    currentTier: subscription?.tier ?? null,
+  });
+  const selection = useSelectionContext(organizationId);
 
   const fetchSubscription = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      const refresh = await api.api.billing.subscription.refresh.$get();
+      if (!refresh.ok) throw new Error('We could not update your billing details');
       const response = await api.api.billing.subscription.$get();
       if (!response.ok) {
-        setError('Failed to load subscription');
-        return;
+        throw new Error('We could not load your subscription');
       }
-      const data = (await response.json()) as SubscriptionResponse;
-      setSubscription(data);
+      const parsed = subscriptionResponseSchema.safeParse(await response.json());
+      if (!parsed.success) throw new Error('We could not verify your subscription');
+      setSubscription(parsed.data);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load subscription');
+      throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const payment = usePaymentMethod(subscription?.tier ?? 'hobby', fetchSubscription);
+  const refreshAll = useCallback(async () => {
+    try {
+      await fetchSubscription();
+    } finally {
+      await selection.refreshContext();
+    }
+  }, [fetchSubscription, selection.refreshContext]);
+  const refreshNow = useBillingAutoRefresh(refreshAll, {
+    urgent:
+      !dialogOpen &&
+      !!(
+        error ||
+        selection.error ||
+        selection.context?.pendingOperation ||
+        selection.context?.unfinishedCheckout ||
+        selection.context?.recovery?.status === 'requested' ||
+        selection.context?.recovery?.status === 'checkout_pending'
+      ),
+  });
+  const payment = usePaymentMethod(subscription?.tier ?? 'hobby', refreshNow);
 
-  useEffect(() => {
-    void fetchSubscription();
-  }, [fetchSubscription]);
-
-  if (loading) {
+  // Keep the mounted checkout and its provider callbacks alive during background refreshes.
+  if (loading && !subscription) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -64,25 +101,43 @@ export function SubscribePage() {
     );
   }
 
-  if (error || !subscription) {
+  if (!subscription) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <AlertTriangle className="size-8 text-destructive" />
         <p className="mt-3 text-sm text-muted-foreground">
           {error ?? 'Unable to load subscription'}
         </p>
-        <Button variant="outline" className="mt-4" onClick={() => void fetchSubscription()}>
-          Retry
-        </Button>
+        <p className="mt-2 text-sm text-muted-foreground">We will try again automatically.</p>
       </div>
     );
   }
 
   const { tier, lifecycleState } = subscription;
   const currentPlan = PLAN_MAP[tier];
+  const suppressPlanActions =
+    subscription.cancellationScheduled ||
+    !selection.context ||
+    Object.values(selection.actions).some((action) => action?.hidden);
+  const needsPaymentRecovery =
+    subscription.razorpayStatus === 'halted' ||
+    lifecycleState === 'payment_failed' ||
+    lifecycleState === 'grace';
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      {loading && (
+        <p role="status" className="mb-4 text-sm text-muted-foreground">
+          Refreshing billing status…
+        </p>
+      )}
+      {error && (
+        <div className="mb-4 flex flex-col gap-2" role="alert">
+          <p>
+            {error}. Previously loaded billing details are shown. We will try again automatically.
+          </p>
+        </div>
+      )}
       {/* Current plan summary */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">Subscription</h1>
@@ -96,39 +151,75 @@ export function SubscribePage() {
             </div>
             <LifecycleBadge state={lifecycleState} />
           </div>
-          {subscription.currentPeriodEnd && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Current period ends:{' '}
-              {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
-            </p>
-          )}
+          {subscription.currentPeriodEnd &&
+            !(suppressPlanActions && subscription.cancellationScheduled) && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Current period ends:{' '}
+                {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
+              </p>
+            )}
         </div>
 
         {/* Lifecycle warnings */}
         <LifecycleNotice state={lifecycleState} />
       </div>
 
-      {/* Plan selection / upgrade button */}
-      <Button
-        onClick={() => {
-          if (
-            subscription.razorpayStatus === 'halted' ||
-            lifecycleState === 'payment_failed' ||
-            lifecycleState === 'grace'
-          )
-            payment.open();
-          else setDialogOpen(true);
+      <BillingStatusNotice
+        context={selection.context}
+        currentTier={tier}
+        cancellationScheduled={subscription.cancellationScheduled}
+        currentPeriodEnd={subscription.currentPeriodEnd}
+        onDismissed={refreshNow}
+        onReview={(target) => {
+          setSelectedTier(target);
+          setDialogOpen(true);
         }}
-        disabled={payment.busy}
-      >
-        {subscription.razorpayStatus === 'halted' ||
-        lifecycleState === 'payment_failed' ||
-        lifecycleState === 'grace'
-          ? 'Update Payment Method'
-          : tier === 'hobby'
-            ? 'Upgrade Plan'
-            : 'Change Plan'}
-      </Button>
+      />
+
+      <PlanSelection
+        currentTier={tier}
+        lifecycleState={lifecycleState}
+        selectedTier={selectedTier}
+        actions={selection.actions}
+        onSelectPlan={(target) => {
+          setSelectedTier(target);
+          setDialogOpen(true);
+        }}
+      />
+      {selectedTier && !suppressPlanActions && !selection.actions[selectedTier]?.disabled && (
+        <Button variant="outline" className="mt-4" onClick={() => setDialogOpen(true)}>
+          Continue {PLAN_MAP[selectedTier].label}
+        </Button>
+      )}
+      {selection.error && (
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          {selection.error}
+        </p>
+      )}
+
+      {/* Plan selection / upgrade button */}
+      {(!suppressPlanActions || needsPaymentRecovery) && (
+        <Button
+          onClick={() => {
+            if (
+              subscription.razorpayStatus === 'halted' ||
+              lifecycleState === 'payment_failed' ||
+              lifecycleState === 'grace'
+            )
+              payment.open();
+            else setDialogOpen(true);
+          }}
+          disabled={payment.busy}
+        >
+          {subscription.razorpayStatus === 'halted' ||
+          lifecycleState === 'payment_failed' ||
+          lifecycleState === 'grace'
+            ? 'Update Payment Method'
+            : tier === 'hobby'
+              ? 'Upgrade Plan'
+              : 'Change Plan'}
+        </Button>
+      )}
       {payment.message && (
         <p role="status" className="mt-3 text-sm">
           {payment.message}
@@ -159,6 +250,7 @@ export function SubscribePage() {
 
       {/* Checkout dialog */}
       <CheckoutFlow
+        scopeKey={JSON.stringify([userId, organizationId])}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         currentTier={tier}
@@ -166,7 +258,9 @@ export function SubscribePage() {
         cancellationScheduled={subscription.cancellationScheduled ?? false}
         currentPeriodEnd={subscription.currentPeriodEnd}
         restoreTier={subscription.preLapseTier}
-        onSubscriptionChange={fetchSubscription}
+        initialTargetTier={selectedTier}
+        onTargetChange={setSelectedTier}
+        onSubscriptionChange={refreshNow}
       />
     </div>
   );
@@ -175,19 +269,20 @@ export function SubscribePage() {
 // ─── Lifecycle UI Components ─────────────────────────────────────────────────
 
 function LifecycleBadge({ state }: { state: SubscriptionState }) {
-  const config: Record<SubscriptionState, { label: string; className: string }> = {
-    active: { label: 'Active', className: 'bg-green-100 text-green-800' },
-    payment_failed: { label: 'Payment Issue', className: 'bg-yellow-100 text-yellow-800' },
-    grace: { label: 'Grace Period', className: 'bg-yellow-100 text-yellow-800' },
-    locked: { label: 'Suspended', className: 'bg-red-100 text-red-800' },
-    downgraded: { label: 'Downgraded', className: 'bg-muted text-muted-foreground' },
+  const config: Record<
+    SubscriptionState,
+    { label: string; className: 'success' | 'warning' | 'destructive' | 'secondary' }
+  > = {
+    active: { label: 'Active', className: 'success' },
+    payment_failed: { label: 'Payment Issue', className: 'warning' },
+    grace: { label: 'Grace Period', className: 'warning' },
+    locked: { label: 'Suspended', className: 'destructive' },
+    downgraded: { label: 'Downgraded', className: 'secondary' },
   };
 
   const { label, className } = config[state];
 
-  return (
-    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>{label}</span>
-  );
+  return <Badge variant={className}>{label}</Badge>;
 }
 
 function LifecycleNotice({ state }: { state: SubscriptionState }) {
@@ -233,8 +328,8 @@ function LifecycleNotice({ state }: { state: SubscriptionState }) {
   const borderClass =
     notice.severity === 'error'
       ? 'border-destructive/30 bg-destructive/5'
-      : 'border-yellow-300/50 bg-yellow-50';
-  const textClass = notice.severity === 'error' ? 'text-destructive' : 'text-yellow-800';
+      : 'border-warning/50 bg-warning/10';
+  const textClass = notice.severity === 'error' ? 'text-destructive' : 'text-warning-foreground';
 
   return (
     <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${borderClass} ${textClass}`}>

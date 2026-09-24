@@ -30,6 +30,7 @@ import { adminVerificationsRoutes, verificationsRoutes } from './modules/verific
 import { subscribeRoutes } from './modules/billing/subscribe-routes.js';
 import { webhookRoutes } from './modules/billing/webhook-routes.js';
 import { entitlementRoutes } from './modules/billing/entitlement-routes.js';
+import { recoveryRoutes } from './modules/billing/recovery-routes.js';
 import {
   adminOrganizationRetentionRoutes,
   organizationRetentionRoutes,
@@ -108,6 +109,7 @@ export const app = base
   .route('/api/search', searchRoutes)
   .route('/api/billing', subscribeRoutes)
   .route('/api/billing', webhookRoutes)
+  .route('/api/billing', recoveryRoutes)
   .route('/api/billing', entitlementRoutes);
 
 /** Exported for the web app's type-safe `hc<AppType>` client. */

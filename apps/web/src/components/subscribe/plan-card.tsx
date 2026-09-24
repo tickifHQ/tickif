@@ -1,86 +1,100 @@
 'use client';
 
+import { useId } from 'react';
 import { Button } from '@repo/ui/components/button';
-import { Card } from '@repo/ui/components/card';
-import { Check, Crown, Building2, Sparkles } from 'lucide-react';
+import { Badge } from '@repo/ui/components/badge';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '@repo/ui/components/card';
+import { Check } from 'lucide-react';
 import type { PlanTier } from '@repo/contracts';
 import { formatCurrency, getCumulativeFeatures, type PlanDefinition } from '@/lib/plan-config';
-
-const PLAN_ICONS: Record<PlanTier, typeof Crown> = {
-  hobby: Sparkles,
-  professional_plus: Crown,
-  corporate: Building2,
-};
 
 interface PlanCardProps {
   plan: PlanDefinition;
   isCurrent: boolean;
-  isLocked: boolean;
+  isLocked?: boolean;
+  isSelected?: boolean;
+  allowCurrentAction?: boolean;
+  actionLabel?: string;
+  actionReason?: string;
+  hideAction?: boolean;
   onSelect: (tier: PlanTier) => void;
 }
 
-/**
- * Individual plan card. Displays tier name, pricing, and features.
- *
- * Rules:
- * - Never displays "Free" for Hobby (shows ₹0/month)
- * - Professional+ does NOT show an add-seat affordance
- * - Locked state disables upgrade actions
- */
-export function PlanCard({ plan, isCurrent, isLocked, onSelect }: PlanCardProps) {
-  const Icon = PLAN_ICONS[plan.tier];
+/** Plan summaries reuse flat cards; availability is supplied by the billing controller. */
+export function PlanCard({
+  plan,
+  isCurrent,
+  isLocked = false,
+  isSelected = false,
+  allowCurrentAction = false,
+  actionLabel,
+  actionReason,
+  hideAction = false,
+  onSelect,
+}: PlanCardProps) {
+  const reasonId = useId();
   const features = getCumulativeFeatures(plan.tier);
+  const label =
+    actionLabel ?? (plan.tier === 'hobby' ? 'Switch to Hobby' : `Upgrade to ${plan.label}`);
+  const currentActionDisabled = isCurrent && !allowCurrentAction;
 
   return (
     <Card
-      radius="xl"
-      className={`relative flex flex-col ${isCurrent ? 'border-primary/40 bg-primary/5' : ''}`}
+      variant={isSelected && !isCurrent ? 'accent' : 'ghost'}
+      className="flex min-w-0 flex-col rounded-none shadow-none md:row-span-4 md:grid md:grid-rows-subgrid"
     >
-      <div className="flex flex-1 flex-col p-5">
-        <div className="flex items-center gap-2">
-          <Icon className="size-5 text-primary" />
-          <span className="text-base font-semibold text-foreground">{plan.label}</span>
+      <CardHeader className="gap-4">
+        <div className="flex min-h-7 flex-wrap items-center gap-2">
+          <CardTitle>
+            <h3>{plan.label}</h3>
+          </CardTitle>
+          {isCurrent ? <Badge variant="secondary">Current plan</Badge> : null}
+          {isSelected && !isCurrent ? <Badge variant="outline">Selected plan</Badge> : null}
         </div>
-
-        <div className="mt-3">
-          <span className="text-3xl font-bold text-foreground">
+        <div className="flex flex-wrap items-baseline gap-1">
+          <span className="text-3xl font-semibold tracking-tight">
             {formatCurrency(plan.price)}
           </span>
-          <span className="text-sm text-muted-foreground"> /month</span>
+          <span className="text-sm text-muted-foreground">/month</span>
         </div>
-
-        <ul className="mt-4 flex-1 space-y-2">
+        <CardDescription>Per organization, billed monthly</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1">
+        <ul className="flex flex-col gap-3">
           {features.map((feature) => (
-            <li key={feature} className="flex items-center gap-2 text-sm text-foreground">
-              <Check className="size-4 shrink-0 text-primary" />
-              {feature}
+            <li key={feature} className="flex items-start gap-2 text-sm">
+              <Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span>{feature}</span>
             </li>
           ))}
         </ul>
-
-        <div className="mt-5">
-          {isCurrent ? (
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled
-              aria-label={`${plan.label} is your current plan`}
-            >
-              Current Plan
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled={isLocked}
-              onClick={() => onSelect(plan.tier)}
-              aria-label={`Select ${plan.label} plan`}
-            >
-              {isLocked ? 'Unavailable' : 'Select'}
-            </Button>
-          )}
-        </div>
-      </div>
+      </CardContent>
+      <CardFooter className="flex-col items-stretch gap-3 md:row-span-2 md:grid md:grid-rows-subgrid">
+        {hideAction ? (
+          <p className="min-h-10 text-sm text-muted-foreground">{actionReason}</p>
+        ) : (
+          <Button
+            variant={isSelected && !isCurrent ? 'default' : 'outline'}
+            className="h-auto min-h-10 w-full whitespace-normal"
+            disabled={currentActionDisabled || isLocked}
+            onClick={() => onSelect(plan.tier)}
+            aria-label={currentActionDisabled ? `${plan.label} is your current plan` : label}
+            aria-describedby={actionReason ? reasonId : undefined}
+          >
+            {currentActionDisabled ? 'Current plan' : label}
+          </Button>
+        )}
+        <p id={reasonId} className="min-h-10 text-sm text-muted-foreground">
+          {hideAction ? null : actionReason}
+        </p>
+      </CardFooter>
     </Card>
   );
 }

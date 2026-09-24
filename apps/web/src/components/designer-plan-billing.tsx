@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -25,15 +25,23 @@ import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
+import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
+import { PlanSelection } from '@/components/subscribe/plan-selection';
+import {
+  usePlanSelection,
+  type BillingSelectionScope,
+} from '@/components/subscribe/use-plan-selection';
+import { useSelectionContext } from '@/components/subscribe/use-selection-context';
+import { useBillingAutoRefresh } from '@/components/subscribe/use-billing-auto-refresh';
 import { api } from '@/lib/api';
 import { mapSubscriptionToBillingState } from '@/lib/billing-state';
 import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import type { SubscriptionResponse } from '@repo/contracts';
+import { subscriptionResponseSchema } from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
-interface DesignerPlanBillingProps {
+interface DesignerPlanBillingProps extends BillingSelectionScope {
   billing: BillingState;
 }
 
@@ -95,7 +103,9 @@ function CurrentPlanCard({
   onSubscribe,
   onPayment,
   paymentBusy,
+  suppressPlanActions = false,
 }: {
+  suppressPlanActions?: boolean;
   onPayment?: () => void;
   paymentBusy?: boolean;
   billing: BillingState;
@@ -156,13 +166,16 @@ function CurrentPlanCard({
                 No paid subscription required. Upgrade anytime for more features.
               </p>
             )}
-            {billing.renewalDate && billing.lifecycle === 'active' && billing.tier !== 'hobby' && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                {billing.cancellationScheduled
-                  ? `Your plan ends on ${formatDate(billing.renewalDate)}`
-                  : `Your plan renews on ${formatDate(billing.renewalDate)}`}
-              </p>
-            )}
+            {billing.renewalDate &&
+              billing.lifecycle === 'active' &&
+              billing.tier !== 'hobby' &&
+              !(suppressPlanActions && billing.cancellationScheduled) && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {billing.cancellationScheduled
+                    ? `Your plan ends on ${formatDate(billing.renewalDate)}`
+                    : `Your plan renews on ${formatDate(billing.renewalDate)}`}
+                </p>
+              )}
             {billing.subscriptionId && (
               <div className="mt-1.5 flex min-w-0 flex-col items-start gap-1.5 text-xs text-muted-foreground">
                 Subscription ID:{' '}
@@ -178,21 +191,24 @@ function CurrentPlanCard({
             )}
           </div>
         </div>
-        {cta && (
-          <Button
-            variant="outline"
-            className="shrink-0"
-            disabled={paymentBusy}
-            onClick={
-              cta.kind === 'payment' ||
-              (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
-                ? onPayment
-                : () => onSubscribe()
-            }
-          >
-            {cta.label}
-          </Button>
-        )}
+        {cta &&
+          (!suppressPlanActions ||
+            cta.kind === 'payment' ||
+            (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')) && (
+            <Button
+              variant="outline"
+              className="shrink-0"
+              disabled={paymentBusy}
+              onClick={
+                cta.kind === 'payment' ||
+                (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
+                  ? onPayment
+                  : () => onSubscribe()
+              }
+            >
+              {cta.label}
+            </Button>
+          )}
       </div>
     </Card>
   );
@@ -369,102 +385,14 @@ function BillingSummary({
   );
 }
 
-// ─── Upgrade Card (sidebar) ──────────────────────────────────────────────────
-
-function UpgradeCard({
-  billing,
-  onSubscribe,
-}: {
-  billing: BillingState;
-  onSubscribe: (targetTier?: PlanTier) => void;
-}) {
-  if (billing.tier === 'corporate') return null;
-  // Upgrade offers only while active. Locked/downgraded use restore CTAs;
-  // grace/payment_failed must pay the current plan, not switch.
-  if (billing.lifecycle !== 'active') return null;
-
-  const cards: {
-    tier: PlanTier;
-    label: string;
-    price: number;
-    description: string;
-    benefits: string[];
-  }[] = [];
-
-  if (billing.tier === 'hobby') {
-    cards.push({
-      tier: 'professional_plus',
-      label: 'Professional+',
-      price: PLAN_TIER_PRICES.professional_plus,
-      description: 'Stand out with a verified badge and get discovered faster by homeowners.',
-      benefits: ['Verified-business badge', 'Search & discovery ranking priority'],
-    });
-    cards.push({
-      tier: 'corporate',
-      label: 'Corporate',
-      price: PLAN_TIER_PRICES.corporate,
-      description:
-        'Unlock unlimited team collaboration, branches, and advanced organization features.',
-      benefits: [
-        'Unlimited team members',
-        'Unlimited branches',
-        'Branch dashboards & analytics',
-        'Full 5-role RBAC',
-        'Top-of-directory placement',
-      ],
-    });
-  } else {
-    cards.push({
-      tier: 'corporate',
-      label: 'Corporate',
-      price: PLAN_TIER_PRICES.corporate,
-      description:
-        'Unlock unlimited team collaboration, branches, and advanced organization features.',
-      benefits: [
-        'Unlimited team members',
-        'Unlimited branches',
-        'Branch dashboards & analytics',
-        'Full 5-role RBAC',
-        'Top-of-directory placement',
-      ],
-    });
-  }
-
-  return (
-    <>
-      {cards.map((card) => (
-        <Card key={card.tier} variant="accent" radius="2xl">
-          <div className="p-5">
-            <h2 className="text-base font-semibold text-foreground">Upgrade to {card.label}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              ₹{card.price.toLocaleString('en-IN')} / month
-            </p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{card.description}</p>
-            <ul className="mt-4 space-y-2">
-              {card.benefits.map((benefit) => (
-                <li key={benefit} className="flex items-center gap-2 text-sm text-foreground">
-                  <Check className="size-4 shrink-0 text-primary" />
-                  {benefit}
-                </li>
-              ))}
-            </ul>
-            <Button className="mt-5 w-full" onClick={() => onSubscribe(card.tier)}>
-              Upgrade Now
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-        </Card>
-      ))}
-    </>
-  );
-}
-
 // ─── Frozen Resources (Downgraded) ───────────────────────────────────────────
 
 function FrozenResourcesCard({
   resources,
   onSubscribe,
+  suppressPlanActions = false,
 }: {
+  suppressPlanActions?: boolean;
   resources: FrozenResource[];
   onSubscribe: (targetTier?: PlanTier) => void;
 }) {
@@ -502,10 +430,12 @@ function FrozenResourcesCard({
             </div>
           ))}
         </div>
-        <Button className="mt-5 w-full" onClick={() => onSubscribe()}>
-          Upgrade to Restore
-          <ArrowRight className="size-4" />
-        </Button>
+        {!suppressPlanActions && (
+          <Button className="mt-5 w-full" onClick={() => onSubscribe()}>
+            Upgrade to Restore
+            <ArrowRight className="size-4" />
+          </Button>
+        )}
       </div>
     </Card>
   );
@@ -633,7 +563,9 @@ function PlanIncludesCard({
   tier,
   lifecycle,
   onSubscribe,
+  suppressPlanActions = false,
 }: {
+  suppressPlanActions?: boolean;
   tier: PlanTier;
   lifecycle: BillingState['lifecycle'];
   onSubscribe: (targetTier?: PlanTier) => void;
@@ -678,7 +610,7 @@ function PlanIncludesCard({
             );
           })}
         </div>
-        {nextTier && lifecycle === 'active' && (
+        {nextTier && lifecycle === 'active' && !suppressPlanActions && (
           <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
             <p className="text-sm font-medium text-foreground">
               {tier === 'hobby'
@@ -718,36 +650,73 @@ function HelpCard() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBillingProps) {
+export function DesignerPlanBilling(props: DesignerPlanBillingProps) {
+  return (
+    <ScopedDesignerPlanBilling
+      key={JSON.stringify([props.userId, props.organizationId])}
+      {...props}
+    />
+  );
+}
+
+function ScopedDesignerPlanBilling({
+  billing: initialBilling,
+  userId,
+  organizationId,
+}: DesignerPlanBillingProps) {
   const [billing, setBilling] = useState(initialBilling);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const [initialTargetTier, setInitialTargetTier] = useState<PlanTier | null>(null);
+  const { selectedTier, setSelectedTier } = usePlanSelection({
+    userId,
+    organizationId,
+    currentTier: billing.tier,
+  });
+  const selection = useSelectionContext(organizationId);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
   // Called on mount (SSR hydration catch-up) and after checkout flow completes.
   const refreshBilling = useCallback(async () => {
     try {
-      setRefreshError(null);
-      await api.api.billing.subscription.refresh.$get();
+      const refresh = await api.api.billing.subscription.refresh.$get();
+      if (!refresh.ok) throw new Error('Billing refresh unavailable');
       const response = await api.api.billing.subscription.$get();
       if (response.ok) {
-        const data = (await response.json()) as SubscriptionResponse;
-        setBilling(mapSubscriptionToBillingState(data));
+        const parsed = subscriptionResponseSchema.safeParse(await response.json());
+        if (!parsed.success) throw new Error('Billing response invalid');
+        setBilling(mapSubscriptionToBillingState(parsed.data));
+        setRefreshError(null);
       } else {
-        setRefreshError('Billing could not be refreshed. Displaying the last loaded information.');
+        throw new Error('Billing read unavailable');
       }
     } catch {
-      setRefreshError('Billing could not be refreshed. Displaying the last loaded information.');
+      setRefreshError(
+        'We could not update billing. Your last loaded details are shown while we try again.',
+      );
+      throw new Error('Billing refresh unavailable');
     }
   }, []);
 
-  const payment = usePaymentMethod(billing.tier, refreshBilling);
-
-  // Reconcile on mount so the client sees the latest state after SSR.
-  useEffect(() => {
-    void refreshBilling();
-  }, [refreshBilling]);
+  const refreshAll = useCallback(async () => {
+    try {
+      await refreshBilling();
+    } finally {
+      await selection.refreshContext();
+    }
+  }, [refreshBilling, selection.refreshContext]);
+  const refreshNow = useBillingAutoRefresh(refreshAll, {
+    urgent:
+      !subscribeOpen &&
+      !!(
+        refreshError ||
+        selection.error ||
+        selection.context?.pendingOperation ||
+        selection.context?.unfinishedCheckout ||
+        selection.context?.recovery?.status === 'requested' ||
+        selection.context?.recovery?.status === 'checkout_pending'
+      ),
+  });
+  const payment = usePaymentMethod(billing.tier, refreshNow);
 
   const openSubscribe = useCallback(
     (tier?: PlanTier) => {
@@ -761,20 +730,31 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
           : billing.lifecycle === 'locked'
             ? billing.tier
             : null;
-      setInitialTargetTier(tier ?? recoveryTier);
+      setSelectedTier(tier ?? selectedTier ?? recoveryTier);
       setSubscribeOpen(true);
     },
-    [billing.lifecycle, billing.preLapseTier, billing.tier, billing.razorpayStatus, payment],
+    [
+      billing.lifecycle,
+      billing.preLapseTier,
+      billing.tier,
+      billing.razorpayStatus,
+      payment,
+      selectedTier,
+      setSelectedTier,
+    ],
   );
 
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
     setSubscribeOpen(next);
-    if (!next) setInitialTargetTier(null);
   }, []);
 
   const showPaymentDueCard =
     billing.tier !== 'hobby' &&
     (billing.lifecycle === 'grace' || billing.lifecycle === 'payment_failed');
+  const suppressPlanActions =
+    billing.cancellationScheduled ||
+    !selection.context ||
+    Object.values(selection.actions).some((action) => action?.hidden);
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -819,17 +799,44 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
                 </>
               ) : null}
             </p>
-            <Button variant="outline" size="sm" onClick={() => void refreshBilling()}>
-              Refresh billing
-            </Button>
           </AlertDescription>
         </Alert>
       )}
+
+      <BillingStatusNotice
+        context={selection.context}
+        currentTier={billing.tier}
+        cancellationScheduled={billing.cancellationScheduled}
+        currentPeriodEnd={billing.renewalDate}
+        onDismissed={refreshNow}
+        onReview={openSubscribe}
+      />
+
+      <section className="mt-8" aria-label="Compare plans">
+        <PlanSelection
+          currentTier={billing.tier}
+          lifecycleState={billing.lifecycle}
+          selectedTier={selectedTier}
+          actions={selection.actions}
+          onSelectPlan={openSubscribe}
+        />
+        {selectedTier && !suppressPlanActions && !selection.actions[selectedTier]?.disabled && (
+          <Button variant="outline" className="mt-4" onClick={() => openSubscribe(selectedTier)}>
+            Continue {PLAN_TIER_LABELS[selectedTier]}
+          </Button>
+        )}
+        {selection.error && (
+          <p role="status" className="mt-4 text-sm text-muted-foreground">
+            {selection.error}
+          </p>
+        )}
+      </section>
 
       {/* Main content */}
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
           <CurrentPlanCard
+            suppressPlanActions={suppressPlanActions}
             billing={billing}
             onSubscribe={openSubscribe}
             onPayment={payment.open}
@@ -842,13 +849,18 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
           )}
 
           {billing.lifecycle === 'downgraded' && billing.frozenResources.length > 0 && (
-            <FrozenResourcesCard resources={billing.frozenResources} onSubscribe={openSubscribe} />
+            <FrozenResourcesCard
+              resources={billing.frozenResources}
+              onSubscribe={openSubscribe}
+              suppressPlanActions={suppressPlanActions}
+            />
           )}
 
           <BillingSummary billing={billing} onPayment={payment.open} paymentBusy={payment.busy} />
           <PaymentHistory />
 
           <PlanIncludesCard
+            suppressPlanActions={suppressPlanActions}
             tier={billing.tier}
             lifecycle={billing.lifecycle}
             onSubscribe={openSubscribe}
@@ -892,12 +904,12 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
             </Card>
           )}
 
-          <UpgradeCard billing={billing} onSubscribe={openSubscribe} />
           <HelpCard />
         </aside>
       </div>
 
       <CheckoutFlow
+        scopeKey={JSON.stringify([userId, organizationId])}
         open={subscribeOpen}
         onOpenChange={handleSubscribeOpenChange}
         currentTier={billing.tier}
@@ -905,8 +917,9 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
         cancellationScheduled={billing.cancellationScheduled}
         currentPeriodEnd={billing.renewalDate}
         restoreTier={billing.preLapseTier}
-        initialTargetTier={initialTargetTier}
-        onSubscriptionChange={refreshBilling}
+        initialTargetTier={selectedTier}
+        onTargetChange={setSelectedTier}
+        onSubscriptionChange={refreshNow}
       />
     </div>
   );

@@ -272,8 +272,8 @@ const envSchema = z.object({
   // Razorpay billing (E-115). Optional in dev/test — the subscribe service
   // asserts their presence at call time rather than at boot.
   // Key prefix determines mode: rzp_test_* = Test Mode, rzp_live_* = Live.
-  RAZORPAY_KEY_ID: z.string().min(1).optional(),
-  RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
+  RAZORPAY_KEY_ID: z.preprocess(blankStringToUndefined, z.string().min(1).optional()),
+  RAZORPAY_KEY_SECRET: z.preprocess(blankStringToUndefined, z.string().min(1).optional()),
   RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: z.string().min(1).optional(),
   RAZORPAY_PLAN_ID_CORPORATE: z.string().min(1).optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
