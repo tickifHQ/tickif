@@ -1018,9 +1018,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
           { kind: 'tag', filterKey: 'tag', slug: 'bed-styling', label: 'Bed Styling' },
         ]),
       );
-      expect(suggestions).not.toContainEqual(
-        expect.objectContaining({ slug: 'bedroom-unused' }),
-      );
+      expect(suggestions).not.toContainEqual(expect.objectContaining({ slug: 'bedroom-unused' }));
     });
 
     it('matches discovery entity terms in the database search fallback', async () => {
@@ -1172,22 +1170,23 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
   });
 });
 
-describe('rating and paid coverage in the database fallback', () => {
-  it('sorts before pagination and never promotes a paid lower-rated studio over a higher rating', async () => {
+describe('relevance, rating and tier in the database fallback', () => {
+  it('sorts before pagination and uses tier only to break rating ties', async () => {
     config.TYPESENSE_SEARCH_CONFIGURED = false;
     const ids: string[] = [];
-    for (const [rating, paid] of [
-      ['5.00', true],
-      ['5.00', false],
-      ['4.00', true],
+    for (const [rating, tier] of [
+      ['5.00', 'corporate'],
+      ['5.00', 'professional_plus'],
+      ['5.00', 'hobby'],
+      ['4.00', 'corporate'],
     ] as const) {
       const designer = await activeDesigner({ avgRating: rating });
       const project = await makePublishedProject(designer.id, { title: 'Bedroom' });
       ids.push(project.id);
-      if (paid)
+      if (tier !== 'hobby')
         await db.insert(schema.subscription).values({
           organizationId: designer.orgId,
-          planTier: 'professional_plus',
+          planTier: tier,
           subscriptionState: 'active',
           currentPeriodEnd: new Date(Date.now() + 86400000),
         });
@@ -1200,5 +1199,25 @@ describe('rating and paid coverage in the database fallback', () => {
     );
     expect(bodies.flatMap((body) => body.items.map((item) => item.id))).toEqual(ids);
     expect(bodies.every((body) => body.source === 'db')).toBe(true);
+  });
+
+  it('keeps an exact title match above a higher-rated paid description match', async () => {
+    config.TYPESENSE_SEARCH_CONFIGURED = false;
+    const exactDesigner = await activeDesigner({ avgRating: '4.00' });
+    const exact = await makePublishedProject(exactDesigner.id, { title: 'Bedroom' });
+    const paidDesigner = await activeDesigner({ avgRating: '5.00' });
+    const description = await makePublishedProject(paidDesigner.id, {
+      title: 'Warm retreat',
+      description: 'A bedroom with warm finishes',
+    });
+    await db.insert(schema.subscription).values({
+      organizationId: paidDesigner.orgId,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      currentPeriodEnd: new Date(Date.now() + 86400000),
+    });
+
+    const { body } = await getFeed('?q=bedroom');
+    expect(body.items.map((item) => item.id)).toEqual([exact.id, description.id]);
   });
 });

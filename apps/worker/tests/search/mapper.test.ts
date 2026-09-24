@@ -31,6 +31,8 @@ describe('search projection mapper', () => {
         slug: 'studio-one',
         displayName: 'Studio One',
         avgRating: '4.75',
+        planTier: null,
+        subscriptionState: null,
         reviewCount: 16,
       },
       cover: {
@@ -99,6 +101,7 @@ describe('search projection mapper', () => {
       featuredAt: null,
       avgRating: 4.75,
       paidUntil: 0,
+      rankingTier: 0,
       reviewCount: 16,
     });
   });
@@ -123,7 +126,14 @@ describe('search projection mapper', () => {
         publishedAt: new Date('2026-07-01T00:00:00.000Z'),
         featuredAt: null,
       },
-      designer: { slug: null, displayName: 'Studio One', avgRating: '0', reviewCount: 0 },
+      designer: {
+        slug: null,
+        displayName: 'Studio One',
+        avgRating: '0',
+        planTier: null,
+        subscriptionState: null,
+        reviewCount: 0,
+      },
       cover: {
         id: 'cover-1',
         status: 'ready' as const,
@@ -155,6 +165,8 @@ describe('search projection mapper', () => {
         yearsExperience: 8,
         projectCount: 12,
         avgRating: '4.75',
+        planTier: null,
+        subscriptionState: null,
         reviewCount: 16,
         logoImageId: 'originals/logos/designer-1/logo',
         updatedAt: new Date('2026-07-02T00:00:00.000Z'),
@@ -184,6 +196,7 @@ describe('search projection mapper', () => {
       projectCount: 12,
       avgRating: 4.75,
       paidUntil: 0,
+      rankingTier: 0,
       reviewCount: 16,
       isKycVerified: false,
       kycExpiresAt: 0,
