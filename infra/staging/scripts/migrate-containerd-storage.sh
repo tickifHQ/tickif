@@ -29,8 +29,8 @@ for service in postgres redis typesense socket-proxy; do
   docker service scale --detach=true "tickif_$service=0"
 done
 deadline=$((SECONDS + 180))
-while [[ -n "$(docker ps -q)" ]]; do
-  (( SECONDS < deadline )) || { echo 'Containers did not stop; migration aborted' >&2; exit 1; }
+while [[ -n "$(docker ps -q)" || -n "$(docker ps -aq --filter label=com.docker.stack.namespace=tickif)" ]]; do
+  (( SECONDS < deadline )) || { echo 'Containers or stopped Swarm tasks remain; migration aborted' >&2; exit 1; }
   sleep 2
 done
 systemctl stop docker.socket docker.service containerd.service

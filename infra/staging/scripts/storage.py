@@ -57,6 +57,17 @@ def removal_candidates(images, repositories, protected_refs, protected_ids, reta
 
 
 def inspect_many(kind, ids):
+    if kind == "container":
+        containers = []
+        for container_id in ids:
+            try:
+                containers.extend(json.loads(docker(kind, "inspect", container_id)))
+            except subprocess.CalledProcessError as error:
+                # Swarm can remove stopped tasks between listing and inspection.
+                # Docker can also list an already-removed dead task after restart.
+                if "No such container:" not in (error.stderr or ""):
+                    raise
+        return containers
     return json.loads(docker(kind, "inspect", *ids)) if ids else []
 
 

@@ -15,6 +15,15 @@ spec.loader.exec_module(storage)
 
 
 class StorageTests(unittest.TestCase):
+    def test_container_disappearing_during_inspection_is_safe(self):
+        missing = subprocess.CalledProcessError(1, ["docker"], stderr="Error response from daemon: No such container: removed")
+        with patch.object(storage, "docker", side_effect=[missing, '[{"Image":"still-protected"}]']):
+            self.assertEqual(storage.inspect_many("container", ["removed", "present"]), [{"Image": "still-protected"}])
+        failure = subprocess.CalledProcessError(1, ["docker"], stderr="Cannot connect to Docker daemon")
+        with patch.object(storage, "docker", side_effect=failure):
+            with self.assertRaises(subprocess.CalledProcessError):
+                storage.inspect_many("container", ["present"])
+
     def test_checks_root_and_both_image_storage_filesystems(self):
         roomy = SimpleNamespace(f_bavail=20 * 1024**3, f_frsize=1, f_favail=200000)
         full = SimpleNamespace(f_bavail=1024**3, f_frsize=1, f_favail=200000)
