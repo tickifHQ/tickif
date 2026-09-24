@@ -473,7 +473,8 @@ describe('PublicDesignerProfile', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getAllByRole('button', { name: 'Book consultation' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Enquire' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Enquire' })).toBeEnabled();
     fireEvent.click(screen.getAllByRole('button', { name: 'Book consultation' })[0]!);
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Save profile' })).not.toBeInTheDocument();
@@ -492,7 +493,8 @@ describe('PublicDesignerProfile', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getAllByRole('button', { name: 'Book consultation' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Enquire' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Enquire' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Book consultation' })).not.toBeInTheDocument();
   });
 

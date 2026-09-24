@@ -2,6 +2,7 @@ import Image from 'next/image';
 import type { ReactNode } from 'react';
 import {
   BadgeCheck,
+  CalendarCheck,
   CalendarDays,
   Check,
   Globe,
@@ -266,7 +267,8 @@ function HeroSection({ portfolio, view }: SectionProps) {
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"
-              className="min-w-36"
+              ariaLabel="Enquire"
+              className="min-w-36 transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
             >
               <MessageSquare className="size-4" />
               Enquire
@@ -509,10 +511,11 @@ function StorySection({ portfolio, view }: SectionProps) {
                   designerProfileId={portfolio.profileId}
                   loginHref={view.loginHref}
                   variant="emphasis"
-                  className="mt-5 h-8 w-full"
+                  ariaLabel="Book Consultation"
+                  className="mt-5 h-8 w-full transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
                 >
-                  <MessageSquare className="size-4" />
-                  Enquire
+                  <CalendarCheck className="size-4" />
+                  Book Consultation
                 </EnquiryCta>
               </div>
 
@@ -907,10 +910,11 @@ function ShareSection({ portfolio, view }: SectionProps) {
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"
-              className="h-10 px-6 shadow-sm"
+              ariaLabel="Book Consultation"
+              className="h-10 px-6 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
             >
-              <MessageSquare className="size-4" />
-              Enquire
+              <CalendarCheck className="size-4" />
+              Book Consultation
             </EnquiryCta>
             <CopyLinkButton
               value={view.publicProfileHref}

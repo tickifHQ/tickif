@@ -205,17 +205,21 @@ add:
 ## Rating and paid discovery ranking
 
 Text searches order by Typesense text relevance, then designer average rating,
-then unexpired paid subscription coverage. For equally relevant matches, a free
-5-star designer precedes a paid 4-star designer; a paid 5-star designer precedes
-a free 5-star designer. The explicit designer rating sort puts rating first,
-then paid coverage, then relevance. Empty home feeds keep their existing recent
+then effective paid tier: Corporate, Professional+, Hobby. A free 5-star designer
+precedes a paid 4-star designer. Among equally relevant 5-star designers,
+Corporate precedes Professional+, then Hobby. The explicit designer rating sort
+puts rating first, then tier, then relevance. Empty home feeds keep their recent
 or featured order, and other explicit sort selections remain available.
 
-Both collections now project `paidUntil`. Paid means a non-Hobby subscription
+Both collections project `rankingTier` and `paidUntil`. Paid means a non-Hobby subscription
 that is neither locked nor downgraded, with a future `currentPeriodEnd`.
 Scheduled cancellation keeps priority until that boundary. The query evaluates
 expiry against the current time, so delayed lifecycle jobs cannot extend it.
 Subscription changes enqueue a designer projection, which refreshes its projects.
+The Postgres fallback sorts exact and title-prefix matches before other matches,
+then uses rating and the same active tier order. It cannot reproduce Typesense's
+full-text score exactly. Rebuild both collections after adding `rankingTier` so
+existing documents receive the new field.
 KYC remains a filter and badge, but no longer determines default result order.
 
 Designer `portfolioTerms` contains published project titles, descriptions and

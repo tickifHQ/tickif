@@ -86,6 +86,12 @@ vi.mock('@repo/db', () => ({
       id: 'organization.id',
       slug: 'organization.slug',
     },
+    subscription: {
+      organizationId: 'subscription.organizationId',
+      subscriptionState: 'subscription.subscriptionState',
+      currentPeriodEnd: 'subscription.currentPeriodEnd',
+      planTier: 'subscription.planTier',
+    },
     projectImage: {
       id: 'projectImage.id',
       status: 'projectImage.status',
@@ -198,7 +204,7 @@ describe('discoveryRepository.searchFeed', () => {
       query_by: 'title',
       filter_by: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
       sort_by: expect.stringMatching(
-        /^_text_match:desc,avgRating:desc,_eval\(paidUntil:>\d+\):desc$/,
+        /^_text_match:desc,avgRating:desc,_eval\(\[\(rankingTier:=2 && paidUntil:>\d+\):2, \(rankingTier:=1 && paidUntil:>\d+\):1\]\):desc$/,
       ),
       facet_by:
         'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes,materials,tags',
@@ -447,7 +453,7 @@ describe('discoveryRepository.listFeedFallback', () => {
     // Verify the query chain is called in order
     expect(mockBuilder.from).toHaveBeenCalled();
     expect(mockBuilder.innerJoin).toHaveBeenCalledTimes(2); // designer_profile and organization
-    expect(mockBuilder.leftJoin).toHaveBeenCalledTimes(1); // cover image
+    expect(mockBuilder.leftJoin).toHaveBeenCalledTimes(2); // subscription and cover image
     expect(mockBuilder.where).toHaveBeenCalled();
     expect(mockBuilder.orderBy).toHaveBeenCalled();
     expect(mockBuilder.limit).toHaveBeenCalled();

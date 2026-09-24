@@ -106,7 +106,7 @@ describe('discovery projection source', () => {
     document = mapDesignerSearchDocument(source!);
     expect(document.portfolioTerms).toEqual([]);
   });
-  it('projects paid coverage for both collections and removes it for a locked account', async () => {
+  it('projects the effective tier for both collections across upgrade and lock', async () => {
     const designer = await makeDiscoverableDesigner();
     const project = await makeProject({ designerId: designer.id, publishedAt: new Date() });
     const until = new Date('2030-01-01T00:00:00Z');
@@ -123,19 +123,41 @@ describe('discovery projection source', () => {
     expect(mapProjectSearchDocument((await findProjectSearchSource(project.id))!).paidUntil).toBe(
       until.getTime(),
     );
+    expect(
+      mapDesignerSearchDocument((await findDesignerSearchSource(designer.id))!).rankingTier,
+    ).toBe(1);
+    expect(mapProjectSearchDocument((await findProjectSearchSource(project.id))!).rankingTier).toBe(
+      1,
+    );
+    await db
+      .update(schema.subscription)
+      .set({ planTier: 'corporate' })
+      .where(eq(schema.subscription.organizationId, designer.orgId));
+    expect(
+      mapDesignerSearchDocument((await findDesignerSearchSource(designer.id))!).rankingTier,
+    ).toBe(2);
+    expect(mapProjectSearchDocument((await findProjectSearchSource(project.id))!).rankingTier).toBe(
+      2,
+    );
     await db
       .update(schema.subscription)
       .set({
         subscriptionState: 'locked',
         lockedAt: new Date(),
         graceStartedAt: new Date(),
-        preLapseTier: 'professional_plus',
+        preLapseTier: 'corporate',
       })
       .where(eq(schema.subscription.organizationId, designer.orgId));
     expect(
       mapDesignerSearchDocument((await findDesignerSearchSource(designer.id))!).paidUntil,
     ).toBe(0);
     expect(mapProjectSearchDocument((await findProjectSearchSource(project.id))!).paidUntil).toBe(
+      0,
+    );
+    expect(
+      mapDesignerSearchDocument((await findDesignerSearchSource(designer.id))!).rankingTier,
+    ).toBe(0);
+    expect(mapProjectSearchDocument((await findProjectSearchSource(project.id))!).rankingTier).toBe(
       0,
     );
   });
