@@ -328,6 +328,8 @@ export const currentProfileResponseSchema = profileOwnerResponseSchema
   .meta({ id: 'CurrentProfile' });
 export type CurrentProfileResponse = z.infer<typeof currentProfileResponseSchema>;
 
+export const MAX_EXPERIENCE_CENTERS = 20;
+
 export const experienceCenterSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
@@ -646,7 +648,7 @@ export const updatePortfolioSchema = z
       })
       .optional(),
     showTickifBadge: z.boolean().optional(),
-    experienceCenters: z.array(experienceCenterSchema).max(20).optional(),
+    experienceCenters: z.array(experienceCenterSchema).max(MAX_EXPERIENCE_CENTERS).optional(),
   })
   .meta({ id: 'UpdatePortfolio' });
 export type UpdatePortfolioInput = z.infer<typeof updatePortfolioSchema>;
