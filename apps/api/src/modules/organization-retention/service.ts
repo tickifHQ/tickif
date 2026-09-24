@@ -43,6 +43,10 @@ function unwrapMutation(result: RetentionMutationResult): OrganizationRetentionM
       throw AppError.conflict('Organization is no longer recoverable through this action');
     case 'legal_hold':
       throw AppError.conflict('Organization is under a legal hold');
+    case 'billing_pending':
+      throw AppError.conflict(
+        'Complete or resolve the pending billing checkout before deleting this organization.',
+      );
   }
 }
 

@@ -339,7 +339,7 @@ test('paid recovery preserves the accepted downgrade across session loss and can
   context,
 }) => {
   test.setTimeout(120_000);
-  const owner = await createBillingOwner(context, 'corporate');
+  const owner = await createBillingOwner(context, 'corporate', { unverifiedPeriod: true });
   let replacementRequests = 0;
   page.on('request', (request) => {
     if (request.method() === 'POST' && request.url().endsWith('/api/billing/subscribe'))

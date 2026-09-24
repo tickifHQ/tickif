@@ -24,6 +24,7 @@ import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { reasonLabel } from './billing-reason';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
+import { ReplacementCheckout } from './replacement-checkout';
 
 interface CheckoutFlowProps {
   open: boolean;
@@ -40,6 +41,7 @@ interface CheckoutFlowProps {
 }
 
 type Step =
+  | 'replacement'
   | 'select'
   | 'loading'
   | 'review'
@@ -318,6 +320,11 @@ function ScopedCheckoutFlow({
         setRecovery(data.data.recovery);
         setStep('recovery');
         onSubscriptionChange?.();
+      } else if (preview.action === 'change_plan') {
+        const response = await api.api.billing['change-plan'].$post({ json });
+        acknowledged = true;
+        if (!response.ok) await failResponse(response);
+        setStep('replacement');
       } else if (preview.action === 'subscribe') {
         const response = await api.api.billing.subscribe.$post({ json });
         acknowledged = true;
@@ -444,8 +451,9 @@ function ScopedCheckoutFlow({
   return (
     <Dialog
       open={open}
+      modal={!providerOpen}
       onOpenChange={(value) => {
-        if (!blocking) onOpenChange(value);
+        if (!blocking && !providerOpen) onOpenChange(value);
       }}
     >
       <DialogContent
@@ -501,6 +509,13 @@ function ScopedCheckoutFlow({
                     {preview.amountCertainty === 'estimated' ? ' (estimate)' : ''}
                   </dd>
                 </dl>
+                {preview.action === 'change_plan' && (
+                  <p className="text-sm text-muted-foreground">
+                    Authorize future renewals in checkout. Any upgrade adjustment shown above is a
+                    separate payment. Downgrades retain your current plan until the renewal date.
+                    Your bank may show a refundable mandate authorization charge.
+                  </p>
+                )}
                 {preview.action === 'subscribe' && (
                   <p className="text-sm text-muted-foreground">
                     Review the final recurring amount and payment authorization in Razorpay
@@ -560,6 +575,14 @@ function ScopedCheckoutFlow({
                   {preview.confirmationAllowed ? 'Choose another plan' : 'Close'}
                 </Button>
               </div>
+            )}
+            {step === 'replacement' && (
+              <ReplacementCheckout
+                onProviderOpen={setProviderOpen}
+                onChange={() => {
+                  void syncStatus();
+                }}
+              />
             )}
             {step === 'recovery' && (
               <div className="flex flex-col gap-4" role="status">

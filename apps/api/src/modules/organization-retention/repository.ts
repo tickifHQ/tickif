@@ -12,6 +12,7 @@ export type RetentionMutationResult =
   | { outcome: 'forbidden' }
   | { outcome: 'confirmation_mismatch' }
   | { outcome: 'not_recoverable' }
+  | { outcome: 'billing_pending' }
   | { outcome: 'legal_hold' };
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -207,6 +208,28 @@ async function beginDeletion(
     return { outcome: 'not_recoverable' };
   }
 
+  // The retention lock excludes billing reservations. Wait for any in-flight
+  // provider operation before freezing its cleanup identifiers.
+  const [pendingBilling] = await tx
+    .select({ id: schema.billingOperation.operationId })
+    .from(schema.billingOperation)
+    .where(
+      and(
+        eq(schema.billingOperation.organizationId, input.organizationId),
+        inArray(schema.billingOperation.status, ['processing', 'reconciliation_pending']),
+      ),
+    )
+    .limit(1);
+  const replacements = await tx
+    .select()
+    .from(schema.billingReplacement)
+    .where(eq(schema.billingReplacement.organizationId, input.organizationId));
+  if (
+    pendingBilling ||
+    replacements.some((row) => ['creating', 'checkout', 'aborting'].includes(row.status))
+  )
+    return { outcome: 'billing_pending' };
+
   const revision = await nextRevision(tx, input.organizationId);
   const dueDates = lifecycleDueDates(input.now);
   const [retention] = await tx
@@ -229,7 +252,15 @@ async function beginDeletion(
     .from(schema.subscription)
     .where(eq(schema.subscription.organizationId, input.organizationId))
     .limit(1);
-  if (subscription?.razorpaySubscriptionId) {
+  const agreements = [
+    ...new Set(
+      [
+        subscription?.razorpaySubscriptionId,
+        ...replacements.flatMap((row) => [row.sourceSubscriptionId, row.replacementSubscriptionId]),
+      ].filter((id): id is string => !!id),
+    ),
+  ];
+  if (agreements.length) {
     const [manifest] = await tx
       .insert(schema.organizationPurgeManifest)
       .values({
@@ -248,13 +279,15 @@ async function beginDeletion(
       .returning({ id: schema.organizationPurgeManifest.id });
     await tx
       .insert(schema.organizationPurgeManifestItem)
-      .values({
-        manifestId: manifest!.id,
-        kind: 'razorpay_subscription',
-        resourceKey: subscription.razorpaySubscriptionId,
-        createdAt: input.now,
-        updatedAt: input.now,
-      })
+      .values(
+        agreements.map((resourceKey) => ({
+          manifestId: manifest!.id,
+          kind: 'razorpay_subscription' as const,
+          resourceKey,
+          createdAt: input.now,
+          updatedAt: input.now,
+        })),
+      )
       .onConflictDoNothing();
   }
   await captureAndDelist(tx, { ...input, revision });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
+import { razorpayInvoicesSchema, razorpayPaymentsSchema } from '@repo/contracts';
 
 const subscriptionSchema = z.object({
   id: z.string().startsWith('sub_e2e_'),
@@ -9,6 +10,8 @@ const subscriptionSchema = z.object({
   status: z.string(),
   current_start: z.number().nullable().default(null),
   current_end: z.number().nullable().default(null),
+  start_at: z.number().nullable().optional(),
+  expire_by: z.number().optional(),
   created_at: z.number().default(1_790_000_000),
   short_url: z.null().default(null),
   notes: z.record(z.string(), z.string()).default({}),
@@ -20,6 +23,19 @@ const subscriptionSchema = z.object({
   scheduled_plan_id: z.string().optional(),
 });
 const subscriptions = new Map<string, z.infer<typeof subscriptionSchema>>();
+const orders = new Map<
+  string,
+  {
+    id: string;
+    amount: number;
+    amount_paid: number;
+    currency: string;
+    receipt: string;
+    status: string;
+  }
+>();
+const payments = new Map<string, z.infer<typeof razorpayPaymentsSchema>['items'][number]>();
+const invoices = new Map<string, z.infer<typeof razorpayInvoicesSchema>['items'][number]>();
 const requests: Array<{ method: string; path: string; body: unknown }> = [];
 const faultSchema = z.object({
   method: z.enum(['GET', 'POST', 'PATCH']),
@@ -50,6 +66,34 @@ export async function handleBillingProvider(
   const reply = (body: unknown, status = 200) =>
     response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
   try {
+    if (url.pathname === '/billing-fixture/capture' && request.method === 'POST') {
+      const input = z.object({ orderId: z.string() }).parse(await readBody(request));
+      const order = orders.get(input.orderId);
+      if (!order) throw new Error('Unknown order');
+      const payment = {
+        id: `pay_e2e_${randomUUID()}`,
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        status: 'captured',
+        amount_refunded: 0,
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      payments.set(payment.id, payment);
+      order.status = 'paid';
+      order.amount_paid = order.amount;
+      reply(payment);
+      return;
+    }
+    if (url.pathname === '/billing-fixture/invoices' && request.method === 'POST') {
+      const input = z
+        .object({ invoices: razorpayInvoicesSchema, payments: razorpayPaymentsSchema })
+        .parse(await readBody(request));
+      for (const invoice of input.invoices.items) invoices.set(invoice.id, invoice);
+      for (const payment of input.payments.items) payments.set(payment.id, payment);
+      reply({ saved: true });
+      return;
+    }
     if (url.pathname === '/billing-fixture/faults' && request.method === 'POST') {
       const fault = faultSchema.parse(await readBody(request));
       const id = randomUUID();
@@ -90,6 +134,41 @@ export async function handleBillingProvider(
       reply({ error: { description: 'Synthetic one-shot provider outage' } }, 503);
       return;
     }
+    if (path === '/orders' && request.method === 'POST') {
+      const input = z
+        .object({ amount: z.number(), currency: z.string(), receipt: z.string() })
+        .parse(body);
+      const order = {
+        ...input,
+        id: `order_e2e_${randomUUID()}`,
+        amount_paid: 0,
+        status: 'created',
+      };
+      orders.set(order.id, order);
+      reply(order);
+      return;
+    }
+    if (path.startsWith('/orders/')) {
+      const id = path.split('/')[2]!;
+      reply(
+        path.endsWith('/payments')
+          ? { items: [...payments.values()].filter((p) => p.order_id === id) }
+          : orders.get(id),
+      );
+      return;
+    }
+    if (path === '/invoices') {
+      reply({
+        items: [...invoices.values()].filter(
+          (i) => i.subscription_id === url.searchParams.get('subscription_id'),
+        ),
+      });
+      return;
+    }
+    if (path.startsWith('/payments/')) {
+      reply(payments.get(path.split('/')[2]!));
+      return;
+    }
     if (path.startsWith('/plans/')) {
       const id = path.slice('/plans/'.length);
       if (!['plan_e2e_professional', 'plan_e2e_corporate'].includes(id)) {
@@ -116,6 +195,8 @@ export async function handleBillingProvider(
         .object({
           plan_id: subscriptionSchema.shape.plan_id,
           notes: z.record(z.string(), z.string()),
+          start_at: z.number().optional(),
+          expire_by: z.number().optional(),
         })
         .parse(body);
       const subscription = subscriptionSchema.parse({
@@ -139,8 +220,10 @@ export async function handleBillingProvider(
       return;
     }
     if (match?.[2] === '/cancel' && request.method === 'POST') {
-      // This is a request parameter, not a documented subscription response field.
+      const input = z.object({ cancel_at_cycle_end: z.boolean() }).parse(body);
+      // Cancellation scheduling is not a documented subscription response field.
       delete subscription.cancel_at_cycle_end;
+      if (!input.cancel_at_cycle_end) subscription.status = 'cancelled';
     } else if (request.method === 'PATCH') {
       const update = z
         .object({

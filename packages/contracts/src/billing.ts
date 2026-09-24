@@ -57,6 +57,8 @@ export type SubscriptionState = z.infer<typeof subscriptionStateSchema>;
  * `event` field. Only subscription-related events are handled by E-117.
  */
 export const RAZORPAY_EVENT = {
+  PAYMENT_CAPTURED: 'payment.captured',
+  SUBSCRIPTION_AUTHENTICATED: 'subscription.authenticated',
   SUBSCRIPTION_UPDATED: 'subscription.updated',
   SUBSCRIPTION_ACTIVATED: 'subscription.activated',
   SUBSCRIPTION_CHARGED: 'subscription.charged',
@@ -67,6 +69,8 @@ export const RAZORPAY_EVENT = {
 } as const;
 
 export const RAZORPAY_EVENT_VALUES = [
+  RAZORPAY_EVENT.PAYMENT_CAPTURED,
+  RAZORPAY_EVENT.SUBSCRIPTION_AUTHENTICATED,
   RAZORPAY_EVENT.SUBSCRIPTION_UPDATED,
   RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
   RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,

@@ -242,6 +242,9 @@ importers:
       '@repo/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@repo/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@repo/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -466,6 +469,9 @@ importers:
       '@repo/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@repo/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@repo/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -654,6 +660,40 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.22.4
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@26.6.1)(@vitest/coverage-v8@4.1.11)(happy-dom@20.11.6)(msw@2.14.6(@types/node@26.6.1)(typescript@6.0.3))(vite@8.0.16(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/billing:
+    dependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../config
+      '@repo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@repo/db':
+        specifier: workspace:*
+        version: link:../db
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@repo/vitest-config':
+        specifier: workspace:*
+        version: link:../vitest-config
+      '@types/node':
+        specifier: 26.6.1
+        version: 26.6.1
+      eslint:
+        specifier: ^9.18.0
+        version: 9.39.4(jiti@2.7.0)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

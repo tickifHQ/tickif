@@ -1,5 +1,9 @@
 export function reasonLabel(reason: string | null) {
   switch (reason) {
+    case 'replacement_pending':
+      return 'Your plan change is in progress. Resume its checkout or check the scheduled change.';
+    case 'billing_period_unverified':
+      return 'The paid billing period could not be verified. Your current access is preserved.';
     case 'source_subscription_terminated':
       return 'Your previous subscription has ended.';
     case 'another_plan_activated':

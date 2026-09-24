@@ -226,6 +226,18 @@ export function isDomesticCardPlanChangeRejection(
   );
 }
 
+/** The documented UPI update error is a definite rejection, not a timeout.
+ * Keep this classification specific to plan updates and the exact 400 signature.
+ */
+function isUpiPlanChangeRejection(providerError: Partial<RazorpayError>, status: number): boolean {
+  return (
+    status === 400 &&
+    providerError.error?.code === 'BAD_REQUEST_ERROR' &&
+    providerError.error.description?.toLowerCase().trim().replace(/\.$/, '') ===
+      'subscriptions cannot be updated when payment mode is upi'
+  );
+}
+
 // ─── API Operations ──────────────────────────────────────────────────────────
 
 /** A missing or ambiguous configured mapping must never grant a paid tier. */
@@ -322,11 +334,12 @@ export async function updateSubscription(params: {
         schedule_change_at: params.scheduleChangeAt ?? 'cycle_end',
       }),
     },
-    // E-289: reclassify ONLY the domestic-card plan-change rejection to an
-    // actionable 422. This classifier is scoped to updateSubscription; every
-    // other operation keeps the default 502 mapping unchanged.
+    // E-289/E-344: only documented domestic-card and UPI plan-change
+    // rejections become actionable 422s. Other operations and unrecognized
+    // failures keep the default 502 mapping unchanged.
     (providerError, status) =>
-      isDomesticCardPlanChangeRejection(providerError, status)
+      isDomesticCardPlanChangeRejection(providerError, status) ||
+      isUpiPlanChangeRejection(providerError, status)
         ? AppError.paymentModeChangeUnsupported(
             'This subscription was set up with a payment method that does not support ' +
               'changing plans directly. Cancel the current plan and subscribe to the new ' +

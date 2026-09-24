@@ -931,8 +931,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
 
   // ── E-289: domestic-card Professional+ → Corporate upgrade ─────────────────
 
-  it('changePlan on a domestic-card mandate surfaces payment_mode_change_unsupported and preserves Professional+', async () => {
-    const { AppError } = await import('../../../src/lib/errors.js');
+  it('changePlan cannot bypass reviewed eligibility and preserves Professional+', async () => {
     const { user, org } = await makeOrgWithOwner();
 
     // Active Professional+ subscription authorized with a domestic card.
@@ -944,20 +943,12 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
       razorpayStatus: 'active',
     });
 
-    // Razorpay rejects the in-place plan change; the real client classifies the
-    // domestic-card 400 to this actionable error, so the mock throws it directly.
-    vi.mocked(mockUpdateSubscription).mockRejectedValue(
-      AppError.paymentModeChangeUnsupported(
-        'This subscription was set up with a payment method that does not support changing plans directly.',
-      ),
-    );
-
     await expect(
       subscribeService.changePlan(
         { userId: user.id, activeOrgId: org.id },
         { targetTier: 'corporate' },
       ),
-    ).rejects.toMatchObject({ status: 422, code: 'payment_mode_change_unsupported' });
+    ).rejects.toMatchObject({ status: 409, code: 'billing_action_unavailable' });
 
     // Professional+ is fully preserved — the failed upgrade must not partially
     // mutate any local subscription state (transaction rolled back).
@@ -969,7 +960,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     expect(sub!.razorpaySubscriptionId).toBe('sub_domestic_card');
     expect(sub!.razorpayStatus).toBe('active');
     expect(sub!.cancelAtPeriodEnd).toBe(false);
-    expect(vi.mocked(mockUpdateSubscription)).toHaveBeenCalledOnce();
+    expect(vi.mocked(mockUpdateSubscription)).not.toHaveBeenCalled();
   });
 });
 

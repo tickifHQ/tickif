@@ -1,4 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import {
+  replacementRepository,
+  reconcileReplacement,
+  refundAbandonedReplacement,
+  auditSupersededAgreement,
+} from '@repo/billing';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
 import {
@@ -82,9 +88,37 @@ export async function processWebhookEvent(
   event: RazorpayEvent,
   payload: Record<string, unknown>,
 ): Promise<WebhookResult> {
+  if (event === RAZORPAY_EVENT.PAYMENT_CAPTURED) {
+    const orderId = (payload as { payload?: { payment?: { entity?: { order_id?: unknown } } } })
+      .payload?.payment?.entity?.order_id;
+    const replacement =
+      typeof orderId === 'string' ? await replacementRepository.byOrder(orderId) : undefined;
+    if (replacement) {
+      await refundAbandonedReplacement(replacement);
+      await reconcileReplacement(replacement.organizationId);
+      await invalidateEntitlementCache(replacement.organizationId);
+      return { outcome: 'processed' };
+    }
+  }
   const razorpaySubscriptionId = await resolveSubscriptionId(event, payload);
   if (!razorpaySubscriptionId) {
     return { outcome: 'ignored', reason: 'No subscription ID in payload' };
+  }
+
+  const replacement = await replacementRepository.byProvider(razorpaySubscriptionId);
+  if (replacement && replacement.status !== 'failed') {
+    if (replacement.status !== 'completed') {
+      await reconcileReplacement(replacement.organizationId);
+      await invalidateEntitlementCache(replacement.organizationId);
+      return { outcome: 'processed' };
+    }
+    if (
+      replacement.sourceSubscriptionId === razorpaySubscriptionId ||
+      replacement.targetTier === 'hobby'
+    ) {
+      await auditSupersededAgreement(replacement);
+      return { outcome: 'ignored', reason: 'Superseded payment agreement' };
+    }
   }
 
   const [subscription] = await db

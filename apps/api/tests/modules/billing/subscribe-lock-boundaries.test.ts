@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@repo/billing', () => ({
+  replacementRepository: { current: vi.fn().mockResolvedValue(undefined) },
+}));
 
 const mocks = vi.hoisted(() => ({
   acquireBillingRefreshLease: vi.fn(),

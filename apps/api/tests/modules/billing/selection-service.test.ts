@@ -1,4 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import type * as Billing from '@repo/billing';
+vi.mock('@repo/billing', async (original) => ({
+  ...(await original<typeof Billing>()),
+  replacementRepository: { current: vi.fn().mockResolvedValue(undefined) },
+}));
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
   fetch: vi.fn(),
@@ -53,8 +58,8 @@ const remote = {
   id: 'rzp1',
   status: 'active',
   plan_id: 'plan_pro',
-  current_end: 2000000000,
-  current_start: 1997408000,
+  current_end: Date.parse('2026-10-01T00:00:00Z') / 1000,
+  current_start: Date.parse('2026-09-01T00:00:00Z') / 1000,
   quantity: 1,
 };
 beforeEach(() => {
@@ -106,6 +111,17 @@ describe('billing selection and signed consent', () => {
     expect(context.pendingOperation?.operationId).toBe(operationId);
     expect(mocks.updateOperation).not.toHaveBeenCalled();
   });
+  it('offers immediate upgrades using replacement checkout for UPI', async () => {
+    mocks.find.mockResolvedValue(active);
+    mocks.fetch.mockResolvedValue({ ...remote, payment_method: 'upi' });
+    expect(
+      await billingSelectionService.preview(caller, { targetTier: 'corporate' }),
+    ).toMatchObject({
+      action: 'change_plan',
+      timing: 'now',
+      reason: null,
+    });
+  });
   it('offers direct Corporate checkout without granting the target entitlement', async () => {
     const context = await billingSelectionService.context(caller);
     expect(context.currentTier).toBe('hobby');
@@ -145,17 +161,17 @@ describe('billing selection and signed consent', () => {
     expect(context.unfinishedCheckout?.targetTier).toBeNull();
     expect(context.actions.every((x) => x.reason === 'unknown_checkout_plan')).toBe(true);
   });
-  it('does not invent immediate upgrade monetary authorization', async () => {
+  it('quotes an exact adjustment for a separately authorized immediate upgrade', async () => {
     mocks.find.mockResolvedValue(active);
     mocks.fetch.mockResolvedValue(remote);
     expect(
       await billingSelectionService.preview(caller, { targetTier: 'corporate' }),
     ).toMatchObject({
-      action: 'recover',
-      timing: 'after_expiry',
-      reason: 'amount_authorization_unavailable',
-      adjustmentAmount: 0,
-      nextEligibleAction: 'subscribe',
+      action: 'change_plan',
+      timing: 'now',
+      reason: null,
+      adjustmentAmount: 133333,
+      nextEligibleAction: null,
     });
   });
   it('rejects forged, expired, cross-organization and changed-provider previews', async () => {

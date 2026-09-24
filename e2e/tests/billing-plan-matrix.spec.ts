@@ -4,6 +4,7 @@ import { billingMutationRequestSchema, type PlanTier } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
 import {
   createBillingOwner,
+  completeReplacement,
   deliverSubscriptionEvent,
   providerMutationCount,
 } from '../lib/billing';
@@ -67,7 +68,9 @@ for (const entry of entryPoints) {
           ? 'checkout activation'
           : target.tier === 'hobby'
             ? 'cycle-end cancellation'
-            : 'explicit deferred recovery';
+            : current.tier === 'professional_plus'
+              ? 'immediate paid upgrade'
+              : 'scheduled paid downgrade';
       test(`${entry.label}: ${current.label} -> ${target.label}: ${semantics}`, async ({
         page,
         context,
@@ -150,99 +153,42 @@ for (const entry of entryPoints) {
               throw new Error('Same-tier branch should already have returned');
             await confirmProviderActivation(context, owner, target.tier);
           } else {
-            const recovery = target.tier !== 'hobby';
-            const cta = recovery ? 'Cancel & save plan' : 'Schedule cancellation';
-            if (recovery) {
+            if (target.tier !== 'hobby') {
+              await page.getByRole('button', { name: 'Confirm plan change', exact: true }).click();
               await expect(
-                page.getByRole('button', { name: 'Confirm plan change', exact: true }),
-              ).not.toBeVisible();
-              await expect(
-                page.getByText(/No replacement subscription is purchased now/),
+                page.getByRole('button', { name: 'Continue plan change', exact: true }),
               ).toBeVisible();
-            }
-            await page.getByRole('button', { name: cta, exact: true }).click();
-            await expect(
-              page.getByRole('heading', {
-                name: recovery ? 'Plan saved' : 'Plan change scheduled',
-                exact: true,
-              }),
-            ).toBeVisible();
-            expect(mutations).toEqual([
-              {
-                path: recovery ? '/api/billing/recovery' : '/api/billing/cancel',
-                targetTier: target.tier,
-              },
-            ]);
-            const scheduled = await owner.subscription();
-            expect(scheduled?.planTier).toBe(current.tier);
-            expect(scheduled?.cancelAtPeriodEnd).toBe(true);
-            expect(scheduled?.razorpaySubscriptionId).toBe(owner.provider.id);
-            expect(
-              await providerMutationCount(context, `/subscriptions/${owner.provider.id}/cancel`),
-            ).toBe(1);
-            expect(
-              await providerMutationCount(context, `/subscriptions/${owner.provider.id}`),
-            ).toBe(0);
-            if (recovery) {
-              const [intent] = await db
-                .select()
-                .from(schema.billingRecovery)
-                .where(eq(schema.billingRecovery.organizationId, owner.org.id));
-              expect(intent).toMatchObject({
-                targetTier: target.tier,
-                status: 'waiting_for_expiry',
-                sourceSubscriptionId: owner.provider.id,
-              });
-            }
-            // No access change or replacement occurs merely because cancellation was accepted.
-            await page.reload();
-            await expect(
-              page
-                .getByRole('region', { name: 'Choose your plan', exact: true })
-                .locator('[data-slot="card"]')
-                .filter({ has: page.getByRole('heading', { name: current.label, exact: true }) })
-                .getByRole('button', {
-                  name: `${current.label} is your current plan`,
-                  exact: true,
-                }),
-            ).toBeDisabled();
-            expect(mutations).toHaveLength(1);
-            const now = Math.floor(Date.now() / 1000);
-            await deliverSubscriptionEvent(context, 'subscription.cancelled', {
-              ...owner.provider,
-              entity: 'subscription',
-              status: 'cancelled',
-              current_end: now - 1,
-              ended_at: now,
-              cancel_at_cycle_end: true,
-            });
-            await expect.poll(async () => (await owner.subscription())?.planTier).toBe('hobby');
-            await expect(
-              page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
-            ).toBeVisible({ timeout: 45_000 });
-            expect(mutations).toHaveLength(1);
-            if (recovery) {
+              expect((await owner.subscription())?.planTier).toBe(current.tier);
+              await completeReplacement(context, owner, target.tier === 'professional_plus');
+              await page.getByRole('button', { name: 'Check status', exact: true }).click();
+              expect(mutations).toEqual([
+                { path: '/api/billing/change-plan', targetTier: target.tier },
+              ]);
+            } else {
               await page
-                .getByRole('button', { name: `Review ${target.label}`, exact: true })
+                .getByRole('button', { name: 'Schedule cancellation', exact: true })
                 .click();
-              expect(mutations).toHaveLength(1);
-              await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
               await expect(
-                page.getByRole('button', { name: 'Continue checkout', exact: true }),
+                page.getByRole('heading', { name: 'Plan change scheduled', exact: true }),
               ).toBeVisible();
-              expect(mutations[1]).toEqual({
-                path: '/api/billing/subscribe',
-                targetTier: target.tier,
+              expect((await owner.subscription())?.planTier).toBe(current.tier);
+              const now = Math.floor(Date.now() / 1000);
+              await deliverSubscriptionEvent(context, 'subscription.cancelled', {
+                ...owner.provider,
+                status: 'cancelled',
+                current_end: now - 1,
+                ended_at: now,
+                cancel_at_cycle_end: true,
               });
-              const replacementId = await confirmProviderActivation(context, owner, target.tier);
-              expect(replacementId).not.toBe(owner.provider.id);
+              await expect.poll(async () => (await owner.subscription())?.planTier).toBe('hobby');
+              await page.reload();
             }
           }
           if (target.tier !== 'hobby') {
             await expect(
               page.getByRole('heading', { name: 'Plan activated', exact: true }),
             ).toBeVisible({ timeout: 15_000 });
-            expect(mutations).toHaveLength(current.tier === 'hobby' ? 1 : 2);
+            expect(mutations).toHaveLength(1);
             await page.getByRole('button', { name: 'Done', exact: true }).click();
           }
           await expect(

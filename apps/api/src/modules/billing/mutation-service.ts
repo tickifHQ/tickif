@@ -11,6 +11,8 @@ import {
   type BillingCaller,
 } from './selection-service.js';
 import { AppError } from '../../lib/errors.js';
+import { startReplacement } from './replacement-service.js';
+import { replacementRepository, cancelReplacementRenewal } from '@repo/billing';
 
 export const billingMutationService = {
   async execute(
@@ -20,6 +22,19 @@ export const billingMutationService = {
   ) {
     await assertBillingAccess(caller);
     const org = caller.activeOrgId!;
+    const replacement = await replacementRepository.current(org);
+    if (replacement) {
+      if (kind === 'change_plan' && replacement.targetTier === params.targetTier)
+        return {
+          operationId: replacement.id,
+          outcome: 'processing',
+          targetTier: replacement.targetTier,
+          effectiveAt: replacement.periodEnd.toISOString(),
+          razorpaySubscriptionId: replacement.replacementSubscriptionId ?? '',
+        };
+      if (!(kind === 'cancel' && replacement.status === 'confirmed'))
+        throw AppError.conflict('Complete the pending plan change before choosing another plan.');
+    }
     const reserved = await subscribeRepository.withOrganizationLock(org, async (repository) => {
       const existing = await repository.findOperation(org, params.operationId);
       if (existing) {
@@ -75,20 +90,29 @@ export const billingMutationService = {
         kind === 'subscribe'
           ? await subscribeService.createSubscription(caller, params)
           : kind === 'cancel'
-            ? await subscribeService.cancelSubscription(caller, params)
-            : await subscribeService.changePlan(caller, params);
+            ? replacement
+              ? await cancelReplacementRenewal(org)
+              : await subscribeService.cancelSubscription(caller, params)
+            : await startReplacement(caller, params.operationId, reserved.preview!);
+      if (!result) throw AppError.forbidden('Organization billing is unavailable.');
       const outcome: BillingMutationOutcome = {
         operationId: params.operationId,
-        outcome: kind === 'subscribe' ? 'processing' : 'scheduled',
+        outcome: kind === 'cancel' ? 'scheduled' : 'processing',
         targetTier: params.targetTier,
-        effectiveAt: reserved.preview!.effectiveAt,
+        effectiveAt:
+          kind === 'cancel' &&
+          'currentPeriodEnd' in result &&
+          typeof result.currentPeriodEnd === 'string'
+            ? result.currentPeriodEnd
+            : reserved.preview!.effectiveAt,
         razorpaySubscriptionId: result.razorpaySubscriptionId,
       };
       const response = { ...result, ...outcome };
       // Checkout creation is complete; activation remains provider-authoritative.
-      // Mark operation scheduled to release the reservation, keeping response processing.
+      // A paid change retains its reservation until captured payment and
+      // cancellation of the previous renewal are verified.
       await subscribeRepository.updateOperation(org, params.operationId, {
-        status: 'scheduled',
+        status: kind === 'change_plan' ? 'processing' : 'scheduled',
         result: response,
       });
       return response;
