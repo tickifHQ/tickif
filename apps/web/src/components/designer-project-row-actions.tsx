@@ -27,8 +27,10 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import {
   Archive,
+  Check,
   Copy,
   ExternalLink,
+  Link2,
   MoreVertical,
   Pencil,
   RotateCcw,
@@ -36,6 +38,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { env } from '@/env';
 
 function canWithdrawProject(status: ProjectStatus) {
   return status === 'submitted';
@@ -61,6 +64,7 @@ export function DesignerProjectRowActions({
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Radix traps focus in the menu, so opening a dialog from a menu item has to
   // wait until the menu has finished closing. Holds which dialog to open next.
@@ -72,6 +76,16 @@ export function DesignerProjectRowActions({
   const restoreEnabled = canArchive && projectStatus === 'archived' && !isRetentionManaged;
   const deleteEnabled = canDelete && !isTerminal && !isRetentionManaged;
   const withdrawEnabled = canWithdrawProject(projectStatus);
+  // Only a published project has a live public page. Its relative path is what
+  // the public site links to elsewhere (showcase card, image detail, etc.).
+  const isPublished = projectStatus === 'published';
+  const duplicateEnabled = !isTerminal && projectStatus !== 'archived';
+  const publicPath = `/projects/${projectId}`;
+  // Copy Link shares an absolute URL, so build it from the public web origin.
+  const publicUrl = `${env.NEXT_PUBLIC_WEB_URL.replace(/\/$/, '')}${publicPath}`;
+  // Only separate nonempty groups so archived rows have no leading divider.
+  const hasQuickActions = isPublished || duplicateEnabled;
+  const hasStateActions = withdrawEnabled || archiveEnabled || restoreEnabled || deleteEnabled;
 
   function handleMenuOpenChange(open: boolean) {
     setMenuOpen(open);
@@ -83,6 +97,18 @@ export function DesignerProjectRowActions({
       if (pending === 'delete') setDeleteOpen(true);
       else setWithdrawOpen(true);
     }, 0);
+  }
+
+  function copyPublicLink() {
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(publicUrl);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      } catch {
+        setCopied(false);
+      }
+    })();
   }
 
   function duplicateProject() {
@@ -179,30 +205,17 @@ export function DesignerProjectRowActions({
   return (
     <div className="flex items-center justify-end gap-1">
       {!isTerminal && projectStatus !== 'archived' ? (
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label={`Duplicate ${projectTitle}`}
-            disabled={isPending}
-            onClick={duplicateProject}
-          >
-            <Copy className="size-4" />
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label={`Edit ${projectTitle}`}
-          >
-            <Link href={`/designer/projects/${projectId}/edit`}>
-              <Pencil className="size-4" />
-            </Link>
-          </Button>
-        </>
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label={`Edit ${projectTitle}`}
+        >
+          <Link href={`/designer/projects/${projectId}/edit`}>
+            <Pencil className="size-4" />
+          </Link>
+        </Button>
       ) : null}
 
       <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
@@ -218,47 +231,61 @@ export function DesignerProjectRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem disabled>
-            <ExternalLink className="size-4" />
-            View public
-          </DropdownMenuItem>
+          {isPublished ? (
+            <DropdownMenuItem asChild>
+              <Link href={publicPath}>
+                <ExternalLink className="size-4" />
+                View project
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+          {isPublished ? (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                // Keep the menu open long enough to flip to the "Copied" state.
+                event.preventDefault();
+                copyPublicLink();
+              }}
+            >
+              {copied ? <Check className="size-4" /> : <Link2 className="size-4" />}
+              {copied ? 'Copied' : 'Copy link'}
+            </DropdownMenuItem>
+          ) : null}
+          {duplicateEnabled ? (
+            <DropdownMenuItem disabled={isPending} onSelect={duplicateProject}>
+              <Copy className="size-4" />
+              Duplicate project
+            </DropdownMenuItem>
+          ) : null}
+          {hasQuickActions && hasStateActions ? <DropdownMenuSeparator /> : null}
           {withdrawEnabled ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  pendingDialogRef.current = 'withdraw';
-                }}
-              >
-                <Undo2 className="size-4" />
-                Withdraw submission
-              </DropdownMenuItem>
-            </>
+            <DropdownMenuItem
+              onSelect={() => {
+                pendingDialogRef.current = 'withdraw';
+              }}
+            >
+              <Undo2 className="size-4" />
+              Withdraw submission
+            </DropdownMenuItem>
           ) : null}
           {archiveEnabled || restoreEnabled ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => changeArchiveState(restoreEnabled ? 'restore' : 'archive')}
-              >
-                {restoreEnabled ? <RotateCcw className="size-4" /> : <Archive className="size-4" />}
-                {restoreEnabled ? 'Restore to drafts' : 'Archive project'}
-              </DropdownMenuItem>
-            </>
+            <DropdownMenuItem
+              onSelect={() => changeArchiveState(restoreEnabled ? 'restore' : 'archive')}
+            >
+              {restoreEnabled ? <RotateCcw className="size-4" /> : <Archive className="size-4" />}
+              {restoreEnabled ? 'Restore to drafts' : 'Archive project'}
+            </DropdownMenuItem>
           ) : null}
           {deleteEnabled ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => {
-                  pendingDialogRef.current = 'delete';
-                }}
-              >
-                <Trash2 className="size-4" />
-                Delete project
-              </DropdownMenuItem>
-            </>
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => {
+                pendingDialogRef.current = 'delete';
+              }}
+            >
+              <Trash2 className="size-4" />
+              Delete project
+            </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>

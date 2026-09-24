@@ -13,7 +13,7 @@ case "$1 $2" in
   'info --format') [[ "$3" == *ControlAvailable* ]] && echo true || echo node ;;
   'node ls') echo node ;;
   'node inspect') echo true ;;
-  'secret inspect') [[ "$3" != tickif_staging_razorpay_webhook_secret_v1 ]] ;;
+  'secret inspect') [[ "${ALLOW_SECRETS:-false}" == true || "$3" != tickif_staging_razorpay_webhook_secret_v1 ]] ;;
   *) echo "Unexpected Docker command before preflight completed: $*" >&2; exit 1 ;;
 esac
 MOCK
@@ -33,3 +33,21 @@ if grep -q 'service scale' "$DOCKER_CALLS"; then
 fi
 grep -q 'secret inspect tickif_staging_razorpay_webhook_secret_v1' "$DOCKER_CALLS"
 echo 'Provider-secret preflight fails before traffic closes.'
+
+# A storage or pull failure must occur before the cleanup trap can close traffic.
+cat >"$fixture/python3" <<'MOCK'
+#!/usr/bin/env bash
+echo 'Storage preparation failed' >&2
+exit 1
+MOCK
+chmod +x "$fixture/python3"
+export ALLOW_SECRETS=true
+if PATH="$fixture:$PATH" bash infra/staging/scripts/deploy.sh "$fixture/env"; then
+  echo 'Deploy unexpectedly accepted failed storage preparation' >&2
+  exit 1
+fi
+if grep -q 'service scale' "$DOCKER_CALLS"; then
+  echo 'Deploy closed traffic after storage preparation failed' >&2
+  exit 1
+fi
+echo 'Storage preflight fails before traffic closes.'
