@@ -1,4 +1,5 @@
 import type { DesignerSearchDocument, ProjectSearchDocument } from '@repo/search';
+import { rankingTier, type PlanTier, type SubscriptionState } from '@repo/contracts';
 
 export type SearchImageDerivative = {
   variant: string;
@@ -32,6 +33,8 @@ export type ProjectSearchSource = {
     displayName: string;
     avgRating: string;
     paidUntil?: number;
+    planTier: PlanTier | null;
+    subscriptionState: SubscriptionState | null;
     reviewCount: number;
   };
   cover: {
@@ -65,6 +68,8 @@ export type DesignerSearchSource = {
     projectCount: number;
     avgRating: string;
     paidUntil?: number;
+    planTier: PlanTier | null;
+    subscriptionState: SubscriptionState | null;
     reviewCount: number;
     logoImageId: string | null;
     updatedAt: Date;
@@ -148,6 +153,10 @@ export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSe
     featuredAt: source.project.featuredAt?.getTime() ?? null,
     avgRating: Number(source.designer.avgRating),
     paidUntil: Number(source.designer.paidUntil ?? 0),
+    rankingTier: rankingTier(
+      source.designer.planTier ?? 'hobby',
+      source.designer.subscriptionState ?? 'active',
+    ),
     reviewCount: source.designer.reviewCount,
   };
 }
@@ -170,6 +179,10 @@ export function mapDesignerSearchDocument(source: DesignerSearchSource): Designe
     projectCount: source.profile.projectCount,
     avgRating: Number(source.profile.avgRating),
     paidUntil: Number(source.profile.paidUntil ?? 0),
+    rankingTier: rankingTier(
+      source.profile.planTier ?? 'hobby',
+      source.profile.subscriptionState ?? 'active',
+    ),
     portfolioTerms: uniqueSorted(source.portfolioTerms ?? []),
     reviewCount: source.profile.reviewCount,
     isKycVerified: source.profile.isKycVerified,

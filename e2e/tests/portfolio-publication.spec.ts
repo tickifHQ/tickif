@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
@@ -35,6 +36,7 @@ type SeedOptions = {
   logo: boolean;
   bio: boolean;
   tagline: boolean;
+  heroCover: boolean;
 };
 
 test.describe('E-278 portfolio publication readiness', () => {
@@ -96,6 +98,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       profileId: profile.id,
       portfolioSlug,
       tagline: options.tagline ? `${label} designs with care` : null,
+      heroImageId: options.heroCover ? `originals/portfolio-covers/${profile.id}/cover.jpg` : null,
       publicLinkEnabled: options.publicLinkEnabled,
     });
 
@@ -114,6 +117,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         logo: false,
         bio: false,
         tagline: false,
+        heroCover: false,
       });
       await signInPhone(context, seed.user.phoneNumber);
       await selectOrganization(context, seed.organization.id);
@@ -154,6 +158,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         logo: true,
         bio: true,
         tagline: true,
+        heroCover: true,
       });
       await signInPhone(context, seed.user.phoneNumber);
       await selectOrganization(context, seed.organization.id);
@@ -191,6 +196,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         logo: true,
         bio: true,
         tagline: true,
+        heroCover: true,
       });
       const canonicalUrl = new URL(`/d/${seed.portfolioSlug}`, webUrl).toString();
       await signInPhone(context, seed.user.phoneNumber);
@@ -225,6 +231,66 @@ test.describe('E-278 portfolio publication readiness', () => {
       // The public page itself renders (not a 404).
       const publicPage = await page.goto(canonicalUrl);
       expect(publicPage?.status()).toBe(200);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('uploading the final required cover publishes the portfolio and renders responsively', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ baseURL: webUrl });
+    try {
+      const seed = await seedDesigner('cover-upload', {
+        status: 'draft',
+        publicLinkEnabled: true,
+        logo: true,
+        bio: true,
+        tagline: true,
+        heroCover: false,
+      });
+      await signInPhone(context, seed.user.phoneNumber);
+      await selectOrganization(context, seed.organization.id);
+      const page = await context.newPage();
+
+      await page.goto('/designer/portfolio');
+      await expect(page.getByRole('button', { name: 'Upload portfolio cover' })).toBeVisible();
+      await page
+        .getByLabel('Portfolio cover file')
+        .setInputFiles(
+          resolve(
+            import.meta.dirname,
+            '../../apps/web/public/images/home-hero/neutral-living-room.jpg',
+          ),
+        );
+      await expect(page.getByRole('button', { name: 'Replace portfolio cover' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Open full' })).toBeVisible();
+
+      const publicUrl = `/d/${seed.portfolioSlug}`;
+      await page.goto(publicUrl);
+      await expect(page.getByRole('region', { name: 'Portfolio hero' })).toBeVisible();
+      const portfolioCover = page.getByAltText(`${seed.organization.name} portfolio cover`);
+      await expect(portfolioCover).toBeVisible();
+      await expect(portfolioCover).toHaveAttribute('loading', 'eager');
+      await expect(page.getByText('Years experience')).toBeVisible();
+      await expect(page.getByText('Projects', { exact: true })).toBeVisible();
+      await expect(page.getByText('Cities present')).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Book consultation', exact: true }).first(),
+      ).toBeVisible();
+
+      const ownEnquire = page.getByRole('button', { name: 'Enquire', exact: true }).first();
+      await expect(ownEnquire).toHaveAttribute('aria-disabled', 'true');
+      await ownEnquire.hover();
+      await expect(page.getByRole('tooltip')).toHaveText(
+        "You can't enquire about your own studio.",
+      );
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.getByRole('region', { name: 'Portfolio hero' })).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
     } finally {
       await context.close();
     }

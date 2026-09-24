@@ -45,8 +45,16 @@ function designerInitials(displayName: string): string {
     .join('');
 }
 
+function projectCityLabel(specifications: PublicProjectDetailResponse['specifications']): string {
+  // A project uses either a taxonomy city (with a label) or a free-text custom
+  // city (`cityName`); the two are mutually exclusive on the backend. Prefer the
+  // taxonomy label, fall back to the custom name, and preserve the previous
+  // empty behaviour when neither is present.
+  return specifications.city?.label ?? specifications.cityName ?? '';
+}
+
 function projectSpecifications(project: PublicProjectDetailResponse): Specification[] {
-  const place = [project.specifications.locality?.label, project.specifications.city?.label]
+  const place = [project.specifications.locality?.label, projectCityLabel(project.specifications)]
     .filter(Boolean)
     .join(', ');
   const completed = formatCompletedMonth(project.completedMonth);
@@ -237,7 +245,7 @@ export function PublicProjectOverview({
   canonicalUrl: string;
 }) {
   const specifications = projectSpecifications(project);
-  const location = [project.specifications.locality?.label, project.specifications.city?.label]
+  const location = [project.specifications.locality?.label, projectCityLabel(project.specifications)]
     .filter(Boolean)
     .join(', ');
   const hasRecommendations = Object.values(project.recommendations).some(

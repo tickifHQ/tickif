@@ -26,11 +26,13 @@ export function BookingCta({
   designerName,
   referredProjectId,
   loginHref,
+  className,
 }: {
   designerProfileId: string;
   designerName: string;
   referredProjectId?: string;
   loginHref: string;
+  className?: string;
 }) {
   const { data: session, isPending } = authClient.useSession();
   // The browser may already have a session while SSR reports it pending.
@@ -46,6 +48,7 @@ export function BookingCta({
     <>
       <Button
         variant="outline"
+        className={className}
         disabled={!hydrated || isPending}
         onClick={() => (session ? setOpen(true) : setLoginOpen(true))}
       >

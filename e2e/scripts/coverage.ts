@@ -200,6 +200,10 @@ const requiredEntries: [file: string, title: string][] = [
     'a published portfolio exposes the canonical URL everywhere and resolves publicly (state F + regression G)',
   ],
   [
+    'portfolio-publication.spec.ts',
+    'uploading the final required cover publishes the portfolio and renders responsively',
+  ],
+  [
     'visitor-role-boundaries.spec.ts',
     'visitor settings and designer role boundaries are enforced in the UI and API',
   ],

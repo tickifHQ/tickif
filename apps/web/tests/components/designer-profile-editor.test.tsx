@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   CurrentProfileResponse,
@@ -17,6 +18,35 @@ const mock = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: mock.refresh }),
+}));
+
+vi.mock('next/image', () => ({
+  default: ({
+    fill: _fill,
+    unoptimized: _unoptimized,
+    ...imageProps
+  }: ComponentProps<'img'> & { fill?: boolean; unoptimized?: boolean }) =>
+    createElement('img', imageProps),
+}));
+
+vi.mock('@/components/logo-crop-dialog', () => ({
+  LogoCropDialog: ({
+    imageSource,
+    initialCrop,
+    open,
+  }: {
+    imageSource: string | null;
+    initialCrop: unknown;
+    open: boolean;
+  }) =>
+    open ? (
+      <div
+        role="dialog"
+        aria-label="Crop logo"
+        data-image-source={imageSource}
+        data-initial-crop={JSON.stringify(initialCrop)}
+      />
+    ) : null,
 }));
 
 vi.mock('@/lib/profile-editor-api', () => ({
@@ -71,6 +101,7 @@ const profile: CurrentProfileResponse = {
   entityType: 'company',
   bio: 'Warm, practical homes.',
   logoImageId: null,
+  logoUrl: null,
   status: 'active',
   yearsExperience: 5,
   projectCount: 8,
@@ -106,7 +137,7 @@ const completion: ProfileCompletionResponse = {
 };
 
 function ownerProfile(overrides: Partial<ProfileOwnerResponse> = {}): ProfileOwnerResponse {
-  const { organization: _organization, shareUrl: _shareUrl, ...owner } = profile;
+  const { organization: _organization, shareUrl: _shareUrl, logoUrl: _logoUrl, ...owner } = profile;
   return { ...owner, ...overrides };
 }
 
@@ -135,7 +166,11 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByLabelText(/address/i)).toHaveValue('Bandra West, Mumbai');
     expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('9876543210');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://mahi.example.com');
-    expect(screen.queryByLabelText(/google business url/i)).not.toBeInTheDocument();
+    // The Google Business Profile link is now editable in settings and prefilled
+    // from the saved googleBusinessUrl.
+    expect(screen.getByLabelText(/google business profile/i)).toHaveValue(
+      'https://g.page/mahi-studio',
+    );
     expect(screen.getByLabelText(/firm type/i)).toHaveValue('Private Limited');
     expect(screen.getByRole('button', { name: /cities: mumbai/i })).toBeInTheDocument();
     expect(
@@ -143,6 +178,53 @@ describe('DesignerProfileEditor', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /design themes: modern/i })).toBeInTheDocument();
     expect(screen.getByText('70% complete')).toBeInTheDocument();
+  });
+
+  it('shows the saved portfolio logo instead of generated initials', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{
+          ...profile,
+          logoUrl: 'https://storage.example.com/studio-logo.webp',
+        }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Edit logo' })).toHaveClass('cursor-pointer');
+    expect(screen.getByAltText('Mahi Studio logo')).toHaveAttribute(
+      'src',
+      'https://storage.example.com/studio-logo.webp',
+    );
+    expect(screen.queryByAltText('Generated profile initials')).not.toBeInTheDocument();
+  });
+
+  it('opens the shared logo crop workflow with the saved source and crop', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{
+          ...profile,
+          logoUrl: 'https://storage.example.com/studio-logo.webp',
+          logoSourceUrl: 'https://storage.example.com/studio-logo-source.png',
+          logoCrop: { x: 10, y: 15, width: 60, height: 60 },
+        }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit logo' }));
+    expect(await screen.findByRole('dialog', { name: 'Studio logo' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByRole('dialog', { name: 'Crop logo' })).toHaveAttribute(
+      'data-image-source',
+      'https://storage.example.com/studio-logo-source.png',
+    );
   });
 
   it('names each missing requirement with a direct action, including logo upload', () => {
@@ -159,7 +241,7 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('Logo')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upload your logo' })).toHaveAttribute(
       'href',
-      '/designer/portfolio',
+      '/designer/profile#profile-logo',
     );
   });
 
@@ -315,6 +397,101 @@ describe('DesignerProfileEditor', () => {
 
     expect(await screen.findByText(/enter a valid url/i)).toBeInTheDocument();
     expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it('normalizes and saves an edited Google Business Profile link', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const googleField = screen.getByLabelText(/google business profile/i);
+    await user.clear(googleField);
+    await user.type(googleField, 'g.page/mahi-updated');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        googleBusinessUrl: 'https://g.page/mahi-updated',
+      });
+    });
+  });
+
+  it('directs owners to portfolio settings to connect Google reviews separately', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(
+      screen.getByText(/saving this link does not change your google review connection/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /manage google reviews in portfolio settings/i }),
+    ).toHaveAttribute('href', '/designer/portfolio');
+  });
+
+  it('clears the Google Business Profile link by sending null when emptied', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText(/google business profile/i));
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ googleBusinessUrl: null });
+    });
+  });
+
+  it('rejects an invalid Google Business Profile link without sending an update', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const googleField = screen.getByLabelText(/google business profile/i);
+    await user.clear(googleField);
+    await user.type(googleField, 'not-a-url');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText(/enter a valid url/i)).toBeInTheDocument();
+    expect(googleField).toHaveAttribute('aria-invalid', 'true');
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it('leaves the Google Business Profile link untouched when a profile has none', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, googleBusinessUrl: null }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByLabelText(/google business profile/i)).toHaveValue('');
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
   it('wires the remaining contact, social, company, and footprint fields without touching the stored business URL', async () => {

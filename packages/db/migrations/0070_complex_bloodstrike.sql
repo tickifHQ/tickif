@@ -1,0 +1,1 @@
+ALTER TABLE "designer_portfolio" ADD COLUMN "hero_image_id" text;

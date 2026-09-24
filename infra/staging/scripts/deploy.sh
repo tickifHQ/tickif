@@ -30,6 +30,10 @@ require_secrets \
   "$R2_ACCESS_KEY_ID_SECRET" "$R2_SECRET_ACCESS_KEY_SECRET" "$RESEND_API_KEY_SECRET" \
   "$GOOGLE_CLIENT_SECRET_NAME" "$RAZORPAY_KEY_SECRET_NAME" "$RAZORPAY_WEBHOOK_SECRET_NAME"
 
+# This must precede the failure trap: preflight failures leave live traffic alone.
+python3 "$SCRIPT_DIR/storage.py" prepare \
+  "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$OPERATIONS_IMAGE"
+
 render_dir="$(mktemp -d)"
 finish() {
   code=$?

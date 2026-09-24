@@ -51,6 +51,8 @@ const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardPro
   displayName: 'Studio Noir',
   bio: 'Thoughtful interiors for real homes.',
   tagline: 'Spaces with depth and warmth',
+  heroImageId: 'originals/portfolio-covers/11111111-1111-4111-8111-111111111111/cover.png',
+  showHero: true,
   profileStatus: 'active',
   publicLinkEnabled: true,
   memberId: 'member_1',

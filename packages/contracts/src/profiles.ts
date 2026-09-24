@@ -221,6 +221,37 @@ const footprintEntrySchema = z.object({
 });
 
 /**
+ * Selected logo area as percentages of the untouched source image. Percentage
+ * coordinates survive viewport changes, unlike cropper screen pixels.
+ */
+export const logoCropAreaSchema = z
+  .object({
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100),
+    width: z.number().positive().max(100),
+    height: z.number().positive().max(100),
+  })
+  .superRefine((area, context) => {
+    const tolerance = 0.01;
+    if (area.x + area.width > 100 + tolerance) {
+      context.addIssue({
+        code: 'custom',
+        path: ['width'],
+        message: 'Logo crop extends beyond the source width',
+      });
+    }
+    if (area.y + area.height > 100 + tolerance) {
+      context.addIssue({
+        code: 'custom',
+        path: ['height'],
+        message: 'Logo crop extends beyond the source height',
+      });
+    }
+  })
+  .meta({ id: 'LogoCropArea' });
+export type LogoCropArea = z.infer<typeof logoCropAreaSchema>;
+
+/**
  * Base profile fields — single source of truth for both projections.
  * Public and owner projections are derived via .omit/.extend to prevent drift.
  */
@@ -281,7 +312,12 @@ export type ProfileOwnerResponse = z.infer<typeof profileOwnerResponseSchema>;
 /** Authenticated current profile context used by designer workspace screens. */
 export const currentProfileResponseSchema = profileOwnerResponseSchema
   .extend({
+    /** Short-lived display URL for the active branch's saved portfolio logo. */
     logoUrl: z.string().url().nullable().optional(),
+    /** Short-lived untouched source URL used only by authenticated logo editors. */
+    logoSourceUrl: z.string().url().nullable().optional(),
+    /** Persisted crop selection used to restore the logo editor. */
+    logoCrop: logoCropAreaSchema.nullable().optional(),
     organization: z.object({
       id: z.string(),
       name: z.string(),
@@ -291,6 +327,8 @@ export const currentProfileResponseSchema = profileOwnerResponseSchema
   })
   .meta({ id: 'CurrentProfile' });
 export type CurrentProfileResponse = z.infer<typeof currentProfileResponseSchema>;
+
+export const MAX_EXPERIENCE_CENTERS = 20;
 
 export const experienceCenterSchema = z
   .object({
@@ -498,12 +536,18 @@ export type GoogleConnectionSummary = z.infer<typeof googleConnectionSummarySche
 /**
  * Hero fields a designer must fill before the public page goes live.
  *
- * The public `/d/{slug}` page leads with the logo, studio name, tagline and bio;
- * without them the hero renders as an empty frame. Completing all four flips
+ * The public `/d/{slug}` page leads with the cover, logo, studio name, tagline and bio;
+ * without them the hero renders as an empty frame. Completing all five flips
  * `designer_profile.status` from `draft` to `active`, which is what every public
  * surface gates on (portfolio page, discovery feed, search index, bookings).
  */
-export const requiredPortfolioFieldSchema = z.enum(['logo', 'displayName', 'tagline', 'bio']);
+export const requiredPortfolioFieldSchema = z.enum([
+  'heroCover',
+  'logo',
+  'displayName',
+  'tagline',
+  'bio',
+]);
 export type RequiredPortfolioField = z.infer<typeof requiredPortfolioFieldSchema>;
 
 export const portfolioReviewSourceSettingsSchema = z
@@ -539,6 +583,11 @@ export const portfolioResponseSchema = z
     displayName: z.string(),
     bio: z.string().nullable(),
     logoUrl: z.string().url().nullable(),
+    heroCoverUrl: z.string().url().nullable(),
+    /** Private signed URL for re-editing the untouched logo upload. */
+    logoSourceUrl: z.string().url().nullable(),
+    /** Private owner-only crop selection used to restore the logo editor. */
+    logoCrop: logoCropAreaSchema.nullable(),
     websiteUrl: z.string().nullable(),
     instagramHandle: z.string().nullable(),
     linkedinHandle: z.string().nullable(),
@@ -599,7 +648,7 @@ export const updatePortfolioSchema = z
       })
       .optional(),
     showTickifBadge: z.boolean().optional(),
-    experienceCenters: z.array(experienceCenterSchema).max(20).optional(),
+    experienceCenters: z.array(experienceCenterSchema).max(MAX_EXPERIENCE_CENTERS).optional(),
   })
   .meta({ id: 'UpdatePortfolio' });
 export type UpdatePortfolioInput = z.infer<typeof updatePortfolioSchema>;
@@ -624,7 +673,20 @@ export type SlugAvailabilityResponse = z.infer<typeof slugAvailabilityResponseSc
 export const logoUploadRequestSchema = z
   .object({
     contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif']),
-    contentLength: z.number().int().min(1).max(5_000_000),
+    contentLength: z.number().int().min(1).max(10_000_000),
+    variant: z.enum(['display', 'source']).default('display'),
+  })
+  .superRefine((value, context) => {
+    if (value.variant === 'display' && value.contentLength > 5_000_000) {
+      context.addIssue({
+        code: 'too_big',
+        maximum: 5_000_000,
+        inclusive: true,
+        origin: 'number',
+        path: ['contentLength'],
+        message: 'Display logo must be 5 MB or smaller',
+      });
+    }
   })
   .meta({ id: 'LogoUploadRequest' });
 export type LogoUploadRequest = z.infer<typeof logoUploadRequestSchema>;
@@ -642,6 +704,8 @@ export type LogoUploadUrlResponse = z.infer<typeof logoUploadUrlResponseSchema>;
 export const uploadLogoResponseSchema = z
   .object({
     logoUrl: z.string().url(),
+    logoSourceUrl: z.string().url().nullable(),
+    logoCrop: logoCropAreaSchema.nullable(),
   })
   .meta({ id: 'UploadLogoResponse' });
 export type UploadLogoResponse = z.infer<typeof uploadLogoResponseSchema>;
@@ -655,9 +719,57 @@ export const logoCommitRequestSchema = z
       .string()
       .max(512)
       .regex(/^originals\/logos\/[^/]+\/[^/]+$/, 'Must be an originals/logos/ object key'),
+    sourceObjectKey: z
+      .string()
+      .max(512)
+      .regex(/^originals\/logos\/[^/]+\/[^/]+$/, 'Must be an originals/logos/ object key')
+      .optional(),
+    logoCrop: logoCropAreaSchema.optional(),
   })
   .meta({ id: 'LogoCommitRequest' });
 export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;
+
+// --- Portfolio Hero Cover Upload ---
+
+/** POST /api/profiles/me/portfolio/cover/upload — request body. */
+export const portfolioCoverUploadRequestSchema = z
+  .object({
+    contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif']),
+    contentLength: z.number().int().min(1).max(10_000_000),
+  })
+  .meta({ id: 'PortfolioCoverUploadRequest' });
+export type PortfolioCoverUploadRequest = z.infer<typeof portfolioCoverUploadRequestSchema>;
+
+/** POST /api/profiles/me/portfolio/cover/upload — response with presigned URL. */
+export const portfolioCoverUploadUrlResponseSchema = z
+  .object({
+    uploadUrl: z.string().url(),
+    key: z.string(),
+  })
+  .meta({ id: 'PortfolioCoverUploadUrlResponse' });
+export type PortfolioCoverUploadUrlResponse = z.infer<typeof portfolioCoverUploadUrlResponseSchema>;
+
+/** POST /api/profiles/me/portfolio/cover/commit — request body. */
+export const portfolioCoverCommitRequestSchema = z
+  .object({
+    objectKey: z
+      .string()
+      .max(512)
+      .regex(
+        /^originals\/portfolio-covers\/[^/]+\/[^/]+$/,
+        'Must be an originals/portfolio-covers/ object key',
+      ),
+  })
+  .meta({ id: 'PortfolioCoverCommitRequest' });
+export type PortfolioCoverCommitRequest = z.infer<typeof portfolioCoverCommitRequestSchema>;
+
+/** POST /api/profiles/me/portfolio/cover/commit — persisted cover URL. */
+export const uploadPortfolioCoverResponseSchema = z
+  .object({
+    heroCoverUrl: z.string().url(),
+  })
+  .meta({ id: 'UploadPortfolioCoverResponse' });
+export type UploadPortfolioCoverResponse = z.infer<typeof uploadPortfolioCoverResponseSchema>;
 
 // --- Google reviews endpoints ---
 
@@ -777,6 +889,7 @@ export const publicPortfolioStatsSchema = z
       .nullable(),
     projectCount: z.number().int(),
     yearsExperience: z.number().int(),
+    cityPresenceCount: z.number().int().nonnegative(),
     /**
      * Label of the lowest budget band across published projects (taxonomy
      * `sortOrder`), or null when no published project carries a band.
@@ -849,6 +962,7 @@ export const publicPortfolioResponseSchema = z
     cities: z.array(z.string()),
     experienceCenterGroups: z.array(experienceCenterGroupSchema).optional(),
     logoUrl: z.string().url().nullable(),
+    heroCoverUrl: z.string().url().nullable(),
     accentColor: z.string(),
     badges: z.array(portfolioBadgeSchema),
     isKycVerified: z.boolean(),

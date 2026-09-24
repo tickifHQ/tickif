@@ -3,10 +3,15 @@ import {
   PROFILE_FOOTPRINT_LIMITS,
   PROFILE_STAFF_COUNT_MAX,
   listTaxonomyQuerySchema,
+  logoUploadRequestSchema,
+  logoCommitRequestSchema,
   onboardDesignerSchema,
   onboardingDraftFieldsSchema,
   onboardingDraftSchema,
   onboardingStepSchema,
+  portfolioCoverCommitRequestSchema,
+  portfolioCoverUploadRequestSchema,
+  requiredPortfolioFieldSchema,
   taxonomyKindSchema,
   updateProfileSchema,
 } from '../src';
@@ -56,6 +61,40 @@ describe('profile and taxonomy contracts', () => {
   });
 });
 
+describe('portfolio cover contracts', () => {
+  it('recognizes the Hero cover as a required portfolio field', () => {
+    expect(requiredPortfolioFieldSchema.safeParse('heroCover').success).toBe(true);
+  });
+
+  it('accepts supported cover uploads up to 10 MB and rejects larger files', () => {
+    expect(
+      portfolioCoverUploadRequestSchema.safeParse({
+        contentType: 'image/webp',
+        contentLength: 10_000_000,
+      }).success,
+    ).toBe(true);
+    expect(
+      portfolioCoverUploadRequestSchema.safeParse({
+        contentType: 'image/webp',
+        contentLength: 10_000_001,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts only keys within the portfolio-cover storage namespace', () => {
+    expect(
+      portfolioCoverCommitRequestSchema.safeParse({
+        objectKey: 'originals/portfolio-covers/profile-1/object-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      portfolioCoverCommitRequestSchema.safeParse({
+        objectKey: 'originals/logos/profile-1/object-1',
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe('onboarding draft contract (E-298)', () => {
   it('accepts a fully partial/incomplete draft without the strict onboarding gates', () => {
     // Only a step + one field, no company name, no min-length name — all fine for a draft,
@@ -92,5 +131,55 @@ describe('onboarding draft contract (E-298)', () => {
       (_, i) => `${i + 1}1111111-1111-4111-8111-111111111111`,
     );
     expect(onboardingDraftFieldsSchema.safeParse({ scopeIds: tooManyScopes }).success).toBe(false);
+  });
+});
+
+describe('portfolio logo upload contracts', () => {
+  it('allows a larger untouched source while keeping display crops at 5 MB', () => {
+    expect(
+      logoUploadRequestSchema.safeParse({
+        contentType: 'image/png',
+        contentLength: 8_000_000,
+        variant: 'source',
+      }).success,
+    ).toBe(true);
+    expect(
+      logoUploadRequestSchema.safeParse({
+        contentType: 'image/webp',
+        contentLength: 8_000_000,
+        variant: 'display',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a profile-owned source key and rejects malformed keys', () => {
+    expect(
+      logoCommitRequestSchema.safeParse({
+        objectKey: 'originals/logos/profile-1/display-key',
+        sourceObjectKey: 'originals/logos/profile-1/source-key',
+        logoCrop: { x: 12.5, y: 20, width: 50, height: 60 },
+      }).success,
+    ).toBe(true);
+    expect(
+      logoCommitRequestSchema.safeParse({
+        objectKey: 'originals/logos/profile-1/display-key',
+        sourceObjectKey: 'originals/logos/profile-1/nested/source-key',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects crop selections outside the untouched source bounds', () => {
+    expect(
+      logoCommitRequestSchema.safeParse({
+        objectKey: 'originals/logos/profile-1/display-key',
+        logoCrop: { x: 70, y: 0, width: 40, height: 100 },
+      }).success,
+    ).toBe(false);
+    expect(
+      logoCommitRequestSchema.safeParse({
+        objectKey: 'originals/logos/profile-1/display-key',
+        logoCrop: { x: 0, y: 0, width: 0, height: 100 },
+      }).success,
+    ).toBe(false);
   });
 });

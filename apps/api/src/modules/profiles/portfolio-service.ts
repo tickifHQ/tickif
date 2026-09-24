@@ -4,6 +4,7 @@ import type {
   RequiredPortfolioField,
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
+  LogoCropArea,
 } from '@repo/contracts';
 import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
@@ -33,8 +34,16 @@ export type Caller = {
 };
 
 const ALLOWED_LOGO_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+const ALLOWED_HERO_COVER_CONTENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+]);
 
-const MAX_LOGO_BYTES = 5_000_000;
+const MAX_HERO_COVER_BYTES = 10_000_000;
+const MAX_DISPLAY_LOGO_BYTES = 5_000_000;
+const MAX_SOURCE_LOGO_BYTES = 10_000_000;
 
 // Badge thresholds
 const BADGE_NEW_DAYS = 90;
@@ -47,7 +56,7 @@ const BADGE_PROJECTS_PUBLISHED_COUNT = 25;
 type AuditEvent = {
   userId: string;
   activeOrgId: string;
-  action: 'portfolio.updated' | 'portfolio.logo_uploaded';
+  action: 'portfolio.updated' | 'portfolio.logo_uploaded' | 'portfolio.hero_cover_uploaded';
   timestamp: string; // ISO-8601
   resourceId: string; // profileId
   changedFields?: string[]; // for updates
@@ -113,6 +122,27 @@ export async function presignProfileLogo(profile: DesignerProfileRecord): Promis
   return presignDownload({ key: profile.logoImageId });
 }
 
+/** Presign a dedicated Hero cover only when its storage key belongs to this profile. */
+export async function presignPortfolioHeroCover(
+  profileId: string,
+  portfolio: Pick<PortfolioRecord, 'heroImageId'>,
+): Promise<string | null> {
+  const expectedPrefix = `originals/portfolio-covers/${profileId}/`;
+  if (!portfolio.heroImageId || !portfolio.heroImageId.startsWith(expectedPrefix)) return null;
+  return presignDownload({ key: portfolio.heroImageId });
+}
+
+/** Presign the private untouched source used only by the owner-side crop editor. */
+export async function presignProfileLogoSource(
+  profile: DesignerProfileRecord,
+): Promise<string | null> {
+  const expectedPrefix = `originals/logos/${profile.id}/`;
+  if (!profile.logoSourceImageId || !profile.logoSourceImageId.startsWith(expectedPrefix)) {
+    return null;
+  }
+  return presignDownload({ key: profile.logoSourceImageId });
+}
+
 export function computeBadges(
   profile: DesignerProfileRecord,
   isKycVerified = false,
@@ -141,9 +171,12 @@ export function computeBadges(
  */
 export function missingRequiredFields(
   profile: Pick<DesignerProfileRecord, 'logoImageId' | 'displayName' | 'bio'>,
-  portfolio: Pick<PortfolioRecord, 'tagline'> | null,
+  portfolio: Pick<PortfolioRecord, 'heroImageId' | 'showHero' | 'tagline'> | null,
 ): RequiredPortfolioField[] {
   const missing: RequiredPortfolioField[] = [];
+  if ((portfolio?.showHero ?? true) && !isNonBlank(portfolio?.heroImageId)) {
+    missing.push('heroCover');
+  }
   if (!isNonBlank(profile.logoImageId)) missing.push('logo');
   if (!isNonBlank(profile.displayName)) missing.push('displayName');
   if (!isNonBlank(portfolio?.tagline)) missing.push('tagline');
@@ -165,12 +198,22 @@ function isNonBlank(value: string | null | undefined): boolean {
  */
 export function getPortfolioPublicationState(
   profile: Pick<DesignerProfileRecord, 'status' | 'logoImageId' | 'displayName' | 'bio'>,
-  portfolio: Pick<PortfolioRecord, 'publicLinkEnabled' | 'tagline'> | null,
+  portfolio: Pick<
+    PortfolioRecord,
+    'heroImageId' | 'publicLinkEnabled' | 'showHero' | 'tagline'
+  > | null,
 ): { publiclyVisible: boolean; missingRequiredFields: RequiredPortfolioField[] } {
   const missing = missingRequiredFields(profile, portfolio);
+  // Existing active portfolios predate dedicated covers. Keep them public while
+  // surfacing the missing cover in settings, but require every new draft to add
+  // one before activation. The public Hero never falls back to a project image.
+  const blockingMissing =
+    profile.status === 'active' ? missing.filter((field) => field !== 'heroCover') : missing;
   return {
     publiclyVisible:
-      profile.status === 'active' && (portfolio?.publicLinkEnabled ?? true) && missing.length === 0,
+      profile.status === 'active' &&
+      (portfolio?.publicLinkEnabled ?? true) &&
+      blockingMissing.length === 0,
     missingRequiredFields: missing,
   };
 }
@@ -227,8 +270,10 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   // Independent reads — one round-trip's worth of latency, not three.
-  const [logoUrl, googleRow, isKycVerified] = await Promise.all([
+  const [logoUrl, heroCoverUrl, logoSourceUrl, googleRow, isKycVerified] = await Promise.all([
     presignProfileLogo(profile),
+    presignPortfolioHeroCover(profile.id, portfolio),
+    presignProfileLogoSource(profile),
     // Lightweight Google connection snapshot so the settings page renders the
     // real connection state (badge + rating) without a second request.
     googleReviewsRepository.findByProfileId(profile.id),
@@ -255,6 +300,9 @@ async function buildPortfolioResponse(
     displayName: profile.displayName,
     bio: profile.bio,
     logoUrl,
+    heroCoverUrl,
+    logoSourceUrl,
+    logoCrop: profile.logoCrop,
     websiteUrl: profile.websiteUrl,
     instagramHandle: profile.instagramHandle,
     linkedinHandle: profile.linkedinHandle,
@@ -521,7 +569,7 @@ export const portfolioService = {
 
   /** Mint a presigned upload URL for a logo image. */
   async createLogoUploadUrl(
-    input: { contentType: string; contentLength: number },
+    input: { contentType: string; contentLength: number; variant?: 'display' | 'source' },
     caller: Caller,
   ): Promise<{ uploadUrl: string; key: string }> {
     const profile = await resolveProfile(caller);
@@ -531,7 +579,8 @@ export const portfolioService = {
       throw AppError.unprocessable('Unsupported content type for logo upload');
     }
 
-    if (input.contentLength > MAX_LOGO_BYTES) {
+    const sizeLimit = input.variant === 'source' ? MAX_SOURCE_LOGO_BYTES : MAX_DISPLAY_LOGO_BYTES;
+    if (input.contentLength > sizeLimit) {
       throw AppError.unprocessable('Declared size exceeds the logo size limit');
     }
 
@@ -557,11 +606,110 @@ export const portfolioService = {
     return { uploadUrl, key };
   },
 
-  /** Confirm a logo was uploaded and persist the association. */
-  async commitLogoUpload(
+  /** Mint a presigned upload URL for the dedicated portfolio Hero cover. */
+  async createHeroCoverUploadUrl(
+    input: { contentType: string; contentLength: number },
+    caller: Caller,
+  ): Promise<{ uploadUrl: string; key: string }> {
+    const profile = await resolveProfile(caller);
+
+    if (!ALLOWED_HERO_COVER_CONTENT_TYPES.has(input.contentType)) {
+      throw AppError.unprocessable('Unsupported content type for portfolio cover upload');
+    }
+    if (input.contentLength > MAX_HERO_COVER_BYTES) {
+      throw AppError.unprocessable('Declared size exceeds the portfolio cover size limit');
+    }
+
+    const key = `originals/portfolio-covers/${profile.id}/${randomUUID()}`;
+    const reserved = await portfolioRepository.reserveLogoUpload(
+      profile.id,
+      key,
+      new Date(Date.now() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000),
+    );
+    if (!reserved) throw AppError.conflict('Organization is no longer accepting uploads');
+
+    try {
+      const uploadUrl = await presignUpload({
+        key,
+        contentType: input.contentType,
+        contentLength: input.contentLength,
+      });
+      return { uploadUrl, key };
+    } catch (error) {
+      await portfolioRepository.releaseUploadLease(key).catch(() => undefined);
+      throw error;
+    }
+  },
+
+  /** Confirm and atomically associate a dedicated portfolio Hero cover. */
+  async commitHeroCoverUpload(
     input: { objectKey: string },
     caller: Caller,
-  ): Promise<{ logoUrl: string }> {
+  ): Promise<{ heroCoverUrl: string }> {
+    const profile = await resolveProfile(caller);
+    const expectedPrefix = `originals/portfolio-covers/${profile.id}/`;
+    if (!input.objectKey.startsWith(expectedPrefix)) {
+      throw AppError.forbidden('Object key does not belong to this profile');
+    }
+    if (!(await objectExists(input.objectKey))) {
+      throw AppError.badRequest('No uploaded object found for this image');
+    }
+
+    let portfolio = await portfolioRepository.findOrCreate(profile.id);
+    const previousKey = portfolio.heroImageId;
+    let updated = await portfolioRepository.setHeroImageIfMatch(
+      profile.id,
+      previousKey,
+      input.objectKey,
+    );
+    if (!updated) {
+      portfolio = await portfolioRepository.findOrCreate(profile.id);
+      updated = await portfolioRepository.setHeroImageIfMatch(
+        profile.id,
+        portfolio.heroImageId,
+        input.objectKey,
+      );
+      if (!updated) {
+        throw AppError.conflict('Portfolio cover was modified concurrently, please retry');
+      }
+    }
+
+    const updatedPortfolio = { ...portfolio, heroImageId: input.objectKey };
+    if (
+      profile.status === 'draft' &&
+      missingRequiredFields(profile, updatedPortfolio).length === 0
+    ) {
+      await portfolioRepository.activateIfDraft(profile.id);
+    }
+
+    if (previousKey && previousKey !== input.objectKey && previousKey.startsWith(expectedPrefix)) {
+      try {
+        await deleteObject(previousKey);
+      } catch (err) {
+        console.error('[commitHeroCoverUpload] Failed to delete previous cover:', err);
+      }
+    }
+
+    emitAuditEvent({
+      userId: caller.userId,
+      activeOrgId: caller.activeOrgId!,
+      action: 'portfolio.hero_cover_uploaded',
+      timestamp: new Date().toISOString(),
+      resourceId: profile.id,
+    });
+
+    return { heroCoverUrl: await presignDownload({ key: input.objectKey }) };
+  },
+
+  /** Confirm a logo was uploaded and persist the association. */
+  async commitLogoUpload(
+    input: { objectKey: string; sourceObjectKey?: string; logoCrop?: LogoCropArea },
+    caller: Caller,
+  ): Promise<{
+    logoUrl: string;
+    logoSourceUrl: string | null;
+    logoCrop: LogoCropArea | null;
+  }> {
     const profile = await resolveProfile(caller);
 
     // Validate that the key belongs to this profile (prevent cross-profile attachment)
@@ -569,32 +717,59 @@ export const portfolioService = {
     if (!input.objectKey.startsWith(expectedPrefix)) {
       throw AppError.forbidden('Object key does not belong to this profile');
     }
+    if (input.sourceObjectKey && !input.sourceObjectKey.startsWith(expectedPrefix)) {
+      throw AppError.forbidden('Source object key does not belong to this profile');
+    }
 
-    const exists = await objectExists(input.objectKey);
-    if (!exists) {
+    const [displayExists, sourceExists] = await Promise.all([
+      objectExists(input.objectKey),
+      input.sourceObjectKey ? objectExists(input.sourceObjectKey) : Promise.resolve(true),
+    ]);
+    if (!displayExists) {
       throw AppError.badRequest('No uploaded object found for this image');
+    }
+    if (!sourceExists) {
+      throw AppError.badRequest('No uploaded object found for the source image');
     }
 
     // Compare-and-set: atomically swap logoImageId only if current value matches what we read
     const previousKey = profile.logoImageId;
+    const previousSourceKey = profile.logoSourceImageId;
+    const nextLogoCrop = input.logoCrop ?? null;
+    // Before source tracking existed, the displayed image is the crop editor's
+    // original. Keep it so saved percentages still refer to the same pixels.
+    const cropSourceKey = previousSourceKey ?? (input.logoCrop ? previousKey : null);
+    let nextSourceKey = input.sourceObjectKey ?? cropSourceKey;
     const updated = await portfolioRepository.setLogoIfMatch(
       profile.id,
       previousKey,
       input.objectKey,
+      nextSourceKey,
+      nextLogoCrop,
     );
     if (!updated) {
       // Concurrent modification — retry CAS once with fresh state
       const freshProfile = await resolveProfile(caller);
+      const freshSourceKey =
+        freshProfile.logoSourceImageId ?? (input.logoCrop ? freshProfile.logoImageId : null);
+      if (!input.sourceObjectKey && input.logoCrop && freshSourceKey !== cropSourceKey) {
+        throw AppError.conflict('Logo source was modified concurrently, please reopen the editor');
+      }
+      nextSourceKey = input.sourceObjectKey ?? freshSourceKey;
       const retried = await portfolioRepository.setLogoIfMatch(
         freshProfile.id,
         freshProfile.logoImageId,
         input.objectKey,
+        nextSourceKey,
+        nextLogoCrop,
       );
       if (!retried) {
         throw AppError.conflict('Logo was modified concurrently, please retry');
       }
     }
     profile.logoImageId = input.objectKey;
+    profile.logoSourceImageId = nextSourceKey;
+    profile.logoCrop = nextLogoCrop;
 
     // The logo is a required field, so this upload may be what takes the
     // portfolio live. Kept out of the CAS transaction: a failure here must not
@@ -608,11 +783,29 @@ export const portfolioService = {
     }
 
     // Clean up the previous storage object (non-critical — orphan is acceptable)
-    if (previousKey && previousKey !== input.objectKey && previousKey.startsWith(expectedPrefix)) {
+    if (
+      previousKey &&
+      previousKey !== input.objectKey &&
+      previousKey !== nextSourceKey &&
+      previousKey.startsWith(expectedPrefix)
+    ) {
       try {
         await deleteObject(previousKey);
       } catch (err) {
         console.error('[commitLogoUpload] Failed to delete previous logo:', err);
+      }
+    }
+    if (
+      input.sourceObjectKey &&
+      previousSourceKey &&
+      previousSourceKey !== input.sourceObjectKey &&
+      previousSourceKey !== previousKey &&
+      previousSourceKey.startsWith(expectedPrefix)
+    ) {
+      try {
+        await deleteObject(previousSourceKey);
+      } catch (err) {
+        console.error('[commitLogoUpload] Failed to delete previous logo source:', err);
       }
     }
 
@@ -624,9 +817,12 @@ export const portfolioService = {
       resourceId: profile.id,
     });
 
-    const logoUrl = await presignDownload({ key: input.objectKey });
+    const [logoUrl, logoSourceUrl] = await Promise.all([
+      presignDownload({ key: input.objectKey }),
+      nextSourceKey ? presignDownload({ key: nextSourceKey }) : Promise.resolve(null),
+    ]);
 
-    return { logoUrl };
+    return { logoUrl, logoSourceUrl, logoCrop: nextLogoCrop };
   },
 
   /** Delete the current logo from storage and clear the DB association. */

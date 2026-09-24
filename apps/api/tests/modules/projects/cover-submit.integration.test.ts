@@ -46,6 +46,20 @@ async function completeDraft() {
 }
 
 describe('transactional cover submit gate', () => {
+  it('submits a complete draft with a custom city', async () => {
+    const { project, images, submit } = await completeDraft();
+    await projectsRepository.updateDraft(project.id, {
+      coverImageId: images[0]!.id,
+      citySlug: null,
+      cityName: 'Pondicherry',
+    });
+    expect((await submit()).submitted).toMatchObject({
+      status: 'submitted',
+      citySlug: null,
+      cityName: 'Pondicherry',
+    });
+  });
+
   it.each(['citySlug', 'propertyTypeSlug', 'scopeSlug', 'budgetBandSlug'] as const)(
     'does not commit submission after a draft patch clears %s',
     async (field) => {

@@ -11,6 +11,7 @@ export const PROJECT_MATERIAL_FIELDS = [
   'bhkSlug',
   'sizeSqft',
   'citySlug',
+  'cityName',
   'localitySlug',
   'buildingName',
   'budgetBandSlug',

@@ -83,6 +83,7 @@ export default async function DesignerDashboardPage() {
     <DesignerDashboardOverview
       studioName={studioName}
       studioLocation={studioLocation}
+      logoUrl={profile?.logoUrl ?? null}
       portfolioUrl={portfolioUrl}
       portfolioPubliclyVisible={portfolioPubliclyVisible}
       dashboard={dashboard.data}

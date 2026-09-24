@@ -1,0 +1,11 @@
+[Unit]
+Description=Retain recent Tickif staging rollback images
+Requires=docker.service
+After=docker.service
+RequiresMountsFor=/var/lib/docker /var/lib/containerd
+
+[Service]
+Type=oneshot
+User=azureuser
+ExecStart=/usr/bin/bash /opt/tickif/maintenance/prune-images.sh /opt/tickif/staging.env
+TimeoutStartSec=1800

@@ -3,21 +3,22 @@ import {
   listProjectsResponseSchema,
   logoUploadUrlResponseSchema,
   portfolioProjectsResponseSchema,
+  portfolioCoverUploadUrlResponseSchema,
   portfolioResponseSchema,
   slugAvailabilityResponseSchema,
   uploadLogoResponseSchema,
+  uploadPortfolioCoverResponseSchema,
   type GoogleReviewsResponse,
+  type LogoCropArea,
   type PortfolioProjectsResponse,
   type PortfolioResponse,
   type SlugAvailabilityResponse,
   type UpdatePortfolioInput,
   type UploadLogoResponse,
+  type UploadPortfolioCoverResponse,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
-import {
-  handleApiResponse,
-  readApiErrorMessage,
-} from '@/lib/api-response';
+import { handleApiResponse, readApiErrorMessage } from '@/lib/api-response';
 
 /**
  * Portfolio API client — typed wrappers around the Hono RPC client.
@@ -83,12 +84,12 @@ export async function checkSlugAvailability(slug: string): Promise<SlugAvailabil
  * 2. PUT the file directly to the presigned URL (R2 / S3)
  * 3. Commit the upload so the API persists the association
  */
-export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
-  // Step 1: Get presigned upload URL
+async function uploadLogoObject(file: File, variant: 'display' | 'source'): Promise<string> {
   const presignResponse = await api.api.profiles.me.portfolio.logo.upload.$post({
     json: {
       contentType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif',
       contentLength: file.size,
+      variant,
     },
   });
 
@@ -98,7 +99,6 @@ export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
     'Could not prepare logo upload.',
   );
 
-  // Step 2: Upload the file directly to storage via presigned URL
   const storageResponse = await fetch(uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': file.type },
@@ -109,12 +109,63 @@ export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
     throw new Error('Could not upload logo to storage.');
   }
 
-  // Step 3: Commit the upload
+  return key;
+}
+
+export async function uploadLogo(
+  displayFile: File,
+  sourceFile?: File,
+  logoCrop?: LogoCropArea,
+): Promise<UploadLogoResponse> {
+  // Preserve the untouched source only when the user chose a new image. When
+  // editing an existing logo, omitting it tells the API to keep the saved source.
+  const [objectKey, sourceObjectKey] = await Promise.all([
+    uploadLogoObject(displayFile, 'display'),
+    sourceFile ? uploadLogoObject(sourceFile, 'source') : Promise.resolve(undefined),
+  ]);
+
   const commitResponse = await api.api.profiles.me.portfolio.logo.commit.$post({
-    json: { objectKey: key },
+    json: { objectKey, sourceObjectKey, logoCrop },
   });
 
-  return handleApiResponse(commitResponse, uploadLogoResponseSchema, 'Could not commit logo upload.');
+  return handleApiResponse(
+    commitResponse,
+    uploadLogoResponseSchema,
+    'Could not commit logo upload.',
+  );
+}
+
+/** Upload and commit the dedicated public portfolio Hero cover. */
+export async function uploadPortfolioCover(file: File): Promise<UploadPortfolioCoverResponse> {
+  const presignResponse = await api.api.profiles.me.portfolio.cover.upload.$post({
+    json: {
+      contentType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif',
+      contentLength: file.size,
+    },
+  });
+
+  const { uploadUrl, key } = await handleApiResponse(
+    presignResponse,
+    portfolioCoverUploadUrlResponseSchema,
+    'Could not prepare portfolio cover upload.',
+  );
+  const storageResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  if (!storageResponse.ok) {
+    throw new Error('Could not upload portfolio cover to storage.');
+  }
+
+  const commitResponse = await api.api.profiles.me.portfolio.cover.commit.$post({
+    json: { objectKey: key },
+  });
+  return handleApiResponse(
+    commitResponse,
+    uploadPortfolioCoverResponseSchema,
+    'Could not commit portfolio cover upload.',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +206,11 @@ export async function connectGoogleReviews(reference: string): Promise<GoogleRev
 /** POST /api/profiles/me/portfolio/google/refresh — re-fetch in the background. */
 export async function refreshGoogleReviews(): Promise<GoogleReviewsResponse> {
   const response = await api.api.profiles.me.portfolio.google.refresh.$post();
-  return handleApiResponse(response, googleReviewsResponseSchema, 'Could not refresh Google reviews.');
+  return handleApiResponse(
+    response,
+    googleReviewsResponseSchema,
+    'Could not refresh Google reviews.',
+  );
 }
 
 /** DELETE /api/profiles/me/portfolio/google — disconnect the location. */

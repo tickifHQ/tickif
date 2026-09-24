@@ -1,5 +1,5 @@
 import { db, schema, eq, and, or, sql } from '@repo/db';
-import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
+import { VERIFICATION_APPLICATION_STATUS, type LogoCropArea } from '@repo/contracts';
 import type { DesignerProfileRecord } from './repository.js';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
@@ -518,6 +518,8 @@ export const portfolioRepository = {
     profileId: string,
     expectedPreviousKey: string | null,
     newKey: string,
+    sourceKey: string | null,
+    logoCrop: LogoCropArea | null,
   ): Promise<boolean> {
     const condition = expectedPreviousKey
       ? and(
@@ -533,7 +535,7 @@ export const portfolioRepository = {
       const now = new Date();
       const result = await tx
         .update(schema.designerProfile)
-        .set({ logoImageId: newKey, updatedAt: now })
+        .set({ logoImageId: newKey, logoSourceImageId: sourceKey, logoCrop, updatedAt: now })
         .where(condition)
         .returning({ id: schema.designerProfile.id });
       if (result.length === 0) return false;
@@ -547,5 +549,34 @@ export const portfolioRepository = {
       ]);
       return true;
     });
+  },
+
+  /**
+   * Compare-and-set the dedicated portfolio Hero cover.
+   *
+   * The portfolio row is created before this call. Matching the previous key
+   * prevents two concurrent uploads from silently deleting each other's cover.
+   */
+  async setHeroImageIfMatch(
+    profileId: string,
+    expectedPreviousKey: string | null,
+    newKey: string,
+  ): Promise<boolean> {
+    const condition = expectedPreviousKey
+      ? and(
+          eq(schema.designerPortfolio.profileId, profileId),
+          eq(schema.designerPortfolio.heroImageId, expectedPreviousKey),
+        )
+      : and(
+          eq(schema.designerPortfolio.profileId, profileId),
+          sql`${schema.designerPortfolio.heroImageId} IS NULL`,
+        );
+
+    const result = await db
+      .update(schema.designerPortfolio)
+      .set({ heroImageId: newKey, updatedAt: new Date() })
+      .where(condition)
+      .returning({ id: schema.designerPortfolio.id });
+    return result.length > 0;
   },
 };
