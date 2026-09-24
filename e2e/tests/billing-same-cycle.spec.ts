@@ -21,6 +21,15 @@ for (const scenario of [
       test.setTimeout(120_000);
       await page.setViewportSize({ width: cancelled ? 390 : 1280, height: 900 });
       const owner = await createBillingOwner(context, 'hobby');
+      await page.addInitScript(() => {
+        class CheckoutFixture {
+          constructor(private options: { modal: { ondismiss: () => void } }) {}
+          open() {
+            this.options.modal.ondismiss();
+          }
+        }
+        Object.assign(window, { Razorpay: CheckoutFixture });
+      });
       const headers = { origin: webUrl };
       try {
         const initialLabel = scenario.source === 'corporate' ? 'Corporate' : 'Professional+';
