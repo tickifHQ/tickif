@@ -55,7 +55,7 @@ export function LogoCropDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !isSaving && onOpenChange(nextOpen)}>
-      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-full flex-col gap-0 overflow-hidden p-0 data-[state=closed]:animate-none data-[state=open]:animate-none sm:max-w-4xl">
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-full flex-col gap-0 overflow-hidden p-0 data-[state=closed]:animate-none data-[state=open]:animate-none sm:max-w-xl">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-14 text-left sm:px-6">
           <DialogTitle>Crop logo</DialogTitle>
           <DialogDescription>
@@ -63,8 +63,8 @@ export function LogoCropDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="relative h-[min(58dvh,28rem)] min-h-72 overflow-hidden bg-muted md:h-[min(64dvh,36rem)]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="relative h-[min(52dvh,30rem)] min-h-64 overflow-hidden bg-muted">
             {imageSource ? (
               <Cropper
                 image={imageSource}
@@ -90,7 +90,7 @@ export function LogoCropDialog({
             )}
           </div>
 
-          <div className="space-y-5 border-t border-border bg-card p-5 md:border-l md:border-t-0 md:p-6">
+          <div className="space-y-4 border-t border-border bg-card px-5 py-4 sm:px-6">
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="logo-zoom">Zoom</Label>
@@ -110,10 +110,6 @@ export function LogoCropDialog({
                   onValueChange={(value) => setZoom(value[0] ?? 1)}
                 />
               </div>
-            </div>
-
-            <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              The saved logo will be square and optimized for portfolio cards and workspace menus.
             </div>
 
             {error ? (

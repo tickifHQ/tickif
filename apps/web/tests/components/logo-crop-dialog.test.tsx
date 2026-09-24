@@ -56,8 +56,15 @@ describe('LogoCropDialog', () => {
     expect(screen.getByRole('dialog', { name: 'Crop logo' })).toBeInTheDocument();
     expect(screen.getByTestId('cropper')).toHaveAttribute('data-aspect', '1');
     expect(screen.getByTestId('cropper')).toHaveAttribute('data-crop-shape', 'rect');
-    expect(screen.getByRole('slider', { name: 'Logo zoom' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save logo' })).toBeDisabled();
+    const zoom = screen.getByRole('slider', { name: 'Logo zoom' });
+    const chooseAnother = screen.getByRole('button', { name: 'Choose another' });
+    const saveLogo = screen.getByRole('button', { name: 'Save logo' });
+
+    expect(zoom).toBeInTheDocument();
+    expect(zoom.compareDocumentPosition(chooseAnother)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(chooseAnother.compareDocumentPosition(saveLogo)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByText(/saved logo will be square and optimized/i)).not.toBeInTheDocument();
+    expect(saveLogo).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Prepare crop' }));
     await user.click(screen.getByRole('button', { name: 'Save logo' }));

@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition, type ChangeEvent, type Ref } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+  type DragEvent,
+  type Ref,
+} from 'react';
 import Image from 'next/image';
 import { ImagePlus, Loader2, Pencil, Upload, X } from 'lucide-react';
 import type { LogoCropArea, UploadLogoResponse } from '@repo/contracts';
@@ -62,7 +70,9 @@ export function DesignerLogoInput({
 }) {
   const [isUploading, startUploadTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [cropSource, setCropSource] = useState<LogoCropSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,14 +88,10 @@ export function DesignerLogoInput({
       setManagerOpen(true);
       return;
     }
-    fileInputRef.current?.click();
+    setUploadOpen(true);
   }
 
-  function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    event.target.value = '';
+  function openCropperForFile(file: File) {
     setError(null);
     if (!ALLOWED_LOGO_SOURCE_TYPES.has(file.type)) {
       setError('Choose a JPEG, PNG, WebP, or AVIF image.');
@@ -104,6 +110,31 @@ export function DesignerLogoInput({
       initialCrop: null,
     });
     setManagerOpen(false);
+    setUploadOpen(false);
+    setIsDragging(false);
+  }
+
+  function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    openCropperForFile(file);
+  }
+
+  function handleFileDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file) openCropperForFile(file);
+  }
+
+  function handleUploadOpenChange(open: boolean) {
+    setUploadOpen(open);
+    if (!open) {
+      setError(null);
+      setIsDragging(false);
+    }
   }
 
   function editExistingLogo() {
@@ -202,16 +233,64 @@ export function DesignerLogoInput({
 
       {error ? <p className="max-w-64 text-xs font-medium text-destructive">{error}</p> : null}
 
+      <Dialog open={uploadOpen} onOpenChange={handleUploadOpenChange}>
+        <DialogContent className="max-h-[calc(100dvh-1rem)] gap-0 overflow-y-auto p-0 sm:max-w-sm">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Upload logo</DialogTitle>
+            <DialogDescription>
+              Choose an image to crop and use as your studio logo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 p-4 sm:p-5">
+            <div
+              data-testid="logo-upload-dropzone"
+              className={cn(
+                'flex aspect-square w-full max-w-56 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/40 p-4 text-center transition-colors',
+                isDragging && 'border-primary bg-primary/5',
+              )}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleFileDrop}
+            >
+              <div className="flex size-12 items-center justify-center rounded-lg border border-dashed border-border bg-background text-muted-foreground">
+                <ImagePlus className="size-5" aria-hidden />
+              </div>
+              <p className="text-sm font-medium text-foreground">Drag &amp; drop an image</p>
+            </div>
+            <Button
+              type="button"
+              variant="fancy"
+              size="fancy"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Browse image
+            </Button>
+            {error ? (
+              <p role="alert" className="text-center text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={managerOpen} onOpenChange={setManagerOpen}>
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="border-b border-border px-5 py-4 pr-14 text-left sm:px-6">
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="border-b border-border px-5 py-3.5 pr-14 text-left">
             <DialogTitle>Studio logo</DialogTitle>
             <DialogDescription>
               Review your saved logo, refine its crop, or choose a replacement.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col items-center gap-5 p-6 sm:p-8">
-            <div className="relative aspect-square w-full max-w-64 overflow-hidden rounded-xl border border-border bg-muted">
+          <div className="flex flex-col items-center p-5">
+            <div
+              data-testid="saved-logo-preview"
+              className="relative aspect-square w-full max-w-48 overflow-hidden rounded-xl border border-border bg-muted"
+            >
               {value.logoUrl ? (
                 <Image
                   src={value.logoUrl}
@@ -223,12 +302,12 @@ export function DesignerLogoInput({
               ) : null}
             </div>
           </div>
-          <DialogFooter className="border-t border-border px-5 py-4 sm:px-6">
-            <Button type="button" variant="outline" onClick={chooseAnotherLogo}>
+          <DialogFooter className="border-t border-border px-5 py-3.5">
+            <Button type="button" variant="outline" size="sm" onClick={chooseAnotherLogo}>
               <Upload className="size-4" aria-hidden />
               Choose another logo
             </Button>
-            <Button type="button" onClick={editExistingLogo}>
+            <Button type="button" size="sm" onClick={editExistingLogo}>
               <Pencil className="size-4" aria-hidden />
               Edit
             </Button>

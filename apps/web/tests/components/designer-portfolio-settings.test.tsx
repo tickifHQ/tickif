@@ -232,6 +232,41 @@ describe('DesignerPortfolioSettings', () => {
     expect(mock.uploadLogo).not.toHaveBeenCalled();
   });
 
+  it('opens a compact square drop zone when an empty logo is selected', async () => {
+    await renderSettings();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Upload logo' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Upload logo' })).toBeInTheDocument();
+    const dropzone = screen.getByTestId('logo-upload-dropzone');
+    const browseButton = screen.getByRole('button', { name: 'Browse image' });
+
+    expect(dropzone).toHaveClass('aspect-square', 'max-w-56');
+    expect(dropzone).not.toContainElement(browseButton);
+    expect(browseButton).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
+    expect(screen.getByText('Drag & drop an image')).toHaveClass('text-sm');
+    expect(
+      screen.queryByText(/you'll be able to zoom and position it before uploading/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens the cropper when an image is dropped into the empty logo state', async () => {
+    await renderSettings();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Upload logo' }));
+
+    const sourceFile = new File(['source'], 'wide-logo.png', { type: 'image/png' });
+    fireEvent.drop(screen.getByTestId('logo-upload-dropzone'), {
+      dataTransfer: { files: [sourceFile] },
+    });
+
+    expect(await screen.findByRole('dialog', { name: 'Crop logo' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Upload logo' })).not.toBeInTheDocument();
+  });
+
   it('uploads the generated square WebP with the untouched source and refreshes the workspace shell', async () => {
     mock.fetchPortfolio.mockResolvedValueOnce(basePortfolio);
     mock.fetchPortfolio.mockResolvedValueOnce({
@@ -287,9 +322,10 @@ describe('DesignerPortfolioSettings', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Edit logo' }));
 
-    expect(await screen.findByRole('dialog', { name: 'Studio logo' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Choose another logo' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Studio logo' })).toHaveClass('sm:max-w-md');
+    expect(screen.getByTestId('saved-logo-preview')).toHaveClass('max-w-48');
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveClass('h-9');
+    expect(screen.getByRole('button', { name: 'Choose another logo' })).toHaveClass('h-9');
     expect(mock.uploadLogo).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
