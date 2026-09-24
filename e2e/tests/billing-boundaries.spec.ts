@@ -246,9 +246,10 @@ test('choosing another eligible saved plan requires confirmation before its repl
   page,
   context,
 }) => {
-  const owner = await createBillingOwner(context, 'corporate');
+  const owner = await createBillingOwner(context, 'corporate', { unverifiedPeriod: true });
   try {
     const quote = await preview(context, 'professional_plus');
+    expect(quote.action).toBe('recover');
     const saved = await post(context, '/recovery', {
       targetTier: 'professional_plus',
       previewToken: quote.previewToken,
