@@ -26,6 +26,9 @@ export STAGING_HOST=staging.invalid
 export ACME_CA_SERVER=http://127.0.0.1:9/directory
 export EMAIL_FROM='Tickif Staging <ci@example.com>'
 export DESIRED_API_REPLICAS=1 DESIRED_WEB_REPLICAS=1 DESIRED_WORKER_REPLICAS=1
+# Disposable CI already built the images and has a smaller shared root disk.
+# Production headroom defaults are covered independently by test-storage.py.
+export MIN_IMAGE_FREE_GIB=1 MIN_ROOT_FREE_GIB=1
 fixture=$(mktemp -d)
 trap 'rm -rf -- "$fixture"' EXIT
 for entry in POSTGRES_PASSWORD_SECRET:synthetic-postgres-password REDIS_PASSWORD_SECRET:synthetic-redis-password TYPESENSE_ADMIN_KEY_SECRET:synthetic-typesense-admin TYPESENSE_SEARCH_KEY_SECRET:synthetic-typesense-search BETTER_AUTH_SECRET_NAME:synthetic-auth-secret-for-image-tests NOVU_SECRET_NAME:synthetic-novu-key R2_ACCESS_KEY_ID_SECRET:synthetic-r2-access R2_SECRET_ACCESS_KEY_SECRET:synthetic-r2-secret RESEND_API_KEY_SECRET:synthetic-resend-key GOOGLE_CLIENT_SECRET_NAME:synthetic-google-secret RAZORPAY_KEY_SECRET_NAME:synthetic-razorpay-secret RAZORPAY_WEBHOOK_SECRET_NAME:synthetic-webhook-secret; do

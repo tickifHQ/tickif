@@ -33,6 +33,60 @@ Log the manager into GHCR with a read-only token so `docker stack deploy
 printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io -u GITHUB_USER --password-stdin
 ```
 
+### Image storage and retention
+
+Docker Engine 29's containerd image store uses `/var/lib/containerd` independently
+of Docker's `/var/lib/docker`. Both must be on the data disk. On this staging
+host, `/var/lib/docker/containerd-store` is bind-mounted at `/var/lib/containerd`
+by `var-lib-containerd.mount`. Docker and containerd service drop-ins require
+both mounts, preventing startup on the root disk if the data mount fails.
+
+For a one-time migration of an existing host, first close traffic and writers,
+run image retention, then run `scripts/migrate-containerd-storage.sh` as root.
+It stops the remaining containers, copies with ownership, hard links, ACLs and
+xattrs preserved, verifies checksums, installs the persistent mount, and restarts
+Docker. The original store remains at `/var/lib/containerd.root-backup` until
+the new mount, retained images and restored services have been verified. Only
+then remove that exact unmounted backup directory; never remove live containerd
+snapshots or Docker volumes. The script intentionally refuses to overwrite an
+existing destination or backup. A failed migration requires operator inspection.
+
+Deployment requires Python 3 and runs `scripts/storage.py prepare` under the
+release lock **before** installing the failure trap or stopping traffic. It:
+
+- Retains three complete rollback image sets plus the requested release and
+  releases referenced by containers or current/previous Swarm specifications.
+  Only immutable application image references are eligible for removal;
+  infrastructure images and volumes are excluded. Removal never uses force.
+- Requires 2 GiB free on `/`, 10 GiB on both Docker and containerd storage, and
+  100,000 free inodes on each filesystem.
+- Pulls all four requested images before downtime, checking capacity again after
+  every pull. Any preparation failure leaves the existing traffic state unchanged.
+
+Optional environment overrides are `IMAGE_ROLLBACK_RELEASES`,
+`MIN_ROOT_FREE_GIB`, `MIN_IMAGE_FREE_GIB`, `MIN_FREE_INODES`, and
+`CONTAINERD_STORAGE_PATH` (default `/var/lib/containerd`). All numeric values
+must be positive. Thresholds reserve headroom; they are not image-size estimates.
+The mount must exist before preflight, and thresholds should rise if images grow.
+
+`scripts/prune-images.sh /opt/tickif/staging.env` performs the same retention under
+the shared release lock without stopping services. The staging host also runs
+this from a daily `tickif-image-retention.timer`, using a root-owned copy of the
+maintenance scripts at `/opt/tickif/maintenance`. Keep that copy updated when
+changing retention behavior. Check its result with
+`journalctl -u tickif-image-retention.service`.
+
+Install the daily retention job as root after recovery (the supplied unit uses
+the staging deploy account `azureuser`; adjust it on other hosts):
+
+```bash
+install -d -m 755 /opt/tickif/maintenance
+install -m 755 infra/staging/scripts/{lib.sh,prune-images.sh,storage.py} /opt/tickif/maintenance/
+install -m 644 infra/staging/systemd/tickif-image-retention.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now tickif-image-retention.timer
+```
+
 Repository variable `STAGING_HOST` supplies the same-origin URL embedded into
 the web bundle at image build time. Changing it requires rebuilding the web
 image; changing only the container environment cannot update `NEXT_PUBLIC_*`.
