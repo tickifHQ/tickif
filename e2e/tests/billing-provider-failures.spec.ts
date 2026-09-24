@@ -98,7 +98,7 @@ test('provider outage blocks a paid change preview without mutating billing', as
     );
     expect((await owner.subscription())?.planTier).toBe('professional_plus');
     // The one-shot outage clears, so an explicit new review can expose recovery.
-    expect((await preview(context, 'corporate')).action).toBe('recover');
+    expect((await preview(context, 'corporate')).action).toBe('change_plan');
   } finally {
     await clear();
     await owner.dispose();
@@ -252,7 +252,7 @@ test('invalid duplicate and stale signed webhooks cannot grant or roll back a pa
 test('lost recovery cancellation retains the accepted target and reconciles without cancelling twice', async ({
   context,
 }) => {
-  const owner = await createBillingOwner(context, 'corporate');
+  const owner = await createBillingOwner(context, 'corporate', { unverifiedPeriod: true });
   const review = await preview(context, 'professional_plus');
   const input = {
     targetTier: 'professional_plus',

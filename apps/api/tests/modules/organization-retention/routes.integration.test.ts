@@ -15,6 +15,53 @@ import {
   mergeResponseCookies,
 } from '../../helpers/auth.js';
 
+it('preserves every replacement mandate for deletion cleanup and blocks unresolved checkout', async () => {
+  const organization = await makeOrganization({ slug: 'replacement-retention' });
+  const owner = await organizationSession({
+    phone: '+919800025091',
+    role: 'owner',
+    organizationId: organization.id,
+  });
+  const id = 'a55de6cd-f296-4f1b-a1e3-77c0c60b7147';
+  await db
+    .insert(schema.billingReplacement)
+    .values({
+      id,
+      organizationId: organization.id,
+      sourceSubscriptionId: 'sub_old',
+      replacementSubscriptionId: 'sub_future',
+      sourceTier: 'corporate',
+      targetTier: 'professional_plus',
+      targetPlanId: 'plan_target',
+      amount: 0,
+      recurringAmount: 299900,
+      currency: 'INR',
+      periodEnd: new Date(Date.now() + 86400000),
+      expiresAt: new Date(Date.now() + 600000),
+      status: 'checkout',
+    });
+  const input = {
+    organizationId: organization.id,
+    userId: owner.userId,
+    confirmationSlug: organization.slug,
+    now: new Date(),
+  };
+  expect(await organizationRetentionRepository.requestDeletion(input)).toEqual({
+    outcome: 'billing_pending',
+  });
+  expect(await db.select().from(schema.organizationRetention)).toHaveLength(0);
+  await db
+    .update(schema.billingReplacement)
+    .set({ status: 'confirmed' })
+    .where(eq(schema.billingReplacement.id, id));
+  expect((await organizationRetentionRepository.requestDeletion(input)).outcome).toBe('updated');
+  const cleanup = await db
+    .select()
+    .from(schema.organizationPurgeManifestItem)
+    .where(eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'));
+  expect(cleanup.map((item) => item.resourceKey).sort()).toEqual(['sub_future', 'sub_old']);
+});
+
 async function organizationSession(input: {
   phone: string;
   role: 'owner' | 'member';

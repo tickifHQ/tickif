@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { replacementRepository, reconcileReplacement } from '@repo/billing';
 import { subscribeRepository, type SubscriptionUpdate } from './subscribe-repository.js';
 import {
   ORGANIZATION_CAPABILITY,
@@ -35,6 +36,7 @@ import { orgsService } from '../orgs/service.js';
  */
 
 import { validateBillingPreview } from './selection-service.js';
+import { getPlanChangeTiming } from './plan-change-policy.js';
 
 type Caller = { userId: string; activeOrgId: string | null };
 
@@ -290,20 +292,6 @@ export const subscribeService = {
     }
 
     return withBillingUpdate(caller.activeOrgId!, async (repository) => {
-      if (params.previewToken && params.operationId) {
-        await assertOrgBillingAccess(caller);
-        const checked = await validateBillingPreview(
-          caller,
-          params as BillingMutationRequest,
-          repository,
-        );
-        if (checked.preview.action !== 'change_plan')
-          throw new AppError(
-            'billing_action_unavailable',
-            'Use the verified deferred recovery flow for this plan change.',
-            409,
-          );
-      }
       // Find existing subscription
       const subscription = await repository.find(caller.activeOrgId!);
 
@@ -329,13 +317,35 @@ export const subscribeService = {
         throw AppError.unprocessable('Already on the target plan');
       }
 
-      // Update Razorpay subscription plan — deferred to cycle end.
+      // The service must enforce review too: internal callers cannot bypass
+      // eligibility by omitting the optional legacy request fields.
+      if (!params.previewToken || !params.operationId)
+        throw new AppError(
+          'billing_action_unavailable',
+          'Review this plan change before confirming it.',
+          409,
+        );
+      await assertOrgBillingAccess(caller);
+      const checked = await validateBillingPreview(
+        caller,
+        { ...params, previewToken: params.previewToken, operationId: params.operationId },
+        repository,
+      );
+      const timing = getPlanChangeTiming(subscription.planTier, params.targetTier);
+      if (checked.preview.action !== 'change_plan' || !timing || checked.preview.timing !== timing)
+        throw new AppError(
+          'billing_action_unavailable',
+          'Use the verified deferred recovery flow for this plan change.',
+          409,
+        );
+
+      // Timing comes from tier direction and a fresh server-validated review.
       // The local planTier is NOT updated here. E-117 webhook will confirm the
       // actual plan change and update planTier at that time.
       const updated = await updateSubscription({
         subscriptionId: subscription.razorpaySubscriptionId,
         planId: razorpayPlanId,
-        scheduleChangeAt: 'cycle_end',
+        scheduleChangeAt: timing,
       });
 
       // Only update razorpayStatus (informational) — do NOT change planTier.
@@ -512,6 +522,13 @@ export const subscribeService = {
         reconciled: false,
         razorpayStatus: subscription?.razorpayStatus ?? null,
       };
+    }
+
+    if (await replacementRepository.current(caller.activeOrgId)) {
+      const reconciled = await reconcileReplacement(caller.activeOrgId);
+      await invalidateEntitlementCache(caller.activeOrgId);
+      const local = await subscribeRepository.find(caller.activeOrgId);
+      return { reconciled: !!reconciled, razorpayStatus: local?.razorpayStatus ?? null };
     }
 
     const snapshot = await subscribeRepository.find(caller.activeOrgId);

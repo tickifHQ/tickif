@@ -45,7 +45,8 @@
     "zod": "catalog:",
     "react-email": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "@repo/billing": "workspace:*"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

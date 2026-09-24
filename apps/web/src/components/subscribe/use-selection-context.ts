@@ -22,15 +22,21 @@ function pricingRestriction(context: BillingSelectionContext | null): string | u
     return 'Your payment is being confirmed. No further purchase is needed.';
   if (context.recovery?.status === 'requested')
     return 'Your cancellation is being confirmed. Your saved plan will be available after your current subscription ends.';
-  if (context.recovery?.status === 'waiting_for_expiry') {
+  if (
+    context.recovery?.status === 'waiting_for_expiry' &&
+    !context.actions.some((action) => action.action === 'change_plan')
+  ) {
     const date = context.recovery.eligibleAt;
     return date
       ? `You can purchase your saved plan after ${new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}, once your current subscription has ended.`
       : 'You can purchase your saved plan once your current subscription has ended. We are checking the end date.';
   }
-  if (context.scheduledChange)
+  if (context.scheduledChange && !context.actions.some((action) => action.action === 'cancel'))
     return 'A plan change is scheduled. You can choose another plan once it takes effect.';
-  if (context.actions.some((action) => action.reason === 'cancellation_scheduled'))
+  if (
+    context.actions.some((action) => action.reason === 'cancellation_scheduled') &&
+    !context.actions.some((action) => action.action === 'change_plan')
+  )
     return reasonLabel('cancellation_scheduled');
   return undefined;
 }
@@ -89,5 +95,9 @@ export function useSelectionContext(organizationId?: string | null) {
               : (error ?? 'Checking available billing actions…'),
     };
   }
-  return { context, actions, error, refreshContext };
+  const savedTargetTier =
+    context?.recovery && !['completed', 'dismissed', 'superseded'].includes(context.recovery.status)
+      ? context.recovery.targetTier
+      : null;
+  return { context, actions, error, refreshContext, savedTargetTier };
 }

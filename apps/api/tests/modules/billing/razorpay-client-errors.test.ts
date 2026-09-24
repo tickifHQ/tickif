@@ -16,6 +16,49 @@ const {
 } = await import('../../../src/modules/billing/razorpay-client.js');
 
 describe('billing / razorpay-client failures', () => {
+  it.each([
+    ['fetch', 400, 'BAD_REQUEST_ERROR', 'subscriptions cannot be updated when payment mode is UPI'],
+    [
+      'update',
+      500,
+      'BAD_REQUEST_ERROR',
+      'subscriptions cannot be updated when payment mode is UPI',
+    ],
+    ['update', 400, 'SERVER_ERROR', 'subscriptions cannot be updated when payment mode is UPI'],
+    ['update', 400, 'BAD_REQUEST_ERROR', 'UPI payment processing is temporarily unavailable'],
+  ] as const)(
+    'keeps unrelated %s/%s/%s errors uncertain',
+    async (operation, status, code, description) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(Response.json({ error: { code, description } }, { status })),
+      );
+      await expect(
+        operation === 'fetch'
+          ? fetchSubscription('sub_upi')
+          : updateSubscription({ subscriptionId: 'sub_upi', planId: 'plan_corporate' }),
+      ).rejects.toMatchObject({ code: 'upstream_error', status: 502 });
+    },
+  );
+  it('classifies the documented UPI update rejection as an actionable limitation', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              code: 'BAD_REQUEST_ERROR',
+              description: 'subscriptions cannot be updated when payment mode is UPI',
+            },
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    await expect(
+      updateSubscription({ subscriptionId: 'sub_upi', planId: 'plan_corporate' }),
+    ).rejects.toMatchObject({ code: 'payment_mode_change_unsupported', status: 422 });
+  });
   it('rejects malformed successful responses instead of trusting casts', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ id: 'sub_missing_plan' })));
     await expect(fetchSubscription('sub_missing_plan')).rejects.toMatchObject({

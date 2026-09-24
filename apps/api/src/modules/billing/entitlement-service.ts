@@ -6,6 +6,8 @@ import {
   type SubscriptionResponse,
 } from '@repo/contracts';
 import { config } from '@repo/config';
+import { applyReplacementSchedule } from '@repo/billing';
+import { invalidateEntitlementCache } from '../../lib/redis.js';
 import { getCachedEntitlement, setCachedEntitlement } from '../../lib/redis.js';
 import { entitlementRepository } from './entitlement-repository.js';
 import { daysRemaining } from './lifecycle-time.js';
@@ -61,6 +63,8 @@ export const entitlementService = {
     }
 
     // Check Redis cache
+    if (await applyReplacementSchedule(caller.activeOrgId))
+      await invalidateEntitlementCache(caller.activeOrgId);
     const cached = await getCachedEntitlement(caller.activeOrgId);
     if (cached) {
       try {

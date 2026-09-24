@@ -141,7 +141,7 @@ test('simultaneous submissions and completed-operation replay create exactly one
 test('recovery revisions protect replacement and dismissal never reverses provider cancellation', async ({
   context,
 }) => {
-  const owner = await createBillingOwner(context, 'corporate');
+  const owner = await createBillingOwner(context, 'corporate', { unverifiedPeriod: true });
   try {
     const quote = await preview(context, 'professional_plus');
     expect(quote.action).toBe('recover');

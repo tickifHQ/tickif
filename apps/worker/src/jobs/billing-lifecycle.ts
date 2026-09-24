@@ -9,6 +9,11 @@ import {
 import { invalidateEntitlementCache } from '../billing-lifecycle/cache.js';
 import { processOrganizationRetentionSweep } from './organization-retention.js';
 import { processBillingRecoverySweep } from '../billing-lifecycle/recovery.js';
+import {
+  replacementRepository,
+  reconcileReplacement,
+  refundAbandonedReplacement,
+} from '@repo/billing';
 
 /** Cap the fan-out of one sweep tick so a backlog can't run unbounded. */
 const SWEEP_BATCH_SIZE = 200;
@@ -54,6 +59,28 @@ export async function processBillingLifecycleSweep(
   let graceFailures = 0;
   let downgradeFailures = 0;
   let orgExpiryFailures = 0;
+
+  for (const candidate of await replacementRepository.candidates()) {
+    try {
+      await reconcileReplacement(candidate.organizationId, now);
+    } catch {
+      console.error('[worker] replacement billing reconciliation failed');
+    } finally {
+      // Rotate pending and failing rows too, so one batch cannot starve later schedules.
+      await replacementRepository.update(candidate.id, {});
+      // The local effective date may have committed before a provider read failed.
+      await invalidateEntitlementCache(candidate.organizationId);
+    }
+  }
+  for (const candidate of await replacementRepository.abandonedOrders()) {
+    try {
+      await refundAbandonedReplacement(candidate);
+    } catch {
+      console.error('[worker] abandoned plan-change payment reconciliation failed');
+    } finally {
+      await replacementRepository.update(candidate.id, {});
+    }
+  }
 
   // grace → locked
   const graceExpired = await findGraceExpired(now, graceDays, SWEEP_BATCH_SIZE);

@@ -10,7 +10,9 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
             ? 'checkout activation'
             : target === 'Hobby'
               ? 'cycle-end cancellation'
-              : 'explicit deferred recovery';
+              : current === 'Professional+'
+                ? 'immediate paid upgrade'
+                : 'scheduled paid downgrade';
       return ['billing-plan-matrix.spec.ts', `${entry}: ${current} -> ${target}: ${semantics}`];
     }),
   ),
@@ -18,10 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   ...billingMatrixEntries,
-  ...(['Professional+', 'Corporate'] as const).flatMap((initial) =>
-    ['Hobby cancellation', 'paid-plan recovery'].map((flow): [string, string] => [
+  ...['Upgrade to Corporate', 'Downgrade to Professional+'].flatMap((action) =>
+    [false, true].map((cancelled): [string, string] => [
       'billing-same-cycle.spec.ts',
-      `Hobby purchase to ${initial} preserves the paid cycle through ${flow}, repeat purchase attempts, and ${initial === 'Corporate' ? 'Professional+' : 'Corporate'} recovery`,
+      `Hobby purchase then ${action} uses the original paid cycle with cancellation ${cancelled}`,
     ]),
   ),
   ...[

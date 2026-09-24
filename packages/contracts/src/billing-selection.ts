@@ -105,3 +105,30 @@ export const billingSubscribeOutcomeSchema = billingCheckoutResponseSchema
 export const billingCancelOutcomeSchema = billingCancelResponseSchema
   .extend(billingMutationOutcomeSchema.shape)
   .meta({ id: 'BillingCancelOutcome' });
+
+export const billingReplacementCheckoutSchema = z
+  .object({
+    operationId: z.uuid(),
+    status: z.string(),
+    targetTier: planTierSchema,
+    mandateAuthorized: z.boolean(),
+    razorpaySubscriptionId: z.string().nullable(),
+    razorpayOrderId: z.string().nullable(),
+    amount: z.number().int().nonnegative(),
+    currency: z.string(),
+    effectiveAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    razorpayKeyId: z.string(),
+  })
+  .nullable()
+  .meta({ id: 'BillingReplacementCheckout' });
+export const billingReplacementVerifySchema = z
+  .object({
+    operationId: z.uuid(),
+    kind: z.enum(['subscription', 'order']),
+    providerId: z.string().min(1).max(100),
+    paymentId: z.string().min(1).max(100),
+    signature: z.string().min(1).max(128),
+  })
+  .meta({ id: 'BillingReplacementVerify' });
+export type BillingReplacementVerify = z.infer<typeof billingReplacementVerifySchema>;

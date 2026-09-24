@@ -14,6 +14,8 @@ import {
   billingRefreshResponseSchema,
   billingPaymentsQuerySchema,
   billingPaymentsResponseSchema,
+  billingReplacementCheckoutSchema,
+  billingReplacementVerifySchema,
 } from '@repo/contracts';
 import { config } from '@repo/config';
 import { requireAuth } from '../../lib/auth-middleware.js';
@@ -21,6 +23,7 @@ import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { subscribeService } from './subscribe-service.js';
 import { billingSelectionService } from './selection-service.js';
 import { billingMutationService } from './mutation-service.js';
+import { replacementCheckout, verifyReplacement } from './replacement-service.js';
 
 // ─── Route Definitions ───────────────────────────────────────────────────────
 
@@ -63,9 +66,9 @@ const changePlanRoute = createRoute({
   method: 'post',
   path: '/change-plan',
   tags: ['Billing'],
-  summary: 'Change the plan for an existing Razorpay subscription',
+  summary: 'Start a paid plan change with a replacement payment mandate',
   description:
-    'Resolves the target Razorpay plan ID server-side. Requires organization billing access.',
+    'Authorizes a future renewal mandate and collects any immediate prorated upgrade payment. Requires organization billing access.',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -90,9 +93,7 @@ const changePlanRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: {
-      description:
-        'Invalid tier, same plan, billing not configured, or the subscription payment mode ' +
-        'does not support an in-place plan change (E-289, code payment_mode_change_unsupported)',
+      description: 'Invalid tier, same plan, or billing not configured',
     },
     502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
@@ -258,6 +259,56 @@ const changePreviewRoute = createRoute({
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/replacement',
+      tags: ['Billing'],
+      middleware: [requireAuth] as const,
+      responses: {
+        200: {
+          description: 'Resume an authorized plan change',
+          content: { 'application/json': { schema: billingReplacementCheckoutSchema } },
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        await replacementCheckout({
+          userId: c.get('user')!.id,
+          activeOrgId: c.get('session')!.activeOrganizationId ?? null,
+        }),
+        200,
+      ),
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/replacement/verify',
+      tags: ['Billing'],
+      middleware: [requireAuth] as const,
+      request: {
+        body: { content: { 'application/json': { schema: billingReplacementVerifySchema } } },
+      },
+      responses: {
+        200: {
+          description: 'Verified checkout state',
+          content: { 'application/json': { schema: billingReplacementCheckoutSchema } },
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        await verifyReplacement(
+          {
+            userId: c.get('user')!.id,
+            activeOrgId: c.get('session')!.activeOrganizationId ?? null,
+          },
+          c.req.valid('json'),
+        ),
+        200,
+      ),
+  )
   .openapi(selectionContextRoute, async (c) =>
     c.json(
       await billingSelectionService.context({
