@@ -82,6 +82,7 @@ describe('PublicPortfolioSocialCard', () => {
             google: null,
             projectCount: 1,
             yearsExperience: 2,
+            cityPresenceCount: 0,
             startingBudget: null,
           },
         })}

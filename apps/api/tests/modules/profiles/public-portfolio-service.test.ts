@@ -101,6 +101,7 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   publicLinkEnabled: true,
   portfolioSlug: 'test-studio',
   accentColor: '#FF8F73',
+  heroImageId: 'originals/portfolio-covers/profile-1/cover',
   showHero: true,
   showTrustCredentials: true,
   showFeaturedTestimonial: true,
@@ -326,6 +327,8 @@ describe('publicPortfolioService.getBySlug — projection', () => {
     const result = await publicPortfolioService.getBySlug('test-studio');
 
     expect(result.cities).toEqual(['Chennai', 'Coimbatore']);
+    expect(result.heroCoverUrl).toBe('https://cdn.test/originals/portfolio-covers/profile-1/cover');
+    expect(result.stats.cityPresenceCount).toBe(2);
   });
 
   it('does not re-verify the designer when fetching the embedded project page', async () => {

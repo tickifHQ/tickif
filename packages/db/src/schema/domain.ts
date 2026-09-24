@@ -1328,7 +1328,8 @@ export const designerPortfolio = pgTable(
     showSocialLinks: boolean('show_social_links').default(true).notNull(),
     showShareBlock: boolean('show_share_block').default(true).notNull(),
 
-    // Hero (tagline — displayName and bio live on designer_profile)
+    // Hero (displayName, bio, and logo live on designer_profile)
+    heroImageId: text('hero_image_id'),
     tagline: text('tagline'),
 
     // Featured testimonial

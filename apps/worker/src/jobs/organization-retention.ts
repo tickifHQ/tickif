@@ -74,9 +74,10 @@ async function purgeOrganization(organizationId: string, now: Date): Promise<boo
             listObjectKeys(`originals/${projectId}/`),
             listObjectKeys(`derivatives/${projectId}/`),
           ]),
-          ...prepared.profileIds.map((profileId) =>
+          ...prepared.profileIds.flatMap((profileId) => [
             listObjectKeys(`originals/logos/${profileId}/`),
-          ),
+            listObjectKeys(`originals/portfolio-covers/${profileId}/`),
+          ]),
           listObjectKeys(`verification-documents/${prepared.organizationId}/`),
         ])
       ).flat();

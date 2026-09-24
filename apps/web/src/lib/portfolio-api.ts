@@ -3,9 +3,11 @@ import {
   listProjectsResponseSchema,
   logoUploadUrlResponseSchema,
   portfolioProjectsResponseSchema,
+  portfolioCoverUploadUrlResponseSchema,
   portfolioResponseSchema,
   slugAvailabilityResponseSchema,
   uploadLogoResponseSchema,
+  uploadPortfolioCoverResponseSchema,
   type GoogleReviewsResponse,
   type LogoCropArea,
   type PortfolioProjectsResponse,
@@ -13,6 +15,7 @@ import {
   type SlugAvailabilityResponse,
   type UpdatePortfolioInput,
   type UploadLogoResponse,
+  type UploadPortfolioCoverResponse,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { handleApiResponse, readApiErrorMessage } from '@/lib/api-response';
@@ -129,6 +132,39 @@ export async function uploadLogo(
     commitResponse,
     uploadLogoResponseSchema,
     'Could not commit logo upload.',
+  );
+}
+
+/** Upload and commit the dedicated public portfolio Hero cover. */
+export async function uploadPortfolioCover(file: File): Promise<UploadPortfolioCoverResponse> {
+  const presignResponse = await api.api.profiles.me.portfolio.cover.upload.$post({
+    json: {
+      contentType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif',
+      contentLength: file.size,
+    },
+  });
+
+  const { uploadUrl, key } = await handleApiResponse(
+    presignResponse,
+    portfolioCoverUploadUrlResponseSchema,
+    'Could not prepare portfolio cover upload.',
+  );
+  const storageResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  if (!storageResponse.ok) {
+    throw new Error('Could not upload portfolio cover to storage.');
+  }
+
+  const commitResponse = await api.api.profiles.me.portfolio.cover.commit.$post({
+    json: { objectKey: key },
+  });
+  return handleApiResponse(
+    commitResponse,
+    uploadPortfolioCoverResponseSchema,
+    'Could not commit portfolio cover upload.',
   );
 }
 

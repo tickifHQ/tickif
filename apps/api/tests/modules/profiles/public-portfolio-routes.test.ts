@@ -52,9 +52,8 @@ vi.mock('@repo/config', () => ({
 }));
 
 // Import AFTER mock registration
-const { publicPortfolioService } = await import(
-  '../../../src/modules/profiles/public-portfolio-service.js'
-);
+const { publicPortfolioService } =
+  await import('../../../src/modules/profiles/public-portfolio-service.js');
 const { AppError } = await import('../../../src/lib/errors.js');
 const { app } = await import('../../../src/app.js');
 
@@ -71,6 +70,7 @@ const fakePortfolio: PublicPortfolioResponse = {
   cities: ['Chennai'],
   experienceCenterGroups: [],
   logoUrl: null,
+  heroCoverUrl: null,
   accentColor: '#FF8F73',
   badges: ['verified'],
   isKycVerified: true,
@@ -89,6 +89,7 @@ const fakePortfolio: PublicPortfolioResponse = {
     google: { rating: 4.8, reviewCount: 57 },
     projectCount: 12,
     yearsExperience: 6,
+    cityPresenceCount: 1,
     startingBudget: '₹10L+',
   },
   reviewVisibility: {
@@ -127,9 +128,7 @@ describe('GET /api/portfolios/{slug}', () => {
 
     const res = await app.request('/api/portfolios/test-studio');
 
-    expect(res.headers.get('Cache-Control')).toBe(
-      'public, max-age=60, stale-while-revalidate=300',
-    );
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=60, stale-while-revalidate=300');
   });
 
   it('propagates the service 404 through the standard error envelope', async () => {

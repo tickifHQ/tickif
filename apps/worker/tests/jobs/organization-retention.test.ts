@@ -134,11 +134,48 @@ describe('organization retention lifecycle processor', () => {
     expect(search.deleteSearchDocument).toHaveBeenCalledWith('designers', 'profile-1');
     expect(search.deleteSearchProjectsByDesigner).toHaveBeenCalledWith('profile-1');
     expect(repository.finalizeOrganizationPurge).toHaveBeenCalledOnce();
-    expect(storage.listObjectKeys).toHaveBeenCalledTimes(8);
+    expect(storage.listObjectKeys).toHaveBeenCalledTimes(10);
     expect(repository.appendPurgeStorageItems).toHaveBeenCalledTimes(2);
     expect(
       vi.mocked(repository.finalizeOrganizationPurge).mock.invocationCallOrder[0],
     ).toBeGreaterThan(vi.mocked(search.deleteSearchProjectsByDesigner).mock.invocationCallOrder[0]!);
+  });
+
+  it('deletes committed and abandoned portfolio covers before removing the organization', async () => {
+    const coverKeys = [
+      'originals/portfolio-covers/profile-1/committed',
+      'originals/portfolio-covers/profile-1/abandoned',
+    ];
+    vi.mocked(repository.findOrganizationsDueForPurge).mockResolvedValue([
+      { organizationId: 'org-1' },
+    ]);
+    vi.mocked(repository.prepareOrganizationPurge).mockResolvedValue({
+      manifestId: 'manifest-1',
+      organizationId: 'org-1',
+      projectIds: [],
+      profileIds: ['profile-1'],
+      items: [],
+      storageScanNotBefore: null,
+    });
+    vi.mocked(storage.listObjectKeys).mockImplementation(async (prefix) =>
+      prefix === 'originals/portfolio-covers/profile-1/' ? coverKeys : [],
+    );
+    vi.mocked(repository.appendPurgeStorageItems).mockImplementation(async (_id, keys) =>
+      keys.map((resourceKey, index) => ({ sequence: BigInt(index + 1), resourceKey })),
+    );
+    vi.mocked(repository.finalizeOrganizationPurge).mockResolvedValue(true);
+
+    await processOrganizationRetentionSweep(now);
+
+    for (const key of coverKeys) {
+      expect(storage.deleteObject).toHaveBeenCalledWith(key);
+    }
+    expect(repository.finalizeOrganizationPurge).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(repository.finalizeOrganizationPurge).mock.invocationCallOrder[0],
+    ).toBeGreaterThan(vi.mocked(storage.deleteObject).mock.invocationCallOrder.at(-1)!);
+    vi.mocked(storage.listObjectKeys).mockResolvedValue([]);
+    vi.mocked(repository.appendPurgeStorageItems).mockResolvedValue([]);
   });
 
   it('waits for outstanding presigned uploads to expire before scanning or deleting', async () => {

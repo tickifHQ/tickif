@@ -105,7 +105,7 @@ test('consultation lifecycle: visitor books, studio confirms and completes, visi
       ).ok(),
     ).toBeTruthy();
     await visitor.goto(`/d/${profile.slug}`);
-    await visitor.getByRole('button', { name: 'Book consultation', exact: true }).click();
+    await visitor.getByRole('button', { name: 'Book consultation', exact: true }).first().click();
     await visitor.getByRole('button', { name: 'Add another time' }).click();
     await visitor.getByLabel('Time window 2').selectOption('afternoon');
     await visitor

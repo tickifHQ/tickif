@@ -153,7 +153,7 @@ describe('EnquiryCta', () => {
     expect(screen.queryByRole('dialog', { name: 'Send an Enquiry' })).not.toBeInTheDocument();
   });
 
-  it("shares one eligibility check and disables every CTA on the caller's own studio", async () => {
+  it("shares one eligibility check and explains why every CTA is unavailable on the caller's own studio", async () => {
     mocks.session = {
       user: {
         id: 'designer-1',
@@ -180,15 +180,23 @@ describe('EnquiryCta', () => {
       </EnquiryAvailabilityProvider>,
     );
 
-    const enquire = await screen.findByRole('button', {
-      name: 'Enquire with Studio North',
-    });
-    const conversation = screen.getByRole('button', { name: 'Start a conversation' });
     await waitFor(() => {
-      expect(enquire).toBeDisabled();
-      expect(conversation).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Enquire with Studio North' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      expect(screen.getByRole('button', { name: 'Start a conversation' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
     });
-    expect(enquire).toHaveAttribute('title', 'You cannot enquire with your own studio');
+
+    const enquire = screen.getByRole('button', { name: 'Enquire with Studio North' });
+    fireEvent.focus(enquire);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      "You can't enquire about your own studio.",
+    );
+    expect(screen.queryByRole('dialog', { name: 'Send an Enquiry' })).not.toBeInTheDocument();
     expect(mocks.checkEnquiry).toHaveBeenCalledTimes(1);
   });
 

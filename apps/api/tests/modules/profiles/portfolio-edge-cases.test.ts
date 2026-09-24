@@ -89,6 +89,7 @@ const fakePortfolioResponse: PortfolioResponse = {
   displayName: 'Test Studio',
   bio: null,
   logoUrl: null,
+  heroCoverUrl: null,
   logoSourceUrl: null,
   logoCrop: null,
   websiteUrl: null,

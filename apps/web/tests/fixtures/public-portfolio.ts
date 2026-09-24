@@ -65,6 +65,7 @@ export function makePublicPortfolio(
     foundedYear: 2018,
     cities: ['Chennai'],
     logoUrl: null,
+    heroCoverUrl: 'https://cdn.example.test/portfolio-covers/anika-spaces.jpg',
     accentColor: '#FF8F73',
     badges: ['verified', 'established'],
     isKycVerified: true,
@@ -83,6 +84,7 @@ export function makePublicPortfolio(
       google: { rating: 4.8, reviewCount: 57 },
       projectCount: 28,
       yearsExperience: 8,
+      cityPresenceCount: 1,
       startingBudget: '₹10L+',
     },
     reviewVisibility: {

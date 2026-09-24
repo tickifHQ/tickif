@@ -329,6 +329,7 @@ export function DesignerLogoInput({
       <input
         ref={fileInputRef}
         type="file"
+        aria-label="Portfolio logo file"
         accept="image/jpeg,image/png,image/webp,image/avif"
         className="hidden"
         onChange={handleFileSelected}

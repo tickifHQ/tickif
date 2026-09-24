@@ -72,6 +72,7 @@ const mockPortfolioRow = (overrides: Partial<PortfolioRecord> = {}): PortfolioRe
   publicLinkEnabled: true,
   portfolioSlug: null,
   accentColor: '#FF8F73',
+  heroImageId: null,
   showHero: true,
   showTrustCredentials: true,
   showFeaturedTestimonial: true,

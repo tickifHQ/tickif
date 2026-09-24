@@ -130,23 +130,46 @@ describe('PublicDesignerProfile', () => {
     mocks.session = null;
   });
 
-  it('uses the large derivative for the wide hero while keeping the card cover for previews', () => {
-    const project = {
-      ...makeProjects(1)[0]!,
-      coverImageUrl: 'https://cdn.example.test/projects/medium.webp',
-      heroImageUrl: 'https://cdn.example.test/projects/large.webp',
-    };
+  it('uses the dedicated portfolio cover instead of a project image', () => {
     const portfolio = makePublicPortfolio({
-      projects: { projects: [project], page: 1, limit: 30, hasMore: false },
+      heroCoverUrl: 'https://cdn.example.test/portfolio-covers/hero.webp',
+      projects: {
+        projects: makeProjects(1),
+        page: 1,
+        limit: 30,
+        hasMore: false,
+      },
     });
 
     render(<PublicDesignerProfile portfolio={portfolio} />);
 
-    const projectImageUrls = screen
-      .getAllByAltText('Project 0 by Anika Spaces')
-      .map((image) => image.getAttribute('src'));
-    expect(projectImageUrls).toContain('https://cdn.example.test/projects/large.webp');
-    expect(projectImageUrls).toContain('https://cdn.example.test/projects/medium.webp');
+    expect(screen.getByAltText('Anika Spaces portfolio cover')).toHaveAttribute(
+      'src',
+      'https://cdn.example.test/portfolio-covers/hero.webp',
+    );
+    expect(screen.getByAltText('Anika Spaces portfolio cover')).toHaveAttribute('loading', 'eager');
+    expect(screen.getByAltText('Project 0 by Anika Spaces')).toHaveAttribute(
+      'src',
+      expect.stringContaining('projects/adyar.jpg'),
+    );
+  });
+
+  it('shows years, published projects, and city presence as the hero proof stats', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.getByText('Years experience')).toBeInTheDocument();
+    expect(hero.getByText('Projects')).toBeInTheDocument();
+    expect(hero.getByText('Cities present')).toBeInTheDocument();
+    expect(hero.queryByText('Typical budget')).not.toBeInTheDocument();
+    expect(hero.queryByText('Rating')).not.toBeInTheDocument();
+  });
+
+  it('uses Book consultation copy instead of Start a conversation', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getAllByText('Book consultation').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/Start a conversation/i)).toHaveLength(0);
   });
 
   it('renders every section from the API payload', () => {
@@ -281,7 +304,6 @@ describe('PublicDesignerProfile', () => {
     );
 
     expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
-    expect(screen.getByText('57 Google reviews')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Google reviews' })).toBeInTheDocument();
     expect(screen.queryByText('Based on 0 verified reviews')).not.toBeInTheDocument();
   });
@@ -401,6 +423,7 @@ describe('PublicDesignerProfile', () => {
             google: null,
             projectCount: 3,
             yearsExperience: 0,
+            cityPresenceCount: 0,
             startingBudget: null,
           },
         })}
@@ -449,13 +472,10 @@ describe('PublicDesignerProfile', () => {
   it('opens login in place for signed-out profile actions', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    // Enquire UI / Book Consultation feedback: the designer CTAs now read
-    // "Book Consultation" (StudioBar + hero + testimonial + share block = 4),
-    // while the distinct bottom "Get free consultation" CTA is unchanged.
-    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(4);
-    expect(screen.queryByRole('button', { name: 'Enquire' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeEnabled();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Book Consultation' })[0]!);
+    expect(screen.getAllByRole('button', { name: 'Book consultation' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Enquire' })).toBeEnabled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Book consultation' })[0]!);
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Save profile' })).not.toBeInTheDocument();
   });
@@ -472,11 +492,10 @@ describe('PublicDesignerProfile', () => {
 
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(4);
-    expect(screen.queryByRole('button', { name: 'Enquire' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Book Consultation' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Get free consultation' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Book consultation' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Enquire' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Book consultation' })).not.toBeInTheDocument();
   });
 
   it('renders the API-supplied project page in the gallery', () => {

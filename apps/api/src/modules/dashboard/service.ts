@@ -108,7 +108,12 @@ export const dashboardService = {
       },
       profile.publicLinkEnabled === null
         ? null
-        : { publicLinkEnabled: profile.publicLinkEnabled, tagline: profile.tagline },
+        : {
+            publicLinkEnabled: profile.publicLinkEnabled,
+            tagline: profile.tagline,
+            heroImageId: profile.heroImageId,
+            showHero: profile.showHero ?? true,
+          },
     );
 
     return {

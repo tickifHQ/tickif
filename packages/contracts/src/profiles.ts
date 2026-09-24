@@ -536,12 +536,18 @@ export type GoogleConnectionSummary = z.infer<typeof googleConnectionSummarySche
 /**
  * Hero fields a designer must fill before the public page goes live.
  *
- * The public `/d/{slug}` page leads with the logo, studio name, tagline and bio;
- * without them the hero renders as an empty frame. Completing all four flips
+ * The public `/d/{slug}` page leads with the cover, logo, studio name, tagline and bio;
+ * without them the hero renders as an empty frame. Completing all five flips
  * `designer_profile.status` from `draft` to `active`, which is what every public
  * surface gates on (portfolio page, discovery feed, search index, bookings).
  */
-export const requiredPortfolioFieldSchema = z.enum(['logo', 'displayName', 'tagline', 'bio']);
+export const requiredPortfolioFieldSchema = z.enum([
+  'heroCover',
+  'logo',
+  'displayName',
+  'tagline',
+  'bio',
+]);
 export type RequiredPortfolioField = z.infer<typeof requiredPortfolioFieldSchema>;
 
 export const portfolioReviewSourceSettingsSchema = z
@@ -577,6 +583,7 @@ export const portfolioResponseSchema = z
     displayName: z.string(),
     bio: z.string().nullable(),
     logoUrl: z.string().url().nullable(),
+    heroCoverUrl: z.string().url().nullable(),
     /** Private signed URL for re-editing the untouched logo upload. */
     logoSourceUrl: z.string().url().nullable(),
     /** Private owner-only crop selection used to restore the logo editor. */
@@ -722,6 +729,48 @@ export const logoCommitRequestSchema = z
   .meta({ id: 'LogoCommitRequest' });
 export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;
 
+// --- Portfolio Hero Cover Upload ---
+
+/** POST /api/profiles/me/portfolio/cover/upload — request body. */
+export const portfolioCoverUploadRequestSchema = z
+  .object({
+    contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif']),
+    contentLength: z.number().int().min(1).max(10_000_000),
+  })
+  .meta({ id: 'PortfolioCoverUploadRequest' });
+export type PortfolioCoverUploadRequest = z.infer<typeof portfolioCoverUploadRequestSchema>;
+
+/** POST /api/profiles/me/portfolio/cover/upload — response with presigned URL. */
+export const portfolioCoverUploadUrlResponseSchema = z
+  .object({
+    uploadUrl: z.string().url(),
+    key: z.string(),
+  })
+  .meta({ id: 'PortfolioCoverUploadUrlResponse' });
+export type PortfolioCoverUploadUrlResponse = z.infer<typeof portfolioCoverUploadUrlResponseSchema>;
+
+/** POST /api/profiles/me/portfolio/cover/commit — request body. */
+export const portfolioCoverCommitRequestSchema = z
+  .object({
+    objectKey: z
+      .string()
+      .max(512)
+      .regex(
+        /^originals\/portfolio-covers\/[^/]+\/[^/]+$/,
+        'Must be an originals/portfolio-covers/ object key',
+      ),
+  })
+  .meta({ id: 'PortfolioCoverCommitRequest' });
+export type PortfolioCoverCommitRequest = z.infer<typeof portfolioCoverCommitRequestSchema>;
+
+/** POST /api/profiles/me/portfolio/cover/commit — persisted cover URL. */
+export const uploadPortfolioCoverResponseSchema = z
+  .object({
+    heroCoverUrl: z.string().url(),
+  })
+  .meta({ id: 'UploadPortfolioCoverResponse' });
+export type UploadPortfolioCoverResponse = z.infer<typeof uploadPortfolioCoverResponseSchema>;
+
 // --- Google reviews endpoints ---
 
 /** A single Google review, as surfaced on the portfolio. */
@@ -840,6 +889,7 @@ export const publicPortfolioStatsSchema = z
       .nullable(),
     projectCount: z.number().int(),
     yearsExperience: z.number().int(),
+    cityPresenceCount: z.number().int().nonnegative(),
     /**
      * Label of the lowest budget band across published projects (taxonomy
      * `sortOrder`), or null when no published project carries a band.
@@ -912,6 +962,7 @@ export const publicPortfolioResponseSchema = z
     cities: z.array(z.string()),
     experienceCenterGroups: z.array(experienceCenterGroupSchema).optional(),
     logoUrl: z.string().url().nullable(),
+    heroCoverUrl: z.string().url().nullable(),
     accentColor: z.string(),
     badges: z.array(portfolioBadgeSchema),
     isKycVerified: z.boolean(),
