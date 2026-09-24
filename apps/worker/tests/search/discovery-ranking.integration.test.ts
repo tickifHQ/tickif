@@ -13,11 +13,12 @@ beforeAll(async () => {
   await client
     .collections()
     .create({ ...searchCollectionSchema('projects', collection), synonym_sets: [] });
-  for (const [id, avgRating, paidUntil, publishedAt, title] of [
-    ['paid-five', 5, 2000000000000, 1, 'Bedroom'],
-    ['free-five', 5, 0, 3, 'Bedroom'],
-    ['paid-four', 4, 2000000000000, 4, 'Bedroom'],
-    ['irrelevant-paid', 5, 2000000000000, 5, 'Kitchen'],
+  for (const [id, avgRating, rankingTier, paidUntil, publishedAt, title] of [
+    ['corporate-five', 5, 2, 2000000000000, 1, 'Bedroom'],
+    ['professional-five', 5, 1, 2000000000000, 2, 'Bedroom'],
+    ['free-five', 5, 0, 0, 3, 'Bedroom'],
+    ['corporate-four', 4, 2, 2000000000000, 4, 'Bedroom'],
+    ['irrelevant-paid', 5, 2, 2000000000000, 5, 'Kitchen'],
   ] as const) {
     await client
       .collections<Record<string, unknown> & { id: string }>(collection)
@@ -34,6 +35,7 @@ beforeAll(async () => {
         roomLabels: [],
         tags: [],
         avgRating,
+        rankingTier,
         paidUntil,
         publishedAt,
       });
@@ -44,16 +46,48 @@ afterAll(async () => {
 });
 
 describe('discovery ranking against Typesense', () => {
-  it('keeps higher ratings first and paid wins equal-rating ties without admitting unrelated work', async () => {
+  it('keeps higher ratings first and ranks Corporate then Professional on equal-rating ties', async () => {
     const result = await client
       .collections<Record<string, unknown> & { id: string }>(collection)
       .documents()
       .search({ q: 'bed', query_by: 'title', sort_by: discoveryRanking(1900000000000) });
     expect(result.hits?.map((hit) => hit.document.id)).toEqual([
-      'paid-five',
+      'corporate-five',
+      'professional-five',
       'free-five',
-      'paid-four',
+      'corporate-four',
     ]);
+  });
+  it('keeps a more relevant free project above a higher-rated Corporate project', async () => {
+    const documents = client
+      .collections<Record<string, unknown> & { id: string }>(collection)
+      .documents();
+    await documents.create({
+      id: 'exact-free',
+      title: 'Bed',
+      designerId: 'exact-free',
+      designerName: 'Studio',
+      themes: [],
+      materials: [],
+      finishes: [],
+      roomSlugs: [],
+      roomLabels: [],
+      tags: [],
+      avgRating: 4,
+      rankingTier: 0,
+      paidUntil: 0,
+      publishedAt: 1,
+    });
+    try {
+      const result = await documents.search({
+        q: 'bed',
+        query_by: 'title',
+        sort_by: discoveryRanking(1900000000000),
+      });
+      expect(result.hits?.[0]?.document.id).toBe('exact-free');
+    } finally {
+      await client.collections(collection).documents('exact-free').delete();
+    }
   });
   it('preserves ranking across pages', async () => {
     const pages = await Promise.all(
@@ -71,9 +105,10 @@ describe('discovery ranking against Typesense', () => {
       ),
     );
     expect(pages.flatMap((page) => page.hits?.map((hit) => hit.document.id) ?? [])).toEqual([
-      'paid-five',
+      'corporate-five',
+      'professional-five',
       'free-five',
-      'paid-four',
+      'corporate-four',
     ]);
   });
   it('recovers bad as a short typo without returning unrelated paid content', async () => {
@@ -88,9 +123,10 @@ describe('discovery ranking against Typesense', () => {
       query,
     );
     expect(result.hits?.map((hit) => hit.document.id)).toEqual([
-      'paid-five',
+      'corporate-five',
+      'professional-five',
       'free-five',
-      'paid-four',
+      'corporate-four',
     ]);
 
     const unrelated = await searchWithDiscoveryFallback(
@@ -109,11 +145,12 @@ describe('discovery ranking against Typesense', () => {
       .collections<Record<string, unknown> & { id: string }>(collection)
       .documents()
       .search({ q: 'bed', query_by: 'title', sort_by: discoveryRanking(2000000000000) });
-    expect(result.hits?.map((hit) => hit.document.id)).toEqual([
-      'free-five',
-      'paid-five',
-      'paid-four',
-    ]);
+    const ids = result.hits?.map((hit) => hit.document.id);
+    expect(ids?.[0]).toBe('free-five');
+    expect(ids?.slice(1, 3)).toEqual(
+      expect.arrayContaining(['corporate-five', 'professional-five']),
+    );
+    expect(ids?.[3]).toBe('corporate-four');
   });
   it('keeps an exact bad match instead of replacing it with bedroom results', async () => {
     await client.collections(collection).documents().create({
@@ -155,11 +192,12 @@ describe('designer portfolio matching against Typesense', () => {
     await client
       .collections()
       .create({ ...searchCollectionSchema('designers', designers), synonym_sets: [] });
-    for (const [id, avgRating, paidUntil, portfolioTerms] of [
-      ['paid-five', 5, 2000000000000, ['Bedroom']],
-      ['free-five', 5, 0, ['Bedroom']],
-      ['paid-four', 4, 2000000000000, ['Bedroom']],
-      ['kitchen-studio', 5, 2000000000000, ['Kitchen']],
+    for (const [id, avgRating, rankingTier, paidUntil, portfolioTerms] of [
+      ['corporate-five', 5, 2, 2000000000000, ['Bedroom']],
+      ['professional-five', 5, 1, 2000000000000, ['Bedroom']],
+      ['free-five', 5, 0, 0, ['Bedroom']],
+      ['corporate-four', 4, 2, 2000000000000, ['Bedroom']],
+      ['kitchen-studio', 5, 2, 2000000000000, ['Kitchen']],
     ] as const) {
       await client
         .collections(designers)
@@ -175,6 +213,7 @@ describe('designer portfolio matching against Typesense', () => {
           yearsExperience: 1,
           projectCount: 1,
           avgRating,
+          rankingTier,
           paidUntil,
           portfolioTerms: [...portfolioTerms],
           reviewCount: 1,
@@ -185,7 +224,7 @@ describe('designer portfolio matching against Typesense', () => {
   afterAll(async () => {
     await client.collections(designers).delete();
   });
-  it('finds generic rooms through published portfolio terms and breaks rating ties by paid coverage', async () => {
+  it('finds generic rooms through published portfolio terms and breaks rating ties by tier', async () => {
     const result = await client
       .collections<Record<string, unknown> & { id: string }>(designers)
       .documents()
@@ -195,9 +234,10 @@ describe('designer portfolio matching against Typesense', () => {
         sort_by: discoveryRanking(1900000000000),
       });
     expect(result.hits?.map((hit) => hit.document.id)).toEqual([
-      'paid-five',
+      'corporate-five',
+      'professional-five',
       'free-five',
-      'paid-four',
+      'corporate-four',
     ]);
     const kitchen = await client
       .collections<Record<string, unknown> & { id: string }>(designers)

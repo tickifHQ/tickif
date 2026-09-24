@@ -20,7 +20,7 @@ import {
   type FacetVocabulary,
 } from './constants.js';
 import { emptyFacetVocabulary } from './facets.js';
-import type { Derivative } from '@repo/contracts';
+import { RANKING_TIER, type Derivative } from '@repo/contracts';
 import { projectFeedFilterClauses } from '../projects/feed-filters.repository.js';
 
 /**
@@ -197,6 +197,29 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&');
 }
 
+function feedTextRelevance(q: string) {
+  const escaped = escapeLikePattern(q);
+  const contains = `%${escaped}%`;
+  return sql<number>`case
+    when lower(${schema.project.title}) = lower(${q}) then 3
+    when ${schema.project.title} ilike ${`${escaped}%`} then 2
+    when ${schema.project.title} ilike ${contains}
+      or ${schema.project.description} ilike ${contains}
+      or ${schema.designerProfile.displayName} ilike ${contains} then 1
+    else 0 end`;
+}
+
+function activeRankingTier() {
+  return sql<number>`case
+    when ${schema.subscription.subscriptionState} not in ('locked', 'downgraded')
+      and ${schema.subscription.currentPeriodEnd} > now() then
+      case ${schema.subscription.planTier}
+        when 'corporate' then ${RANKING_TIER.corporate}
+        when 'professional_plus' then ${RANKING_TIER.professional_plus}
+        else ${RANKING_TIER.hobby} end
+    else ${RANKING_TIER.hobby} end`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Repository
 // ─────────────────────────────────────────────────────────────────────────────
@@ -279,15 +302,15 @@ export const discoveryRepository = {
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .leftJoin(schema.subscription, eq(schema.subscription.organizationId, schema.organization.id))
       .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
       .where(where)
       .orderBy(
         ...(params.q
           ? [
+              desc(feedTextRelevance(params.q)),
               desc(schema.designerProfile.avgRating),
-              sql`exists (select 1 from subscription s where s.organization_id = ${schema.designerProfile.orgId}
-          and s.plan_tier <> 'hobby' and s.subscription_state not in ('locked', 'downgraded')
-          and s.current_period_end > now()) DESC`,
+              desc(activeRankingTier()),
               desc(schema.project.id),
             ]
           : params.sortBy),

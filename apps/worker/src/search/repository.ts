@@ -7,9 +7,11 @@ const PAGE_LIMIT_MAX = 500;
 
 // Coverage expiry prevents stale paid boosts if a lifecycle/index job is delayed.
 function paidUntilProjection() {
-  return sql<number>`coalesce((select extract(epoch from s.current_period_end) * 1000
-    from subscription s where s.organization_id = ${schema.designerProfile.orgId}
-    and s.plan_tier <> 'hobby' and s.subscription_state not in ('locked', 'downgraded')), 0)`;
+  return sql<number>`case
+    when ${schema.subscription.planTier} <> 'hobby'
+      and ${schema.subscription.subscriptionState} not in ('locked', 'downgraded')
+    then coalesce(extract(epoch from ${schema.subscription.currentPeriodEnd}) * 1000, 0)
+    else 0 end`;
 }
 
 function boundedLimit(limit: number): number {
@@ -73,6 +75,8 @@ async function readProjectSearchSource(
         displayName: schema.designerProfile.displayName,
         avgRating: schema.designerProfile.avgRating,
         paidUntil: paidUntilProjection(),
+        planTier: schema.subscription.planTier,
+        subscriptionState: schema.subscription.subscriptionState,
         reviewCount: schema.designerProfile.reviewCount,
       },
       cover: {
@@ -84,6 +88,7 @@ async function readProjectSearchSource(
     .from(schema.project)
     .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
     .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+    .leftJoin(schema.subscription, eq(schema.subscription.organizationId, schema.organization.id))
     .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
     .where(
       and(
@@ -166,6 +171,8 @@ export async function findDesignerSearchSource(
       projectCount: schema.designerProfile.projectCount,
       avgRating: schema.designerProfile.avgRating,
       paidUntil: paidUntilProjection(),
+      planTier: schema.subscription.planTier,
+      subscriptionState: schema.subscription.subscriptionState,
       reviewCount: schema.designerProfile.reviewCount,
       logoImageId: schema.designerProfile.logoImageId,
       updatedAt: schema.designerProfile.updatedAt,
@@ -179,6 +186,7 @@ export async function findDesignerSearchSource(
     })
     .from(schema.designerProfile)
     .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+    .leftJoin(schema.subscription, eq(schema.subscription.organizationId, schema.organization.id))
     .innerJoin(
       schema.designerPortfolio,
       eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
