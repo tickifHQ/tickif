@@ -37,6 +37,8 @@ export type ProjectSearchDocument = {
   avgRating: number;
   /** Paid coverage end in epoch ms. Zero means no paid discovery priority. */
   paidUntil?: number;
+  /** Effective tier after subscription lifecycle rules. */
+  rankingTier?: number;
   /** Designer's review count for rating snippet. */
   reviewCount: number;
 };
@@ -59,6 +61,8 @@ export type DesignerSearchDocument = {
   avgRating: number;
   /** Paid coverage end in epoch ms. Zero means no paid discovery priority. */
   paidUntil?: number;
+  /** Effective tier after subscription lifecycle rules. */
+  rankingTier?: number;
   reviewCount: number;
   /** Optional while existing Typesense documents are backfilled after schema rollout. */
   isKycVerified?: boolean;
