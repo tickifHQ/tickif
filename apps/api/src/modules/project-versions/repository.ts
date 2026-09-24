@@ -81,6 +81,7 @@ export function projectContentFields(project: Project): UpdateProjectInput {
     bhkSlug: project.bhkSlug,
     sizeSqft: project.sizeSqft,
     citySlug: project.citySlug,
+    cityName: project.cityName,
     localitySlug: project.localitySlug,
     buildingName: project.buildingName,
     budgetBandSlug: project.budgetBandSlug,

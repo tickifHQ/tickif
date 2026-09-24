@@ -93,6 +93,32 @@ describe('bounded live project versions', () => {
       .from(schema.project)
       .where(eq(schema.project.id, fixture.project.id));
     expect(live).toMatchObject({ status: 'published', citySlug: 'mumbai', cityName: null });
+    await projectsRepository.transition({
+      id: fixture.project.id,
+      fromStatus: 'submitted',
+      toStatus: 'in_review',
+      actorUserId: fixture.actor.id,
+      action: 'start_review',
+    });
+    await projectsRepository.transition({
+      id: fixture.project.id,
+      fromStatus: 'in_review',
+      toStatus: 'published',
+      actorUserId: fixture.actor.id,
+      action: 'publish',
+      requireNoUnresolvedReviewComments: true,
+    });
+    const [published] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, fixture.project.id));
+    expect(published).toMatchObject({ citySlug: null, cityName: 'Pondicherry' });
+
+    await projectsRepository.updateDraft(fixture.project.id, { cityName: 'Auroville' });
+    const state = await readProjectAggregate(fixture.project.id);
+    expect(state?.pending).not.toBeNull();
+    expect(state?.live.project.cityName).toBe('Pondicherry');
+    expect(state?.current.project.cityName).toBe('Auroville');
   });
 
   it.each(['minor edit', 'approved pending edit'] as const)(
