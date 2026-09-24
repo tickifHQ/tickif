@@ -43,6 +43,10 @@ describe('search repository designer ranking compatibility', () => {
       'a sort field is reported missing by name',
       'Request failed with HTTP code 404 | Server said: Could not find a field named `paidUntil` in the schema for sorting.',
     ],
+    [
+      'the new tier field is missing',
+      'Request failed with HTTP code 404 | Server said: Could not find a field named `rankingTier` in the schema for sorting.',
+    ],
   ])('retries default discovery without paid ranking when %s', async (_label, message) => {
     mocks.search.mockRejectedValueOnce(new Error(message)).mockResolvedValueOnce({
       hits: [],
@@ -56,7 +60,7 @@ describe('search repository designer ranking compatibility', () => {
       estimatedTotalHits: 0,
     });
     expect(mocks.search).toHaveBeenCalledTimes(2);
-    expect(mocks.search.mock.calls[0]?.[0].sort_by).toContain('_eval(paidUntil:>');
+    expect(mocks.search.mock.calls[0]?.[0].sort_by).toContain('_eval([(rankingTier:=2');
     expect(mocks.search.mock.calls[1]?.[0].sort_by).toBe(DESIGNER_DEFAULT_SORT);
   });
 
@@ -98,8 +102,6 @@ describe('search repository project facets', () => {
       per_page: 24,
     });
 
-    expect(mocks.search).toHaveBeenCalledWith(
-      expect.objectContaining({ max_facet_values: 250 }),
-    );
+    expect(mocks.search).toHaveBeenCalledWith(expect.objectContaining({ max_facet_values: 250 }));
   });
 });

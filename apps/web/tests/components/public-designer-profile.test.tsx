@@ -449,10 +449,13 @@ describe('PublicDesignerProfile', () => {
   it('opens login in place for signed-out profile actions', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getByRole('button', { name: 'Start a conversation' })).toBeEnabled();
-    expect(screen.getAllByRole('button', { name: 'Enquire' })).toHaveLength(3);
+    // Enquire UI / Book Consultation feedback: the designer CTAs now read
+    // "Book Consultation" (StudioBar + hero + testimonial + share block = 4),
+    // while the distinct bottom "Get free consultation" CTA is unchanged.
+    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Enquire' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Book Consultation' })[0]!);
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Save profile' })).not.toBeInTheDocument();
   });
@@ -469,10 +472,10 @@ describe('PublicDesignerProfile', () => {
 
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getByRole('button', { name: 'Start a conversation' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Enquire' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Enquire' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Start a conversation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Book Consultation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Get free consultation' })).not.toBeInTheDocument();
   });
 
