@@ -6,6 +6,7 @@ import type {
   DashboardProfileContext,
   ProjectStatusCount,
 } from '../../../src/modules/dashboard/repository.js';
+import type * as portfolioServiceModule from '../../../src/modules/profiles/portfolio-service.js';
 
 vi.mock('../../../src/modules/dashboard/repository.js', () => ({
   dashboardRepository: {
@@ -32,11 +33,21 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/profiles/portfolio-service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof portfolioServiceModule>();
+  return {
+    ...actual,
+    presignPortfolioHeroCover: vi.fn(),
+  };
+});
+
 const { dashboardService } = await import('../../../src/modules/dashboard/service.js');
 const { dashboardRepository } = await import('../../../src/modules/dashboard/repository.js');
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
 const { leadsService } = await import('../../../src/modules/leads/service.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
+const { presignPortfolioHeroCover } =
+  await import('../../../src/modules/profiles/portfolio-service.js');
 
 const input = { userId: 'user_1', userRole: 'designer', orgId: 'org_1' };
 
@@ -84,6 +95,9 @@ beforeEach(() => {
   vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue(counts());
   vi.mocked(profilesService.getCompletion).mockResolvedValue(completion());
   vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 0, new: 0 });
+  vi.mocked(presignPortfolioHeroCover).mockResolvedValue(
+    'https://cdn.example.com/portfolio-cover.png',
+  );
   vi.mocked(orgsService.getCapabilities).mockResolvedValue({
     billing: true,
     manageMembers: true,
@@ -134,10 +148,19 @@ describe('dashboardService.getProfileDashboard', () => {
         new: 3,
       },
       shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
+      heroCoverUrl: 'https://cdn.example.com/portfolio-cover.png',
       publiclyVisible: true,
       verificationStatus: null,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
+  });
+
+  it('keeps the dashboard usable when the decorative cover cannot be presigned', async () => {
+    vi.mocked(presignPortfolioHeroCover).mockRejectedValueOnce(new Error('Storage unavailable'));
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.heroCoverUrl).toBeNull();
   });
 
   it('returns no project or lead totals to a billing-only administrator', async () => {

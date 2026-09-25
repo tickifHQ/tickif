@@ -57,6 +57,8 @@ export const profileDashboardResponseSchema = z
       new: z.number().int(),
     }),
     shareUrl: z.string().url(),
+    /** Presigned dedicated portfolio cover for the dashboard share preview. */
+    heroCoverUrl: z.string().url().nullable(),
     /**
      * E-278: whether `/d/{slug}` actually serves the portfolio right now
      * (`status === 'active' && publicLinkEnabled`). The dashboard uses this to

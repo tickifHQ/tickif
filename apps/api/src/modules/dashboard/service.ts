@@ -6,7 +6,11 @@ import {
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
-import { getPortfolioPublicationState, publicPortfolioUrl } from '../profiles/portfolio-service.js';
+import {
+  getPortfolioPublicationState,
+  presignPortfolioHeroCover,
+  publicPortfolioUrl,
+} from '../profiles/portfolio-service.js';
 import { profilesService } from '../profiles/service.js';
 import { orgsService } from '../orgs/service.js';
 import {
@@ -82,7 +86,7 @@ export const dashboardService = {
       return Promise.resolve({ total: 0, new: 0 });
     })();
 
-    const [completion, counts, leadCounts] = await Promise.all([
+    const [completion, counts, leadCounts, heroCoverUrl] = await Promise.all([
       profilesService.getCompletion({
         userId: input.userId,
         orgId: profile.orgId,
@@ -94,6 +98,7 @@ export const dashboardService = {
           : dashboardRepository.countProjectsByStatus(profile.profileId)
         : Promise.resolve([]),
       leadCountsRequest,
+      presignPortfolioHeroCover(profile.profileId, profile).catch(() => null),
     ]);
 
     const published = countProjectBucket(counts, ['published']);
@@ -132,6 +137,7 @@ export const dashboardService = {
         new: leadCounts.new,
       },
       shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.profileSlug),
+      heroCoverUrl,
       publiclyVisible: publication.publiclyVisible,
       verificationStatus: effectiveVerificationStatus(profile),
     };
