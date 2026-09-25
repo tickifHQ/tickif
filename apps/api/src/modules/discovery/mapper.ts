@@ -36,6 +36,7 @@ export interface NormalizedFeedItem {
   designerName: string;
   designerSlug: string | null;
   citySlug: string | null;
+  cityName: string | null;
   localitySlug: string | null;
   bhkSlug: string | null;
   budgetBandSlug: string | null;
@@ -70,6 +71,7 @@ export function normalizeTypesenseHit(hit: ProjectSearchDocument): NormalizedFee
     designerName: hit.designerName,
     designerSlug: hit.designerSlug,
     citySlug: hit.citySlug,
+    cityName: hit.cityName ?? null,
     localitySlug: hit.localitySlug,
     bhkSlug: hit.bhkSlug,
     budgetBandSlug: hit.budgetBandSlug,
@@ -98,6 +100,7 @@ export function normalizePostgresRow(row: FeedProjectRow): NormalizedFeedItem {
     designerName: row.designerName,
     designerSlug: row.designerSlug,
     citySlug: row.citySlug,
+    cityName: row.cityName,
     localitySlug: row.localitySlug,
     bhkSlug: row.bhkSlug,
     budgetBandSlug: row.budgetBandSlug,
@@ -223,7 +226,7 @@ export async function toDiscoveryCard(
     slug: item.slug,
     title: item.title,
     studio: item.designerName,
-    city: labelOf(labels, 'city', item.citySlug),
+    city: labelOf(labels, 'city', item.citySlug) ?? item.cityName,
     locality:
       item.citySlug && item.localitySlug
         ? (localityLabels.get(`${item.citySlug}:${item.localitySlug}`) ?? null)

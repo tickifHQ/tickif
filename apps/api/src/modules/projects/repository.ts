@@ -294,6 +294,7 @@ function recommendationBranch(params: {
       ${schema.project.slug} as "slug",
       ${schema.project.title} as "title",
       ${schema.project.citySlug} as "citySlug",
+      ${schema.project.cityName} as "cityName",
       ${schema.project.localitySlug} as "localitySlug",
       ${schema.project.budgetBandSlug} as "budgetBandSlug",
       ${schema.project.scopeSlug} as "scopeSlug",
@@ -792,23 +793,23 @@ export const projectsRepository = {
       const [row] = await tx
         .insert(schema.project)
         .values({
-        designerId,
-        title: input.title,
-        slug,
-        description: input.description ?? null,
-        propertyTypeSlug: input.propertyTypeSlug ?? null,
-        propertySubtypeSlug: input.propertySubtypeSlug ?? null,
-        scopeSlug: input.scopeSlug ?? null,
-        bhkSlug: input.bhkSlug ?? null,
-        sizeSqft: input.sizeSqft ?? null,
-        citySlug: input.citySlug ?? null,
-        cityName: input.cityName ?? null,
-        localitySlug: input.localitySlug ?? null,
-        buildingName: input.buildingName ?? null,
-        budgetBandSlug: input.budgetBandSlug ?? null,
-        completedMonth: input.completedMonth ?? null,
-        durationMonths: input.durationMonths ?? null,
-        metadata: input.metadata ?? {},
+          designerId,
+          title: input.title,
+          slug,
+          description: input.description ?? null,
+          propertyTypeSlug: input.propertyTypeSlug ?? null,
+          propertySubtypeSlug: input.propertySubtypeSlug ?? null,
+          scopeSlug: input.scopeSlug ?? null,
+          bhkSlug: input.bhkSlug ?? null,
+          sizeSqft: input.sizeSqft ?? null,
+          citySlug: input.citySlug ?? null,
+          cityName: input.cityName ?? null,
+          localitySlug: input.localitySlug ?? null,
+          buildingName: input.buildingName ?? null,
+          budgetBandSlug: input.budgetBandSlug ?? null,
+          completedMonth: input.completedMonth ?? null,
+          durationMonths: input.durationMonths ?? null,
+          metadata: input.metadata ?? {},
         })
         .returning();
       if (!row) throw new Error('insert returned no row');
@@ -1011,7 +1012,8 @@ export const projectsRepository = {
           ).length,
         };
         const hasCover = eligible.some((image) => image.id === aggregate.project.coverImageId);
-        if (!hasCover) return { project: aggregate.project, counts, submitted: null, missingCover: true };
+        if (!hasCover)
+          return { project: aggregate.project, counts, submitted: null, missingCover: true };
         if (
           !aggregate.project.title.trim() ||
           !(aggregate.project.citySlug || aggregate.project.cityName) ||
@@ -2210,7 +2212,7 @@ export const projectsRepository = {
 
     const result = await db.execute<RawProjectRecommendationRow>(sql`
       select
-        "group", "id", "slug", "title", "citySlug", "localitySlug",
+        "group", "id", "slug", "title", "citySlug", "cityName", "localitySlug",
         "budgetBandSlug", "scopeSlug", "bhkSlug", "propertySubtypeSlug",
         "studio", "rating", "reviewCount", "coverImageId", "coverStatus",
         "coverDerivatives", "coverWidth", "coverHeight", "coverThemeSlugs", "sizeSqft",

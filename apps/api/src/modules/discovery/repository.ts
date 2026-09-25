@@ -52,6 +52,7 @@ export interface FeedProjectRow {
   slug: string;
   title: string;
   citySlug: string | null;
+  cityName: string | null;
   localitySlug: string | null;
   bhkSlug: string | null;
   budgetBandSlug: string | null;
@@ -104,6 +105,7 @@ const TYPESENSE_INCLUDE_FIELDS = [
   'designerSlug',
   'designerName',
   'citySlug',
+  'cityName',
   'localitySlug',
   'bhkSlug',
   'budgetBandSlug',
@@ -151,8 +153,8 @@ function feedVisibilityWhere(filters: DiscoveryFeedFilters, q?: string) {
 /**
  * Degraded-path text match.
  *
- * Covers the free-text columns behind `PROJECT_QUERY_BY` — `title`, `description` and
- * `designerName` — so the fallback is not quietly narrower than Typesense. Dropping
+ * Covers the free-text columns behind `PROJECT_QUERY_BY` — `title`, `description`,
+ * `cityName` and `designerName` — so the fallback is not quietly narrower than Typesense. Dropping
  * `description` here (as an earlier revision did) meant a query matching only a project's
  * body text returned hits while Typesense was up and nothing while it was down, which is
  * the one thing a fallback must not do. The remaining `PROJECT_QUERY_BY` entries are
@@ -166,6 +168,7 @@ function feedTextMatch(q: string) {
   return or(
     ilike(schema.project.title, pattern),
     ilike(schema.project.description, pattern),
+    ilike(schema.project.cityName, pattern),
     ilike(schema.designerProfile.displayName, pattern),
     sql`exists (
       select 1
@@ -205,6 +208,7 @@ function feedTextRelevance(q: string) {
     when ${schema.project.title} ilike ${`${escaped}%`} then 2
     when ${schema.project.title} ilike ${contains}
       or ${schema.project.description} ilike ${contains}
+      or ${schema.project.cityName} ilike ${contains}
       or ${schema.designerProfile.displayName} ilike ${contains} then 1
     else 0 end`;
 }
@@ -288,6 +292,7 @@ export const discoveryRepository = {
         slug: schema.project.slug,
         title: schema.project.title,
         citySlug: schema.project.citySlug,
+        cityName: schema.project.cityName,
         localitySlug: schema.project.localitySlug,
         bhkSlug: schema.project.bhkSlug,
         budgetBandSlug: schema.project.budgetBandSlug,

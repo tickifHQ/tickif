@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { PublicProjectRecommendations } from '../../src/components/public-project-recommendations';
 import { makePublicProject, makeRecommendationProject } from '../fixtures/public-project';
 
-vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+vi.mock('@/components/project-like-button', () => ({
+  ProjectLikeButton: () => <button>Like</button>,
+}));
 
 describe('PublicProjectRecommendations', () => {
   it('renders the three sourced recommendation groups and their existing routes', () => {
@@ -72,5 +74,29 @@ describe('PublicProjectRecommendations', () => {
 
     rerender(<PublicProjectRecommendations project={makePublicProject()} />);
     expect(screen.queryByRole('region', { name: 'Related projects' })).toBeNull();
+  });
+
+  it('uses a custom city label without inventing a taxonomy filter link', () => {
+    render(
+      <PublicProjectRecommendations
+        project={makePublicProject({
+          specifications: {
+            ...makePublicProject().specifications,
+            city: null,
+            cityName: 'Pondicherry',
+            locality: null,
+          },
+          recommendations: {
+            moreFromDesigner: [],
+            sameBudgetDifferentStyle: [],
+            nearby: [makeRecommendationProject({ city: 'Pondicherry', locality: null })],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'In Pondicherry' })).toBeInTheDocument();
+    expect(screen.getByText('More homes in Pondicherry')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /All in Pondicherry/ })).toBeNull();
   });
 });

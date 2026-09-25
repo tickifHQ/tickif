@@ -62,6 +62,7 @@ function postgresRow(overrides: Partial<FeedProjectRow> = {}): FeedProjectRow {
     designerName: 'Studio One',
     designerSlug: 'studio-one',
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: 'bandra',
     bhkSlug: '3-bhk',
     budgetBandSlug: '40-60-lakh',
@@ -111,6 +112,16 @@ describe('discovery card mapper', () => {
       coverImageUrl: 'https://signed.example/medium.webp',
       imageWidth: 1024,
       imageHeight: 768,
+    });
+  });
+
+  it.each([
+    ['Typesense', normalizeTypesenseHit(searchHit({ citySlug: null, cityName: 'Pondicherry' }))],
+    ['Postgres', normalizePostgresRow(postgresRow({ citySlug: null, cityName: 'Pondicherry' }))],
+  ])('preserves a custom city from the %s discovery path', async (_source, item) => {
+    await expect(toDiscoveryCard(item, labels, localities)).resolves.toMatchObject({
+      city: 'Pondicherry',
+      locality: null,
     });
   });
 

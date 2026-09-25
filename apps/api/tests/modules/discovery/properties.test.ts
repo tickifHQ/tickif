@@ -173,6 +173,7 @@ const createPostgresRow = (
   designerName: 'Designer Name',
   designerSlug: 'designer-slug',
   citySlug,
+  cityName: null,
   localitySlug: null,
   bhkSlug,
   budgetBandSlug: null,

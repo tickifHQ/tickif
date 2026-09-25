@@ -76,6 +76,7 @@ const postgresRow = {
   ...searchHit,
   designerSlug: 'studio-one',
   citySlug: 'mumbai',
+  cityName: null,
   localitySlug: null,
   bhkSlug: '3-bhk',
   budgetBandSlug: null,
