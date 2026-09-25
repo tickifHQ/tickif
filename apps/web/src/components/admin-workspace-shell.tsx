@@ -8,6 +8,7 @@ import { AccountMenu } from '@/components/account-menu';
 import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import {
+  Inbox,
   LayoutDashboard,
   MessageSquareMore,
   ShieldUser,
@@ -27,6 +28,7 @@ const adminItems: AdminNavItem[] = [
   { label: 'Project moderation', href: '/moderation', icon: SquareChartGantt },
   { label: 'Review moderation', href: '/review-moderation', icon: MessageSquareMore },
   { label: 'Profile verification', href: '/verifications', icon: ShieldUser },
+  { label: 'Enquiries', href: '/admin/enquiries', icon: Inbox },
 ];
 
 function isActive(pathname: string, href: string) {
