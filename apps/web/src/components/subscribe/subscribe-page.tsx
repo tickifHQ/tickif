@@ -116,9 +116,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
   const { tier, lifecycleState } = subscription;
   const currentPlan = PLAN_MAP[tier];
   const suppressPlanActions =
-    subscription.cancellationScheduled ||
-    !selection.context ||
-    Object.values(selection.actions).some((action) => action?.hidden);
+    !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
   const needsPaymentRecovery =
     subscription.razorpayStatus === 'halted' ||
     lifecycleState === 'payment_failed' ||
@@ -179,7 +177,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
       <PlanSelection
         currentTier={tier}
         lifecycleState={lifecycleState}
-        selectedTier={selectedTier}
+        selectedTier={selection.savedTargetTier ?? selectedTier}
         actions={selection.actions}
         onSelectPlan={(target) => {
           setSelectedTier(target);

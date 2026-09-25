@@ -10,9 +10,12 @@ import {
 } from '@repo/contracts';
 import { orgsService } from '../orgs/service.js';
 import { AppError } from '../../lib/errors.js';
+import { invalidateEntitlementCache } from '../../lib/redis.js';
 import { operationRepository } from './operation-repository.js';
 import { recoveryService } from './recovery-service.js';
 import { subscribeRepository } from './subscribe-repository.js';
+import { getPlanChangeTiming } from './plan-change-policy.js';
+import { replacementRepository, reconcileReplacement, upgradeAmount } from '@repo/billing';
 import {
   fetchSubscription,
   fetchScheduledChanges,
@@ -111,16 +114,9 @@ async function snapshot(caller: BillingCaller, reader: Reader = subscribeReposit
         'cancel',
         local?.cancelAtPeriodEnd || remote.cancel_at_cycle_end ? 'cancellation_scheduled' : null,
       );
-    if (local?.cancelAtPeriodEnd || remote.cancel_at_cycle_end)
-      return result('recover', 'cancellation_scheduled');
-    // A card marker does not establish international-card mandate eligibility.
-    // No verified provider quote/cap exists: never submit an unbounded immediate charge.
-    return result(
-      'recover',
-      currentTier === 'professional_plus'
-        ? 'amount_authorization_unavailable'
-        : 'payment_method_unverified',
-    );
+    if (!remote.current_start || !remote.current_end)
+      return result('recover', 'billing_period_unverified');
+    return result('change_plan');
   });
   const context: BillingSelectionContext = {
     organizationId: caller.activeOrgId!,
@@ -141,7 +137,54 @@ async function snapshot(caller: BillingCaller, reader: Reader = subscribeReposit
   };
 }
 
-async function buildPreview(caller: BillingCaller, targetTier: PlanTier, reader?: Reader) {
+async function buildPreview(
+  caller: BillingCaller,
+  targetTier: PlanTier,
+  reader?: Reader,
+  quotedAt = Math.floor(Date.now() / 1000),
+) {
+  const pending = await replacementRepository.current(caller.activeOrgId!);
+  if (pending) {
+    const resume = targetTier === pending.targetTier && pending.status === 'checkout';
+    const cancel = targetTier === 'hobby' && pending.status === 'confirmed';
+    const local = await (reader ?? subscribeRepository).find(caller.activeOrgId!);
+    const preview: Omit<BillingChangePreview, 'expiresAt' | 'previewToken'> = {
+      organizationId: caller.activeOrgId!,
+      sourceSubscriptionId: pending.sourceSubscriptionId,
+      currentTier: local?.planTier ?? pending.sourceTier,
+      targetTier,
+      action: cancel ? 'cancel' : resume ? 'change_plan' : 'blocked',
+      timing: cancel ? 'cycle_end' : pending.targetTier === 'corporate' ? 'now' : 'cycle_end',
+      effectiveAt:
+        !cancel && pending.targetTier === 'corporate'
+          ? pending.createdAt.toISOString()
+          : pending.periodEnd.toISOString(),
+      nextRenewalAt: pending.periodEnd.toISOString(),
+      nextEligibleAction: null,
+      nextEligibleAt: null,
+      reason: 'replacement_pending',
+      recurringAmount: cancel ? 0 : pending.recurringAmount,
+      adjustmentAmount: cancel ? 0 : pending.amount,
+      currency: pending.currency,
+      amountCertainty: 'confirmed',
+      adjustmentDirection: !cancel && pending.amount ? 'charge' : 'none',
+      confirmationAllowed: resume || cancel,
+    };
+    return {
+      preview,
+      revision: sign(
+        JSON.stringify({
+          id: pending.id,
+          status: pending.status,
+          targetTier: pending.targetTier,
+          sourceTier: pending.sourceTier,
+          amount: pending.amount,
+          periodEnd: pending.periodEnd,
+          preview,
+        }),
+      ),
+    };
+  }
   const state = await snapshot(caller, reader);
   const action = state.context.actions.find((entry) => entry.targetTier === targetTier)!;
   let recurringAmount: number | null = targetTier === 'hobby' ? 0 : null;
@@ -166,6 +209,35 @@ async function buildPreview(caller: BillingCaller, targetTier: PlanTier, reader?
     }
   }
   const noCharge = action.action === 'cancel' || action.action === 'recover';
+  let adjustmentAmount: number | null = noCharge ? 0 : null;
+  if (
+    action.action === 'change_plan' &&
+    recurringAmount !== null &&
+    state.remote?.current_start &&
+    state.remote.current_end &&
+    !state.remote.offer_id &&
+    (state.remote.quantity ?? 1) === 1
+  ) {
+    const sourcePlan = await fetchPlan(state.remote.plan_id);
+    if (
+      sourcePlan.period === 'monthly' &&
+      sourcePlan.interval === 1 &&
+      sourcePlan.item.currency === currency
+    ) {
+      adjustmentAmount =
+        getPlanChangeTiming(state.context.currentTier, targetTier) === 'now'
+          ? upgradeAmount(
+              sourcePlan.item.amount,
+              recurringAmount,
+              state.remote.current_start,
+              state.remote.current_end,
+              quotedAt,
+            )
+          : 0;
+      // Razorpay orders require at least INR 1; waive a smaller remaining-period adjustment.
+      if (adjustmentAmount < 100) adjustmentAmount = 0;
+    }
+  }
   const preview: Omit<BillingChangePreview, 'expiresAt' | 'previewToken'> = {
     organizationId: state.context.organizationId,
     sourceSubscriptionId: state.context.sourceSubscriptionId,
@@ -177,21 +249,31 @@ async function buildPreview(caller: BillingCaller, targetTier: PlanTier, reader?
         ? 'now'
         : action.action === 'cancel'
           ? 'cycle_end'
-          : action.action === 'recover'
-            ? 'after_expiry'
-            : 'unavailable',
-    effectiveAt: action.action === 'subscribe' ? null : action.effectiveAt,
+          : action.action === 'change_plan'
+            ? (getPlanChangeTiming(state.context.currentTier, targetTier) ?? 'unavailable')
+            : action.action === 'recover'
+              ? 'after_expiry'
+              : 'unavailable',
+    effectiveAt:
+      action.action === 'subscribe'
+        ? null
+        : action.action === 'change_plan' &&
+            getPlanChangeTiming(state.context.currentTier, targetTier) === 'now'
+          ? new Date(quotedAt * 1000).toISOString()
+          : action.effectiveAt,
     nextRenewalAt: iso(state.remote?.current_end),
     nextEligibleAction: action.action === 'recover' ? 'subscribe' : null,
     nextEligibleAt: action.action === 'recover' ? action.effectiveAt : null,
     reason: action.reason,
     recurringAmount,
     currency,
-    adjustmentAmount: noCharge ? 0 : null,
-    adjustmentDirection: noCharge ? 'none' : 'unknown',
-    amountCertainty: noCharge ? 'confirmed' : 'unavailable',
+    adjustmentAmount,
+    adjustmentDirection:
+      adjustmentAmount === null ? 'unknown' : adjustmentAmount > 0 ? 'charge' : 'none',
+    amountCertainty: adjustmentAmount !== null ? 'confirmed' : 'unavailable',
     confirmationAllowed:
-      ['subscribe', 'cancel', 'recover'].includes(action.action) &&
+      (['subscribe', 'cancel', 'recover'].includes(action.action) ||
+        (action.action === 'change_plan' && adjustmentAmount !== null)) &&
       state.context.providerState === 'known',
   };
   return { preview, revision: sign(JSON.stringify({ revision: state.revision, preview })) };
@@ -199,6 +281,58 @@ async function buildPreview(caller: BillingCaller, targetTier: PlanTier, reader?
 export const billingSelectionService = {
   async context(caller: BillingCaller) {
     await assertBillingAccess(caller);
+    const replacement = await replacementRepository.current(caller.activeOrgId!);
+    if (replacement) {
+      await reconcileReplacement(caller.activeOrgId!);
+      await invalidateEntitlementCache(caller.activeOrgId!);
+      const current = await replacementRepository.current(caller.activeOrgId!);
+      const local = await subscribeRepository.find(caller.activeOrgId!);
+      if (current)
+        return {
+          organizationId: caller.activeOrgId!,
+          currentTier: local?.planTier ?? 'hobby',
+          sourceSubscriptionId: local?.razorpaySubscriptionId ?? null,
+          providerState: 'known' as const,
+          recovery: null,
+          pendingOperation: ['checkout', 'confirmed'].includes(current.status)
+            ? null
+            : {
+                operationId: current.id,
+                targetTier: current.targetTier,
+                status: current.status,
+                reason: 'replacement_checkout_pending',
+              },
+          unfinishedCheckout: null,
+          scheduledChange:
+            local?.cancelAtPeriodEnd && current.status === 'confirmed'
+              ? {
+                  targetTier: 'hobby' as const,
+                  effectiveAt:
+                    local.currentPeriodEnd?.toISOString() ?? current.periodEnd.toISOString(),
+                }
+              : current.status === 'confirmed' && current.targetTier !== local?.planTier
+                ? { targetTier: current.targetTier, effectiveAt: current.periodEnd.toISOString() }
+                : null,
+          actions: PLAN_TIER_VALUES.map((targetTier) => ({
+            targetTier,
+            action:
+              targetTier === 'hobby' && current.status === 'confirmed'
+                ? ('cancel' as const)
+                : targetTier === local?.planTier
+                  ? ('current' as const)
+                  : targetTier === current.targetTier && current.status === 'checkout'
+                    ? ('change_plan' as const)
+                    : ('blocked' as const),
+            reason:
+              targetTier === 'hobby' && current.status === 'confirmed'
+                ? current.targetTier === 'hobby' || local?.cancelAtPeriodEnd
+                  ? 'cancellation_scheduled'
+                  : null
+                : 'replacement_pending',
+            effectiveAt: current.periodEnd.toISOString(),
+          })),
+        };
+    }
     const recovery = await recoveryService.get(caller);
     const state = await snapshot(caller);
     const context = state.context;
@@ -285,7 +419,13 @@ export const billingSelectionService = {
     params: { targetTier: PlanTier },
   ): Promise<BillingChangePreview> {
     await assertBillingAccess(caller);
-    const { preview, revision } = await buildPreview(caller, params.targetTier);
+    const quotedAt = Math.floor(Date.now() / 1000);
+    const { preview, revision } = await buildPreview(
+      caller,
+      params.targetTier,
+      undefined,
+      quotedAt,
+    );
     const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
     const payload = Buffer.from(
       JSON.stringify({
@@ -294,6 +434,7 @@ export const billingSelectionService = {
         targetTier: params.targetTier,
         revision,
         expiresAt,
+        quotedAt,
       }),
     ).toString('base64url');
     return { ...preview, expiresAt, previewToken: `${payload}.${sign(payload)}` };
@@ -343,7 +484,13 @@ export async function validateBillingPreview(
     !(Date.parse(decoded.expiresAt) > Date.now())
   )
     throw stale();
-  const fresh = await buildPreview(caller, params.targetTier, reader);
+  if (
+    !('quotedAt' in decoded) ||
+    typeof decoded.quotedAt !== 'number' ||
+    !Number.isSafeInteger(decoded.quotedAt)
+  )
+    throw stale();
+  const fresh = await buildPreview(caller, params.targetTier, reader, decoded.quotedAt);
   if (decoded.revision !== fresh.revision) throw stale();
   if (!fresh.preview.confirmationAllowed)
     throw new AppError(

@@ -37,6 +37,50 @@ export const billingOperationKindEnum = pgEnum('billing_operation_kind', [
   'recover',
 ]);
 
+export const billingReplacementStatusEnum = pgEnum('billing_replacement_status', [
+  'creating',
+  'checkout',
+  'confirmed',
+  'completed',
+  'aborting',
+  'failed',
+]);
+
+/** Retains both mandate identities after rollover; provider events never define access alone. */
+export const billingReplacement = pgTable(
+  'billing_replacement',
+  {
+    id: uuid().primaryKey(),
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    sourceSubscriptionId: text().notNull(),
+    replacementSubscriptionId: text().unique(),
+    orderId: text().unique(),
+    paymentId: text().unique(),
+    targetTier: planTierEnum().notNull(),
+    sourceTier: planTierEnum().notNull(),
+    targetPlanId: text().notNull(),
+    amount: integer().notNull(),
+    recurringAmount: integer().notNull(),
+    currency: text().notNull(),
+    periodEnd: timestamp({ withTimezone: true }).notNull(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    status: billingReplacementStatusEnum().notNull().default('creating'),
+    sourceStoppedAt: timestamp({ withTimezone: true }),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('billing_replacement_org_idx').on(t.organizationId),
+    index('billing_replacement_source_idx').on(t.sourceSubscriptionId),
+    index('billing_replacement_sweep_idx').on(t.updatedAt),
+    uniqueIndex('billing_replacement_open_org_unique')
+      .on(t.organizationId)
+      .where(sql`${t.status} not in ('completed', 'failed')`),
+  ],
+);
+
 export const billingRecovery = pgTable(
   'billing_recovery',
   {

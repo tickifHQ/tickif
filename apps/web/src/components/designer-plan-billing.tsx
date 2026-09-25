@@ -752,9 +752,7 @@ function ScopedDesignerPlanBilling({
     billing.tier !== 'hobby' &&
     (billing.lifecycle === 'grace' || billing.lifecycle === 'payment_failed');
   const suppressPlanActions =
-    billing.cancellationScheduled ||
-    !selection.context ||
-    Object.values(selection.actions).some((action) => action?.hidden);
+    !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -816,7 +814,7 @@ function ScopedDesignerPlanBilling({
         <PlanSelection
           currentTier={billing.tier}
           lifecycleState={billing.lifecycle}
-          selectedTier={selectedTier}
+          selectedTier={selection.savedTargetTier ?? selectedTier}
           actions={selection.actions}
           onSelectPlan={openSubscribe}
         />

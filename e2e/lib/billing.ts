@@ -16,7 +16,11 @@ export async function providerMutationCount(context: BrowserContext, path: strin
   return requests.filter((request) => request.path === path && request.method !== 'GET').length;
 }
 
-export async function createBillingOwner(context: BrowserContext, tier: PlanTier = 'hobby') {
+export async function createBillingOwner(
+  context: BrowserContext,
+  tier: PlanTier = 'hobby',
+  options: { unverifiedPeriod?: boolean } = {},
+) {
   await assertTestDb();
   const user = await makeUser({
     role: 'designer',
@@ -32,7 +36,7 @@ export async function createBillingOwner(context: BrowserContext, tier: PlanTier
     id: providerId,
     plan_id: tier === 'corporate' ? 'plan_e2e_corporate' : 'plan_e2e_professional',
     status: 'active',
-    current_start: currentStart,
+    current_start: options.unverifiedPeriod ? 0 : currentStart,
     current_end: currentEnd,
     notes: { organizationId: org.id, tier },
   };
@@ -116,4 +120,95 @@ export async function deliverSubscriptionEvent(
     data: body,
   });
   expect(response.ok(), await response.text()).toBeTruthy();
+}
+
+/** Verified provider fixtures drive the real replacement reconciler, including a simulated renewal boundary. */
+export async function completeReplacement(
+  context: BrowserContext,
+  owner: Awaited<ReturnType<typeof createBillingOwner>>,
+  rollover = false,
+) {
+  const [row] = await db
+    .select()
+    .from(schema.billingReplacement)
+    .where(eq(schema.billingReplacement.organizationId, owner.org.id));
+  expect(row?.replacementSubscriptionId).toBeTruthy();
+  const periodEnd = rollover
+    ? Math.floor(Date.now() / 1000) - 1
+    : Math.floor(row!.periodEnd.getTime() / 1000);
+  const next = {
+    id: row!.replacementSubscriptionId,
+    plan_id: row!.targetPlanId,
+    status: 'authenticated',
+    start_at: Math.floor(row!.periodEnd.getTime() / 1000),
+    current_start: null as number | null,
+    current_end: null as number | null,
+  };
+  expect(
+    (
+      await context.request.post(`${providerUrl}/billing-fixture/subscriptions`, { data: next })
+    ).ok(),
+  ).toBeTruthy();
+  if (row!.orderId)
+    expect(
+      (
+        await context.request.post(`${providerUrl}/billing-fixture/capture`, {
+          data: { orderId: row!.orderId },
+        })
+      ).ok(),
+    ).toBeTruthy();
+  expect((await context.request.get(`${apiUrl}/api/billing/replacement`)).ok()).toBeTruthy();
+  if (rollover) {
+    await db
+      .update(schema.billingReplacement)
+      .set({ periodEnd: new Date(periodEnd * 1000) })
+      .where(eq(schema.billingReplacement.id, row!.id));
+    next.status = 'active';
+    next.start_at = periodEnd;
+    next.current_start = periodEnd;
+    next.current_end = periodEnd + 30 * 86400;
+    const paymentId = `pay_e2e_${randomUUID()}`;
+    expect(
+      (
+        await context.request.post(`${providerUrl}/billing-fixture/invoices`, {
+          data: {
+            invoices: {
+              items: [
+                {
+                  id: `inv_e2e_${randomUUID()}`,
+                  subscription_id: next.id,
+                  payment_id: paymentId,
+                  status: 'paid',
+                  billing_start: periodEnd,
+                  billing_end: next.current_end,
+                  amount_paid: row!.recurringAmount,
+                  currency: row!.currency,
+                },
+              ],
+            },
+            payments: {
+              items: [
+                {
+                  id: paymentId,
+                  order_id: null,
+                  amount: row!.recurringAmount,
+                  currency: row!.currency,
+                  status: 'captured',
+                  amount_refunded: 0,
+                  created_at: periodEnd,
+                },
+              ],
+            },
+          },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    expect(
+      (
+        await context.request.post(`${providerUrl}/billing-fixture/subscriptions`, { data: next })
+      ).ok(),
+    ).toBeTruthy();
+    expect((await context.request.get(`${apiUrl}/api/billing/replacement`)).ok()).toBeTruthy();
+  }
+  return row!;
 }

@@ -41,6 +41,48 @@ function loadRazorpayScript(): Promise<void> {
   return pending;
 }
 
+export async function openRazorpayOrder(params: {
+  keyId: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  onSuccess: (value: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
+  onDismiss: () => void;
+}) {
+  await loadRazorpayScript();
+  if (!window.Razorpay) throw new Error('Razorpay Checkout not available');
+  let completed = false;
+  new window.Razorpay({
+    key: params.keyId,
+    order_id: params.orderId,
+    amount: params.amount,
+    currency: params.currency,
+    name: 'Tickif',
+    description: 'Prorated plan upgrade',
+    handler: (response: Record<string, string>) => {
+      if (completed) return;
+      completed = true;
+      params.onSuccess({
+        razorpay_payment_id: response.razorpay_payment_id ?? '',
+        razorpay_order_id: response.razorpay_order_id ?? '',
+        razorpay_signature: response.razorpay_signature ?? '',
+      });
+    },
+    modal: {
+      ondismiss: () => {
+        if (!completed) {
+          completed = true;
+          params.onDismiss();
+        }
+      },
+    },
+  }).open();
+}
+
 export async function openRazorpayCheckout(params: {
   keyId: string;
   subscriptionId: string;

@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@repo/billing', () => ({
+  replacementRepository: { current: vi.fn().mockResolvedValue(undefined) },
+}));
+vi.mock('../../../src/modules/billing/replacement-service.js', () => ({
+  startReplacement: mocks.change,
+}));
 const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   validate: vi.fn(),
@@ -52,6 +58,35 @@ beforeEach(() => {
   });
 });
 describe('durable billing mutation operations', () => {
+  it.each(['now', 'cycle_end'])(
+    'keeps a %s plan change pending until reconciliation',
+    async (timing) => {
+      mocks.validate.mockResolvedValue({
+        preview: {
+          action: 'change_plan',
+          timing,
+          sourceSubscriptionId: 'provider_sub',
+          effectiveAt: null,
+        },
+        revision: 'revision',
+      });
+      mocks.change.mockResolvedValue({ razorpaySubscriptionId: 'provider_sub' });
+      const response = await billingMutationService.execute(caller, params, 'change_plan');
+      expect(response).toMatchObject({ outcome: 'processing' });
+      expect(mocks.updateOperation).toHaveBeenCalledWith('org', params.operationId, {
+        status: 'processing',
+        result: response,
+      });
+      mocks.findOperation.mockResolvedValue({
+        targetTier: 'corporate',
+        kind: 'change_plan',
+        status: 'processing',
+        result: response,
+      });
+      expect(await billingMutationService.execute(caller, params, 'change_plan')).toEqual(response);
+      expect(mocks.change).toHaveBeenCalledTimes(1);
+    },
+  );
   it('commits reservation before provider mutation and replays the saved result', async () => {
     mocks.create.mockImplementation(async () => {
       expect(mocks.committed).toBe(true);
