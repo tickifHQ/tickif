@@ -10,9 +10,9 @@ export default function DesignersLoading() {
       <span className="sr-only">Loading designers…</span>
       <Skeleton className="h-10 w-60" />
       <Skeleton className="h-48 w-full" />
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }, (_, index) => (
-          <Skeleton key={index} className="h-64 w-full" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {Array.from({ length: 8 }, (_, index) => (
+          <Skeleton key={index} className="h-56 w-full" />
         ))}
       </div>
     </div>

@@ -82,6 +82,7 @@ const DESIGNER_COLLECTION_FIELDS = [
   { name: 'portfolioTerms', type: 'string[]', optional: true },
   { name: 'slug', type: 'string', index: false, optional: true },
   { name: 'displayName', type: 'string' },
+  { name: 'tagline', type: 'string', index: false, optional: true },
   { name: 'bio', type: 'string', optional: true },
   { name: 'entityType', type: 'string', facet: true },
   { name: 'citySlugs', type: 'string[]', facet: true },
@@ -97,6 +98,7 @@ const DESIGNER_COLLECTION_FIELDS = [
   { name: 'isKycVerified', type: 'bool', sort: true, optional: true },
   { name: 'kycExpiresAt', type: 'int64', sort: true, optional: true },
   { name: 'logoImageKey', type: 'string', index: false, optional: true },
+  { name: 'heroImageKey', type: 'string', index: false, optional: true },
   { name: 'updatedAt', type: 'int64', sort: true },
 ] satisfies CollectionFieldSchema[];
 

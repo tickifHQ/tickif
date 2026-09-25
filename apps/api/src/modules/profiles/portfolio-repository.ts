@@ -572,11 +572,23 @@ export const portfolioRepository = {
           sql`${schema.designerPortfolio.heroImageId} IS NULL`,
         );
 
-    const result = await db
-      .update(schema.designerPortfolio)
-      .set({ heroImageId: newKey, updatedAt: new Date() })
-      .where(condition)
-      .returning({ id: schema.designerPortfolio.id });
-    return result.length > 0;
+    return db.transaction(async (tx) => {
+      const now = new Date();
+      const result = await tx
+        .update(schema.designerPortfolio)
+        .set({ heroImageId: newKey, updatedAt: now })
+        .where(condition)
+        .returning({ id: schema.designerPortfolio.id });
+      if (result.length === 0) return false;
+      await recordSearchProjectionEvents(tx, [
+        {
+          entityKind: 'designer',
+          entityId: profileId,
+          operation: 'index',
+          sourceUpdatedAt: now,
+        },
+      ]);
+      return true;
+    });
   },
 };

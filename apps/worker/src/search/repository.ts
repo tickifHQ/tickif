@@ -166,6 +166,7 @@ export async function findDesignerSearchSource(
       slug: schema.designerProfile.slug,
       displayName: schema.designerProfile.displayName,
       bio: schema.designerProfile.bio,
+      tagline: schema.designerPortfolio.tagline,
       entityType: schema.designerProfile.entityType,
       yearsExperience: schema.designerProfile.yearsExperience,
       projectCount: schema.designerProfile.projectCount,
@@ -175,7 +176,11 @@ export async function findDesignerSearchSource(
       subscriptionState: schema.subscription.subscriptionState,
       reviewCount: schema.designerProfile.reviewCount,
       logoImageId: schema.designerProfile.logoImageId,
-      updatedAt: schema.designerProfile.updatedAt,
+      heroImageId: schema.designerPortfolio.heroImageId,
+      updatedAt: sql<Date>`greatest(
+        ${schema.designerProfile.updatedAt},
+        ${schema.designerPortfolio.updatedAt}
+      )`.mapWith(schema.designerProfile.updatedAt),
       isKycVerified: sql<boolean>`exists (
         select 1 from ${schema.verificationApplication}
         where ${schema.verificationApplication.organizationId} = ${schema.designerProfile.orgId}
