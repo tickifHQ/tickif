@@ -105,6 +105,7 @@ export function PublicProjectRecommendations({
 
   const budget = specifications.budgetBand;
   const city = specifications.city;
+  const cityLabel = city?.label ?? specifications.cityName ?? null;
   const locality = specifications.locality;
   const otherDesignerProjectCount = Math.max(
     recommendations.moreFromDesigner.length,
@@ -140,12 +141,12 @@ export function PublicProjectRecommendations({
 
         <RecommendationGroup
           headingId="nearby-projects-heading"
-          title={city ? `In ${city.label}` : 'Nearby projects'}
+          title={cityLabel ? `In ${cityLabel}` : 'Nearby projects'}
           description={
             locality
               ? `More homes around ${locality.label}`
-              : city
-                ? `More homes in ${city.label}`
+              : cityLabel
+                ? `More homes in ${cityLabel}`
                 : 'More homes nearby'
           }
           projects={recommendations.nearby}

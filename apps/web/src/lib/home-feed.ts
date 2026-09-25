@@ -100,7 +100,7 @@ export async function fetchHomeFeedPage(
         slug: hit.slug,
         title: hit.title,
         studio: hit.designerName,
-        city: labelFromSlug(hit.citySlug, labels.cityLabelsBySlug),
+        city: labelFromSlug(hit.citySlug, labels.cityLabelsBySlug) ?? hit.cityName ?? null,
         // Localities are not a homepage facet, so there is no label map to consult.
         locality: labelFromSlug(hit.localitySlug),
         // Search documents carry no aggregate rating; the card hides a zero-review score.
