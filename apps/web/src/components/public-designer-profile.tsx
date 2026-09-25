@@ -6,8 +6,11 @@ import {
   CalendarDays,
   Check,
   Globe,
+  MapPin,
   Link2,
   MessageSquare,
+  Navigation,
+  Phone,
   Quote,
   Shield,
   Sparkle,
@@ -84,6 +87,24 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
+}
+
+function safeExternalHref(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function phoneHref(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return null;
+  return `tel:${trimmed.startsWith('+') ? '+' : ''}${digits}`;
 }
 
 /** Logo when the designer uploaded one, else an initials monogram. */
@@ -830,6 +851,88 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
   );
 }
 
+function ExperienceCentersSection({ portfolio }: SectionProps) {
+  const groups = (portfolio.experienceCenterGroups ?? []).filter(
+    (group) => group.centers.length > 0,
+  );
+  if (groups.length === 0) return null;
+
+  return (
+    <section
+      aria-labelledby="experience-centers-heading"
+      className="border-t border-surface-subtle-border bg-surface-subtle px-4 py-20 sm:px-6"
+    >
+      <div className="mx-auto max-w-7xl">
+        <SectionEyebrow>Visit the studio</SectionEyebrow>
+        <h2 id="experience-centers-heading" className="mt-2 text-4xl font-medium tracking-tight">
+          Experience centers
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Explore materials, finishes, and ideas in person at a studio near you.
+        </p>
+
+        <ul className="mt-9 grid gap-5 lg:grid-cols-2" aria-label="Experience centers by state">
+          {groups.map((group) => (
+            <li key={group.state} className="min-w-0">
+              <Card className="h-full overflow-hidden border-surface-subtle-border bg-background p-0">
+                <div className="flex items-center gap-2 border-b border-surface-subtle-border px-5 py-4 sm:px-6">
+                  <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <h3 className="min-w-0 break-words text-lg font-medium">{group.state}</h3>
+                </div>
+                <ul className="divide-y divide-surface-subtle-border">
+                  {group.centers.map((center, index) => {
+                    const mapsHref = safeExternalHref(center.mapsUrl);
+                    const callHref = phoneHref(center.phone);
+                    const locality = [center.city, center.postalCode].filter(Boolean).join(' · ');
+
+                    return (
+                      <li key={`${center.name}-${center.city}-${index}`} className="p-5 sm:p-6">
+                        <article className="min-w-0">
+                          <h4 className="break-words text-base font-medium text-foreground">
+                            {center.name}
+                          </h4>
+                          <address className="mt-2 max-w-xl break-words text-sm leading-6 not-italic text-muted-foreground [overflow-wrap:anywhere]">
+                            <span className="block">{center.address}</span>
+                            <span className="block">{locality}</span>
+                          </address>
+                          {callHref || mapsHref ? (
+                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+                              {callHref && center.phone ? (
+                                <a
+                                  href={callHref}
+                                  className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                  <Phone className="size-4 shrink-0" aria-hidden="true" />
+                                  <span className="break-all">{center.phone}</span>
+                                </a>
+                              ) : null}
+                              {mapsHref ? (
+                                <a
+                                  href={mapsHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                  className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                  <Navigation className="size-4 shrink-0" aria-hidden="true" />
+                                  Open in Maps
+                                </a>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 function ShareSection({ portfolio, view }: SectionProps) {
   return (
     <section className="overflow-hidden bg-muted px-4 py-20 sm:px-6">
@@ -1004,6 +1107,7 @@ export function PublicDesignerProfile({
         {portfolio.sections.reviews ? <ReviewsSection {...props} /> : null}
         {tickifReviews}
         <StudioDetailsSection {...props} />
+        <ExperienceCentersSection {...props} />
         {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
         <ConsultationSection {...props} />
       </main>

@@ -236,6 +236,78 @@ test.describe('E-278 portfolio publication readiness', () => {
     }
   });
 
+  test('a saved experience center appears on the published portfolio and remains mobile-safe', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ baseURL: webUrl });
+    try {
+      const seed = await seedDesigner('experience-centers', {
+        status: 'active',
+        publicLinkEnabled: true,
+        logo: true,
+        bio: true,
+        tagline: true,
+        heroCover: true,
+      });
+      await signInPhone(context, seed.user.phoneNumber);
+      await selectOrganization(context, seed.organization.id);
+      const page = await context.newPage();
+
+      await page.goto('/designer/portfolio');
+      await page
+        .getByRole('heading', { name: 'Experience Centers' })
+        .locator('xpath=ancestor::button')
+        .click();
+      await page.getByRole('button', { name: 'Add experience center' }).click();
+      await page.getByLabel('Name').fill('Whitefield Experience Center');
+      await page.getByLabel('Address').fill('12, 1st Main Road, Whitefield');
+      await page.getByLabel('City').fill('Bengaluru');
+      await page.getByLabel('State', { exact: true }).selectOption('Karnataka');
+      await page.getByLabel('Postal code (optional)').fill('560066');
+      await page.getByLabel('Phone (optional)').fill('+91 99946-45911');
+      await page
+        .getByLabel('Google Maps link (optional)')
+        .fill('https://maps.google.com/?q=Whitefield');
+      await page.getByRole('button', { name: 'Add center' }).click();
+      await page.getByRole('button', { name: 'Add experience center' }).click();
+      await page.getByLabel('Name').fill('Powai Studio');
+      await page.getByLabel('Address').fill('4, Hiranandani Gardens, Powai');
+      await page.getByLabel('City').fill('Mumbai');
+      await page.getByLabel('State', { exact: true }).selectOption('Maharashtra');
+      await page.getByRole('button', { name: 'Add center' }).click();
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+
+      await page.goto(`/d/${seed.portfolioSlug}`);
+      const centers = page.getByRole('region', { name: 'Experience centers' });
+      await expect(centers).toBeVisible();
+      await expect(centers.getByRole('heading', { name: 'Karnataka' })).toBeVisible();
+      await expect(centers.getByRole('heading', { name: 'Maharashtra' })).toBeVisible();
+      await expect(
+        centers.getByRole('heading', { name: 'Whitefield Experience Center' }),
+      ).toBeVisible();
+      await expect(centers.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
+      await expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
+      await expect(centers.getByText('Bengaluru · 560066')).toBeVisible();
+      await expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
+        'href',
+        'tel:+919994645911',
+      );
+      await expect(centers.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
+        'rel',
+        'noopener noreferrer nofollow',
+      );
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(centers).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+
   test('uploading the final required cover publishes the portfolio and renders responsively', async ({
     browser,
   }) => {

@@ -203,6 +203,10 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   [
     'portfolio-publication.spec.ts',
+    'a saved experience center appears on the published portfolio and remains mobile-safe',
+  ],
+  [
+    'portfolio-publication.spec.ts',
     'uploading the final required cover publishes the portfolio and renders responsively',
   ],
   [
