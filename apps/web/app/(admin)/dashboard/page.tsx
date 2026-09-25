@@ -10,6 +10,9 @@ import {
   AdminDashboardCharts,
   type AdminDashboardChartData,
 } from '@/components/admin-dashboard-charts';
+import { AdminPlatformSummary } from '@/components/admin-platform-summary';
+import { AdminSummaryLoadError } from '@/components/admin-summary-load-error';
+import { AdminActivityAccessError, fetchAdminActivitySummary } from '@/lib/admin-activity-api';
 
 export const metadata = {
   title: 'Admin dashboard · Tickif',
@@ -104,21 +107,29 @@ async function loadDashboardData(cookie: string): Promise<DashboardData> {
 
 export default async function AdminDashboardPage() {
   const cookie = (await headers()).get('cookie');
-  let error: string | null = null;
-  let queues: DashboardQueue[] = [];
-  let charts: AdminDashboardChartData | null = null;
 
   if (!cookie) {
-    error = 'Your admin session could not be found. Please sign in again.';
-  } else {
-    try {
-      const dashboard = await loadDashboardData(cookie);
-      queues = dashboard.queues;
-      charts = dashboard.charts;
-    } catch {
-      error = 'Could not load the current queue totals. Open a queue or refresh the page.';
-    }
+    return (
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Your admin session could not be found. Please sign in again.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
   }
+
+  const [dashboardResult, summaryResult] = await Promise.allSettled([
+    loadDashboardData(cookie),
+    fetchAdminActivitySummary(cookie),
+  ]);
+  const dashboard = dashboardResult.status === 'fulfilled' ? dashboardResult.value : null;
+  const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
+  const summaryError =
+    summaryResult.status === 'rejected' && summaryResult.reason instanceof AdminActivityAccessError
+      ? summaryResult.reason.message
+      : 'Could not load the current platform totals. Retry without leaving the dashboard.';
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
@@ -130,18 +141,21 @@ export default async function AdminDashboardPage() {
           Admin dashboard
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          See the queues that need attention and move directly into the next review.
+          Monitor platform activity, see the queues that need attention, and move into the next
+          review.
         </p>
       </header>
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : charts ? (
+      {summary ? (
+        <AdminPlatformSummary summary={summary} />
+      ) : (
+        <AdminSummaryLoadError message={summaryError} />
+      )}
+
+      {dashboard ? (
         <>
           <section aria-label="Admin review queues" className="grid gap-4 md:grid-cols-3">
-            {queues.map((queue) => {
+            {dashboard.queues.map((queue) => {
               const Icon = queue.icon;
               return (
                 <Card key={queue.title} className="flex min-h-64 flex-col">
@@ -185,11 +199,13 @@ export default async function AdminDashboardPage() {
               );
             })}
           </section>
-          <AdminDashboardCharts data={charts} />
+          <AdminDashboardCharts data={dashboard.charts} />
         </>
       ) : (
         <Alert variant="destructive">
-          <AlertDescription>Could not load the current queue totals.</AlertDescription>
+          <AlertDescription>
+            Could not load the current queue totals. Open a queue directly or refresh the page.
+          </AlertDescription>
         </Alert>
       )}
     </div>
