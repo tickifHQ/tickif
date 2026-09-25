@@ -59,6 +59,7 @@ function makeDesignerDoc(overrides: Partial<DesignerSearchDocument> = {}): Desig
     slug: 'studio-design',
     displayName: 'Studio Design',
     bio: 'Award-winning interior design studio',
+    tagline: 'Spaces shaped around real life',
     entityType: 'company',
     citySlugs: ['mumbai'],
     localitySlugs: ['bandra'],
@@ -71,6 +72,7 @@ function makeDesignerDoc(overrides: Partial<DesignerSearchDocument> = {}): Desig
     isKycVerified: false,
     kycExpiresAt: 0,
     logoImageKey: 'logos/studio-design.jpg',
+    heroImageKey: 'portfolio-covers/studio-design.jpg',
     updatedAt: Date.now(),
     ...overrides,
   };
@@ -277,9 +279,7 @@ describe('GET /api/search/designers', () => {
     });
 
     it('applies AND logic across different facets', async () => {
-      mockSearchDesigners([
-        makeDesignerDoc({ citySlugs: ['mumbai'], scopeSlugs: ['full-home'] }),
-      ]);
+      mockSearchDesigners([makeDesignerDoc({ citySlugs: ['mumbai'], scopeSlugs: ['full-home'] })]);
 
       const res = await get('/api/search/designers?citySlugs=mumbai&scopeSlugs=full-home');
       expect(res.status).toBe(200);
@@ -472,6 +472,7 @@ describe('GET /api/search/designers', () => {
         slug: 'acme-interiors',
         displayName: 'ACME Interiors',
         bio: 'Professional interior design',
+        tagline: 'Made for the way you live',
         entityType: 'company',
         citySlugs: ['mumbai', 'pune'],
         localitySlugs: ['bandra', 'koregaon-park'],
@@ -483,6 +484,7 @@ describe('GET /api/search/designers', () => {
         reviewCount: 25,
         isKycVerified: false,
         logoImageKey: 'logos/acme.png',
+        heroImageKey: 'portfolio-covers/acme.png',
       });
       mockSearchDesigners([designer]);
 
@@ -495,6 +497,7 @@ describe('GET /api/search/designers', () => {
         slug: 'acme-interiors',
         displayName: 'ACME Interiors',
         bio: 'Professional interior design',
+        tagline: 'Made for the way you live',
         entityType: 'company',
         citySlugs: ['mumbai', 'pune'],
         localitySlugs: ['bandra', 'koregaon-park'],
@@ -508,16 +511,19 @@ describe('GET /api/search/designers', () => {
       // logoUrl should be presigned
       expect(hit.logoUrl).toContain('cdn.example.com');
       expect(hit.logoUrl).toContain('signed=1');
+      expect(hit.heroUrl).toContain('cdn.example.com');
+      expect(hit.heroUrl).toContain('signed=1');
     });
 
     it('returns null logoUrl when logoImageKey is null', async () => {
-      const designer = makeDesignerDoc({ logoImageKey: null });
+      const designer = makeDesignerDoc({ logoImageKey: null, heroImageKey: null });
       mockSearchDesigners([designer]);
 
       const res = await get('/api/search/designers?q=test');
       const body = await json(res);
 
       expect(body.hits[0].logoUrl).toBeNull();
+      expect(body.hits[0].heroUrl).toBeNull();
     });
 
     it('does not expose an expired search-projection verification flag', async () => {

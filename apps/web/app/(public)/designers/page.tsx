@@ -23,6 +23,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 
 export default async function DesignersPage({ searchParams }: Props) {
   const query = parseDesignerParams(await searchParams);
+  const discoveryKey = designerPageHref(query);
   const [result, options] = await Promise.all([
     fetchDesignerSearch(query),
     fetchDesignerFacetOptions(),
@@ -41,7 +42,7 @@ export default async function DesignersPage({ searchParams }: Props) {
     options[key].sort((a, b) => a.label.localeCompare(b.label));
   }
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 py-8 sm:px-6">
+    <div className="flex w-full flex-col gap-8 px-5 py-10 sm:px-8 lg:py-12">
       <div>
         <h1 className="font-display text-3xl font-medium tracking-tight">
           Find Designers in Your Location
@@ -50,8 +51,8 @@ export default async function DesignersPage({ searchParams }: Props) {
           Discover designers and studios for your next space.
         </p>
       </div>
-      <DesignerDiscoveryFilters key={designerPageHref(query)} query={query} options={options} />
-      <DesignerDiscoveryResults result={result} query={query} />
+      <DesignerDiscoveryFilters key={`filters:${discoveryKey}`} query={query} options={options} />
+      <DesignerDiscoveryResults key={`results:${discoveryKey}`} result={result} query={query} />
     </div>
   );
 }

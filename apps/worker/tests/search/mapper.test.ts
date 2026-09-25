@@ -161,6 +161,7 @@ describe('search projection mapper', () => {
         slug: 'studio-one',
         displayName: 'Studio One',
         bio: 'Residential interiors',
+        tagline: 'Calm homes, thoughtfully composed',
         entityType: 'company',
         yearsExperience: 8,
         projectCount: 12,
@@ -169,6 +170,7 @@ describe('search projection mapper', () => {
         subscriptionState: null,
         reviewCount: 16,
         logoImageId: 'originals/logos/designer-1/logo',
+        heroImageId: 'originals/portfolio-covers/designer-1/hero',
         updatedAt: new Date('2026-07-02T00:00:00.000Z'),
         isKycVerified: false,
         kycExpiresAt: null,
@@ -186,6 +188,7 @@ describe('search projection mapper', () => {
       slug: 'studio-one',
       displayName: 'Studio One',
       bio: 'Residential interiors',
+      tagline: 'Calm homes, thoughtfully composed',
       portfolioTerms: [],
       entityType: 'company',
       citySlugs: ['mumbai'],
@@ -201,6 +204,7 @@ describe('search projection mapper', () => {
       isKycVerified: false,
       kycExpiresAt: 0,
       logoImageKey: 'originals/logos/designer-1/logo',
+      heroImageKey: 'originals/portfolio-covers/designer-1/hero',
       updatedAt: new Date('2026-07-02T00:00:00.000Z').getTime(),
     });
   });

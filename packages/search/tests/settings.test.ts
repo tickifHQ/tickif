@@ -57,6 +57,12 @@ describe('search collection configuration', () => {
     expect(DESIGNER_SEARCH_SETTINGS.fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'entityType', facet: true }),
+        expect.objectContaining({
+          name: 'tagline',
+          type: 'string',
+          index: false,
+          optional: true,
+        }),
         expect.objectContaining({ name: 'citySlugs', facet: true }),
         expect.objectContaining({ name: 'themeSlugs', facet: true }),
       ]),

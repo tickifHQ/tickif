@@ -150,6 +150,7 @@ export const designerHitSchema = z
     slug: z.string().nullable(),
     displayName: z.string(),
     bio: z.string().nullable(),
+    tagline: z.string().nullable(),
     entityType: designerEntityType,
     citySlugs: z.array(z.string()),
     localitySlugs: z.array(z.string()),
@@ -164,6 +165,7 @@ export const designerHitSchema = z
     googleRatingCount: z.number().int().nonnegative().nullable(),
     isKycVerified: z.boolean(),
     logoUrl: z.string().nullable(),
+    heroUrl: z.string().nullable(),
   })
   .meta({ id: 'DesignerHit' });
 export type DesignerHit = z.infer<typeof designerHitSchema>;

@@ -56,6 +56,49 @@ describe('profile search projection events', () => {
     expect(events).toHaveLength(0);
   });
 
+  it('records a designer reindex when the portfolio hero changes', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    await portfolioRepository.findOrCreate(designer.id);
+
+    await expect(
+      portfolioRepository.setHeroImageIfMatch(
+        designer.id,
+        null,
+        `originals/portfolio-covers/${designer.id}/new-cover`,
+      ),
+    ).resolves.toBe(true);
+
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(eq(schema.searchProjectionOutbox.entityId, designer.id));
+    expect(events).toEqual([
+      expect.objectContaining({
+        entityKind: 'designer',
+        operation: 'index',
+      }),
+    ]);
+  });
+
+  it('does not record a hero event when compare-and-set loses the race', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    await portfolioRepository.findOrCreate(designer.id);
+
+    await expect(
+      portfolioRepository.setHeroImageIfMatch(
+        designer.id,
+        'originals/portfolio-covers/stale',
+        `originals/portfolio-covers/${designer.id}/new-cover`,
+      ),
+    ).resolves.toBe(false);
+
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(eq(schema.searchProjectionOutbox.entityId, designer.id));
+    expect(events).toHaveLength(0);
+  });
+
   it('persists a new profile timestamp for footprint-only updates', async () => {
     const designer = await makeDesigner({ status: 'active' });
     const oldUpdatedAt = new Date('2026-01-01T00:00:00.000Z');
