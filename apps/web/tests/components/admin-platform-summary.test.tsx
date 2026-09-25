@@ -25,22 +25,8 @@ describe('AdminPlatformSummary', () => {
     expect(within(region).getByText(/not time-based trends/i)).toBeVisible();
     expect(within(region).queryByText(/daily|monthly|growth/i)).not.toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: 'Total accounts: 12,34,567' })).toHaveAttribute(
-      'href',
-      '/users',
-    );
-    expect(screen.getByRole('link', { name: 'Active accounts: 765' })).toHaveAttribute(
-      'href',
-      '/users?status=active',
-    );
-    expect(screen.getByRole('link', { name: 'Total enquiries: 321' })).toHaveAttribute(
-      'href',
-      '/admin-enquiries',
-    );
-    expect(screen.getByRole('link', { name: 'Open enquiries: 12' })).toHaveAttribute(
-      'href',
-      '/admin-enquiries?status=open',
-    );
+    expect(within(region).queryByRole('link')).not.toBeInTheDocument();
+    expect(region.querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument();
   });
 
   it('shows valid zero totals without empty-state placeholders', () => {
