@@ -78,7 +78,7 @@ test.describe('public designer discovery', () => {
     }
   });
 
-  test('searches real indexed designers and appends more results with keyboard', async ({
+  test('searches real indexed designers, pages with keyboard, and preserves browser history', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -103,6 +103,9 @@ test.describe('public designer discovery', () => {
     await expect(
       page.getByRole('heading', { name: 'Audit11Directory Studio 01', exact: true }).first(),
     ).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/designers\\?q=${term}`));
+    await expect(page.getByRole('searchbox', { name: 'Search designers' })).toHaveValue(term);
   });
 
   test('applies combined filters at page one, and can recover from empty results', async ({
