@@ -122,6 +122,10 @@ const requiredEntries: [file: string, title: string][] = [
     'designer onboarding and media processing connects to visitor onboarding and discovery, enquiry and lead management',
   ],
   [
+    'admin-enquiries.spec.ts',
+    'admin enquiries filter and paginate while non-admin accounts stay denied',
+  ],
+  [
     'organization-access.spec.ts',
     'invitation acceptance, role changes and studio switching preserve organization boundaries',
   ],
