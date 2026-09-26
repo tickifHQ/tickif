@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import type {
-  AccountStatus,
-  AdminUserActivityResponse,
-  AdminUsersResponse,
-  PlatformRole,
-} from '@repo/contracts';
+import type { AccountStatus, AdminUserActivityResponse, AdminUsersResponse } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
@@ -37,16 +32,10 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { UrlListPagination } from '@/components/list-pagination';
+import { PlatformRoleBadge } from '@/components/platform-role-badge';
 import { fetchAdminUserActivity } from '@/lib/admin-activity-api';
 
 type UserItem = AdminUsersResponse['items'][number];
-
-const roleLabels: Record<PlatformRole, string> = {
-  visitor: 'Visitor',
-  designer: 'Designer',
-  admin: 'Admin',
-  superadmin: 'Super admin',
-};
 
 const statusLabels: Record<AccountStatus, string> = {
   pending: 'Pending',
@@ -122,7 +111,7 @@ function ActivityDetail({
             <h2 className="truncate text-xl font-semibold text-foreground">{user.name}</h2>
             <p className="mt-1 truncate text-sm text-muted-foreground">{user.email}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Badge variant="outline">{roleLabels[user.role]}</Badge>
+              <PlatformRoleBadge role={user.role} />
               <Badge variant={statusVariant(user.status)}>{statusLabels[user.status]}</Badge>
               {user.banned ? <Badge variant="destructive">Banned</Badge> : null}
             </div>
@@ -367,7 +356,7 @@ export function AdminUsersDirectory({
                 <TableHead className="min-w-64">User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="min-w-72">Activity totals</TableHead>
+                <TableHead className="min-w-80">Activity totals</TableHead>
                 <TableHead>Last active</TableHead>
                 <TableHead className="sticky right-0 border-l bg-muted text-right">
                   <span className="sr-only">Actions</span>
@@ -397,7 +386,7 @@ export function AdminUsersDirectory({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{roleLabels[user.role]}</Badge>
+                      <PlatformRoleBadge role={user.role} />
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col items-start gap-1.5">
@@ -408,7 +397,7 @@ export function AdminUsersDirectory({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-nowrap gap-1.5 whitespace-nowrap">
                         <ActivityMetric label="Searches" value={user.searches} />
                         <ActivityMetric label="Projects" value={user.projectViews} />
                         <ActivityMetric label="Profiles" value={user.profileViews} />

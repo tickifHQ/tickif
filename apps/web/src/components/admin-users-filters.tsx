@@ -13,13 +13,7 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField, type SelectFieldOption } from '@repo/ui/components/select-field';
 import { RotateCcw, Search } from 'lucide-react';
-
-const roleLabels: Record<PlatformRole, string> = {
-  visitor: 'Visitor',
-  designer: 'Designer',
-  admin: 'Admin',
-  superadmin: 'Super admin',
-};
+import { platformRoleLabels } from '@/components/platform-role-badge';
 
 const statusLabels: Record<AccountStatus, string> = {
   pending: 'Pending',
@@ -30,7 +24,7 @@ const statusLabels: Record<AccountStatus, string> = {
 
 const roleOptions: readonly SelectFieldOption[] = PLATFORM_ROLE_VALUES.map((value) => ({
   value,
-  label: roleLabels[value],
+  label: platformRoleLabels[value],
 }));
 
 const statusOptions: readonly SelectFieldOption[] = ACCOUNT_STATUS_VALUES.map((value) => ({
