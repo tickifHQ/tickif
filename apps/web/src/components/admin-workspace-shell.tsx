@@ -7,7 +7,13 @@ import type { ComponentType, ReactNode } from 'react';
 import { AccountMenu } from '@/components/account-menu';
 import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
-import { LayoutDashboard, MessageSquareMore, ShieldUser, SquareChartGantt } from 'lucide-react';
+import {
+  Inbox,
+  LayoutDashboard,
+  MessageSquareMore,
+  ShieldUser,
+  SquareChartGantt,
+} from 'lucide-react';
 
 type AdminNavItem = {
   label: string;
@@ -20,6 +26,7 @@ const adminItems: AdminNavItem[] = [
   { label: 'Project moderation', href: '/moderation', icon: SquareChartGantt },
   { label: 'Review moderation', href: '/review-moderation', icon: MessageSquareMore },
   { label: 'Profile verification', href: '/verifications', icon: ShieldUser },
+  { label: 'Enquiries', href: '/admin/enquiries', icon: Inbox },
 ];
 
 function isActive(pathname: string, href: string) {

@@ -47,4 +47,21 @@ describe('ListPagination', () => {
     await user.click(screen.getByRole('button', { name: 'Next page' }));
     expect(onPageChange).toHaveBeenCalledWith(3);
   });
+
+  it('supports an irregular plural item name', () => {
+    render(
+      <ListPagination
+        page={1}
+        totalPages={2}
+        total={12}
+        limit={10}
+        itemName="enquiry"
+        itemNamePlural="enquiries"
+        showPageSize={false}
+        onPageChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Page 1 of 2 · 12 enquiries')).toBeInTheDocument();
+  });
 });

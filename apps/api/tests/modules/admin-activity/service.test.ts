@@ -73,6 +73,7 @@ describe('adminActivityService', () => {
         },
       ],
       total: 1,
+      counts: { all: 4, open: 1, responded: 2, closed: 1 },
     });
 
     const result = await adminActivityService.listEnquiries({ page: 1, limit: 25 });
@@ -81,6 +82,7 @@ describe('adminActivityService', () => {
       designer: { displayName: 'Studio One' },
       referredProject: null,
     });
+    expect(result.counts).toEqual({ all: 4, open: 1, responded: 2, closed: 1 });
   });
 
   it('returns each user activity stream in reverse chronological form', async () => {
