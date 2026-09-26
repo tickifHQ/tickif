@@ -54,6 +54,7 @@ const result: AdminEnquiriesResponse = {
       updatedAt: '2026-09-19T09:30:00.000Z',
     },
   ],
+  counts: { all: 27, open: 12, responded: 8, closed: 7 },
   page: 2,
   limit: 25,
   total: 27,
@@ -81,6 +82,14 @@ describe('AdminEnquiriesList', () => {
     expect(screen.getByText('Not specified')).toBeInTheDocument();
     expect(screen.getAllByText(/Created:/)).toHaveLength(2);
     expect(screen.getAllByText(/Updated:/)).toHaveLength(2);
+    expect(screen.getByText('Open', { selector: 'span[data-slot="badge"]' })).toHaveClass(
+      'bg-success/15',
+      'text-success',
+    );
+    expect(screen.getByText('Responded', { selector: 'span[data-slot="badge"]' })).toHaveClass(
+      'bg-warning/10',
+      'text-warning',
+    );
     expect(screen.queryByText('private-org-id')).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(mocks.pagination).toHaveBeenCalledWith(
@@ -94,22 +103,29 @@ describe('AdminEnquiriesList', () => {
     );
 
     const filters = screen.getByRole('navigation', { name: 'Filter enquiries by status' });
-    expect(within(filters).getByRole('link', { name: 'All' })).toHaveAttribute(
+    expect(within(filters).getByRole('link', { name: 'All 27' })).toHaveAttribute(
       'href',
       '/admin/enquiries?page=1&limit=50',
     );
-    expect(within(filters).getByRole('link', { name: 'Open' })).toHaveAttribute(
+    expect(within(filters).getByRole('link', { name: 'All 27' })).toHaveTextContent('All27');
+    expect(within(filters).getByRole('link', { name: 'Open 12' })).toHaveAttribute(
       'href',
       '/admin/enquiries?page=1&limit=50&status=open',
     );
-    expect(within(filters).getByRole('link', { name: 'Responded' })).toHaveAttribute(
+    expect(within(filters).getByRole('link', { name: 'Open 12' })).toHaveTextContent('Open12');
+    expect(within(filters).getByRole('link', { name: 'Responded 8' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(within(filters).getByRole('link', { name: 'Closed' })).toHaveAttribute(
+    expect(within(filters).getByRole('link', { name: 'Responded 8' })).toHaveClass(
+      'bg-background',
+      'shadow-xs',
+    );
+    expect(within(filters).getByRole('link', { name: 'Closed 7' })).toHaveAttribute(
       'href',
       '/admin/enquiries?page=1&limit=50&status=closed',
     );
+    expect(within(filters).getByRole('link', { name: 'Closed 7' })).toHaveTextContent('Closed7');
   });
 
   it('distinguishes an empty filtered result from an API failure', () => {

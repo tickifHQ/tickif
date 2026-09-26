@@ -83,6 +83,12 @@ export const adminEnquiryItemSchema = z
 export const adminEnquiriesResponseSchema = z
   .object({
     items: z.array(adminEnquiryItemSchema),
+    counts: z.object({
+      all: z.number().int().nonnegative(),
+      open: z.number().int().nonnegative(),
+      responded: z.number().int().nonnegative(),
+      closed: z.number().int().nonnegative(),
+    }),
     page: z.number().int(),
     limit: z.number().int(),
     total: z.number().int().nonnegative(),

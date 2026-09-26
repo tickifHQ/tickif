@@ -92,6 +92,14 @@ describe('admin activity API', () => {
       }),
     ]);
     expect(enquiriesResponse.status).toBe(200);
+    expect(await enquiriesResponse.clone().json()).toMatchObject({
+      counts: {
+        all: expect.any(Number),
+        open: expect.any(Number),
+        responded: expect.any(Number),
+        closed: expect.any(Number),
+      },
+    });
     expect(activityResponse.status).toBe(200);
     expect(await activityResponse.json()).toEqual({
       searches: [expect.objectContaining({ endpoint: 'projects', query: 'bedroom' })],

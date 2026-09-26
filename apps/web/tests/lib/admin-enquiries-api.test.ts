@@ -24,6 +24,8 @@ const enquiry = {
   updatedAt: '2026-09-21T11:00:00.000Z',
 };
 
+const counts = { all: 30, open: 12, responded: 10, closed: 8 };
+
 function response(payload: unknown, init: { ok?: boolean; status?: number } = {}) {
   return {
     ok: init.ok ?? true,
@@ -36,7 +38,7 @@ describe('admin enquiries API adapter', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('loads the all-status view without inventing a status query', async () => {
-    const result = { items: [enquiry], page: 2, limit: 25, total: 30, totalPages: 2 };
+    const result = { items: [enquiry], counts, page: 2, limit: 25, total: 30, totalPages: 2 };
     mocks.enquiries.mockResolvedValue(response(result));
 
     await expect(
@@ -52,7 +54,7 @@ describe('admin enquiries API adapter', () => {
     'forwards the %s filter through the typed route',
     async (status) => {
       mocks.enquiries.mockResolvedValue(
-        response({ items: [], page: 1, limit: 10, total: 0, totalPages: 0 }),
+        response({ items: [], counts, page: 1, limit: 10, total: 0, totalPages: 0 }),
       );
 
       await fetchAdminEnquiries({ status, page: 1, limit: 10 });
@@ -65,7 +67,7 @@ describe('admin enquiries API adapter', () => {
   );
 
   it('preserves nullable project and timeline values from a valid response', async () => {
-    const result = { items: [enquiry], page: 1, limit: 25, total: 1, totalPages: 1 };
+    const result = { items: [enquiry], counts, page: 1, limit: 25, total: 1, totalPages: 1 };
     mocks.enquiries.mockResolvedValue(response(result));
     await expect(fetchAdminEnquiries({ page: 1, limit: 25 })).resolves.toEqual(result);
   });

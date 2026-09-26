@@ -38,9 +38,19 @@ function statusLabel(status: EnquiryStatus) {
 }
 
 function statusVariant(status: EnquiryStatus) {
-  if (status === 'responded') return 'success' as const;
   if (status === 'closed') return 'secondary' as const;
-  return 'info' as const;
+  if (status === 'responded') return 'warning' as const;
+  return 'success' as const;
+}
+
+function statusClassName(status: EnquiryStatus) {
+  if (status === 'closed') {
+    return 'rounded-md bg-muted px-2 py-1 font-normal text-muted-foreground';
+  }
+  if (status === 'responded') {
+    return 'rounded-md bg-warning/10 px-2 py-1 font-normal text-warning';
+  }
+  return 'rounded-md bg-success/15 px-2 py-1 font-normal text-success';
 }
 
 function filterHref(status: StatusFilter, limit: number) {
@@ -74,7 +84,10 @@ export function AdminEnquiriesList({
         </p>
       </header>
 
-      <nav aria-label="Filter enquiries by status" className="flex flex-wrap gap-2">
+      <nav
+        aria-label="Filter enquiries by status"
+        className="inline-flex w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-1 scrollbar-none"
+      >
         {filters.map((filter) => {
           const active = filter.value === activeFilter;
           return (
@@ -83,13 +96,16 @@ export function AdminEnquiriesList({
               href={filterHref(filter.value, query.limit)}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                'inline-flex h-8 shrink-0 items-center rounded-md px-3 text-sm font-medium transition-colors',
                 active
-                  ? 'border-foreground bg-foreground text-background'
-                  : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {filter.label}
+              <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+                {result.counts[filter.value]}
+              </span>
             </Link>
           );
         })}
@@ -121,7 +137,10 @@ export function AdminEnquiriesList({
                       {enquiry.subject}
                     </h2>
                   </div>
-                  <Badge variant={statusVariant(enquiry.status)}>
+                  <Badge
+                    variant={statusVariant(enquiry.status)}
+                    className={statusClassName(enquiry.status)}
+                  >
                     {statusLabel(enquiry.status)}
                   </Badge>
                 </CardHeader>
