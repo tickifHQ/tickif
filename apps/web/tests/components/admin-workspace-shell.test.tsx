@@ -38,6 +38,9 @@ describe('AdminWorkspaceShell', () => {
       'href',
       '/review-moderation',
     );
+    const usersLink = screen.getAllByRole('link', { name: 'Users' })[0];
+    expect(usersLink).toHaveAttribute('href', '/users');
+    expect(usersLink?.querySelector('.lucide-users-round')).toBeInTheDocument();
     const profileVerificationLink = screen.getAllByRole('link', {
       name: 'Profile verification',
     })[0];
