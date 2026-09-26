@@ -232,6 +232,35 @@ describe('ExperienceCentersEditor', () => {
     });
   });
 
+  it('replaces the edited center card with the edit form in the same state group', async () => {
+    const user = userEvent.setup();
+    render(<ExperienceCentersEditor value={[whitefield, powai, bandra]} onChange={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit Powai Studio' }));
+
+    expect(screen.queryByRole('button', { name: 'Edit Powai Studio' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Powai Studio')).not.toBeInTheDocument();
+
+    const form = screen
+      .getByText('Edit experience center')
+      .closest('[data-slot="experience-center-form"]');
+    const editedItem = form?.closest('[data-slot="experience-center-item"]');
+    const maharashtraHeading = screen
+      .getAllByRole('heading', { level: 4 })
+      .find((heading) => heading.textContent === 'Maharashtra');
+    const maharashtraGroup = maharashtraHeading?.closest(
+      '[data-slot="experience-center-state-group"]',
+    );
+
+    expect(form).not.toBeNull();
+    expect(editedItem).toHaveAttribute('data-editing', 'true');
+    expect(maharashtraGroup).toContainElement(editedItem as HTMLElement);
+    expect(within(maharashtraGroup as HTMLElement).getByText('Bandra Lounge')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /add experience center/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('removes a center and emits the remaining array', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
