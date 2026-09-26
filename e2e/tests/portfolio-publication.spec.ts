@@ -281,14 +281,13 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.goto(`/d/${seed.portfolioSlug}`);
       const centers = page.getByRole('region', { name: 'Experience centers' });
       await expect(centers).toBeVisible();
-      await expect(centers.getByRole('heading', { name: 'Karnataka' })).toBeVisible();
-      await expect(centers.getByRole('heading', { name: 'Maharashtra' })).toBeVisible();
       await expect(
         centers.getByRole('heading', { name: 'Whitefield Experience Center' }),
       ).toBeVisible();
       await expect(centers.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
       await expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
-      await expect(centers.getByText('Bengaluru · 560066')).toBeVisible();
+      await expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeVisible();
+      await expect(centers.getByText('Mumbai, Maharashtra')).toBeVisible();
       await expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
         'href',
         'tel:+919994645911',
