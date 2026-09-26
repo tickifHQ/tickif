@@ -21,7 +21,10 @@ describe('AdminUsersFilters', () => {
     render(<AdminUsersFilters query={{ role: 'designer', status: 'active' }} />);
 
     fireEvent.change(screen.getByLabelText('Search users'), { target: { value: 'Anika' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    const searchButton = screen.getByRole('button', { name: 'Search' });
+    expect(searchButton).toHaveClass('bg-button-fancy', 'shadow-button-fancy');
+    expect(searchButton.querySelector('svg')).toBeInTheDocument();
+    fireEvent.click(searchButton);
 
     expect(mocks.push).toHaveBeenCalledWith(
       '/users?role=designer&status=active&page=1&limit=50&q=Anika',
@@ -34,6 +37,19 @@ describe('AdminUsersFilters', () => {
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } });
 
     expect(mocks.push).toHaveBeenCalledWith('/users?role=admin&status=active&page=1&limit=50');
+  });
+
+  it('places Search immediately before Clear in the right-side action area', () => {
+    render(<AdminUsersFilters query={{ role: 'designer', status: 'active' }} />);
+
+    const statusSelect = screen.getByLabelText('Status');
+    const searchButton = screen.getByRole('button', { name: 'Search' });
+    const clearButton = screen.getByRole('button', { name: 'Clear' });
+
+    expect(statusSelect.compareDocumentPosition(searchButton)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(searchButton.nextElementSibling).toBe(clearButton);
   });
 
   it('clears all directory filters while retaining page size', () => {

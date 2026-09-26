@@ -12,7 +12,7 @@ import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField, type SelectFieldOption } from '@repo/ui/components/select-field';
-import { RotateCcw, Search } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import { platformRoleLabels } from '@/components/platform-role-badge';
 
 const statusLabels: Record<AccountStatus, string> = {
@@ -71,32 +71,28 @@ export function AdminUsersFilters({
   }
 
   return (
-    <div
-      className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm lg:grid-cols-[minmax(18rem,1fr)_12rem_12rem_auto] lg:items-end"
+    <form
+      onSubmit={submitSearch}
+      className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm lg:grid-cols-[minmax(18rem,1fr)_12rem_12rem_auto_auto] lg:items-end"
       aria-busy={navigating}
     >
-      <form onSubmit={submitSearch} className="space-y-1.5">
+      <div className="space-y-1.5">
         <Label htmlFor="admin-user-search">Search users</Label>
-        <div className="flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              id="admin-user-search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name, email, or phone"
-              maxLength={120}
-              className="pl-9"
-            />
-          </div>
-          <Button type="submit" variant="outline" disabled={navigating}>
-            Search
-          </Button>
+        <div className="relative min-w-0">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            id="admin-user-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Name, email, or phone"
+            maxLength={120}
+            className="pl-9"
+          />
         </div>
-      </form>
+      </div>
       <SelectField
         label="Role"
         placeholder="All roles"
@@ -115,15 +111,19 @@ export function AdminUsersFilters({
         disabled={navigating}
         onValueChange={(status) => navigate({ status: status || null })}
       />
+      <Button type="submit" variant="fancy" size="fancy" disabled={navigating}>
+        <Search className="size-4" aria-hidden="true" />
+        Search
+      </Button>
       <Button
         type="button"
         variant="ghost"
         disabled={!hasFilters || navigating}
         onClick={clearFilters}
       >
-        <RotateCcw className="size-4" aria-hidden="true" />
+        <Trash2 className="size-4" aria-hidden="true" />
         Clear
       </Button>
-    </div>
+    </form>
   );
 }
