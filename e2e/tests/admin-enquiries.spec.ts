@@ -83,7 +83,13 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
     await expect(page.getByText('open enquiry 01')).toBeVisible();
     await expect(page.getByText('Sunlit Courtyard Home')).toBeVisible();
     await expect(page.getByText('Page 1 of 2 · 12 enquiries')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('link', { name: 'All 26' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open 12' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(page.getByRole('link', { name: 'Responded 7' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Closed 7' })).toBeVisible();
     await expect(page.getByRole('button', { name: /respond|close|assign/i })).toHaveCount(0);
     if (process.env.QA_SCREENSHOT_DIR) {
       await page.screenshot({
@@ -95,7 +101,7 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
     await expect(page).toHaveURL(/\/admin\/enquiries\?status=open&page=2&limit=10/);
     await expect(page.getByText('Page 2 of 2 · 12 enquiries')).toBeVisible();
 
-    await page.getByRole('link', { name: 'Responded' }).click();
+    await page.getByRole('link', { name: 'Responded 7' }).click();
     await expect(page).toHaveURL(/\/admin\/enquiries\?page=1&limit=10&status=responded/);
     await expect(page.getByText('responded enquiry 02')).toBeVisible();
     await expect(page.getByText('Not specified')).toBeVisible();

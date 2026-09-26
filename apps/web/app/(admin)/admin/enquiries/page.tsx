@@ -12,6 +12,7 @@ export const metadata = {
 
 const emptyResult: AdminEnquiriesResponse = {
   items: [],
+  counts: { all: 0, open: 0, responded: 0, closed: 0 },
   page: 1,
   limit: 25,
   total: 0,

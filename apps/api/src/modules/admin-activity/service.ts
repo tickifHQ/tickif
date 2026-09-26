@@ -50,6 +50,7 @@ export const adminActivityService = {
         createdAt: iso(item.createdAt),
         updatedAt: iso(item.updatedAt),
       })),
+      counts: result.counts,
       page: query.page,
       limit: query.limit,
       total: result.total,
