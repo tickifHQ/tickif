@@ -218,6 +218,113 @@ export function ExperienceCentersEditor({
     closeForm();
   }
 
+  const editorForm =
+    editing !== null ? (
+      <div
+        className="space-y-4 rounded-lg border border-border bg-background p-4"
+        data-slot="experience-center-form"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-foreground">
+            {editing === 'new' ? 'Add experience center' : 'Edit experience center'}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Cancel"
+            onClick={closeForm}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ExperienceCenterField
+            id="ec-name"
+            label="Name"
+            value={draft.name}
+            onChange={(v) => updateDraft('name', v)}
+            placeholder="Whitefield Experience Center"
+            error={errors.name}
+            maxLength={120}
+          />
+          <ExperienceCenterField
+            id="ec-city"
+            label="City"
+            value={draft.city}
+            onChange={(v) => updateDraft('city', v)}
+            placeholder="Bengaluru"
+            error={errors.city}
+            maxLength={100}
+          />
+        </div>
+
+        <ExperienceCenterField
+          id="ec-address"
+          label="Address"
+          value={draft.address}
+          onChange={(v) => updateDraft('address', v)}
+          placeholder="12, 1st Main Road, Whitefield"
+          error={errors.address}
+          maxLength={300}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            id="ec-state"
+            label="State"
+            value={draft.state}
+            onValueChange={(v) => updateDraft('state', v)}
+            options={stateOptions}
+            placeholder="Select a state"
+            error={errors.state}
+          />
+          <ExperienceCenterField
+            id="ec-postal-code"
+            label="Postal code (optional)"
+            value={draft.postalCode}
+            onChange={(v) => updateDraft('postalCode', v)}
+            placeholder="560066"
+            error={errors.postalCode}
+            maxLength={20}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ExperienceCenterField
+            id="ec-phone"
+            label="Phone (optional)"
+            value={draft.phone}
+            onChange={(v) => updateDraft('phone', v)}
+            placeholder="9994645911"
+            error={errors.phone}
+            maxLength={20}
+          />
+          <ExperienceCenterField
+            id="ec-maps-url"
+            label="Google Maps link (optional)"
+            value={draft.mapsUrl}
+            onChange={(v) => updateDraft('mapsUrl', v)}
+            placeholder="https://maps.google.com/..."
+            error={errors.mapsUrl}
+            type="url"
+            maxLength={500}
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={closeForm}>
+            Cancel
+          </Button>
+          <Button type="button" size="sm" onClick={saveDraft}>
+            {editing === 'new' ? 'Add center' : 'Save center'}
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-4" data-slot="experience-centers-editor">
       {value.length === 0 && editing !== 'new' ? (
@@ -248,6 +355,13 @@ export function ExperienceCentersEditor({
                 {group.centers.map((center) => {
                   // Map back to the flat-array index for edit/remove targeting.
                   const index = value.indexOf(center);
+                  if (editing === index) {
+                    return (
+                      <li key={index} data-slot="experience-center-item" data-editing="true">
+                        {editorForm}
+                      </li>
+                    );
+                  }
                   return (
                     <li
                       key={index}
@@ -298,116 +412,14 @@ export function ExperienceCentersEditor({
         </ul>
       ) : null}
 
-      {editing !== null ? (
-        <div
-          className="space-y-4 rounded-lg border border-border p-4"
-          data-slot="experience-center-form"
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">
-              {editing === 'new' ? 'Add experience center' : 'Edit experience center'}
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              aria-label="Cancel"
-              onClick={closeForm}
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ExperienceCenterField
-              id="ec-name"
-              label="Name"
-              value={draft.name}
-              onChange={(v) => updateDraft('name', v)}
-              placeholder="Whitefield Experience Center"
-              error={errors.name}
-              maxLength={120}
-            />
-            <ExperienceCenterField
-              id="ec-city"
-              label="City"
-              value={draft.city}
-              onChange={(v) => updateDraft('city', v)}
-              placeholder="Bengaluru"
-              error={errors.city}
-              maxLength={100}
-            />
-          </div>
-
-          <ExperienceCenterField
-            id="ec-address"
-            label="Address"
-            value={draft.address}
-            onChange={(v) => updateDraft('address', v)}
-            placeholder="12, 1st Main Road, Whitefield"
-            error={errors.address}
-            maxLength={300}
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField
-              id="ec-state"
-              label="State"
-              value={draft.state}
-              onValueChange={(v) => updateDraft('state', v)}
-              options={stateOptions}
-              placeholder="Select a state"
-              error={errors.state}
-            />
-            <ExperienceCenterField
-              id="ec-postal-code"
-              label="Postal code (optional)"
-              value={draft.postalCode}
-              onChange={(v) => updateDraft('postalCode', v)}
-              placeholder="560066"
-              error={errors.postalCode}
-              maxLength={20}
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ExperienceCenterField
-              id="ec-phone"
-              label="Phone (optional)"
-              value={draft.phone}
-              onChange={(v) => updateDraft('phone', v)}
-              placeholder="9994645911"
-              error={errors.phone}
-              maxLength={20}
-            />
-            <ExperienceCenterField
-              id="ec-maps-url"
-              label="Google Maps link (optional)"
-              value={draft.mapsUrl}
-              onChange={(v) => updateDraft('mapsUrl', v)}
-              placeholder="https://maps.google.com/..."
-              error={errors.mapsUrl}
-              type="url"
-              maxLength={500}
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={closeForm}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" onClick={saveDraft}>
-              {editing === 'new' ? 'Add center' : 'Save center'}
-            </Button>
-          </div>
-        </div>
-      ) : (
+      {editing === 'new' ? (
+        editorForm
+      ) : editing === null ? (
         <Button type="button" variant="outline" size="sm" onClick={openAdd} disabled={atLimit}>
           <Plus className="size-4" />
           Add experience center
         </Button>
-      )}
+      ) : null}
       {atLimit ? (
         <p className="text-xs text-muted-foreground">
           You can add up to {MAX_EXPERIENCE_CENTERS} experience centers.

@@ -855,7 +855,8 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
   const groups = (portfolio.experienceCenterGroups ?? []).filter(
     (group) => group.centers.length > 0,
   );
-  if (groups.length === 0) return null;
+  const centers = groups.flatMap((group) => group.centers);
+  if (centers.length === 0) return null;
 
   return (
     <section
@@ -871,62 +872,64 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
           Explore materials, finishes, and ideas in person at a studio near you.
         </p>
 
-        <ul className="mt-9 grid gap-5 lg:grid-cols-2" aria-label="Experience centers by state">
-          {groups.map((group) => (
-            <li key={group.state} className="min-w-0">
-              <Card className="h-full overflow-hidden border-surface-subtle-border bg-background p-0">
-                <div className="flex items-center gap-2 border-b border-surface-subtle-border px-5 py-4 sm:px-6">
-                  <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                  <h3 className="min-w-0 break-words text-lg font-medium">{group.state}</h3>
-                </div>
-                <ul className="divide-y divide-surface-subtle-border">
-                  {group.centers.map((center, index) => {
-                    const mapsHref = safeExternalHref(center.mapsUrl);
-                    const callHref = phoneHref(center.phone);
-                    const locality = [center.city, center.postalCode].filter(Boolean).join(' · ');
+        <ul
+          className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          aria-label="Experience centers"
+        >
+          {centers.map((center, index) => {
+            const mapsHref = safeExternalHref(center.mapsUrl);
+            const callHref = phoneHref(center.phone);
+            const location = [center.city, center.state].filter(Boolean).join(', ');
+            const locationWithPostalCode = center.postalCode
+              ? `${location} · ${center.postalCode}`
+              : location;
 
-                    return (
-                      <li key={`${center.name}-${center.city}-${index}`} className="p-5 sm:p-6">
-                        <article className="min-w-0">
-                          <h4 className="break-words text-base font-medium text-foreground">
-                            {center.name}
-                          </h4>
-                          <address className="mt-2 max-w-xl break-words text-sm leading-6 not-italic text-muted-foreground [overflow-wrap:anywhere]">
-                            <span className="block">{center.address}</span>
-                            <span className="block">{locality}</span>
-                          </address>
-                          {callHref || mapsHref ? (
-                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-                              {callHref && center.phone ? (
-                                <a
-                                  href={callHref}
-                                  className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                >
-                                  <Phone className="size-4 shrink-0" aria-hidden="true" />
-                                  <span className="break-all">{center.phone}</span>
-                                </a>
-                              ) : null}
-                              {mapsHref ? (
-                                <a
-                                  href={mapsHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer nofollow"
-                                  className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                >
-                                  <Navigation className="size-4 shrink-0" aria-hidden="true" />
-                                  Open in Maps
-                                </a>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </article>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </Card>
-            </li>
-          ))}
+            return (
+              <li key={`${center.name}-${center.city}-${index}`} className="min-w-0">
+                <Card
+                  data-slot="experience-center-card"
+                  className="h-full overflow-hidden border-surface-subtle-border bg-background p-0"
+                >
+                  <div className="flex items-center gap-1.5 border-b border-surface-subtle-border px-3 py-2.5">
+                    <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                    <h3 className="min-w-0 break-words text-lg font-medium">{center.name}</h3>
+                  </div>
+                  <article className="min-w-0 p-3">
+                    <address className="max-w-xl break-words text-sm leading-5 not-italic text-muted-foreground [overflow-wrap:anywhere]">
+                      <span className="block font-medium text-foreground">
+                        {locationWithPostalCode}
+                      </span>
+                      <span className="mt-0.5 block">{center.address}</span>
+                    </address>
+                    {callHref || mapsHref ? (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        {callHref && center.phone ? (
+                          <a
+                            href={callHref}
+                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <Phone className="size-4 shrink-0" aria-hidden="true" />
+                            <span className="break-all">{center.phone}</span>
+                          </a>
+                        ) : null}
+                        {mapsHref ? (
+                          <a
+                            href={mapsHref}
+                            target="_blank"
+                            rel="noopener noreferrer nofollow"
+                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <Navigation className="size-4 shrink-0" aria-hidden="true" />
+                            Open in Maps
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </section>

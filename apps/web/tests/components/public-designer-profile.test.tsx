@@ -436,7 +436,7 @@ describe('PublicDesignerProfile', () => {
     expect(screen.getByText('Projects published')).toBeInTheDocument();
   });
 
-  it('groups experience centers by state with their complete public details', () => {
+  it('renders each experience center with its location hierarchy and complete public details', () => {
     render(
       <PublicDesignerProfile
         portfolio={makePublicPortfolio({
@@ -476,13 +476,17 @@ describe('PublicDesignerProfile', () => {
 
     const section = screen.getByRole('region', { name: 'Experience centers' });
     const centers = within(section);
-    expect(centers.getByRole('heading', { name: 'Karnataka', level: 3 })).toBeInTheDocument();
-    expect(centers.getByRole('heading', { name: 'Maharashtra', level: 3 })).toBeInTheDocument();
+    const centerGrid = centers.getByRole('list', { name: 'Experience centers' });
+    const cards = section.querySelectorAll('[data-slot="experience-center-card"]');
+    expect(cards).toHaveLength(2);
+    expect(centerGrid).toHaveClass('sm:grid-cols-2', 'xl:grid-cols-3');
+    expect(cards[0]?.querySelector('h3')).toHaveClass('text-lg');
     expect(
-      centers.getByRole('heading', { name: 'Whitefield Experience Center', level: 4 }),
+      centers.getByRole('heading', { name: 'Whitefield Experience Center', level: 3 }),
     ).toBeInTheDocument();
+    expect(centers.getByRole('heading', { name: 'Powai Studio', level: 3 })).toBeInTheDocument();
+    expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeInTheDocument();
     expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeInTheDocument();
-    expect(centers.getByText('Bengaluru · 560066')).toBeInTheDocument();
     expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
       'href',
       'tel:+919994645911',
@@ -541,7 +545,7 @@ describe('PublicDesignerProfile', () => {
 
     const section = screen.getByRole('region', { name: 'Experience centers' });
     expect(within(section).queryByRole('link')).not.toBeInTheDocument();
-    expect(within(section).getByText('Bengaluru')).toBeInTheDocument();
+    expect(within(section).getByText('Bengaluru, Karnataka')).toBeInTheDocument();
   });
 
   it('falls back to initials when the designer has no logo', () => {
