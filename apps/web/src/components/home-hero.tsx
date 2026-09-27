@@ -27,20 +27,20 @@ export function HomeHero({
           <div className="flex items-center gap-2">
             <span className="h-px w-8 bg-surface-subtle-border" />
             <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-primary/70">
-              Homefolio · Real Indian homes, only
+              Tickif · Real Indian interiors &amp; construction
             </span>
             <span className="h-px w-8 bg-surface-subtle-border" />
           </div>
 
           <h1 className="font-display text-5xl leading-none tracking-tight text-foreground sm:text-6xl xl:text-7xl">
-            Inspire from <span className="text-primary">homes</span>
+            Where great <span className="text-primary">spaces</span> and projects
             <br />
-            you&rsquo;ll love.
+            meet their creators.
           </h1>
 
           <p className="max-w-md text-base leading-relaxed text-foreground/80">
-            Type a feeling, a room, or a budget. We&rsquo;ll bring real Indian homes and the
-            designers who built them closer to you.
+            Explore real interiors and construction projects across India, then connect with the
+            professionals who bring them to life.
           </p>
 
           <HomeSearchBar variant="hero" initialQuery={initialQuery} />

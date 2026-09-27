@@ -242,7 +242,7 @@ export function HomeSearchBar({
               handleDropdownKeys(event);
             }
           }}
-          placeholder="Search by city, style, budget, room type…"
+          placeholder="Search interiors, construction, a style, or a city…"
           aria-label="Search homes"
           className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />

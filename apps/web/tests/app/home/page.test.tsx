@@ -193,13 +193,17 @@ describe('HomePage', () => {
         .getByRole('button', { name: 'Filters' })
         .compareDocumentPosition(screen.getAllByText('Test Project')[0]!),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByRole('link', { name: 'Homes in Mumbai' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Projects in Mumbai' })).toHaveAttribute(
       'href',
       '/?city=mumbai',
     );
     expect(screen.getByRole('link', { name: 'Living Room ideas' })).toHaveAttribute(
       'href',
       '/?room=living-room',
+    );
+    expect(screen.getByRole('link', { name: 'Browse professionals' })).toHaveAttribute(
+      'href',
+      '/designers',
     );
 
     const discoveryCalls = (fetch as ReturnType<typeof vi.fn>).mock.calls
@@ -385,7 +389,7 @@ describe('HomePage', () => {
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
     expect(screen.getAllByRole('search')).toHaveLength(1);
-    expect(screen.queryByText(/Inspire from/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Where great spaces/)).not.toBeInTheDocument();
     // E-303: the discovery card shows the budget pill (not tags) in its hover UI.
     expect(within(screen.getByRole('article')).getByText('₹15–35L')).toBeInTheDocument();
   });
