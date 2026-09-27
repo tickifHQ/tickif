@@ -184,6 +184,15 @@ export const publicPortfolioService = {
       : [];
     const googleRating = google?.summary.rating ?? null;
 
+    // Custom (free-text) cities display alongside taxonomy city labels. Dedupe
+    // case-insensitively against the taxonomy labels so the public list and the
+    // "cities present" count never double-count the same place.
+    const taxonomyCityKeys = new Set(cities.map((label) => label.toLocaleLowerCase()));
+    const customCityLabels = profile.customCities.filter(
+      (label) => !taxonomyCityKeys.has(label.toLocaleLowerCase()),
+    );
+    const allCities = [...cities, ...customCityLabels];
+
     return {
       profileId: profile.id,
       slug,
@@ -194,7 +203,7 @@ export const publicPortfolioService = {
       bio: profile.bio,
       firmType: profile.firmType,
       foundedYear: profile.foundedYear,
-      cities,
+      cities: allCities,
       experienceCenterGroups: groupExperienceCenters(portfolio.experienceCenters),
       logoUrl,
       heroCoverUrl,
@@ -218,7 +227,7 @@ export const publicPortfolioService = {
             : null,
         projectCount: profile.projectCount,
         yearsExperience: profile.yearsExperience,
-        cityPresenceCount: cities.length,
+        cityPresenceCount: allCities.length,
         startingBudget,
       },
       social: sections.socialLinks

@@ -124,6 +124,7 @@ const profile: CurrentProfileResponse = {
     { ...terms.scopes[0]!, kind: 'scope' as const },
     { ...terms.themes[0]!, kind: 'theme' as const },
   ],
+  customCities: [],
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
   organization: { id: 'org-1', name: 'Mahi Studio', slug: 'mahi-studio' },
@@ -348,12 +349,123 @@ describe('DesignerProfileEditor', () => {
       expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
         displayName: 'Mahi Design Co.',
         cityIds: [terms.cities[0]!.id, terms.cities[1]!.id],
+        customCities: [],
       });
     });
     expect(await screen.findByText(/profile saved/i)).toBeInTheDocument();
     expect(screen.getByText('80% complete')).toBeInTheDocument();
     expect(mock.fetchProfileCompletion).toHaveBeenCalledOnce();
     expect(mock.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('adds a free-text custom city and saves it alongside the taxonomy city', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ customCities: ['Coimbatore'] }));
+
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    // Open the Cities dropdown and choose the in-menu "Add a custom city" action.
+    await user.click(screen.getByRole('button', { name: /^cities:/i }));
+    await user.click(screen.getByRole('menuitem', { name: /add a custom city/i }));
+    const customInput = screen.getByLabelText(/add a custom city/i);
+    await user.type(customInput, 'Coimbatore');
+    await user.keyboard('{Enter}');
+
+    // The custom city is now a checked item inside the same Cities dropdown, and
+    // the combined counter moves.
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Coimbatore' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByText('2/5')).toBeInTheDocument();
+
+    // Closing the dropdown, the custom city shows inside the Cities trigger summary.
+    await user.keyboard('{Escape}');
+    expect(
+      screen.getByRole('button', { name: /^cities:.*coimbatore/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        // Mumbai is already selected in the fixture footprint; the custom city
+        // is sent together with the unchanged taxonomy selection.
+        cityIds: [terms.cities[0]!.id],
+        customCities: ['Coimbatore'],
+      });
+    });
+  });
+
+  it('removes a custom city before saving', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile());
+
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, customCities: ['Coimbatore'] }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    // The custom city appears inside the Cities trigger summary.
+    expect(screen.getByRole('button', { name: /^cities:.*coimbatore/i })).toBeInTheDocument();
+
+    // Removing it: open the dropdown and uncheck the custom city item.
+    await user.click(screen.getByRole('button', { name: /^cities:/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Coimbatore' }));
+    await user.keyboard('{Escape}');
+
+    expect(
+      screen.queryByRole('button', { name: /^cities:.*coimbatore/i }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        cityIds: [terms.cities[0]!.id],
+        customCities: [],
+      });
+    });
+  });
+
+  it('blocks adding a custom city once the combined limit of 5 is reached', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{
+          ...profile,
+          // 1 taxonomy city + 4 custom = 5 combined (the limit).
+          customCities: ['Coimbatore', 'Kochi', 'Mysuru', 'Vizag'],
+        }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByText('5/5')).toBeInTheDocument();
+    // Open the dropdown: both the taxonomy options and the "Add a custom city"
+    // action refuse further additions at the combined cap.
+    await user.click(screen.getByRole('button', { name: /^cities:/i }));
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Pune' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: /add a custom city/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('normalizes bare website URLs before validating and saving them', async () => {
@@ -646,7 +758,7 @@ describe('DesignerProfileEditor', () => {
       />,
     );
 
-    expect(screen.getByText('Select up to 5 cities.')).toBeInTheDocument();
+    expect(screen.getByText('Select up to 5 cities in total.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^cities:/i })).toHaveAttribute(
       'aria-invalid',
       'true',

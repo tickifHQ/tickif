@@ -42,6 +42,7 @@ type ProfileUpdateData = Partial<{
   foundedYear: number | null;
   staffCount: number | null;
   testimonialBannerEnabled: boolean;
+  customCities: string[];
 }>;
 
 async function replaceFootprintByKindInTx(

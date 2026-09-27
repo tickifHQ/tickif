@@ -1,0 +1,1 @@
+ALTER TABLE "designer_profile" ADD COLUMN "custom_cities" jsonb DEFAULT '[]'::jsonb NOT NULL;
