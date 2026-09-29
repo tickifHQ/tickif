@@ -37,6 +37,7 @@ type NavItem = {
   headerIcon?: ComponentType<{ className?: string }>;
   comingSoon?: boolean;
   visible?: (capabilities: OrganizationCapabilities) => boolean;
+  feature?: 'consultations';
 };
 
 const hasProjectAccess = (capabilities: OrganizationCapabilities) =>
@@ -59,6 +60,7 @@ const studioItems: NavItem[] = [
     href: '/designer/consultations',
     icon: CalendarDays,
     visible: hasLeadAccess,
+    feature: 'consultations',
   },
   {
     label: 'Analytics',
@@ -145,8 +147,16 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-function visibleItems(items: NavItem[], capabilities: OrganizationCapabilities): NavItem[] {
-  return items.filter((item) => !item.visible || item.visible(capabilities));
+function visibleItems(
+  items: NavItem[],
+  capabilities: OrganizationCapabilities,
+  consultationsEnabled: boolean,
+): NavItem[] {
+  return items.filter(
+    (item) =>
+      (item.feature !== 'consultations' || consultationsEnabled) &&
+      (!item.visible || item.visible(capabilities)),
+  );
 }
 
 function SidebarSection({
@@ -174,7 +184,13 @@ function SidebarSection({
   );
 }
 
-function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
+function WorkspaceHeaderTitle({
+  pathname,
+  consultationsEnabled,
+}: {
+  pathname: string;
+  consultationsEnabled: boolean;
+}) {
   if (pathname.startsWith('/designer/projects/upload')) {
     return (
       <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-muted-foreground sm:inline-flex">
@@ -188,7 +204,11 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     );
   }
 
-  const navigationItem = headerItems.find((item) => isItemActive(pathname, item.href));
+  const navigationItem = headerItems.find(
+    (item) =>
+      (item.feature !== 'consultations' || consultationsEnabled) &&
+      isItemActive(pathname, item.href),
+  );
 
   if (navigationItem?.href) {
     const Icon = navigationItem.headerIcon ?? navigationItem.icon;
@@ -213,6 +233,7 @@ function SidebarContent({
   isWorkspaceRefreshing,
   onSwitchSuccess,
   capabilities,
+  consultationsEnabled,
 }: {
   activeOrganizationId: string;
   studioName: string;
@@ -222,6 +243,7 @@ function SidebarContent({
   isWorkspaceRefreshing: boolean;
   onSwitchSuccess: (organizationId: string) => void;
   capabilities: OrganizationCapabilities;
+  consultationsEnabled: boolean;
 }) {
   return (
     <>
@@ -239,12 +261,12 @@ function SidebarContent({
         <div className="space-y-6">
           <SidebarSection
             title="Studio"
-            items={visibleItems(studioItems, capabilities)}
+            items={visibleItems(studioItems, capabilities, consultationsEnabled)}
             pathname={pathname}
           />
           <SidebarSection
             title="Grow"
-            items={visibleItems(growItems, capabilities)}
+            items={visibleItems(growItems, capabilities, consultationsEnabled)}
             pathname={pathname}
           />
         </div>
@@ -318,6 +340,7 @@ export function DesignerWorkspaceShell({
   logoUrl,
   planLabel,
   capabilities,
+  consultationsEnabled = false,
   children,
 }: {
   activeOrganizationId: string;
@@ -325,6 +348,7 @@ export function DesignerWorkspaceShell({
   logoUrl?: string | null;
   planLabel: string;
   capabilities: OrganizationCapabilities;
+  consultationsEnabled?: boolean;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -359,9 +383,12 @@ export function DesignerWorkspaceShell({
           isWorkspaceRefreshing={isWorkspaceRefreshing}
           onSwitchSuccess={handleSwitchSuccess}
           capabilities={capabilities}
+          consultationsEnabled={consultationsEnabled}
         />
       )}
-      headerTitle={<WorkspaceHeaderTitle pathname={pathname} />}
+      headerTitle={
+        <WorkspaceHeaderTitle pathname={pathname} consultationsEnabled={consultationsEnabled} />
+      }
       headerActions={
         <>
           {capabilities.writeProjects &&

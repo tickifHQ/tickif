@@ -156,6 +156,7 @@ services:
     image: ${WEB_IMAGE}
     environment:
       NODE_ENV: production
+      CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
       NEXT_PUBLIC_API_URL: https://${STAGING_HOST}
       NEXT_PUBLIC_WEB_URL: https://${STAGING_HOST}
     networks:
@@ -219,6 +220,7 @@ services:
     image: ${API_IMAGE}
     environment: &app-environment
       NODE_ENV: production
+      CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
       PORT: '3001'
       POSTGRES_HOST: postgres
       POSTGRES_PORT: '5432'

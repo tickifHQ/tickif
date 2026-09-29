@@ -55,7 +55,7 @@ const createBookingRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Account suspended'),
-    404: errorJson('Designer profile not found'),
+    404: errorJson('Consultations not available or designer profile not found'),
     409: errorJson('Open consultation limit reached'),
     422: errorJson('Invalid booking request'),
   },
@@ -76,6 +76,7 @@ const listMineRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Account suspended'),
+    404: errorJson('Consultations not available'),
   },
 });
 
@@ -94,6 +95,7 @@ const listInboxRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Organization membership required'),
+    404: errorJson('Consultations not available'),
     422: errorJson('No active organization selected'),
   },
 });

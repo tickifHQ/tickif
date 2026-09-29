@@ -50,7 +50,7 @@ function ManagedReview({ item }: { item: ParticipantReview }) {
         <Badge variant="secondary">{submitted ? 'disputed' : review.status}</Badge>
       </header>
       <p className="text-sm">
-        {review.rating} / 5 stars{review.verifiedConsultation ? ' · Verified consultation' : ''}
+        {review.rating} / 5 stars{review.verifiedConsultation ? ' · Verified client' : ''}
       </p>
       {review.body ? (
         <p className="whitespace-pre-wrap break-words text-sm">{review.body}</p>

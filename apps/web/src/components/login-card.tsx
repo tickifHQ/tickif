@@ -89,7 +89,7 @@ function formatTimer(seconds: number): string {
 const browsingFeatures = [
   { icon: Bookmark, title: 'Save what you love' },
   { icon: MessageSquare, title: 'Message designers' },
-  { icon: Calendar, title: 'Book free consultations' },
+  { icon: Mail, title: 'Send enquiries to designers' },
 ] as const;
 
 const designerFeatures = [
@@ -134,7 +134,7 @@ export function LoginCard({
   const promoSubtitle =
     loginMode === 'designer'
       ? 'One link to share your work, get discovered, and turn views into real enquiries.'
-      : 'Save the homes you love, message designers, and book free consultations.';
+      : 'Save the homes you love, message designers, and send enquiries directly.';
 
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;

@@ -96,7 +96,6 @@ for (const policy of cases) {
       for (const [name, visible] of [
         ['Projects', policy.projects],
         ['Leads', policy.leads],
-        ['Consultations', policy.leads],
         ['Reviews', policy.manage],
         ['Analytics', true],
         ['Portfolio', policy.manage],

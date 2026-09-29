@@ -6,6 +6,7 @@ const mock = vi.hoisted(() => ({
   requireAuth: vi.fn(),
   headers: vi.fn(),
   getLeads: vi.fn(),
+  getCurrentOrgRole: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-guard', () => ({
@@ -44,6 +45,10 @@ vi.mock('@/components/designer-leads-list', () => ({
   ),
 }));
 
+vi.mock('@/lib/current-org-role', () => ({
+  getCurrentOrgRole: mock.getCurrentOrgRole,
+}));
+
 const response: ListLeadsResponse = {
   items: [],
   page: 2,
@@ -56,6 +61,7 @@ describe('DesignerLeadsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock.headers.mockResolvedValue({ get: () => 'session=abc' });
+    mock.getCurrentOrgRole.mockResolvedValue('owner');
     mock.getLeads.mockResolvedValue(
       new Response(JSON.stringify(response), {
         status: 200,
@@ -79,7 +85,16 @@ describe('DesignerLeadsPage', () => {
 
     expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'designer' });
     expect(mock.getLeads).toHaveBeenCalledWith(
-      { query: { status: 'contacted', q: 'Priya', sortBy: 'receivedAt', sortOrder: 'desc', page: 2, limit: 12 } },
+      {
+        query: {
+          status: 'contacted',
+          q: 'Priya',
+          sortBy: 'receivedAt',
+          sortOrder: 'desc',
+          page: 2,
+          limit: 12,
+        },
+      },
       { headers: { cookie: 'session=abc' } },
     );
     expect(screen.getByTestId('active-status')).toHaveTextContent('contacted');
@@ -94,5 +109,20 @@ describe('DesignerLeadsPage', () => {
     render(page);
 
     expect(screen.getByTestId('error')).toHaveTextContent('Could not load leads.');
+  });
+
+  it('ignores the removed consultation view parameter and keeps one lead inbox', async () => {
+    const { default: Page } = await import('../../../../app/(designer)/designer/leads/page');
+
+    const searchParams = Promise.resolve({
+      view: 'consultations',
+      status: 'requested',
+      page: '2',
+    });
+    render(await Page({ searchParams }));
+
+    expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'designer' });
+    expect(mock.getLeads).toHaveBeenCalled();
+    expect(screen.getByTestId('active-status')).toHaveTextContent('all');
   });
 });

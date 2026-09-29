@@ -67,8 +67,19 @@ describe('DesignerDashboardOverview', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: /welcome, livspace/i })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: /welcome, livspace/i });
+    expect(heading).toHaveClass('text-2xl');
+    expect(heading).not.toHaveClass('text-4xl');
+    expect(screen.getByTestId('designer-dashboard-overview')).toHaveClass('p-4', 'lg:p-6');
     expect(screen.getByText(/let's get your profile ready to go live/i)).toBeInTheDocument();
+    expect(screen.getByTestId('profile-completion-progress')).toHaveClass('px-2');
+    expect(screen.getByTestId('profile-completion-progress-bar')).toHaveClass('h-1.5');
+    expect(screen.getByRole('heading', { name: 'Complete profile' })).toHaveClass(
+      'text-muted-foreground',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Complete profile' }).closest('section'),
+    ).toHaveClass('bg-profile-completion-background', 'rounded-3xl');
     expect(screen.getByText('33%')).toBeInTheDocument();
     expect(screen.getByText(/account creation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/upload your first project/i).length).toBeGreaterThan(0);

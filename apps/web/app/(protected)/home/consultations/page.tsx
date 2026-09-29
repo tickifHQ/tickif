@@ -1,9 +1,16 @@
+import { redirect } from 'next/navigation';
+import { config } from '@repo/config/features';
 import { ConsultationsPage } from '@/components/consultations-page';
-export const metadata = { title: 'My consultations · Tickif' };
+export function generateMetadata() {
+  return {
+    title: config.CONSULTATIONS_ENABLED ? 'My consultations · Tickif' : 'Enquiries · Tickif',
+  };
+}
 export default function Page({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
-  return <ConsultationsPage scope="mine" searchParams={searchParams} />;
+  if (!config.CONSULTATIONS_ENABLED) return redirect('/enquiries');
+  return <ConsultationsPage searchParams={searchParams} />;
 }

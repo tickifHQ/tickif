@@ -16,6 +16,7 @@
     "@dicebear/core": "catalog:",
     "@dicebear/styles": "catalog:",
     "@repo/auth": "workspace:*",
+    "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
     "@repo/ui": "workspace:*",
     "@t3-oss/env-nextjs": "catalog:",

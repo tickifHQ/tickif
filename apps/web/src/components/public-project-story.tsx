@@ -324,7 +324,7 @@ function NarrativeSection({ project }: { project: PublicProjectDetailResponse })
                   {attribution}
                   {narrative.verifiedConsultation ? (
                     <BadgeCheck
-                      aria-label="Verified consultation"
+                      aria-label="Verified client"
                       className="size-4 fill-primary text-primary-foreground"
                     />
                   ) : null}

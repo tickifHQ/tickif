@@ -59,7 +59,7 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     expect(screen.getByTestId('feature-save-what-you-love')).toBeInTheDocument();
     expect(screen.getByTestId('feature-message-designers')).toBeInTheDocument();
-    expect(screen.getByTestId('feature-book-free-consultations')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-send-enquiries-to-designers')).toBeInTheDocument();
   });
 
   it('shows designer features when designer tab is selected', async () => {

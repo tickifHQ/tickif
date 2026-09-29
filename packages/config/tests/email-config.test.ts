@@ -169,6 +169,19 @@ describe('email environment configuration', () => {
     expect(parsed.EMAIL_FROM).toBe('Tickif <noreply@tickif.com>');
   });
 
+  it('keeps consultations disabled unless the feature is explicitly enabled', () => {
+    const base = {
+      NODE_ENV: 'development',
+      BETTER_AUTH_SECRET: 'development-auth-secret',
+      BETTER_AUTH_URL: 'http://localhost:3001',
+    };
+
+    expect(parseConfig(base).CONSULTATIONS_ENABLED).toBe(false);
+    expect(parseConfig({ ...base, CONSULTATIONS_ENABLED: 'true' }).CONSULTATIONS_ENABLED).toBe(
+      true,
+    );
+  });
+
   it('does not require email credentials in production processes that do not send email', () => {
     expect(() => parseConfig(productionEnvironment)).not.toThrow();
   });

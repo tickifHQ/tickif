@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { LeadDetailResponse, LeadListStatus, ListLeadsResponse } from '@repo/contracts';
 import { Avatar } from '@repo/ui/components/avatar';
+import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { EmptyState } from '@repo/ui/components/empty-state';
 import {
@@ -89,6 +90,8 @@ export function DesignerLeadsList({
   sortBy,
   sortOrder,
   error,
+  canManageConsultations = false,
+  consultationsEnabled = false,
 }: {
   leads: ListLeadsResponse;
   tabCounts?: Partial<Record<LeadListStatus, number>>;
@@ -99,6 +102,8 @@ export function DesignerLeadsList({
   sortBy?: string;
   sortOrder?: string;
   error?: string;
+  canManageConsultations?: boolean;
+  consultationsEnabled?: boolean;
 }) {
   return (
     <div className="space-y-6 p-5">
@@ -130,6 +135,7 @@ export function DesignerLeadsList({
                 />
               </TableHead>
               <TableHead className="w-60">Referred project</TableHead>
+              {consultationsEnabled ? <TableHead className="w-32">Type</TableHead> : null}
               <TableHead className="w-48">Contact number</TableHead>
               <TableHead className="w-28">
                 <SortableHeader
@@ -175,6 +181,16 @@ export function DesignerLeadsList({
                   <TableCell className="text-sm font-medium text-muted-foreground">
                     {lead.referredProjectTitle ?? 'No project attached'}
                   </TableCell>
+                  {consultationsEnabled ? (
+                    <TableCell>
+                      <Badge
+                        variant={lead.source === 'consultation' ? 'info' : 'secondary'}
+                        size="compact"
+                      >
+                        {lead.source === 'consultation' ? 'Consultation' : 'Enquiry'}
+                      </Badge>
+                    </TableCell>
+                  ) : null}
                   <TableCell className="text-sm font-medium text-muted-foreground">
                     {lead.contactNumber}
                   </TableCell>
@@ -219,7 +235,7 @@ export function DesignerLeadsList({
               ))
             ) : (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="py-14 text-center">
+                <TableCell colSpan={consultationsEnabled ? 8 : 7} className="py-14 text-center">
                   <EmptyState
                     icon={<UsersRound className="size-5" />}
                     title="No leads found"
@@ -243,7 +259,12 @@ export function DesignerLeadsList({
         limit={leads.limit}
         className={leads.items.length === 0 ? 'opacity-70' : undefined}
       />
-      <DesignerLeadDetailDialog lead={selectedLead ?? null} error={selectedLeadError} />
+      <DesignerLeadDetailDialog
+        lead={selectedLead ?? null}
+        error={selectedLeadError}
+        canManageConsultations={canManageConsultations}
+        consultationsEnabled={consultationsEnabled}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type {
   ListBookingsResponse,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
+import { features } from '../../lib/features.js';
 import { orgsService } from '../orgs/service.js';
 import {
   bookingsRepository,
@@ -89,6 +90,10 @@ function assertActiveCaller(caller: BookingCaller): void {
     throw AppError.forbidden('Account unavailable');
 }
 
+function assertConsultationsEnabled(): void {
+  if (!features.consultations) throw AppError.notFound('Consultations are not available');
+}
+
 function assertPersonalCaller(caller: BookingCaller): void {
   if (caller.activeOrgId) throw AppError.forbidden('Switch to your personal account to continue');
 }
@@ -151,6 +156,7 @@ async function transitionOrConflict(params: TransitionBookingParams): Promise<Bo
 
 export const bookingsService = {
   async create(input: CreateBookingInput, caller: BookingCaller): Promise<BookingResponse> {
+    assertConsultationsEnabled();
     assertActiveCaller(caller);
     assertPersonalCaller(caller);
     if (!caller.phoneNumber || !caller.phoneNumberVerified) {
@@ -183,6 +189,7 @@ export const bookingsService = {
   },
 
   async listMine(query: ListBookingsQuery, caller: BookingCaller): Promise<ListBookingsResponse> {
+    assertConsultationsEnabled();
     assertActiveCaller(caller);
     assertPersonalCaller(caller);
     const { items, total } = await bookingsRepository.list({
@@ -201,6 +208,7 @@ export const bookingsService = {
   },
 
   async listInbox(query: ListBookingsQuery, caller: BookingCaller): Promise<ListBookingsResponse> {
+    assertConsultationsEnabled();
     assertActiveCaller(caller);
     const organizationId = requireActiveOrganization(caller);
     const activeTeamId = requireActiveTeam(caller);
@@ -229,6 +237,7 @@ export const bookingsService = {
     caller: BookingCaller,
     expectedStatus?: BookingStatus,
   ): Promise<BookingResponse> {
+    assertConsultationsEnabled();
     assertActiveCaller(caller);
     const booking = await bookingsRepository.findById(id);
     if (!booking) throw AppError.notFound('Booking not found');
@@ -253,6 +262,7 @@ export const bookingsService = {
     caller: BookingCaller,
     expectedStatus?: BookingStatus,
   ): Promise<BookingResponse> {
+    assertConsultationsEnabled();
     assertActiveCaller(caller);
     const booking = await bookingsRepository.findById(id);
     if (!booking) throw AppError.notFound('Booking not found');
@@ -274,6 +284,7 @@ export const bookingsService = {
     caller: BookingCaller,
     expectedStatus?: BookingStatus,
   ): Promise<BookingResponse> {
+    assertConsultationsEnabled();
     assertActiveCaller(caller);
     const booking = await bookingsRepository.findById(id);
     if (!booking) throw AppError.notFound('Booking not found');

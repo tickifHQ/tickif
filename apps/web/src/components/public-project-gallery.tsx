@@ -115,7 +115,9 @@ export function PublicProjectGallery({
 
   if (projects.length === 0) {
     return (
-      <p className="mt-9 border-t py-12 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+      <p className="mt-9 border-t py-12 text-center text-sm text-muted-foreground">
+        {emptyMessage}
+      </p>
     );
   }
 
@@ -207,8 +209,9 @@ export function PublicProjectGallery({
           showAll ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
         )}
         aria-hidden={!showAll}
+        inert={!showAll}
       >
-        <div className="min-h-0 overflow-hidden">
+        <div className={cn('min-h-0 overflow-hidden', !showAll && 'hidden')}>
           <div className="grid gap-x-6 gap-y-7 pt-7 sm:grid-cols-2 lg:grid-cols-3">
             {additionalProjects.map((project) => (
               <PublicProjectCard key={project.id} project={project} studioName={studioName} />
@@ -233,7 +236,11 @@ export function PublicProjectGallery({
             disabled={isPending}
             onClick={handleViewAll}
           >
-            {isPending ? 'Loading projects…' : showAll ? 'Show fewer projects' : 'View all projects'}
+            {isPending
+              ? 'Loading projects…'
+              : showAll
+                ? 'Show fewer projects'
+                : 'View all projects'}
             <ArrowDown
               className={cn(
                 'size-3 transition-transform duration-300 motion-reduce:transition-none',

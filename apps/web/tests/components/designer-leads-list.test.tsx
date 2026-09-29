@@ -33,6 +33,7 @@ const leads: ListLeadsResponse = {
       contactNumber: '+91 9123456789',
       budgetBand: '₹5-10L',
       assignedMemberId: null,
+      source: 'enquiry',
       status: 'contacted',
       receivedAt: '2026-01-06T00:00:00.000Z',
     },
@@ -44,6 +45,7 @@ const leads: ListLeadsResponse = {
       contactNumber: '+91 9123456789',
       budgetBand: '₹25-30L',
       assignedMemberId: null,
+      source: 'consultation',
       status: 'closed',
       receivedAt: '2025-12-22T00:00:00.000Z',
     },
@@ -55,6 +57,7 @@ const leads: ListLeadsResponse = {
       contactNumber: '+91 9000000101',
       budgetBand: '₹10-15L',
       assignedMemberId: null,
+      source: 'enquiry',
       status: 'spam',
       receivedAt: '2025-12-20T00:00:00.000Z',
     },
@@ -67,8 +70,26 @@ const selectedLead: LeadDetailResponse = {
   message: 'Needs a modular kitchen quote.',
   notes: 'Follow up after the budget review.',
   source: 'enquiry',
+  consultation: null,
   createdAt: '2026-01-06T00:00:00.000Z',
   updatedAt: '2026-01-06T00:00:00.000Z',
+};
+
+const consultationLead: LeadDetailResponse = {
+  ...selectedLead,
+  ...leads.items[1]!,
+  referredProjectId: selectedLead.referredProjectId,
+  source: 'consultation',
+  consultation: {
+    id: '55555555-5555-4555-8555-555555555555',
+    status: 'requested',
+    requesterEmail: 'rahul@example.com',
+    preferredSlots: [{ date: '2026-10-02', window: 'afternoon' }],
+    confirmedSlot: null,
+    cancelledBy: null,
+    cancelReason: null,
+    requestedAt: '2026-01-06T00:00:00.000Z',
+  },
 };
 
 describe('DesignerLeadsList', () => {
@@ -88,6 +109,8 @@ describe('DesignerLeadsList', () => {
       '/designer/leads?status=new&page=1',
     );
     expect(screen.getByText('Priya Krishnan')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Type' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Consultation')).not.toBeInTheDocument();
     expect(screen.getAllByText('4BHK Villa in OMR').length).toBeGreaterThan(0);
     const responseChips = screen
       .getAllByText(/^(Contacted|Closed|Spam)$/)
@@ -146,6 +169,40 @@ describe('DesignerLeadsList', () => {
       'bg-button-inverted',
       'text-button-inverted-foreground',
     );
+  });
+
+  it('manages consultation scheduling inside the lead detail dialog', () => {
+    render(
+      <DesignerLeadsList
+        leads={leads}
+        selectedLead={consultationLead}
+        activeStatus="all"
+        canManageConsultations
+        consultationsEnabled
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Consultation schedule' })).toBeInTheDocument();
+    expect(screen.getByText('rahul@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm consultation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel consultation' })).toBeInTheDocument();
+  });
+
+  it('hides consultation scheduling and lead type while the feature is disabled', () => {
+    render(
+      <DesignerLeadsList
+        leads={leads}
+        selectedLead={consultationLead}
+        activeStatus="all"
+        canManageConsultations
+      />,
+    );
+
+    expect(screen.queryByRole('columnheader', { name: 'Type' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Consultation schedule' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm consultation' })).not.toBeInTheDocument();
   });
 
   it('edits persisted designer notes without replacing the homeowner message', async () => {
