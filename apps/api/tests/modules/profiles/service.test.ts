@@ -4,6 +4,11 @@ import type { DesignerProfileRecord } from '../../../src/modules/profiles/reposi
 // Mock the repository — no DB needed for unit tests.
 vi.mock('../../../src/modules/profiles/repository.js', () => {
   return {
+    ProfileCityLimitExceededError: class extends Error {
+      constructor() {
+        super('Select up to 5 cities in total.');
+      }
+    },
     profilesRepository: {
       findByTeamId: vi.fn(),
       findByTeamIdWithOrg: vi.fn(),
@@ -32,7 +37,8 @@ vi.mock('../../../src/modules/profiles/portfolio-service.js', () => ({
 
 // Import AFTER mock registration.
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
-const { profilesRepository } = await import('../../../src/modules/profiles/repository.js');
+const { profilesRepository, ProfileCityLimitExceededError } =
+  await import('../../../src/modules/profiles/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { presignProfileLogo, presignProfileLogoSource } =
   await import('../../../src/modules/profiles/portfolio-service.js');
@@ -66,6 +72,7 @@ const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileR
   foundedYear: null,
   testimonialBannerEnabled: false,
   staffCount: null,
+  customCities: [],
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
   ...over,
@@ -391,5 +398,70 @@ describe('profilesService.updateProfile required Hero fields', () => {
     vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow({ bio: null }));
     await profilesService.updateProfile('u1', 'org-1', { bio: null }, 'team-1');
     expect(profilesRepository.updateProfileAndFootprint).toHaveBeenCalled();
+  });
+
+  it('normalizes custom cities (trim + case-insensitive dedupe) and persists them', async () => {
+    await profilesService.updateProfile(
+      'u1',
+      'org-1',
+      { cityIds: [], customCities: ['  Coimbatore  ', 'coimbatore', 'Kochi'] },
+      'team-1',
+    );
+    expect(profilesRepository.updateProfileAndFootprint).toHaveBeenCalledWith(
+      profileRow().id,
+      { customCities: ['Coimbatore', 'Kochi'] },
+      expect.objectContaining({ cityIds: [] }),
+    );
+  });
+
+  it('rejects when taxonomy + custom cities exceed the combined limit of 5', async () => {
+    await expect(
+      profilesService.updateProfile(
+        'u1',
+        'org-1',
+        {
+          cityIds: ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'],
+          customCities: ['A', 'B', 'C', 'D'],
+        },
+        'team-1',
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(profilesRepository.updateProfileAndFootprint).not.toHaveBeenCalled();
+  });
+
+  it('counts existing footprint cities when only custom cities are updated', async () => {
+    // 4 existing taxonomy cities + 2 custom would be 6 > 5.
+    vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(4);
+    await expect(
+      profilesService.updateProfile('u1', 'org-1', { customCities: ['A', 'B'] }, 'team-1'),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(profilesRepository.countFootprintByKind).toHaveBeenCalledWith(profileRow().id, 'city');
+  });
+
+  it('returns the persisted custom cities in the owner projection', async () => {
+    vi.mocked(profilesRepository.updateProfileAndFootprint).mockResolvedValue(
+      profileRow({ customCities: ['Coimbatore'] }),
+    );
+    const result = await profilesService.updateProfile(
+      'u1',
+      'org-1',
+      { cityIds: [], customCities: ['Coimbatore'] },
+      'team-1',
+    );
+    expect(result.customCities).toEqual(['Coimbatore']);
+  });
+
+  it('returns a validation error when a concurrent city update exceeds the persisted limit', async () => {
+    vi.mocked(profilesRepository.updateProfileAndFootprint).mockRejectedValueOnce(
+      new ProfileCityLimitExceededError(),
+    );
+    await expect(
+      profilesService.updateProfile(
+        'u1',
+        'org-1',
+        { cityIds: [], customCities: ['Mapusa'] },
+        'team-1',
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'Select up to 5 cities in total.' });
   });
 });

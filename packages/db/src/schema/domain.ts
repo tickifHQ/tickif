@@ -342,6 +342,11 @@ export const designerProfile = pgTable(
     // Company metadata
     firmType: text('firm_type'),
     foundedYear: integer('founded_year'),
+    // Free-text service-area cities the designer typed that are not in the seeded
+    // `city` taxonomy. Complements the FK-backed footprint (which stays taxonomy-only
+    // for search/filtering). Display-only, mirroring `project.city_name`. The combined
+    // count of taxonomy footprint cities + these custom cities is capped at 5.
+    customCities: jsonb('custom_cities').$type<string[]>().default([]).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

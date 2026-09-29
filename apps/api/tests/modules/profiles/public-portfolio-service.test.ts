@@ -90,6 +90,7 @@ const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfile
   foundedYear: 2019,
   testimonialBannerEnabled: false,
   staffCount: 4,
+  customCities: [],
   createdAt: new Date('2020-01-01'),
   updatedAt: new Date('2026-01-01'),
   ...over,
@@ -376,6 +377,17 @@ describe('publicPortfolioService.getBySlug — projection', () => {
 
     expect(result.cities).toEqual(['Chennai', 'Coimbatore']);
     expect(result.heroCoverUrl).toBe('https://cdn.test/originals/portfolio-covers/profile-1/cover');
+    expect(result.stats.cityPresenceCount).toBe(2);
+  });
+
+  it('appends custom cities to the taxonomy labels and count, deduped case-insensitively', async () => {
+    vi.mocked(portfolioRepository.findCityLabels).mockResolvedValue(['Chennai']);
+    // "chennai" duplicates the taxonomy label (dropped); "Pondicherry" is new.
+    resolveTo(makeProfile({ customCities: ['chennai', 'Pondicherry'] }));
+
+    const result = await publicPortfolioService.getBySlug('test-studio');
+
+    expect(result.cities).toEqual(['Chennai', 'Pondicherry']);
     expect(result.stats.cityPresenceCount).toBe(2);
   });
 

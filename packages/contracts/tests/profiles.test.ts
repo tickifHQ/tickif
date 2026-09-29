@@ -43,6 +43,34 @@ describe('profile and taxonomy contracts', () => {
     });
   });
 
+  it('accepts trimmed custom cities and rejects blank or over-long entries', () => {
+    const ok = updateProfileSchema.safeParse({ customCities: ['Coimbatore', 'Pondicherry'] });
+    expect(ok.success).toBe(true);
+
+    const blank = updateProfileSchema.safeParse({ customCities: ['   '] });
+    expect(blank.success).toBe(false);
+
+    const tooLong = updateProfileSchema.safeParse({ customCities: ['x'.repeat(101)] });
+    expect(tooLong.success).toBe(false);
+  });
+
+  it('caps the combined taxonomy + custom city count at the city limit', () => {
+    const cityIds = Array.from(
+      { length: 3 },
+      (_, index) => `${index + 1}1111111-1111-4111-8111-111111111111`,
+    );
+    const result = updateProfileSchema.safeParse({
+      cityIds,
+      customCities: ['A', 'B', 'C'], // 3 + 3 = 6 > 5
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.flatten().fieldErrors).toMatchObject({
+      customCities: [`Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities in total.`],
+    });
+  });
+
   it('bounds staff count consistently for onboarding and profile updates', () => {
     const staffCount = PROFILE_STAFF_COUNT_MAX + 1;
     const update = updateProfileSchema.safeParse({ staffCount });

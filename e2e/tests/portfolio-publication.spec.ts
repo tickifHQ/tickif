@@ -105,6 +105,80 @@ test.describe('E-278 portfolio publication readiness', () => {
     return { user, organization, profile, portfolioSlug };
   }
 
+  test('custom cities can be typed, saved, reloaded, and removed on desktop and mobile', async ({
+    page,
+    context,
+  }, testInfo) => {
+    await assertTestDb();
+    const seed = await seedDesigner('custom-cities', {
+      status: 'active',
+      publicLinkEnabled: true,
+      logo: true,
+      bio: true,
+      tagline: true,
+      heroCover: true,
+    });
+    await signInPhone(context, seed.user.phoneNumber);
+    await selectOrganization(context, seed.organization.id);
+    await page.goto('/designer/profile');
+    await expect(page).toHaveTitle('Edit profile · Tickif');
+    await expect(page.getByRole('heading', { name: 'Edit your profile' })).toBeVisible();
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const cities = page.getByRole('button', { name: /^Cities:/ });
+    await cities.click();
+    await page.getByRole('menuitemcheckbox', { name: 'Mumbai', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Add a custom city' }).click();
+    const input = page.getByRole('textbox', { name: 'Add a custom city' });
+    // M must remain in the text input rather than activate Mumbai's menu typeahead.
+    await input.pressSequentially('Mapusa', { delay: 50 });
+    await expect(input).toHaveValue('Mapusa');
+    await expect(input).toBeFocused();
+    await input.press('Enter');
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true })).toBeChecked();
+    // Adding a selected row must not push the still-focused entry below the
+    // scrollable menu's visible edge.
+    const inputBounds = await input.boundingBox();
+    const menuBounds = await page.getByRole('menu').boundingBox();
+    expect(inputBounds).not.toBeNull();
+    expect(menuBounds).not.toBeNull();
+    expect(inputBounds!.y + inputBounds!.height).toBeLessThanOrEqual(
+      menuBounds!.y + menuBounds!.height,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath('custom-cities-desktop.png'),
+      animations: 'disabled',
+    });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(cities).toContainText('Mapusa');
+    const published = await context.request.get(`${apiUrl}/api/portfolios/${seed.portfolioSlug}`);
+    expect(published.ok()).toBeTruthy();
+    expect(await published.json()).toMatchObject({
+      cities: expect.arrayContaining(['Mumbai', 'Mapusa']),
+      stats: { cityPresenceCount: 2 },
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await cities.click();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true })).toBeChecked();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('custom-cities-mobile.png'),
+      animations: 'disabled',
+    });
+    await page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(cities).not.toContainText('Mapusa');
+    expect(errors).toEqual([]);
+  });
+
   test('an incomplete portfolio never exposes an actionable public URL (state D)', async ({
     browser,
   }, testInfo) => {
