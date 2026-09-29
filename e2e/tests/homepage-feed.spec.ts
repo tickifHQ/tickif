@@ -125,6 +125,15 @@ test.describe('homepage search feed', () => {
         has: page.getByText('E208Playwright Project 01', { exact: true }),
       });
       await expect(customCityCard.getByText('Pondicherry', { exact: true })).toBeVisible();
+      if (viewport.name === 'mobile') {
+        const budget = await customCityCard.getByText(/15.*35/).boundingBox();
+        const location = await customCityCard.getByText('Pondicherry', { exact: true }).boundingBox();
+        expect(budget).not.toBeNull();
+        expect(location).not.toBeNull();
+        expect(budget!.y + budget!.height).toBeLessThan(location!.y);
+      } else {
+        await customCityCard.hover();
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
