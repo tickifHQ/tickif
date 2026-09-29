@@ -127,6 +127,13 @@ test.describe('public designer discovery', () => {
         'aria-checked',
         'true',
       );
+      for (const menu of await page.getByRole('menu').all()) {
+        await expect(menu).toBeVisible();
+        const bounds = await menu.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+      }
       await page.screenshot({
         path: testInfo.outputPath(`designer-type-draft-${viewport.width}.png`),
         animations: 'disabled',

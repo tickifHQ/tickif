@@ -227,7 +227,7 @@ export function DesignerDiscoveryFilters({
               {appliedFilterCount > 0 ? ` (${appliedFilterCount})` : null}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
+          <DropdownMenuContent align="start" className="w-40 sm:w-64">
             <DropdownMenuLabel>Filter designers</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {DESIGNER_FACETS.map(({ key, label }) => (
@@ -236,7 +236,7 @@ export function DesignerDiscoveryFilters({
                   <span>{label}</span>
                   {draftFacets[key].length > 0 ? ` (${draftFacets[key].length})` : null}
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-60">
+                <DropdownMenuSubContent className="w-60 max-w-[calc(100vw-12rem)] sm:max-w-none">
                   <DropdownMenuLabel>{label}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <div className="max-h-72 overflow-y-auto">
@@ -261,7 +261,7 @@ export function DesignerDiscoveryFilters({
                 <span>Designer type</span>
                 {draftEntityType ? ' (1)' : null}
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-52">
+              <DropdownMenuSubContent className="w-52 max-w-[calc(100vw-12rem)] sm:max-w-none">
                 <DropdownMenuLabel>Designer type</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuRadioGroup
