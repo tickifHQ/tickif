@@ -115,6 +115,7 @@ type ListPaginationProps = {
   limit: number;
   total: number;
   itemName?: string;
+  itemNamePlural?: string;
   className?: string;
   disabled?: boolean;
   showPageSize?: boolean;
@@ -130,6 +131,7 @@ export function ListPagination({
   limit,
   total,
   itemName,
+  itemNamePlural,
   className,
   disabled = false,
   showPageSize = true,
@@ -144,7 +146,7 @@ export function ListPagination({
   const canGoPrevious = !disabled && currentPage > 1;
   const canGoNext = !disabled && currentPage < safeTotalPages;
   const summary = itemName
-    ? `Page ${currentPage} of ${safeTotalPages} · ${total} ${total === 1 ? itemName : `${itemName}s`}`
+    ? `Page ${currentPage} of ${safeTotalPages} · ${total} ${total === 1 ? itemName : (itemNamePlural ?? `${itemName}s`)}`
     : `Page ${currentPage} of ${safeTotalPages}${total === 0 ? ' · 0 items' : ''}`;
   const href = (targetPage: number) => hrefForPage?.(targetPage);
 
