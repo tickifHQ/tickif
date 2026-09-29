@@ -124,7 +124,7 @@ export const adminActivityRepository = {
   async listEnquiries(query: AdminEnquiriesQuery) {
     const pagination = page(query.page, query.limit);
     const where = query.status ? eq(schema.enquiry.status, query.status) : undefined;
-    const [items, [count]] = await Promise.all([
+    const [items, [count], [counts]] = await Promise.all([
       db
         .select({
           id: schema.enquiry.id,
@@ -158,8 +158,20 @@ export const adminActivityRepository = {
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.enquiry)
         .where(where),
+      db
+        .select({
+          all: sql<number>`count(*)::int`,
+          open: sql<number>`count(*) filter (where ${schema.enquiry.status} = 'open')::int`,
+          responded: sql<number>`count(*) filter (where ${schema.enquiry.status} = 'responded')::int`,
+          closed: sql<number>`count(*) filter (where ${schema.enquiry.status} = 'closed')::int`,
+        })
+        .from(schema.enquiry),
     ]);
-    return { items, total: count?.value ?? 0 };
+    return {
+      items,
+      total: count?.value ?? 0,
+      counts: counts ?? { all: 0, open: 0, responded: 0, closed: 0 },
+    };
   },
 
   async userActivity(userId: string) {
