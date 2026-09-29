@@ -110,6 +110,8 @@ const requiredEntries: [file: string, title: string][] = [
     'designer-discovery.spec.ts',
     'applies combined filters at page one, and can recover from empty results',
   ],
+  ['designer-discovery.spec.ts', 'applies draft designer types at 1440px'],
+  ['designer-discovery.spec.ts', 'applies draft designer types at 390px'],
   [
     'designer-discovery.spec.ts',
     'is reachable on mobile and contains cards and filters without horizontal overflow',

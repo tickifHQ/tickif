@@ -95,7 +95,9 @@ describe('discovery projection source', () => {
     await makeProject({ designerId: designer.id, title: 'Secret draft kitchen', status: 'draft' });
     let source = await findDesignerSearchSource(designer.id);
     expect(source).not.toBeNull();
+    expect(source?.profile.tagline).toBe('Thoughtful homes for modern living');
     let document = mapDesignerSearchDocument(source!);
+    expect(document.tagline).toBe('Thoughtful homes for modern living');
     expect(document.portfolioTerms).toContain('Bedroom');
     expect(document.portfolioTerms?.join(' ')).not.toContain('Secret');
     await db

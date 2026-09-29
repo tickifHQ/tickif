@@ -80,34 +80,79 @@ test.describe('public designer discovery', () => {
 
   test('searches real indexed designers, pages with keyboard, and preserves browser history', async ({
     page,
-  }) => {
+  }, testInfo) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'IntersectionObserver', {
+        configurable: true,
+        value: undefined,
+      });
+    });
     await page.goto(`/designers?q=${term}&sort=yearsExperience%3Adesc`);
     await expect(
       page.getByRole('heading', { name: 'Find Designers in Your Location' }),
     ).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(24);
-    const next = page.getByRole('link', { name: 'Next page' });
-    await next.focus();
-    await next.press('Enter');
-    await expect(page).toHaveURL(new RegExp('page=2'));
-    await expect(page.getByRole('article')).toHaveCount(2);
-    await page.goBack();
-    await expect(page.getByRole('article')).toHaveCount(24);
+    await page.screenshot({
+      path: testInfo.outputPath('designer-directory-desktop.png'),
+      animations: 'disabled',
+    });
+    const loadMore = page.getByRole('button', { name: 'Load more designers' });
+    await loadMore.focus();
+    await loadMore.press('Enter');
+    await expect(page.getByRole('article')).toHaveCount(26);
+    await expect(page).not.toHaveURL(/page=2/);
     await expect(page.getByRole('searchbox', { name: 'Search designers' })).toHaveValue(term);
-    await page.getByRole('link', { name: 'View Audit11Directory Studio 01 profile' }).click();
+    await page.getByRole('link', { name: 'View Audit11Directory Studio 01 portfolio' }).click();
     await expect(page).toHaveURL(`/d/${profile!.slug}`);
     await expect(
       page.getByRole('heading', { name: 'Audit11Directory Studio 01', exact: true }).first(),
     ).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/designers\\?q=${term}`));
+    await expect(page.getByRole('searchbox', { name: 'Search designers' })).toHaveValue(term);
   });
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`applies draft designer types at ${viewport.width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.goto(`/designers?q=${term}&citySlugs=pune`);
+      await expect(page.getByRole('article')).toHaveCount(1);
+      await page.getByRole('button', { name: 'Designer filters (1 selected)' }).click();
+      await page.getByRole('menuitem', { name: 'Designer type', exact: true }).click();
+      await page.getByRole('menuitemradio', { name: 'Individuals', exact: true }).click();
+      await expect(page.getByRole('menuitemradio', { name: 'Individuals' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      for (const menu of await page.getByRole('menu').all()) {
+        await expect(menu).toBeVisible();
+        const bounds = await menu.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+      }
+      await page.screenshot({
+        path: testInfo.outputPath(`designer-type-draft-${viewport.width}.png`),
+        animations: 'disabled',
+      });
+      await page.getByRole('menuitemradio', { name: 'Individuals' }).press('ArrowLeft');
+      await page.getByRole('button', { name: 'Apply 2 filters' }).click();
+      await expect(page).toHaveURL(/citySlugs=pune/);
+      await expect(page).toHaveURL(/entityType=individual/);
+      await expect(page.getByRole('article')).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Remove Individuals filter' })).toBeVisible();
+    });
+  }
 
   test('applies combined filters at page one, and can recover from empty results', async ({
     page,
   }) => {
     await page.goto(`/designers?q=${term}&citySlugs=mumbai&sort=yearsExperience%3Adesc&page=2`);
     await expect(page.getByRole('article')).toHaveCount(1);
-    await page.getByRole('combobox', { name: 'Designer type' }).selectOption('individual');
-    await page.getByRole('button', { name: 'Find designers', exact: true }).click();
+    await page.getByRole('button', { name: 'Individuals' }).click();
     await expect(page).not.toHaveURL(/page=2/);
     await expect(page).toHaveURL(/citySlugs=mumbai/);
     await expect(page.getByRole('heading', { name: 'No designers found' })).toBeVisible();

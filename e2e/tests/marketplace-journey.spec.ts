@@ -406,8 +406,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       whatsappNumber: visitorPhone,
     });
     await visitor.goto(`/designers?q=${encodeURIComponent(`Journey Studio ${suffix}`)}`);
-    await visitor.getByRole('combobox', { name: 'Designer type' }).selectOption('individual');
-    await visitor.getByRole('button', { name: 'Find designers', exact: true }).click();
+    await visitor.getByRole('button', { name: 'Individuals', exact: true }).click();
     await expect(visitor).toHaveURL(/entityType=individual/);
     const studioLink = visitor
       .getByRole('link', { name: new RegExp(`Journey Studio ${suffix}`) })
