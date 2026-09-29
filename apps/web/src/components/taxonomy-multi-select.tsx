@@ -207,6 +207,9 @@ export function TaxonomyMultiSelect({
                     value={customDraft}
                     onChange={(event) => setCustomDraft(event.target.value)}
                     onKeyDown={(event) => {
+                      // Text editing must not trigger the menu's typeahead or
+                      // roving focus. Escape still bubbles to close the menu.
+                      if (event.key !== 'Escape') event.stopPropagation();
                       if (event.key === 'Enter') {
                         event.preventDefault();
                         submitCustom();

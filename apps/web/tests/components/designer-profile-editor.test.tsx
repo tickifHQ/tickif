@@ -388,9 +388,7 @@ describe('DesignerProfileEditor', () => {
 
     // Closing the dropdown, the custom city shows inside the Cities trigger summary.
     await user.keyboard('{Escape}');
-    expect(
-      screen.getByRole('button', { name: /^cities:.*coimbatore/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^cities:.*coimbatore/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -422,7 +420,8 @@ describe('DesignerProfileEditor', () => {
     expect(input).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(screen.getByRole('menuitemcheckbox', { name: 'Panaji' })).toHaveAttribute(
-      'aria-checked', 'true',
+      'aria-checked',
+      'true',
     );
   });
 
@@ -442,10 +441,12 @@ describe('DesignerProfileEditor', () => {
     expect(screen.queryByRole('menuitemcheckbox', { name: 'pune' })).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
-    await waitFor(() => expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
-      cityIds: terms.cities.map((city) => city.id),
-      customCities: [],
-    }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        cityIds: terms.cities.map((city) => city.id),
+        customCities: [],
+      }),
+    );
   });
 
   it('removes a custom city before saving', async () => {
@@ -469,9 +470,7 @@ describe('DesignerProfileEditor', () => {
     await user.click(screen.getByRole('menuitemcheckbox', { name: 'Coimbatore' }));
     await user.keyboard('{Escape}');
 
-    expect(
-      screen.queryByRole('button', { name: /^cities:.*coimbatore/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^cities:.*coimbatore/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
@@ -954,5 +953,3 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('70% complete')).toBeInTheDocument();
   });
 });
-
-

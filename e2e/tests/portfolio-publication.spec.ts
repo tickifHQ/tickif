@@ -106,12 +106,17 @@ test.describe('E-278 portfolio publication readiness', () => {
   }
 
   test('custom cities can be typed, saved, reloaded, and removed on desktop and mobile', async ({
-    page, context,
+    page,
+    context,
   }, testInfo) => {
     await assertTestDb();
     const seed = await seedDesigner('custom-cities', {
-      status: 'active', publicLinkEnabled: true, logo: true, bio: true,
-      tagline: true, heroCover: true,
+      status: 'active',
+      publicLinkEnabled: true,
+      logo: true,
+      bio: true,
+      tagline: true,
+      heroCover: true,
     });
     await signInPhone(context, seed.user.phoneNumber);
     await selectOrganization(context, seed.organization.id);
@@ -146,7 +151,9 @@ test.describe('E-278 portfolio publication readiness', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await cities.click();
     await expect(page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true })).toBeChecked();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('custom-cities-mobile.png') });
     await page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true }).click();
     await page.keyboard.press('Escape');
@@ -445,4 +452,3 @@ test.describe('E-278 portfolio publication readiness', () => {
     }
   });
 });
-

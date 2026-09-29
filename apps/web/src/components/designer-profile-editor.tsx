@@ -392,6 +392,19 @@ export function DesignerProfileEditor({
     );
   }
 
+  function updateCityIds(values: string[]) {
+    const selectedLabels = new Set(
+      taxonomy.cities
+        .filter((option) => values.includes(option.id))
+        .map((option) => option.label.toLocaleLowerCase()),
+    );
+    updateField('cityIds', values);
+    updateField(
+      'customCities',
+      form.customCities.filter((city) => !selectedLabels.has(city.toLocaleLowerCase())),
+    );
+  }
+
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     formRevisionRef.current += 1;
     setForm((current) => ({ ...current, [key]: value }));
@@ -807,7 +820,7 @@ export function DesignerProfileEditor({
             error={validationErrors.cityIds ?? validationErrors.customCities ?? cityLimitError}
             options={taxonomy.cities}
             values={form.cityIds}
-            onValuesChange={(values) => updateField('cityIds', values)}
+            onValuesChange={updateCityIds}
             customValues={form.customCities}
             onAddCustom={addCustomCity}
             onRemoveCustom={removeCustomCity}
