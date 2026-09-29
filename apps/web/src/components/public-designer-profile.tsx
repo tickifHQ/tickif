@@ -2,7 +2,6 @@ import Image from 'next/image';
 import type { ReactNode } from 'react';
 import {
   BadgeCheck,
-  CalendarCheck,
   CalendarDays,
   Check,
   Globe,
@@ -27,7 +26,7 @@ import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-cta';
-import { BookingCta } from '@/components/booking-cta';
+import { ConsultationCta } from '@/components/consultation-cta';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -174,7 +173,7 @@ function StudioBar({ portfolio, view }: SectionProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <BookingCta
+          <ConsultationCta
             designerProfileId={portfolio.profileId}
             designerName={portfolio.displayName}
             loginHref={view.loginHref}
@@ -532,11 +531,11 @@ function StorySection({ portfolio, view }: SectionProps) {
                   designerProfileId={portfolio.profileId}
                   loginHref={view.loginHref}
                   variant="emphasis"
-                  ariaLabel="Book Consultation"
+                  ariaLabel="Send enquiry"
                   className="mt-5 h-8 w-full transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
                 >
-                  <CalendarCheck className="size-4" />
-                  Book Consultation
+                  <MessageSquare className="size-4" />
+                  Send enquiry
                 </EnquiryCta>
               </div>
 
@@ -603,7 +602,7 @@ function ReviewCard({ review }: { review: PublicPortfolioReview }) {
               {review.author}
               {review.verifiedConsultation ? (
                 <BadgeCheck
-                  aria-label="Verified consultation"
+                  aria-label="Verified client"
                   className="size-4 fill-primary text-primary-foreground"
                 />
               ) : null}
@@ -1016,11 +1015,11 @@ function ShareSection({ portfolio, view }: SectionProps) {
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"
-              ariaLabel="Book Consultation"
+              ariaLabel="Send enquiry"
               className="h-10 px-6 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
             >
-              <CalendarCheck className="size-4" />
-              Book Consultation
+              <MessageSquare className="size-4" />
+              Send enquiry
             </EnquiryCta>
             <CopyLinkButton
               value={view.publicProfileHref}
@@ -1052,11 +1051,10 @@ function ConsultationSection({ portfolio, view }: SectionProps) {
           <span className="block">living without.</span>
         </h2>
         <p className="mt-6 max-w-md leading-6 text-surface-inverse-foreground/80">
-          Book a consultation with {portfolio.displayName} on Tickif. The first consultation is
-          free.
+          Send an enquiry to {portfolio.displayName} on Tickif and start discussing your project.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <BookingCta
+          <ConsultationCta
             designerProfileId={portfolio.profileId}
             designerName={portfolio.displayName}
             loginHref={view.loginHref}

@@ -1,7 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnalyticsResponse, ProfileCompletionResponse } from '@repo/contracts';
 import { DesignerAnalyticsDashboard } from '../../src/components/designer-analytics-dashboard';
+
+const featureFlags = vi.hoisted(() => ({ CONSULTATIONS_ENABLED: false }));
+vi.mock('@repo/config/features', () => ({ config: featureFlags }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/designer/analytics',
@@ -77,6 +80,7 @@ class ChartResizeObserver implements ResizeObserver {
 }
 
 beforeEach(() => {
+  featureFlags.CONSULTATIONS_ENABLED = false;
   vi.stubGlobal('ResizeObserver', ChartResizeObserver);
 });
 
@@ -201,10 +205,20 @@ describe('DesignerAnalyticsDashboard', () => {
       'href',
       '/projects/11111111-1111-4111-8111-111111111111',
     );
-    expect(screen.getByText('Enquiry')).toBeInTheDocument();
-    expect(screen.getByText('Consultation')).toBeInTheDocument();
-    expect(screen.getByText('75%')).toBeInTheDocument();
-    expect(screen.getByText('66.7%')).toBeInTheDocument();
+    const sourceRow = screen.getByRole('row', { name: 'Enquiry 100% 50.0%' });
+    expect(within(sourceRow).getByRole('cell', { name: 'Enquiry' })).toBeInTheDocument();
+    expect(screen.getAllByRole('cell', { name: 'Enquiry' })).toHaveLength(1);
+    expect(screen.queryByRole('cell', { name: 'Consultation' })).toBeNull();
+  });
+
+  it('keeps source labels and rates distinct when consultations are enabled', () => {
+    featureFlags.CONSULTATIONS_ENABLED = true;
+    render(
+      <DesignerAnalyticsDashboard analytics={analytics} profileCompletion={profileCompletion} />,
+    );
+
+    expect(screen.getByRole('row', { name: 'Enquiry 75% 66.7%' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'Consultation 25% 0.0%' })).toBeInTheDocument();
   });
 
   it('shows a new trend when the prior period had no activity', () => {
@@ -529,7 +543,9 @@ describe('DesignerAnalyticsDashboard', () => {
 
     expect(screen.getByRole('heading', { name: /Billing analytics/i })).toBeInTheDocument();
     expect(screen.getByText(/Revenue only/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Analytics period: last 7 days/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Analytics period: last 7 days/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Enquiries received')).not.toBeInTheDocument();
     expect(screen.queryByText('Top converting projects')).not.toBeInTheDocument();
   });

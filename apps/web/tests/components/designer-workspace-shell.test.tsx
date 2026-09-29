@@ -95,6 +95,38 @@ vi.mock('@/components/designer-branch-selector', () => ({
 }));
 
 describe('DesignerWorkspaceShell', () => {
+  it('shows consultation navigation only when its feature flag is enabled', () => {
+    const { rerender } = render(
+      <DesignerWorkspaceShell
+        capabilities={FULL_CAPABILITIES}
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        planLabel="Hobby plan"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.queryByRole('link', { name: 'Consultations' })).not.toBeInTheDocument();
+
+    rerender(
+      <DesignerWorkspaceShell
+        capabilities={FULL_CAPABILITIES}
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        planLabel="Hobby plan"
+        consultationsEnabled
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Consultations' })).toHaveAttribute(
+      'href',
+      '/designer/consultations',
+    );
+  });
+
   it('hides links and project creation when the active organization role lacks access', () => {
     mock.pathname = '/designer/dashboard';
 
@@ -213,10 +245,7 @@ describe('DesignerWorkspaceShell', () => {
       </DesignerWorkspaceShell>,
     );
 
-    expect(screen.getByRole('link', { name: /consultations/i })).toHaveAttribute(
-      'href',
-      '/designer/consultations',
-    );
+    expect(screen.queryByRole('link', { name: /consultations/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /^reviews$/i })[0]).toHaveAttribute(
       'href',
       '/designer/reviews',

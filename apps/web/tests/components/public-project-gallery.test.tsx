@@ -45,6 +45,10 @@ describe('PublicProjectGallery', () => {
 
     expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(6);
     expect(screen.getByTestId('project-count')).toHaveTextContent('6 of 9 projects');
+    const additionalProjects = screen.getByTestId('additional-projects');
+    expect(additionalProjects).toHaveAttribute('aria-hidden', 'true');
+    expect(additionalProjects).toHaveAttribute('inert');
+    expect(additionalProjects.firstElementChild).toHaveClass('hidden');
 
     fireEvent.click(screen.getByRole('button', { name: 'View all projects' }));
 
@@ -53,7 +57,16 @@ describe('PublicProjectGallery', () => {
       'aria-expanded',
       'true',
     );
-    expect(screen.getByTestId('additional-projects')).toHaveAttribute('aria-hidden', 'false');
+    expect(additionalProjects).toHaveAttribute('aria-hidden', 'false');
+    expect(additionalProjects).not.toHaveAttribute('inert');
+    expect(additionalProjects.firstElementChild).not.toHaveClass('hidden');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer projects' }));
+
+    expect(screen.getByTestId('project-count')).toHaveTextContent('6 of 9 projects');
+    expect(additionalProjects).toHaveAttribute('aria-hidden', 'true');
+    expect(additionalProjects).toHaveAttribute('inert');
+    expect(additionalProjects.firstElementChild).toHaveClass('hidden');
   });
 
   it('sorts on the fields the API returns and filters by property type', () => {

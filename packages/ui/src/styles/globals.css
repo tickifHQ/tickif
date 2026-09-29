@@ -26,6 +26,7 @@
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-profile-completion-background: var(--profile-completion-background);
   --color-foreground-disabled: var(--foreground-disabled);
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-subtle-border: var(--surface-subtle-border);

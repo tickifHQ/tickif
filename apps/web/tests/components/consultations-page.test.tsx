@@ -4,22 +4,15 @@ import { ConsultationsPage } from '../../src/components/consultations-page';
 
 const mock = vi.hoisted(() => ({
   fetchConsultations: vi.fn(),
-  role: 'owner' as string | null,
   activeOrg: null as string | null,
   session: { user: { role: 'visitor' } } as { user: { role: string } } | null,
 }));
 vi.mock('@/lib/bookings-api', () => ({ fetchConsultations: mock.fetchConsultations }));
 vi.mock('@/lib/auth-guard', () => ({
-  getServerSession: async () => mock.session,
   requirePersonalRequester: async () => {
-    if (mock.activeOrg) throw new Error('redirect:/designer/consultations');
+    if (mock.activeOrg) throw new Error('redirect:/designer/leads');
     return mock.session;
   },
-  activeContextForSession: () => ({ kind: mock.activeOrg ? 'organization' : 'personal' }),
-}));
-vi.mock('@/lib/current-org-role', () => ({ getCurrentOrgRole: async () => mock.role }));
-vi.mock('@/lib/designer-profile', () => ({
-  requireCurrentDesignerProfile: async () => ({ displayName: 'Active Branch' }),
 }));
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ cookie: 'synthetic-session' }),
@@ -39,7 +32,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mock.session = { user: { role: 'visitor' } };
   mock.activeOrg = null;
-  mock.role = 'owner';
   mock.fetchConsultations.mockResolvedValue({
     items: [],
     total: 30,
@@ -52,7 +44,6 @@ describe('consultation pages', () => {
   it('loads the private requester page and preserves URL status through pagination', async () => {
     render(
       await ConsultationsPage({
-        scope: 'mine',
         searchParams: Promise.resolve({ status: 'confirmed', page: '2' }),
       }),
     );
@@ -80,33 +71,20 @@ describe('consultation pages', () => {
     });
     await expect(
       ConsultationsPage({
-        scope: 'mine',
         searchParams: Promise.resolve({ status: 'requested', page: '2' }),
       }),
     ).rejects.toThrow('redirect:/home/consultations?status=requested&page=1');
   });
-  it('renders the active branch inbox read-only for a viewer', async () => {
-    mock.role = 'viewer';
-    mock.session = { user: { role: 'designer' } };
-    render(await ConsultationsPage({ scope: 'inbox', searchParams: Promise.resolve({}) }));
-    expect(screen.getByTestId('list')).toHaveAttribute('data-write', 'false');
-    expect(screen.getByText(/Active Branch/)).toBeInTheDocument();
-    expect(mock.fetchConsultations).toHaveBeenCalledWith(
-      expect.anything(),
-      'inbox',
-      'synthetic-session',
-    );
-  });
   it('does not read personal bookings under an organization session', async () => {
     mock.activeOrg = 'org';
-    await expect(
-      ConsultationsPage({ scope: 'mine', searchParams: Promise.resolve({}) }),
-    ).rejects.toThrow('redirect:/designer/consultations');
+    await expect(ConsultationsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'redirect:/designer/leads',
+    );
     expect(mock.fetchConsultations).not.toHaveBeenCalled();
   });
   it('keeps the requester page available to designers browsing without a studio', async () => {
     mock.session = { user: { role: 'designer' } };
-    render(await ConsultationsPage({ scope: 'mine', searchParams: Promise.resolve({}) }));
+    render(await ConsultationsPage({ searchParams: Promise.resolve({}) }));
     expect(mock.fetchConsultations).toHaveBeenCalledWith(
       { status: 'all', page: 1, limit: 12 },
       'mine',
@@ -116,8 +94,8 @@ describe('consultation pages', () => {
   });
   it('propagates a failed read to the error boundary instead of showing an empty inbox', async () => {
     mock.fetchConsultations.mockRejectedValue(new Error('Offline'));
-    await expect(
-      ConsultationsPage({ scope: 'mine', searchParams: Promise.resolve({}) }),
-    ).rejects.toThrow('Offline');
+    await expect(ConsultationsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'Offline',
+    );
   });
 });

@@ -104,7 +104,7 @@ export function ReviewEditor({
         </p>
         {bookingId && !existing ? (
           <p className="text-sm text-muted-foreground">
-            Your completed consultation will be checked when you submit.
+            Your eligibility will be checked when you submit.
           </p>
         ) : null}
       </fieldset>

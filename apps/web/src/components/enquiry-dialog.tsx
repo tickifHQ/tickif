@@ -55,9 +55,9 @@ const TEMPLATE_CHIPS = [
       'Hi, I would like to request a quotation for my project. Could you share your pricing and availability?',
   },
   {
-    label: 'Book consultation',
+    label: 'Discuss requirements',
     template:
-      'Hi, I would like to book a consultation to discuss my requirements. Please let me know your available slots.',
+      'Hi, I would like to discuss my project requirements. Please let me know how we can take this forward.',
   },
   {
     label: 'Timeline enquiry',
