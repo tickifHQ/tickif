@@ -136,7 +136,19 @@ test.describe('E-278 portfolio publication readiness', () => {
     await expect(input).toBeFocused();
     await input.press('Enter');
     await expect(page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true })).toBeChecked();
-    await page.screenshot({ path: testInfo.outputPath('custom-cities-desktop.png') });
+    // Adding a selected row must not push the still-focused entry below the
+    // scrollable menu's visible edge.
+    const inputBounds = await input.boundingBox();
+    const menuBounds = await page.getByRole('menu').boundingBox();
+    expect(inputBounds).not.toBeNull();
+    expect(menuBounds).not.toBeNull();
+    expect(inputBounds!.y + inputBounds!.height).toBeLessThanOrEqual(
+      menuBounds!.y + menuBounds!.height,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath('custom-cities-desktop.png'),
+      animations: 'disabled',
+    });
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
@@ -154,7 +166,10 @@ test.describe('E-278 portfolio publication readiness', () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath('custom-cities-mobile.png') });
+    await page.screenshot({
+      path: testInfo.outputPath('custom-cities-mobile.png'),
+      animations: 'disabled',
+    });
     await page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true }).click();
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();

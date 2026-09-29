@@ -88,10 +88,13 @@ export function TaxonomyMultiSelect({
   const [customDraft, setCustomDraft] = useState('');
   const customInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus the inline input once it opens.
+  // New checked rows above the input can push it out of the scroll viewport.
   useEffect(() => {
-    if (customEntry) customInputRef.current?.focus();
-  }, [customEntry]);
+    if (customEntry) {
+      customInputRef.current?.focus();
+      customInputRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [customEntry, customValues.length]);
 
   function toggle(optionId: string) {
     onValuesChange(
