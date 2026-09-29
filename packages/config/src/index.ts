@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { parse as parseDotenv } from 'dotenv';
 import { z } from 'zod';
-import { loadRootEnv } from './load-env.js';
-import { featureFlagsSchema } from './features.js';
+import { loadRootEnv } from './load-env';
+import { featureFlagsSchema } from './features';
 
 loadRootEnv();
 

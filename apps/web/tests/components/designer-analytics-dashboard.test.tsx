@@ -207,7 +207,7 @@ describe('DesignerAnalyticsDashboard', () => {
     );
     const sourceRow = screen.getByRole('row', { name: 'Enquiry 100% 50.0%' });
     expect(within(sourceRow).getByRole('cell', { name: 'Enquiry' })).toBeInTheDocument();
-    expect(screen.getAllByRole('cell', { name: 'Enquiry', exact: true })).toHaveLength(1);
+    expect(screen.getAllByRole('cell', { name: 'Enquiry' })).toHaveLength(1);
     expect(screen.queryByRole('cell', { name: 'Consultation' })).toBeNull();
   });
 

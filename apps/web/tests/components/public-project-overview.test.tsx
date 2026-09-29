@@ -34,10 +34,8 @@ describe('PublicProjectOverview', () => {
   it('does not add a second enquiry action where the project already has one', () => {
     render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
 
-    expect(screen.getAllByRole('button', { name: 'Enquire', exact: true }).length).toBeGreaterThan(
-      0,
-    );
-    expect(screen.queryByRole('button', { name: 'Send enquiry', exact: true })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Enquire' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Send enquiry' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Book consultation' })).toBeNull();
   });
 
@@ -46,9 +44,7 @@ describe('PublicProjectOverview', () => {
     render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
 
     expect(screen.getByRole('button', { name: 'Book consultation' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Enquire', exact: true }).length).toBeGreaterThan(
-      0,
-    );
+    expect(screen.getAllByRole('button', { name: 'Enquire' }).length).toBeGreaterThan(0);
   });
 
   it('renders the sourced first-section fields and established public routes', () => {

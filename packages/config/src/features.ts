@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { loadRootEnv } from './load-env.js';
+import { loadRootEnv } from './load-env';
 
 export const featureFlagsSchema = z.object({
   CONSULTATIONS_ENABLED: z.stringbool().optional().default(false),
