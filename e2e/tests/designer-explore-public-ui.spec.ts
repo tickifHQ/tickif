@@ -72,6 +72,9 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await explore.click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath('homepage-desktop.png'), fullPage: false });
+    await page.getByRole('link', { name: 'Browse professionals', exact: true }).click();
+    await expect(page).toHaveURL('/designers');
 
     await page.goto('/designer/dashboard');
     const brand = page.getByRole('link', { name: 'Tickif', exact: true });
@@ -109,6 +112,9 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await mobileExplore.click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath('homepage-mobile.png'), fullPage: false });
+    await page.getByRole('link', { name: 'Browse professionals', exact: true }).click();
+    await expect(page).toHaveURL('/designers');
     expect(pageErrors).toEqual([]);
   } finally {
     await assertTestDb();
