@@ -73,10 +73,10 @@ export function AdminUsersFilters({
   return (
     <form
       onSubmit={submitSearch}
-      className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm lg:grid-cols-[minmax(18rem,1fr)_12rem_12rem_auto_auto] lg:items-end"
+      className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto_auto]"
       aria-busy={navigating}
     >
-      <div className="space-y-1.5">
+      <div className="min-w-0 space-y-1.5 sm:col-span-2 xl:col-span-1">
         <Label htmlFor="admin-user-search">Search users</Label>
         <div className="relative min-w-0">
           <Search

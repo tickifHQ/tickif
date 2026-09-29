@@ -111,6 +111,7 @@ test('E-340 and E-341 admin directory filters users and shows their recent histo
   for (const width of [1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     const filters = page.locator('form').filter({ has: page.getByLabel('Search users') });
+    await captureQaScreenshot(page, testInfo, 'E-340', `users-directory-${width}`);
     await expect
       .poll(() => filters.evaluate((element) => element.scrollWidth <= element.clientWidth))
       .toBe(true);
