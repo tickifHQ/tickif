@@ -23,6 +23,7 @@ const emptyDashboard: ProfileDashboardResponse = {
   profileCompletion: { score: 0, missing: [] },
   projects: { total: 0, published: 0, inReview: 0, draft: 0 },
   leads: { total: 0, new: 0 },
+  heroCoverUrl: null,
   // Placeholder used only when the dashboard fetch fails. `publiclyVisible:false`
   // guarantees the overview never surfaces this non-canonical `/d/studio` URL as
   // a copyable/openable public link (E-278).

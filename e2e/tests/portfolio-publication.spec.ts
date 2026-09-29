@@ -1,8 +1,10 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
+import { putObject } from '@repo/storage';
 import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
 
@@ -409,8 +411,12 @@ test.describe('E-278 portfolio publication readiness', () => {
 
   test('uploading the final required cover publishes the portfolio and renders responsively', async ({
     browser,
-  }) => {
-    const context = await browser.newContext({ baseURL: webUrl });
+  }, testInfo) => {
+    test.setTimeout(60_000);
+    const context = await browser.newContext({
+      baseURL: webUrl,
+      permissions: ['clipboard-read', 'clipboard-write'],
+    });
     try {
       const seed = await seedDesigner('cover-upload', {
         status: 'draft',
@@ -420,9 +426,31 @@ test.describe('E-278 portfolio publication readiness', () => {
         tagline: true,
         heroCover: false,
       });
+      // Use an owned, real image so visual checks cannot pass with a broken logo.
+      const logoKey = `originals/logos/${seed.profile.id}/logo.png`;
+      await putObject({
+        key: logoKey,
+        body: await readFile(
+          resolve(import.meta.dirname, '../../apps/web/public/images/email/tickif-mark.png'),
+        ),
+        contentType: 'image/png',
+      });
+      await db
+        .update(schema.designerProfile)
+        .set({ logoImageId: logoKey })
+        .where(eq(schema.designerProfile.id, seed.profile.id));
       await signInPhone(context, seed.user.phoneNumber);
       await selectOrganization(context, seed.organization.id);
       const page = await context.newPage();
+      const pageErrors: string[] = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+
+      await page.goto('/designer/dashboard');
+      await expect(page.getByTestId('dashboard-preview-logo')).toBeVisible();
+      await expect(page.getByAltText(`${seed.organization.name} portfolio cover`)).toHaveCount(0);
+      await page.getByTestId('dashboard-share-card').screenshot({
+        path: testInfo.outputPath('dashboard-gradient-fallback.png'),
+      });
 
       await page.goto('/designer/portfolio');
       await expect(page.getByRole('button', { name: 'Upload portfolio cover' })).toBeVisible();
@@ -436,6 +464,66 @@ test.describe('E-278 portfolio publication readiness', () => {
         );
       await expect(page.getByRole('button', { name: 'Replace portfolio cover' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Open full' })).toBeVisible();
+
+      for (const surface of [
+        {
+          route: '/designer/portfolio',
+          logo: 'portfolio-preview-logo',
+          cover: 'Portfolio cover preview',
+        },
+        {
+          route: '/designer/dashboard',
+          logo: 'dashboard-preview-logo',
+          cover: `${seed.organization.name} portfolio cover`,
+        },
+      ]) {
+        await page.goto(surface.route);
+        const logo = page.getByTestId(surface.logo);
+        const cover = page.getByAltText(surface.cover, { exact: true });
+        await expect(cover).toBeVisible();
+        await expect
+          .poll(() => cover.evaluate((image: HTMLImageElement) => image.naturalWidth))
+          .toBeGreaterThan(0);
+        await expect
+          .poll(() => logo.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth))
+          .toBeGreaterThan(0);
+        for (const viewport of [
+          { width: 1440, height: 1000 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          // Settings deliberately reserves its side-by-side live preview for
+          // desktop; on mobile the editing form uses the full screen width.
+          if (surface.logo === 'portfolio-preview-logo' && viewport.width < 1024) {
+            await expect(logo).toBeHidden();
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.screenshot({ path: testInfo.outputPath('portfolio-settings-mobile.png') });
+            continue;
+          }
+          await logo.scrollIntoViewIfNeeded();
+          await expect(logo).toHaveCSS('border-top-width', '0px');
+          // The overlapping top of the logo must win hit testing over the cover.
+          expect(
+            await logo.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              return element.contains(
+                document.elementFromPoint(rect.x + rect.width / 2, rect.y + 8),
+              );
+            }),
+          ).toBe(true);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.screenshot({
+            path: testInfo.outputPath(`${surface.logo}-${viewport.width}.png`),
+          });
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.getByRole('button', { name: 'Copy link', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+      }
+      expect(pageErrors).toEqual([]);
+      await page.setViewportSize({ width: 1440, height: 1000 });
 
       const publicUrl = `/d/${seed.portfolioSlug}`;
       await page.goto(publicUrl);
