@@ -620,7 +620,8 @@ describe('GET /api/projects/slug/{slug}', () => {
         designerId: designer.id,
         title: 'Studio Source Second Home',
         status: 'published',
-        citySlug: 'mumbai',
+        citySlug: null,
+        cityName: 'Pondicherry',
         budgetBandSlug: 'premium',
         publishedAt: new Date('2025-06-01T00:00:00.000Z'),
       },
@@ -719,6 +720,7 @@ describe('GET /api/projects/slug/{slug}', () => {
     const body = (await response.json()) as PublicProjectDetailResponse;
     expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
     expect(body.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([sameDesigner.id]);
+    expect(body.recommendations.moreFromDesigner[0]?.city).toBe('Pondicherry');
     expect(body.recommendations.sameBudgetDifferentStyle.map((item) => item.id)).toEqual([
       differentStyle.id,
     ]);

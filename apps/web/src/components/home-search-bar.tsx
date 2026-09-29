@@ -341,7 +341,9 @@ export function HomeSearchBar({
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{project.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {[project.designerName, project.citySlug].filter(Boolean).join(' · ')}
+                      {[project.designerName, project.cityName ?? project.citySlug]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   </span>
                 </Link>

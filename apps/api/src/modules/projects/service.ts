@@ -2099,7 +2099,7 @@ export const projectsService = {
         description: detail.description,
         buildingName: detail.buildingName,
         studio: detail.designer.displayName,
-        city: specifications.city?.label ?? null,
+        city: specifications.city?.label ?? specifications.cityName ?? null,
         locality: specifications.locality?.label ?? null,
         rating: Number(detail.designer.avgRating) || 0,
         reviewCount: detail.designer.reviewCount,
