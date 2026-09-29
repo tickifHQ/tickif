@@ -25,6 +25,7 @@ import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import {
   DesignerOnboardingAccessDeniedError,
+  ProfileCityLimitExceededError,
   profilesRepository,
   type DesignerProfileRecord,
 } from './repository.js';
@@ -630,15 +631,25 @@ export const profilesService = {
       );
     }
 
-    const updated = await profilesRepository.updateProfileAndFootprint(
-      profile.id,
-      { ...profileFields, ...(normalizedCustomCities !== undefined ? { customCities: normalizedCustomCities } : {}) },
-      {
-        cityIds,
-        scopeIds,
-        themeIds,
-      },
-    );
+    const updated = await profilesRepository
+      .updateProfileAndFootprint(
+        profile.id,
+        {
+          ...profileFields,
+          ...(normalizedCustomCities !== undefined ? { customCities: normalizedCustomCities } : {}),
+        },
+        {
+          cityIds,
+          scopeIds,
+          themeIds,
+        },
+      )
+      .catch((error: unknown) => {
+        if (error instanceof ProfileCityLimitExceededError) {
+          throw AppError.unprocessable(error.message);
+        }
+        throw error;
+      });
 
     // Return owner projection
     const footprint = await profilesRepository.getFootprint(profile.id);

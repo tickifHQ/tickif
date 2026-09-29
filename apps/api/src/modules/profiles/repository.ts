@@ -2,6 +2,7 @@ import { db, schema, eq, and, inArray, sql } from '@repo/db';
 import {
   ACCOUNT_STATUS,
   PLATFORM_ROLE,
+  PROFILE_FOOTPRINT_LIMITS,
   VERIFICATION_APPLICATION_STATUS,
   taxonomyKindSchema,
   type DesignerEntityType,
@@ -24,6 +25,13 @@ export class DesignerOnboardingAccessDeniedError extends Error {
   constructor() {
     super('Designer onboarding is not permitted for this account');
     this.name = 'DesignerOnboardingAccessDeniedError';
+  }
+}
+
+export class ProfileCityLimitExceededError extends Error {
+  constructor() {
+    super(`Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities in total.`);
+    this.name = 'ProfileCityLimitExceededError';
   }
 }
 type ProfileUpdateData = Partial<{
@@ -411,9 +419,7 @@ export const profilesRepository = {
       // E-298: consume the resumable onboarding draft in the SAME transaction as
       // the profile/org creation, so a completed designer can never be left with a
       // lingering draft (even on a crash between commit and a separate delete).
-      await tx
-        .delete(schema.onboardingDraft)
-        .where(eq(schema.onboardingDraft.userId, data.userId));
+      await tx.delete(schema.onboardingDraft).where(eq(schema.onboardingDraft.userId, data.userId));
 
       return { profile: profile!, org: org!, created: true };
     });
@@ -558,6 +564,28 @@ export const profilesRepository = {
           taxonomyKindSchema.enum.theme,
           footprint.themeIds,
         );
+      }
+
+      if (footprint.cityIds !== undefined || data.customCities !== undefined) {
+        // The profile UPDATE above holds its row lock until commit. Check the
+        // persisted pair here so concurrent partial patches cannot each pass a
+        // stale service-level count and jointly exceed the shared city budget.
+        const [cityCount] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.designerProfileFootprint)
+          .innerJoin(
+            schema.taxonomy,
+            eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+          )
+          .where(
+            and(
+              eq(schema.designerProfileFootprint.profileId, profileId),
+              eq(schema.taxonomy.kind, taxonomyKindSchema.enum.city),
+            ),
+          );
+        if ((cityCount?.count ?? 0) + updated.customCities.length > PROFILE_FOOTPRINT_LIMITS.city) {
+          throw new ProfileCityLimitExceededError();
+        }
       }
 
       if (hasMutation) {

@@ -4,6 +4,11 @@ import type { DesignerProfileRecord } from '../../../src/modules/profiles/reposi
 // Mock the repository — no DB needed for unit tests.
 vi.mock('../../../src/modules/profiles/repository.js', () => {
   return {
+    ProfileCityLimitExceededError: class extends Error {
+      constructor() {
+        super('Select up to 5 cities in total.');
+      }
+    },
     profilesRepository: {
       findByTeamId: vi.fn(),
       findByTeamIdWithOrg: vi.fn(),
@@ -32,7 +37,8 @@ vi.mock('../../../src/modules/profiles/portfolio-service.js', () => ({
 
 // Import AFTER mock registration.
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
-const { profilesRepository } = await import('../../../src/modules/profiles/repository.js');
+const { profilesRepository, ProfileCityLimitExceededError } =
+  await import('../../../src/modules/profiles/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { presignProfileLogo, presignProfileLogoSource } =
   await import('../../../src/modules/profiles/portfolio-service.js');
@@ -443,5 +449,19 @@ describe('profilesService.updateProfile required Hero fields', () => {
       'team-1',
     );
     expect(result.customCities).toEqual(['Coimbatore']);
+  });
+
+  it('returns a validation error when a concurrent city update exceeds the persisted limit', async () => {
+    vi.mocked(profilesRepository.updateProfileAndFootprint).mockRejectedValueOnce(
+      new ProfileCityLimitExceededError(),
+    );
+    await expect(
+      profilesService.updateProfile(
+        'u1',
+        'org-1',
+        { cityIds: [], customCities: ['Mapusa'] },
+        'team-1',
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'Select up to 5 cities in total.' });
   });
 });
