@@ -404,6 +404,50 @@ describe('DesignerProfileEditor', () => {
     });
   });
 
+  it('keeps typing focus when a custom city starts with a taxonomy option letter', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /^cities:/i }));
+    await user.click(screen.getByRole('menuitem', { name: /add a custom city/i }));
+    const input = screen.getByRole('textbox', { name: /add a custom city/i });
+    await user.type(input, 'Panaji');
+    expect(input).toHaveValue('Panaji');
+    expect(input).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Panaji' })).toHaveAttribute(
+      'aria-checked', 'true',
+    );
+  });
+
+  it('replaces a custom city with its taxonomy selection without double counting', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, customCities: ['pune'] }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /^cities:/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Pune', exact: true }));
+    expect(screen.getByText('2/5')).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'pune', exact: true })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+      cityIds: terms.cities.map((city) => city.id),
+      customCities: [],
+    }));
+  });
+
   it('removes a custom city before saving', async () => {
     const user = userEvent.setup();
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile());
@@ -910,3 +954,4 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('70% complete')).toBeInTheDocument();
   });
 });
+
