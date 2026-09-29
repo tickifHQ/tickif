@@ -954,6 +954,20 @@ describe('DesignerPortfolioSettings', () => {
     });
   });
 
+  it('uses the compact section treatment for Experience Centers', async () => {
+    await renderSettings();
+
+    const heading = screen.getByRole('heading', { name: 'Experience Centers' });
+    const section = heading.closest('[data-slot="portfolio-section"]');
+    const toggle = heading.closest('button');
+    const chevron = toggle?.querySelector('svg');
+
+    expect(section).toHaveClass('rounded-2xl', 'bg-muted/30', 'p-1');
+    expect(section).not.toHaveClass('bg-muted/70');
+    expect(toggle).toHaveClass('items-start', 'p-2');
+    expect(chevron).toHaveClass('mt-2');
+  });
+
   it('shows the complete Google reviews connection summary', async () => {
     mock.fetchGoogleReviews.mockResolvedValue({
       available: true,

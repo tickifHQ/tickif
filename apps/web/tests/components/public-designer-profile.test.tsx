@@ -436,6 +436,118 @@ describe('PublicDesignerProfile', () => {
     expect(screen.getByText('Projects published')).toBeInTheDocument();
   });
 
+  it('renders each experience center with its location hierarchy and complete public details', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          experienceCenterGroups: [
+            {
+              state: 'Karnataka',
+              centers: [
+                {
+                  name: 'Whitefield Experience Center',
+                  address: '12, 1st Main Road, Whitefield',
+                  city: 'Bengaluru',
+                  state: 'Karnataka',
+                  postalCode: '560066',
+                  phone: '+91 99946-45911',
+                  mapsUrl: 'https://maps.google.com/?q=Whitefield',
+                },
+              ],
+            },
+            {
+              state: 'Maharashtra',
+              centers: [
+                {
+                  name: 'Powai Studio',
+                  address: '4, Hiranandani Gardens, Powai',
+                  city: 'Mumbai',
+                  state: 'Maharashtra',
+                  postalCode: null,
+                  phone: null,
+                  mapsUrl: null,
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    const section = screen.getByRole('region', { name: 'Experience centers' });
+    const centers = within(section);
+    const centerGrid = centers.getByRole('list', { name: 'Experience centers' });
+    const cards = section.querySelectorAll('[data-slot="experience-center-card"]');
+    expect(cards).toHaveLength(2);
+    expect(centerGrid).toHaveClass('sm:grid-cols-2', 'xl:grid-cols-3');
+    expect(cards[0]?.querySelector('h3')).toHaveClass('text-lg');
+    expect(
+      centers.getByRole('heading', { name: 'Whitefield Experience Center', level: 3 }),
+    ).toBeInTheDocument();
+    expect(centers.getByRole('heading', { name: 'Powai Studio', level: 3 })).toBeInTheDocument();
+    expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeInTheDocument();
+    expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeInTheDocument();
+    expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
+      'href',
+      'tel:+919994645911',
+    );
+    expect(centers.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
+      'href',
+      'https://maps.google.com/?q=Whitefield',
+    );
+    expect(centers.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
+      'rel',
+      'noopener noreferrer nofollow',
+    );
+  });
+
+  it('omits the experience centers section when data is absent or all groups are empty', () => {
+    const { rerender } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ experienceCenterGroups: undefined })}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Experience centers' })).not.toBeInTheDocument();
+
+    rerender(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          experienceCenterGroups: [{ state: 'Karnataka', centers: [] }],
+        })}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Experience centers' })).not.toBeInTheDocument();
+  });
+
+  it('omits unavailable contact actions and refuses unsafe map schemes', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          experienceCenterGroups: [
+            {
+              state: 'Karnataka',
+              centers: [
+                {
+                  name: 'Safe Studio',
+                  address: 'A very long address that must remain readable on narrow screens',
+                  city: 'Bengaluru',
+                  state: 'Karnataka',
+                  postalCode: null,
+                  phone: null,
+                  mapsUrl: 'javascript:alert(1)',
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    const section = screen.getByRole('region', { name: 'Experience centers' });
+    expect(within(section).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(section).getByText('Bengaluru, Karnataka')).toBeInTheDocument();
+  });
+
   it('falls back to initials when the designer has no logo', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ logoUrl: null })} />);
 
