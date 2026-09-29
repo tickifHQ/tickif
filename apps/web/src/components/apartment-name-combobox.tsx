@@ -194,6 +194,7 @@ export function ApartmentNameCombobox({
             setActiveIndex(0);
           }}
           onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn('text-[13px] leading-[1.1]', selectedApartment ? 'pr-9 pl-11' : 'pr-9')}
@@ -222,6 +223,7 @@ export function ApartmentNameCombobox({
                       key={apartment.name}
                       id={`${listboxId}-option-${index}`}
                       type="button"
+                      tabIndex={-1}
                       role="option"
                       aria-selected={selected}
                       onMouseDown={(event) => event.preventDefault()}
