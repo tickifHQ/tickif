@@ -16,6 +16,7 @@ const mock = vi.hoisted(() => ({
   imageMetadataPatch: vi.fn(),
   completenessGet: vi.fn(),
   submitPost: vi.fn(),
+  withdrawPost: vi.fn(),
   historyGet: vi.fn(),
   createProject: vi.fn(),
   listImagesGet: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('@/lib/api', () => ({
           $patch: mock.projectPatch,
           completeness: { $get: mock.completenessGet },
           submit: { $post: mock.submitPost },
+          withdraw: { $post: mock.withdrawPost },
           'moderation-history': { $get: mock.historyGet },
           images: {
             $get: mock.listImagesGet,
@@ -465,7 +467,12 @@ describe('DesignerProjectUpload', () => {
         ),
       );
 
-      render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+      render(
+        <DesignerProjectUpload
+          initialProjectId="11111111-1111-4111-8111-111111111111"
+          canSubmitProjects
+        />,
+      );
 
       expect(await screen.findByText('Live · Pending changes')).toBeInTheDocument();
       expect(
@@ -480,6 +487,7 @@ describe('DesignerProjectUpload', () => {
       if (status === 'submitted' || status === 'in_review') {
         expect(submit).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Withdraw and edit' })).toBeEnabled();
       } else {
         expect(submit).toBeEnabled();
       }
@@ -501,6 +509,45 @@ describe('DesignerProjectUpload', () => {
       await waitFor(() => expect(historyOpener).toHaveFocus());
     },
   );
+
+  it('restores saved live-project fields when the designer withdraws pending changes', async () => {
+    const user = userEvent.setup();
+    const response = await mock.projectGet();
+    const project = (await response.json()) as Record<string, unknown>;
+    mock.projectGet.mockResolvedValue(
+      Response.json({
+        ...project,
+        status: 'in_review',
+        liveStatus: 'published',
+        pendingChanges: true,
+      }),
+    );
+    mock.withdrawPost.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...project,
+        status: 'draft',
+        liveStatus: 'published',
+        pendingChanges: true,
+      }),
+    });
+
+    const { container } = render(
+      <DesignerProjectUpload
+        initialProjectId="11111111-1111-4111-8111-111111111111"
+        canSubmitProjects
+      />,
+    );
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    expect(selectWithOption(container, '2 BHK')).toHaveValue('2-bhk');
+    await user.click(screen.getByRole('button', { name: 'Withdraw and edit' }));
+
+    expect(mock.withdrawPost).toHaveBeenCalledWith({
+      param: { id: '11111111-1111-4111-8111-111111111111' },
+    });
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+    expect(selectWithOption(container, '2 BHK')).toHaveValue('2-bhk');
+  });
 
   it('saves minor edits to the live project without submitting a review', async () => {
     const response = await mock.projectGet();

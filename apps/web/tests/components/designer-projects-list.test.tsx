@@ -72,8 +72,27 @@ describe('DesignerProjectsList', () => {
     );
 
     expect(screen.getAllByText('Live')).toHaveLength(2);
-    expect(screen.getByText('Pending changes')).toBeInTheDocument();
-    expect(screen.getByText('Submitted')).toBeInTheDocument();
+    expect(screen.getByText('Pending changes · Submitted')).toBeInTheDocument();
+    expect(screen.queryByText('Submitted')).not.toBeInTheDocument();
+  });
+
+  it('keeps moderation feedback available on a live project with pending changes', () => {
+    const pendingProject = {
+      ...projects.items[1]!,
+      liveStatus: 'published' as const,
+      pendingChanges: true,
+      pendingStatus: 'changes_requested' as const,
+    };
+    render(
+      <DesignerProjectsList
+        projects={{ ...projects, items: [pendingProject], total: 1 }}
+        activeStatus="all"
+      />,
+    );
+
+    expect(screen.getByText('Pending changes · Needs Change')).toBeInTheDocument();
+    expect(screen.getByLabelText('Needs Change details')).toBeInTheDocument();
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Add clearer room labels.');
   });
 
   it('does not show a sort indicator when project sorting is unavailable', () => {

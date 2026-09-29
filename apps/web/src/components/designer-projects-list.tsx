@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import type {
   ListProjectsResponse,
   ModerationReasonCode,
@@ -101,18 +102,20 @@ function StatusFeedbackHoverCard({
   );
 }
 
-function StatusBadgeWithFeedback({
+function StatusWithFeedback({
   status,
   moderationNote,
   rejectionReasonCode,
   rejectionReasonCodes,
   updatedAt,
+  children,
 }: {
   status: ProjectStatus;
   moderationNote: string | null;
   rejectionReasonCode: ModerationReasonCode | null;
   rejectionReasonCodes: ModerationReasonCode[];
   updatedAt: string;
+  children: ReactNode;
 }) {
   const reasonCodes =
     rejectionReasonCodes.length > 0
@@ -124,7 +127,7 @@ function StatusBadgeWithFeedback({
     (status === 'changes_requested' || status === 'rejected') &&
     (moderationNote || reasonCodes.length > 0);
 
-  if (!hasFeedback) return <StatusBadge status={status} />;
+  if (!hasFeedback) return children;
 
   return (
     <div
@@ -132,7 +135,7 @@ function StatusBadgeWithFeedback({
       tabIndex={0}
       aria-label={`${statusLabel(status)} details`}
     >
-      <StatusBadge status={status} />
+      {children}
       <StatusFeedbackHoverCard
         title={status === 'rejected' ? 'Rejection reason:' : 'Changes needed on:'}
         note={moderationNote ?? ''}
@@ -318,18 +321,31 @@ export function DesignerProjectsList({
                   </TableCell>
                   <TableCell>
                     {project.liveStatus === 'published' && project.pendingChanges ? (
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col items-start gap-1">
                         <StatusBadge status="published" />
-                        <span className="text-xs text-muted-foreground">Pending changes</span>
+                        <StatusWithFeedback
+                          status={project.status}
+                          moderationNote={project.moderationNote}
+                          rejectionReasonCode={project.rejectionReasonCode}
+                          rejectionReasonCodes={project.rejectionReasonCodes}
+                          updatedAt={project.updatedAt}
+                        >
+                          <span className="text-xs text-muted-foreground">
+                            Pending changes · {statusLabel(project.status)}
+                          </span>
+                        </StatusWithFeedback>
                       </div>
-                    ) : null}
-                    <StatusBadgeWithFeedback
-                      status={project.status}
-                      moderationNote={project.moderationNote}
-                      rejectionReasonCode={project.rejectionReasonCode}
-                      rejectionReasonCodes={project.rejectionReasonCodes}
-                      updatedAt={project.updatedAt}
-                    />
+                    ) : (
+                      <StatusWithFeedback
+                        status={project.status}
+                        moderationNote={project.moderationNote}
+                        rejectionReasonCode={project.rejectionReasonCode}
+                        rejectionReasonCodes={project.rejectionReasonCodes}
+                        updatedAt={project.updatedAt}
+                      >
+                        <StatusBadge status={project.status} />
+                      </StatusWithFeedback>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm font-medium text-muted-foreground">
                     {formatDate(project.createdAt)}
