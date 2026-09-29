@@ -46,6 +46,11 @@ const requiredEntries: [file: string, title: string][] = [
     'scheduled provider plan update retains current access and blocks conflicting selections',
   ].map((title): [string, string] => ['billing-provider-failures.spec.ts', title]),
   [
+    'admin-user-activity.spec.ts',
+    'E-340 and E-341 admin directory filters users and shows their recent history',
+  ],
+  ['admin-user-activity.spec.ts', 'E-340 users directory rejects unauthenticated visitors'],
+  [
     'authentication.spec.ts',
     'anonymous designer routes never paint protected workspace content and retain the callback',
   ],
