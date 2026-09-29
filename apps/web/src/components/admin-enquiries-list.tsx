@@ -96,7 +96,7 @@ export function AdminEnquiriesList({
               href={filterHref(filter.value, query.limit)}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'inline-flex h-8 shrink-0 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                'inline-flex h-8 shrink-0 items-center rounded-md px-2 text-sm font-medium transition-colors sm:px-3',
                 active
                   ? 'bg-background text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground',

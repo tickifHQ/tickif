@@ -127,6 +127,10 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole('heading', { name: 'Enquiries' })).toBeVisible();
+    const filters = page.getByRole('navigation', { name: 'Filter enquiries by status' });
+    expect(await filters.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+      await filters.evaluate((element) => element.clientWidth),
+    );
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       390,
     );
