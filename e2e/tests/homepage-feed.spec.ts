@@ -134,6 +134,7 @@ test.describe('homepage search feed', () => {
       } else {
         await customCityCard.hover();
       }
+      await expect(customCityCard.getByRole('heading').locator('..')).toHaveCSS('opacity', '1');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
