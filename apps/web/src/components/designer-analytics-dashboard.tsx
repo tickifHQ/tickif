@@ -277,7 +277,7 @@ function EngagementBreakdown({ metrics }: { metrics: EngagementMetric[] }) {
 
 const acquisitionSourceLabels: Record<string, string> = {
   enquiry: 'Enquiry',
-  consultation: 'Consultation',
+  consultation: 'Enquiry',
 };
 
 type BranchBreakdownBranch = {

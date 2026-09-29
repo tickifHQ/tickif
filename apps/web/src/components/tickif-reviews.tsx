@@ -163,7 +163,7 @@ export function TickifReviews({
                     <h3 className="font-medium">{review.author.name}</h3>
                     <span className="text-sm">{review.rating} / 5 stars</span>
                     {review.verifiedConsultation ? (
-                      <Badge variant="secondary">Verified consultation</Badge>
+                      <Badge variant="secondary">Verified client</Badge>
                     ) : null}
                   </div>
                   {review.body ? (

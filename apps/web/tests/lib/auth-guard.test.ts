@@ -357,8 +357,8 @@ describe('requirePersonalRequester', () => {
   });
 
   it.each([
-    ['designer', 'active', 'org-1', '/designer/consultations'],
-    ['visitor', 'active', 'org-1', '/designer/consultations'],
+    ['designer', 'active', 'org-1', '/designer/leads'],
+    ['visitor', 'active', 'org-1', '/designer/leads'],
     ['admin', 'active', null, '/dashboard'],
     ['superadmin', 'active', null, '/dashboard'],
     ['visitor', 'pending', null, '/onboarding'],

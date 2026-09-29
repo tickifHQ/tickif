@@ -6,7 +6,7 @@ export type LeadRecord = typeof schema.lead.$inferSelect;
 
 export type LeadListRecord = Pick<
   LeadRecord,
-  'id' | 'name' | 'contactNumber' | 'budgetBandSlug' | 'status' | 'receivedAt'
+  'id' | 'name' | 'contactNumber' | 'budgetBandSlug' | 'source' | 'status' | 'receivedAt'
 > & {
   assignedMemberId: string | null;
   city: string | null;
@@ -24,7 +24,18 @@ export type LeadDetailRecord = LeadListRecord &
     | 'source'
     | 'createdAt'
     | 'updatedAt'
-  >;
+  > & {
+    consultationBookingId: string | null;
+    consultationStatus: (typeof schema.consultationBooking.$inferSelect)['status'] | null;
+    consultationPreferredSlots:
+      (typeof schema.consultationBooking.$inferSelect)['preferredSlots'] | null;
+    consultationConfirmedSlot:
+      (typeof schema.consultationBooking.$inferSelect)['confirmedSlot'] | null;
+    consultationCancelledBy: (typeof schema.consultationBooking.$inferSelect)['cancelledBy'] | null;
+    consultationCancelReason: string | null;
+    consultationRequestedAt: Date | null;
+    consultationRequesterEmail: string | null;
+  };
 
 export type LeadStatusCount = {
   status: LeadStatus;
@@ -71,6 +82,14 @@ function leadProjection() {
     updatedAt: schema.lead.updatedAt,
     city: schema.project.citySlug,
     referredProjectTitle: schema.project.title,
+    consultationBookingId: schema.consultationBooking.id,
+    consultationStatus: schema.consultationBooking.status,
+    consultationPreferredSlots: schema.consultationBooking.preferredSlots,
+    consultationConfirmedSlot: schema.consultationBooking.confirmedSlot,
+    consultationCancelledBy: schema.consultationBooking.cancelledBy,
+    consultationCancelReason: schema.consultationBooking.cancelReason,
+    consultationRequestedAt: schema.consultationBooking.requestedAt,
+    consultationRequesterEmail: schema.user.email,
   };
 }
 
@@ -127,6 +146,7 @@ export const leadsRepository = {
           name: schema.lead.name,
           contactNumber: schema.lead.contactNumber,
           budgetBandSlug: schema.lead.budgetBandSlug,
+          source: schema.lead.source,
           assignedMemberId: schema.lead.assignedMemberId,
           status: schema.lead.status,
           receivedAt: schema.lead.receivedAt,
@@ -154,6 +174,8 @@ export const leadsRepository = {
       .select(leadProjection())
       .from(schema.lead)
       .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
+      .leftJoin(schema.consultationBooking, eq(schema.consultationBooking.leadId, schema.lead.id))
+      .leftJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
       .where(eq(schema.lead.id, id))
       .limit(1);
     return row ?? null;
@@ -199,6 +221,8 @@ export const leadsRepository = {
         .select(leadProjection())
         .from(schema.lead)
         .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
+        .leftJoin(schema.consultationBooking, eq(schema.consultationBooking.leadId, schema.lead.id))
+        .leftJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
         .where(eq(schema.lead.id, row.id))
         .limit(1);
       return updated ?? null;

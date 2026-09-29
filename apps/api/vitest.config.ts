@@ -20,7 +20,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           maxWorkers: 2,
-          env: testEnv(),
+          env: { ...testEnv(), CONSULTATIONS_ENABLED: 'true' },
           globals: true,
           environment: 'node',
           include: ['tests/**/*.test.ts'],
@@ -44,6 +44,7 @@ export default defineConfig({
           // never uses the real .env creds and the token endpoint is mocked. CI-safe.
           env: {
             ...integrationEnv(),
+            CONSULTATIONS_ENABLED: 'true',
             GOOGLE_CLIENT_ID: 'test-google-client-id',
             GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
             BETTER_AUTH_URL: 'http://localhost:3000',

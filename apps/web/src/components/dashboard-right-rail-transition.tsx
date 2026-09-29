@@ -75,7 +75,7 @@ function AnimatedRegion({
       ].join(' ')}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className="pb-5">{children}</div>
+        <div className="pb-4">{children}</div>
       </div>
     </div>
   );
@@ -147,10 +147,10 @@ export function DashboardRightRailTransition({
       <Image
         src="/illustrations/onboarding-workspace-desk.svg"
         alt=""
-        width={95}
-        height={95}
+        width={96}
+        height={96}
         data-testid="dashboard-workspace-illustration"
-        className="pointer-events-none absolute -top-[4.25rem] right-3 z-10 hidden h-auto w-28 select-none sm:block"
+        className="pointer-events-none absolute -top-16 right-3 z-10 hidden h-auto w-24 select-none sm:block"
       />
 
       <AnimatedRegion open={setupOpen} testId="dashboard-complete-setup">

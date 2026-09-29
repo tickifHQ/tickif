@@ -165,10 +165,11 @@ describe('PublicDesignerProfile', () => {
     expect(hero.queryByText('Rating')).not.toBeInTheDocument();
   });
 
-  it('uses Book consultation copy instead of Start a conversation', () => {
+  it('uses enquiry copy instead of consultation or conversation copy', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByText('Book consultation').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Send enquiry').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/consultation/i)).toHaveLength(0);
     expect(screen.queryAllByText(/Start a conversation/i)).toHaveLength(0);
   });
 
@@ -327,7 +328,7 @@ describe('PublicDesignerProfile', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
 
     expect(
-      within(screen.getByTestId('review-marquee-primary')).getByLabelText('Verified consultation'),
+      within(screen.getByTestId('review-marquee-primary')).getByLabelText('Verified client'),
     ).toBeInTheDocument();
     expect(screen.queryByText('“”')).not.toBeInTheDocument();
   });
@@ -472,10 +473,9 @@ describe('PublicDesignerProfile', () => {
   it('opens login in place for signed-out profile actions', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByRole('button', { name: 'Book consultation' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Send enquiry' })).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Enquire' })).toBeEnabled();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Book consultation' })[0]!);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Send enquiry' })[0]!);
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Save profile' })).not.toBeInTheDocument();
   });
@@ -492,10 +492,9 @@ describe('PublicDesignerProfile', () => {
 
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByRole('button', { name: 'Book consultation' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Book Consultation' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Send enquiry' })).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Enquire' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Book consultation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Send enquiry' })).not.toBeInTheDocument();
   });
 
   it('renders the API-supplied project page in the gallery', () => {

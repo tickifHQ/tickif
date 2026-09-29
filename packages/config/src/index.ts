@@ -188,6 +188,8 @@ const envSchema = z.object({
   // API
   PORT: z.coerce.number().int().positive().default(8008),
   NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:8008'),
+  // Consultation scheduling remains available in code but is hidden until product enables it.
+  CONSULTATIONS_ENABLED: z.stringbool().optional().default(false),
 
   // Public web origin for shareable URLs returned by the API. Mirrors the
   // web app's NEXT_PUBLIC_WEB_URL default so client- and server-built links

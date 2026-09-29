@@ -91,7 +91,7 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   [
     'consultation-participants.spec.ts',
-    'consultation lifecycle: visitor books, studio confirms and completes, visitor reviews and cancels another request',
+    'disabled consultations route public requests through enquiries and hide legacy surfaces',
   ],
   [
     'designer-discovery.spec.ts',

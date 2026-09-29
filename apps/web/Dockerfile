@@ -1,7 +1,10 @@
 # Tickif web — Next.js standalone production server.
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS build
 WORKDIR /app
-ENV NODE_OPTIONS=--max-old-space-size=4096
+# Match the regular CI build environment without copying runtime secrets into
+# the image. The production runtime validates its mounted configuration again.
+ENV NODE_OPTIONS=--max-old-space-size=4096 \
+    NODE_ENV=test
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 COPY . .
 RUN pnpm --filter @repo/web... install --frozen-lockfile
@@ -13,7 +16,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
     NEXT_PUBLIC_SCROLL_GATE_LIMIT=$NEXT_PUBLIC_SCROLL_GATE_LIMIT
 RUN test -n "$NEXT_PUBLIC_API_URL" && test -n "$NEXT_PUBLIC_WEB_URL"
-RUN pnpm --filter @repo/web build
+RUN BETTER_AUTH_SECRET=staging-image-build-only-secret \
+    BETTER_AUTH_URL=http://localhost:3001 \
+    pnpm --filter @repo/web build
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 WORKDIR /app

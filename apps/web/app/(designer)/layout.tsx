@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { PLATFORM_ROLE } from '@repo/contracts';
+import { config } from '@repo/config';
 import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
@@ -27,6 +28,7 @@ export default async function DesignerLayout({ children }: { children: ReactNode
       logoUrl={profile.logoUrl}
       planLabel={planLabel}
       capabilities={orgCapabilities}
+      consultationsEnabled={config.CONSULTATIONS_ENABLED}
     >
       <ProtectedBfcacheGuard />
       {children}

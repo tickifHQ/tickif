@@ -15,10 +15,10 @@ import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
 import { fetchConsultations } from '@/lib/bookings-api';
 
 export async function ConsultationsPage({
-  scope,
+  scope = 'mine',
   searchParams,
 }: {
-  scope: 'mine' | 'inbox';
+  scope?: 'mine' | 'inbox';
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const personal = scope === 'mine';
@@ -38,8 +38,12 @@ export async function ConsultationsPage({
     : { status: 'all', page: 1, limit: 12 };
   const data = await fetchConsultations(query, scope, requestHeaders.get('cookie') ?? '');
   const base = personal ? '/home/consultations' : '/designer/consultations';
-  const href = (page: number, status = query.status) =>
-    `${base}?${new URLSearchParams({ status, page: String(page) })}`;
+  const href = (page: number, status = query.status) => {
+    const next = new URLSearchParams();
+    next.set('status', status);
+    next.set('page', String(page));
+    return `${base}?${next.toString()}`;
+  };
   if (data.page > 1 && data.page > data.totalPages) redirect(href(Math.max(1, data.totalPages)));
   return (
     <>

@@ -201,8 +201,7 @@ describe('DesignerAnalyticsDashboard', () => {
       'href',
       '/projects/11111111-1111-4111-8111-111111111111',
     );
-    expect(screen.getByText('Enquiry')).toBeInTheDocument();
-    expect(screen.getByText('Consultation')).toBeInTheDocument();
+    expect(screen.getAllByText('Enquiry').length).toBeGreaterThan(0);
     expect(screen.getByText('75%')).toBeInTheDocument();
     expect(screen.getByText('66.7%')).toBeInTheDocument();
   });
@@ -529,7 +528,9 @@ describe('DesignerAnalyticsDashboard', () => {
 
     expect(screen.getByRole('heading', { name: /Billing analytics/i })).toBeInTheDocument();
     expect(screen.getByText(/Revenue only/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Analytics period: last 7 days/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Analytics period: last 7 days/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Enquiries received')).not.toBeInTheDocument();
     expect(screen.queryByText('Top converting projects')).not.toBeInTheDocument();
   });

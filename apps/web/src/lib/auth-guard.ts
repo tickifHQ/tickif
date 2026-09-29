@@ -6,9 +6,10 @@ import {
   PLATFORM_ROLE,
   accountStatusSchema,
   platformRoleSchema,
+  type ActiveContext,
   type PlatformRole,
 } from '@repo/contracts';
-import type { ActiveContext } from '@repo/contracts';
+import { config } from '@repo/config';
 import { env } from '@/env';
 import {
   DESIGNER_ONBOARDING_DEFERRED_PATH,
@@ -201,7 +202,7 @@ export async function requirePersonalRequester(): Promise<SessionData> {
     redirect('/dashboard');
   }
   if (activeContextForSession(session).kind === 'organization') {
-    redirect('/designer/consultations');
+    redirect(config.CONSULTATIONS_ENABLED ? '/designer/consultations' : '/designer/leads');
   }
   if (role.data === PLATFORM_ROLE.DESIGNER) return session;
   if (role.data !== PLATFORM_ROLE.VISITOR) redirect('/unauthorized');

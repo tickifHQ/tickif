@@ -62,6 +62,7 @@ function bookingProjection() {
     designerTeamId: schema.designerProfile.teamId,
     designerProfileId: schema.consultationBooking.designerProfileId,
     requesterId: schema.consultationBooking.requesterId,
+    leadId: schema.consultationBooking.leadId,
     referredProjectId: schema.consultationBooking.referredProjectId,
     preferredSlots: schema.consultationBooking.preferredSlots,
     confirmedSlot: schema.consultationBooking.confirmedSlot,
@@ -228,28 +229,33 @@ export const bookingsRepository = {
         );
       if ((openCount?.value ?? 0) >= 3) return { kind: 'open_limit_reached' } as const;
 
+      const [lead] = await tx
+        .insert(schema.lead)
+        .values({
+          organizationId: designer.organizationId,
+          teamId: designer.teamId,
+          referredProjectId: params.referredProjectId ?? null,
+          name: params.requesterName,
+          contactNumber: params.requesterPhoneNumber,
+          message: params.message ?? null,
+          source: 'consultation',
+        })
+        .returning({ id: schema.lead.id });
+      if (!lead) throw new Error('lead insert returned no row');
+
       const [booking] = await tx
         .insert(schema.consultationBooking)
         .values({
           organizationId: designer.organizationId,
           designerProfileId: designer.id,
           requesterId: params.requesterId,
+          leadId: lead.id,
           referredProjectId: params.referredProjectId ?? null,
           preferredSlots: params.preferredSlots,
           message: params.message ?? null,
         })
         .returning({ id: schema.consultationBooking.id });
       if (!booking) throw new Error('booking insert returned no row');
-
-      await tx.insert(schema.lead).values({
-        organizationId: designer.organizationId,
-        teamId: designer.teamId,
-        referredProjectId: params.referredProjectId ?? null,
-        name: params.requesterName,
-        contactNumber: params.requesterPhoneNumber,
-        message: params.message ?? null,
-        source: 'consultation',
-      });
 
       await tx.insert(schema.bookingNotificationOutbox).values({
         bookingId: booking.id,

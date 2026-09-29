@@ -276,7 +276,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByText('Projects', { exact: true })).toBeVisible();
       await expect(page.getByText('Cities present')).toBeVisible();
       await expect(
-        page.getByRole('button', { name: 'Book consultation', exact: true }).first(),
+        page.getByRole('button', { name: 'Send enquiry', exact: true }).first(),
       ).toBeVisible();
 
       const ownEnquire = page.getByRole('button', { name: 'Enquire', exact: true }).first();

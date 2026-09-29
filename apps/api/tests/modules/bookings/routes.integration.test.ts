@@ -268,6 +268,7 @@ describe('POST /api/bookings', () => {
       contactNumber: '+919800004102',
       message: 'I would like to discuss my renovation.',
     });
+    expect(booking?.leadId).toBe(lead?.id);
 
     const [notification] = await db
       .select()
