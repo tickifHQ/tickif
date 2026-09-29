@@ -53,6 +53,19 @@ const options = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('designer discovery', () => {
+  it('keeps designer type selection open until the draft filters are applied', async () => {
+    render(<DesignerDiscoveryFilters query={parseDesignerParams({})} options={options} />);
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Designer filters' }), { button: 0 });
+    fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'Designer type' }), {
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Studios' }));
+
+    expect(mocks.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply 1 filter' }));
+    expect(mocks.push).toHaveBeenCalledWith('/designers?entityType=company');
+  });
   it('clears unsaved filters even when the URL is already the default directory', () => {
     render(<DesignerDiscoveryFilters query={parseDesignerParams({})} options={options} />);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'unsaved' } });

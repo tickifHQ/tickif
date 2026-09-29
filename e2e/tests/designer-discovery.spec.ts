@@ -80,7 +80,7 @@ test.describe('public designer discovery', () => {
 
   test('searches real indexed designers, pages with keyboard, and preserves browser history', async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, 'IntersectionObserver', {
         configurable: true,
@@ -92,6 +92,10 @@ test.describe('public designer discovery', () => {
       page.getByRole('heading', { name: 'Find Designers in Your Location' }),
     ).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(24);
+    await page.screenshot({
+      path: testInfo.outputPath('designer-directory-desktop.png'),
+      animations: 'disabled',
+    });
     const loadMore = page.getByRole('button', { name: 'Load more designers' });
     await loadMore.focus();
     await loadMore.press('Enter');
@@ -107,6 +111,34 @@ test.describe('public designer discovery', () => {
     await expect(page).toHaveURL(new RegExp(`/designers\\?q=${term}`));
     await expect(page.getByRole('searchbox', { name: 'Search designers' })).toHaveValue(term);
   });
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`applies draft designer types at ${viewport.width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.goto(`/designers?q=${term}&citySlugs=pune`);
+      await expect(page.getByRole('article')).toHaveCount(1);
+      await page.getByRole('button', { name: 'Designer filters (1 selected)' }).click();
+      await page.getByRole('menuitem', { name: 'Designer type', exact: true }).click();
+      await page.getByRole('menuitemradio', { name: 'Individuals', exact: true }).click();
+      await expect(page.getByRole('menuitemradio', { name: 'Individuals' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      await page.screenshot({
+        path: testInfo.outputPath(`designer-type-draft-${viewport.width}.png`),
+        animations: 'disabled',
+      });
+      await page.getByRole('menuitemradio', { name: 'Individuals' }).press('ArrowLeft');
+      await page.getByRole('button', { name: 'Apply 2 filters' }).click();
+      await expect(page).toHaveURL(/citySlugs=pune/);
+      await expect(page).toHaveURL(/entityType=individual/);
+      await expect(page.getByRole('article')).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Remove Individuals filter' })).toBeVisible();
+    });
+  }
 
   test('applies combined filters at page one, and can recover from empty results', async ({
     page,

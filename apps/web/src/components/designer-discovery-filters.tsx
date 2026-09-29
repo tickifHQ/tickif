@@ -272,9 +272,15 @@ export function DesignerDiscoveryFilters({
                     )
                   }
                 >
-                  <DropdownMenuRadioItem value="all">All designers</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="all" onSelect={(event) => event.preventDefault()}>
+                    All designers
+                  </DropdownMenuRadioItem>
                   {ENTITY_TYPE_OPTIONS.map((option) => (
-                    <DropdownMenuRadioItem key={option.value} value={option.value}>
+                    <DropdownMenuRadioItem
+                      key={option.value}
+                      value={option.value}
+                      onSelect={(event) => event.preventDefault()}
+                    >
                       {option.label}
                     </DropdownMenuRadioItem>
                   ))}
