@@ -63,6 +63,7 @@ export type DesignerSearchSource = {
     slug: string | null;
     displayName: string;
     bio: string | null;
+    tagline: string | null;
     entityType: 'individual' | 'company';
     yearsExperience: number;
     projectCount: number;
@@ -72,6 +73,7 @@ export type DesignerSearchSource = {
     subscriptionState: SubscriptionState | null;
     reviewCount: number;
     logoImageId: string | null;
+    heroImageId: string | null;
     updatedAt: Date;
     isKycVerified: boolean;
     kycExpiresAt: Date | null;
@@ -170,6 +172,7 @@ export function mapDesignerSearchDocument(source: DesignerSearchSource): Designe
     slug: source.profile.slug,
     displayName: source.profile.displayName,
     bio: source.profile.bio,
+    tagline: source.profile.tagline,
     entityType: source.profile.entityType,
     citySlugs: slugs('city'),
     localitySlugs: slugs('locality'),
@@ -188,6 +191,7 @@ export function mapDesignerSearchDocument(source: DesignerSearchSource): Designe
     isKycVerified: source.profile.isKycVerified,
     kycExpiresAt: source.profile.kycExpiresAt?.getTime() ?? 0,
     logoImageKey: source.profile.logoImageId,
+    heroImageKey: source.profile.heroImageId,
     updatedAt: source.profile.updatedAt.getTime(),
   };
 }
