@@ -248,6 +248,54 @@ describe('publicPortfolioService.getBySlug — visibility gate', () => {
 });
 
 describe('publicPortfolioService.getBySlug — projection', () => {
+  it('groups public experience centers by state and sorts states and cities', async () => {
+    resolveTo(
+      makeProfile(),
+      makePortfolio({
+        experienceCenters: [
+          {
+            name: 'Powai Studio',
+            address: '4 Hiranandani Gardens',
+            city: 'Mumbai',
+            state: 'Maharashtra',
+            postalCode: null,
+            phone: null,
+            mapsUrl: null,
+          },
+          {
+            name: 'Indiranagar Studio',
+            address: '8 100 Feet Road',
+            city: 'Bengaluru',
+            state: 'Karnataka',
+            postalCode: '560038',
+            phone: '+91 99946 45911',
+            mapsUrl: 'https://maps.google.com/?q=Indiranagar',
+          },
+          {
+            name: 'Pune Studio',
+            address: '12 Koregaon Park',
+            city: 'Pune',
+            state: 'Maharashtra',
+            postalCode: null,
+            phone: null,
+            mapsUrl: null,
+          },
+        ],
+      }),
+    );
+
+    const result = await publicPortfolioService.getBySlug('test-studio');
+
+    expect(result.experienceCenterGroups?.map((group) => group.state)).toEqual([
+      'Karnataka',
+      'Maharashtra',
+    ]);
+    expect(result.experienceCenterGroups?.[1]?.centers.map((center) => center.city)).toEqual([
+      'Mumbai',
+      'Pune',
+    ]);
+  });
+
   it('never exposes private contact fields', async () => {
     const result = await publicPortfolioService.getBySlug('test-studio');
     const serialized = JSON.stringify(result);
