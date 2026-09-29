@@ -128,6 +128,14 @@ describe('AdminEnquiriesList', () => {
     expect(within(filters).getByRole('link', { name: 'Closed 7' })).toHaveTextContent('Closed7');
   });
 
+  it('keeps a valid custom URL page size available in the page-size selector', () => {
+    render(<AdminEnquiriesList result={{ ...result, limit: 13 }} query={{ page: 2, limit: 13 }} />);
+
+    expect(mocks.pagination).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 13, pageSizes: [10, 13, 25, 50, 100] }),
+    );
+  });
+
   it('distinguishes an empty filtered result from an API failure', () => {
     const empty = { ...result, items: [], page: 1, total: 0, totalPages: 0 };
     const { rerender } = render(

@@ -147,6 +147,11 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
       .toBe('1');
     await page.screenshot({ path: testInfo.outputPath('admin-enquiries-mobile-navigation.png') });
 
+    await mobileNav.getByRole('button', { name: 'Close navigation' }).click();
+    await page.goto('/admin/enquiries?status=open&page=1&limit=13');
+    await expect(page.getByRole('combobox', { name: 'Rows per page' })).toHaveValue('13');
+    await expect(page.getByText('Page 1 of 1 · 12 enquiries')).toBeVisible();
+
     const visitorPage = await visitorContext.newPage();
     await visitorPage.goto('/admin/enquiries');
     await expect(visitorPage).toHaveURL(`${webUrl}/unauthorized`);

@@ -222,7 +222,7 @@ export function AdminEnquiriesList({
           total={result.total}
           itemName="enquiry"
           itemNamePlural="enquiries"
-          pageSizes={[10, 25, 50, 100]}
+          pageSizes={[...new Set([10, 25, 50, 100, result.limit])].sort((a, b) => a - b)}
         />
       ) : null}
     </div>
