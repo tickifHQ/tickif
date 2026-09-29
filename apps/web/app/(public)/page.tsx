@@ -90,9 +90,11 @@ function hasFilters(filters: FeedFilterState): boolean {
 }
 
 function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
+  // "Projects in X" keeps the broader positioning (interiors and construction
+  // projects, not only homes) while pointing at the same city filter.
   const city = (options.city ?? []).slice(0, 4).map((option) => ({
     href: `/?city=${encodeURIComponent(option.slug)}`,
-    label: `Homes in ${option.label}`,
+    label: `Projects in ${option.label}`,
   }));
   const room = (options.room ?? []).slice(0, 4).map((option) => ({
     href: `/?room=${encodeURIComponent(option.slug)}`,
@@ -106,6 +108,10 @@ function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
     if (cityShortcut) shortcuts.push(cityShortcut);
     if (roomShortcut) shortcuts.push(roomShortcut);
   }
+
+  // Surface the professionals behind the projects via the existing public
+  // designer directory — no new search capability is introduced.
+  shortcuts.push({ href: '/designers', label: 'Browse professionals' });
 
   return shortcuts;
 }
