@@ -107,6 +107,17 @@ test('E-340 and E-341 admin directory filters users and shows their recent histo
     'page',
   );
 
+  // The desktop sidebar reduces the space available to filters near the lg breakpoint.
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const filters = page.locator('form').filter({ has: page.getByLabel('Search users') });
+    await expect
+      .poll(() => filters.evaluate((element) => element.scrollWidth <= element.clientWidth))
+      .toBe(true);
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Clear', exact: true })).toBeInViewport();
+  }
+
   await page.getByLabel('Search users').fill(targetPhone.slice(-7));
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page).toHaveURL(/q=\d+/);
