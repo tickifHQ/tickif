@@ -8,7 +8,7 @@ import {
   type ListLeadsQuery,
   type ListLeadsResponse,
 } from '@repo/contracts';
-import { config } from '@repo/config';
+import { config } from '@repo/config/features';
 import { api } from '@/lib/api';
 import { requireAuth } from '@/lib/auth-guard';
 import { DesignerLeadsList } from '@/components/designer-leads-list';

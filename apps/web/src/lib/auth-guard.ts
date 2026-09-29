@@ -9,7 +9,7 @@ import {
   type ActiveContext,
   type PlatformRole,
 } from '@repo/contracts';
-import { config } from '@repo/config';
+import { config } from '@repo/config/features';
 import { env } from '@/env';
 import {
   DESIGNER_ONBOARDING_DEFERRED_PATH,

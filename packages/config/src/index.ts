@@ -1,26 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { config as loadDotenv, parse as parseDotenv } from 'dotenv';
+import { readFileSync } from 'node:fs';
+import { parse as parseDotenv } from 'dotenv';
 import { z } from 'zod';
+import { loadRootEnv } from './load-env.js';
+import { featureFlagsSchema } from './features.js';
 
-/**
- * Autoload the repo-root `.env` by walking up from cwd until one is found, so
- * every workspace command (api, web, worker, drizzle-kit) picks up env without
- * the caller exporting it. Real process env always wins (override: false).
- */
-function loadRootEnv(): void {
-  let dir = process.cwd();
-  for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, '.env');
-    if (existsSync(candidate)) {
-      loadDotenv({ path: candidate });
-      return;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-}
 loadRootEnv();
 
 const LOCAL_TYPESENSE_HOST = 'http://localhost:8108';
@@ -189,7 +172,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8008),
   NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:8008'),
   // Consultation scheduling remains available in code but is hidden until product enables it.
-  CONSULTATIONS_ENABLED: z.stringbool().optional().default(false),
+  CONSULTATIONS_ENABLED: featureFlagsSchema.shape.CONSULTATIONS_ENABLED,
 
   // Public web origin for shareable URLs returned by the API. Mirrors the
   // web app's NEXT_PUBLIC_WEB_URL default so client- and server-built links

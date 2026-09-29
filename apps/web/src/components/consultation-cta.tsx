@@ -1,4 +1,4 @@
-import { config } from '@repo/config';
+import { config } from '@repo/config/features';
 import { BookingCta } from '@/components/booking-cta';
 import { EnquiryCta } from '@/components/enquiry-cta';
 

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { config } from '@repo/config';
+import { config } from '@repo/config/features';
 import { ConsultationsPage } from '@/components/consultations-page';
 export function generateMetadata() {
   return {

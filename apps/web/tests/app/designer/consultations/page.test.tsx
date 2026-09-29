@@ -6,7 +6,7 @@ vi.mock('next/navigation', () => ({
   redirect: mock.redirect,
 }));
 
-vi.mock('@repo/config', () => ({
+vi.mock('@repo/config/features', () => ({
   config: {
     get CONSULTATIONS_ENABLED() {
       return mock.consultationsEnabled;
