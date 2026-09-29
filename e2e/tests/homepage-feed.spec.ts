@@ -19,7 +19,8 @@ const projectDocuments: ProjectSearchDocument[] = Array.from(
     designerId: 'e2080000-0000-4000-8000-000000000000',
     designerSlug: 'e208-playwright-studio',
     designerName: 'E208 Playwright Studio',
-    citySlug: 'mumbai',
+    citySlug: index === 0 ? null : 'mumbai',
+    cityName: index === 0 ? 'Pondicherry' : null,
     localitySlug: null,
     propertyTypeSlug: 'apartment',
     propertySubtypeSlug: null,
@@ -98,4 +99,37 @@ test.describe('homepage search feed', () => {
     await expect(page.getByRole('navigation', { name: 'Feed pages' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Load more projects' })).toHaveCount(0);
   });
+
+  for (const viewport of [
+    { name: 'desktop', width: 1440, height: 1000 },
+    { name: 'mobile', width: 390, height: 844 },
+  ]) {
+    test(`shows custom cities in suggestions and search cards on ${viewport.name}`, async ({
+      page,
+    }, testInfo) => {
+      const pageErrors: string[] = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+      await page.setViewportSize(viewport);
+      await page.goto(`/?q=${SEARCH_TERM}`);
+
+      const searchbox = page.getByRole('searchbox', { name: 'Search homes' });
+      await searchbox.fill('Pondicherry');
+      const suggestions = page.getByRole('group', { name: 'Search suggestions' });
+      await expect(suggestions.getByText('E208 Playwright Studio · Pondicherry')).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('custom-city-suggestions.png') });
+
+      await searchbox.press('Enter');
+      await expect(page).toHaveURL('/?q=Pondicherry');
+      await expect(page.getByRole('heading', { name: 'Results for “Pondicherry”' })).toBeVisible();
+      const customCityCard = page.getByRole('article').filter({
+        has: page.getByText('E208Playwright Project 01', { exact: true }),
+      });
+      await expect(customCityCard.getByText('Pondicherry', { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.screenshot({ path: testInfo.outputPath('custom-city-results.png'), fullPage: true });
+      expect(pageErrors).toEqual([]);
+    });
+  }
 });
