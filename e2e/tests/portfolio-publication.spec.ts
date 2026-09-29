@@ -418,6 +418,14 @@ test.describe('E-278 portfolio publication readiness', () => {
           { width: 390, height: 844 },
         ]) {
           await page.setViewportSize(viewport);
+          // Settings deliberately reserves its side-by-side live preview for
+          // desktop; on mobile the editing form uses the full screen width.
+          if (surface.logo === 'portfolio-preview-logo' && viewport.width < 1024) {
+            await expect(logo).toBeHidden();
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.screenshot({ path: testInfo.outputPath('portfolio-settings-mobile.png') });
+            continue;
+          }
           await logo.scrollIntoViewIfNeeded();
           await expect(logo).toHaveCSS('border-top-width', '0px');
           // The overlapping top of the logo must win hit testing over the cover.
@@ -436,6 +444,7 @@ test.describe('E-278 portfolio publication readiness', () => {
             path: testInfo.outputPath(`${surface.logo}-${viewport.width}.png`),
           });
         }
+        await page.setViewportSize({ width: 1440, height: 1000 });
         await page.getByRole('button', { name: 'Copy link', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
       }

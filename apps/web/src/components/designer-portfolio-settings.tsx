@@ -1626,7 +1626,7 @@ export function DesignerPortfolioSettings() {
                   <div className="space-y-3 px-5 py-4 text-center">
                     <div
                       data-testid="portfolio-preview-logo"
-                      className="relative z-10 mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl bg-amber-700 shadow-sm"
+                      className="relative z-10 mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 shadow-sm"
                     >
                       {portfolio.logoUrl ? (
                         <Image
@@ -1638,7 +1638,7 @@ export function DesignerPortfolioSettings() {
                           className="size-full object-cover"
                         />
                       ) : (
-                        <span className="text-lg font-bold text-white">{initials}</span>
+                        <span className="text-lg font-bold text-primary">{initials}</span>
                       )}
                     </div>
                     <div>

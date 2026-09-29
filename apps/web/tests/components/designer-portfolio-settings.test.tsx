@@ -843,6 +843,7 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     expect(screen.getByTestId('portfolio-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('portfolio-preview-logo')).toHaveClass('bg-primary/10');
     expect(screen.getByTestId('portfolio-preview-logo')).not.toHaveClass('border');
   });
 
