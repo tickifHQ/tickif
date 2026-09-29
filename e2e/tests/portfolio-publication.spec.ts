@@ -107,7 +107,7 @@ test.describe('E-278 portfolio publication readiness', () => {
 
   test('an incomplete portfolio never exposes an actionable public URL (state D)', async ({
     browser,
-  }) => {
+  }, testInfo) => {
     const context = await browser.newContext({ baseURL: webUrl });
     try {
       // Legacy active profile missing Hero fields must still never be publicly visible.
@@ -127,6 +127,21 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.goto('/designer/dashboard');
       await expect(page.getByRole('button', { name: /copy link/i })).toHaveCount(0);
       await expect(page.getByText(seed.portfolioSlug)).toHaveCount(0);
+      await expect(page.getByRole('progressbar', { name: 'Profile completion' })).toBeVisible();
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-setup-desktop.png'),
+        animations: 'disabled',
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-setup-mobile.png'),
+        animations: 'disabled',
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
 
       // Portfolio settings: no "Open full", no "Copy link".
       await page.goto('/designer/portfolio');

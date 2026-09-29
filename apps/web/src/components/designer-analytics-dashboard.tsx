@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { AnalyticsResponse, ProfileCompletionResponse } from '@repo/contracts';
+import { config } from '@repo/config/features';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -277,7 +278,7 @@ function EngagementBreakdown({ metrics }: { metrics: EngagementMetric[] }) {
 
 const acquisitionSourceLabels: Record<string, string> = {
   enquiry: 'Enquiry',
-  consultation: 'Enquiry',
+  consultation: 'Consultation',
 };
 
 type BranchBreakdownBranch = {
@@ -495,6 +496,18 @@ function BillingRevenueView({
 
 function AcquisitionSources({ sources }: { sources: AnalyticsResponse['acquisitionSources'] }) {
   const totalEnquiries = sources.reduce((total, source) => total + source.enquiries, 0);
+  const displaySources: typeof sources = [];
+  for (const source of sources) {
+    const sourceName =
+      !config.CONSULTATIONS_ENABLED && source.source === 'consultation' ? 'enquiry' : source.source;
+    const existing = displaySources.find((item) => item.source === sourceName);
+    if (existing) {
+      existing.enquiries += source.enquiries;
+      existing.conversions += source.conversions;
+    } else {
+      displaySources.push({ ...source, source: sourceName });
+    }
+  }
 
   return (
     <Card radius="lg" className="px-4 py-5">
@@ -526,7 +539,7 @@ function AcquisitionSources({ sources }: { sources: AnalyticsResponse['acquisiti
                 </TableCell>
               </TableRow>
             ) : (
-              sources.map((source) => {
+              displaySources.map((source) => {
                 const enquiryShare =
                   totalEnquiries === 0 ? 0 : (source.enquiries / totalEnquiries) * 100;
                 const conversionRate =

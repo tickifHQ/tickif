@@ -1,7 +1,16 @@
 import type { ReactNode } from 'react';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../fixtures/public-project';
+
+const featureFlags = vi.hoisted(() => ({ CONSULTATIONS_ENABLED: false }));
+vi.mock('@repo/config/features', () => ({ config: featureFlags }));
+vi.mock('@/components/booking-cta', () => ({
+  BookingCta: () => <button>Book consultation</button>,
+}));
+beforeEach(() => {
+  featureFlags.CONSULTATIONS_ENABLED = false;
+});
 
 vi.mock('@/components/project-like-button', () => ({
   ProjectLikeButton: () => <button>Like</button>,
@@ -22,6 +31,26 @@ const { PublicProjectOverview } = await import('../../src/components/public-proj
 const canonicalUrl = 'https://tickif.com/projects/11111111-1111-4111-8111-111111111111';
 
 describe('PublicProjectOverview', () => {
+  it('does not add a second enquiry action where the project already has one', () => {
+    render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
+
+    expect(screen.getAllByRole('button', { name: 'Enquire', exact: true }).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByRole('button', { name: 'Send enquiry', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Book consultation' })).toBeNull();
+  });
+
+  it('retains the distinct booking action when consultations are enabled', () => {
+    featureFlags.CONSULTATIONS_ENABLED = true;
+    render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
+
+    expect(screen.getByRole('button', { name: 'Book consultation' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Enquire', exact: true }).length).toBeGreaterThan(
+      0,
+    );
+  });
+
   it('renders the sourced first-section fields and established public routes', () => {
     const project = makePublicProject();
     render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
