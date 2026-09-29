@@ -906,7 +906,7 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
                         {callHref && center.phone ? (
                           <a
                             href={callHref}
-                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
                             <Phone className="size-4 shrink-0" aria-hidden="true" />
                             <span className="break-all">{center.phone}</span>
@@ -917,9 +917,9 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
                             href={mapsHref}
                             target="_blank"
                             rel="noopener noreferrer nofollow"
-                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
-                            <Navigation className="size-4 shrink-0" aria-hidden="true" />
+                            <Navigation className="size-4 shrink-0 text-primary" aria-hidden="true" />
                             Open in Maps
                           </a>
                         ) : null}
