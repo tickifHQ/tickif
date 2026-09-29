@@ -13,7 +13,7 @@ import { webUrl } from '../lib/environment';
 
 test('admin enquiries filter and paginate while non-admin accounts stay denied', async ({
   browser,
-}) => {
+}, testInfo) => {
   await assertTestDb();
   const suffix = randomUUID();
   const phone = (prefix: string) => `+91${prefix}${randomInt(10_000_000, 99_999_999)}`;
@@ -70,15 +70,21 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
   );
   await db.insert(schema.enquiry).values(enquiries);
 
-  const adminContext = await browser.newContext({ baseURL: webUrl });
+  const adminContext = await browser.newContext({
+    baseURL: webUrl,
+    viewport: { width: 1440, height: 1000 },
+  });
   const visitorContext = await browser.newContext({ baseURL: webUrl });
   await signInPhone(adminContext, admin.phoneNumber!);
   await signInPhone(visitorContext, requester.phoneNumber!);
 
   try {
     const page = await adminContext.newPage();
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.goto('/admin/enquiries?status=open&page=1&limit=10');
 
+    await expect(page).toHaveTitle('Admin enquiries · Tickif');
     await expect(page.getByRole('heading', { name: 'Enquiries' })).toBeVisible();
     await expect(page.getByText('open enquiry 01')).toBeVisible();
     await expect(page.getByText('Sunlit Courtyard Home')).toBeVisible();
@@ -91,18 +97,30 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
     await expect(page.getByRole('link', { name: 'Responded 7' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Closed 7' })).toBeVisible();
     await expect(page.getByRole('button', { name: /respond|close|assign/i })).toHaveCount(0);
-    if (process.env.QA_SCREENSHOT_DIR) {
-      await page.screenshot({
-        path: `${process.env.QA_SCREENSHOT_DIR}/admin-enquiries-desktop.png`,
-      });
-    }
+    await page.screenshot({ path: testInfo.outputPath('admin-enquiries-desktop.png') });
 
     await page.getByRole('link', { name: 'Next page' }).click();
     await expect(page).toHaveURL(/\/admin\/enquiries\?status=open&page=2&limit=10/);
     await expect(page.getByText('Page 2 of 2 · 12 enquiries')).toBeVisible();
 
+    await page.getByRole('combobox', { name: 'Rows per page' }).selectOption('25');
+    await expect(page).toHaveURL(/\/admin\/enquiries\?status=open&page=1&limit=25/);
+    await expect(page.getByText('Page 1 of 1 · 12 enquiries')).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Rows per page' })).toHaveValue('25');
+    await expect(page.getByRole('heading', { level: 2 })).toHaveCount(12);
+
+    await page.getByRole('link', { name: 'Closed 7' }).click();
+    await expect(page).toHaveURL(/\/admin\/enquiries\?page=1&limit=25&status=closed/);
+    await expect(page.getByText('closed enquiry 01')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2 })).toHaveCount(7);
+
+    await page.getByRole('link', { name: 'All 26' }).click();
+    await expect(page).toHaveURL(/\/admin\/enquiries\?page=1&limit=25$/);
+    await expect(page.getByText('Page 1 of 2 · 26 enquiries')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2 })).toHaveCount(25);
+
     await page.getByRole('link', { name: 'Responded 7' }).click();
-    await expect(page).toHaveURL(/\/admin\/enquiries\?page=1&limit=10&status=responded/);
+    await expect(page).toHaveURL(/\/admin\/enquiries\?page=1&limit=25&status=responded/);
     await expect(page.getByText('responded enquiry 02')).toBeVisible();
     await expect(page.getByText('Not specified')).toBeVisible();
     await expect(page.getByText('No referred project').first()).toBeVisible();
@@ -112,11 +130,11 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       390,
     );
-    if (process.env.QA_SCREENSHOT_DIR) {
-      await page.screenshot({
-        path: `${process.env.QA_SCREENSHOT_DIR}/admin-enquiries-mobile.png`,
-      });
-    }
+    await expect(page.getByRole('main')).toBeVisible();
+    expect(
+      await page.getByRole('main').evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(await page.getByRole('main').evaluate((element) => element.clientWidth));
+    await page.screenshot({ path: testInfo.outputPath('admin-enquiries-mobile.png') });
 
     await page.getByRole('button', { name: 'Open navigation' }).click();
     const mobileNav = page.getByRole('dialog', { name: 'Admin navigation' });
@@ -124,19 +142,16 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
       'aria-current',
       'page',
     );
-    if (process.env.QA_SCREENSHOT_DIR) {
-      await expect
-        .poll(() => mobileNav.evaluate((element) => getComputedStyle(element).opacity))
-        .toBe('1');
-      await page.screenshot({
-        path: `${process.env.QA_SCREENSHOT_DIR}/admin-enquiries-mobile-navigation.png`,
-      });
-    }
+    await expect
+      .poll(() => mobileNav.evaluate((element) => getComputedStyle(element).opacity))
+      .toBe('1');
+    await page.screenshot({ path: testInfo.outputPath('admin-enquiries-mobile-navigation.png') });
 
     const visitorPage = await visitorContext.newPage();
     await visitorPage.goto('/admin/enquiries');
     await expect(visitorPage).toHaveURL(`${webUrl}/unauthorized`);
     await expect(visitorPage.getByRole('heading', { name: 'Access denied' })).toBeVisible();
+    expect(pageErrors).toEqual([]);
   } finally {
     await Promise.allSettled([adminContext.close(), visitorContext.close()]);
     await assertTestDb();
