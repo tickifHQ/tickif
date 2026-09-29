@@ -198,10 +198,14 @@ test('composite fields show one visible focus indicator across login and designe
     await apartment.fill('');
     await apartment.evaluate((element) => element.scrollIntoView({ block: 'center' }));
     await expect(apartmentMenu).toBeVisible();
-    await expect.poll(() => apartmentMenu.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.left >= 0 && rect.right <= window.innerWidth;
-    })).toBe(true);
+    await expect
+      .poll(() =>
+        apartmentMenu.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left >= 0 && rect.right <= window.innerWidth;
+        }),
+      )
+      .toBe(true);
     await page.screenshot({
       path: testInfo.outputPath('apartment-selector-mobile.png'),
       animations: 'disabled',
@@ -212,11 +216,15 @@ test('composite fields show one visible focus indicator across login and designe
     await apartment.press('ArrowDown');
     await apartment.press('ArrowDown');
     await apartment.press('ArrowDown');
-    await expect.poll(() => apartmentMenu.evaluate((element) => {
-      const menu = element.getBoundingClientRect();
-      const last = element.querySelector('[role="option"]:last-child')!.getBoundingClientRect();
-      return last.top >= menu.top && last.bottom <= menu.bottom;
-    })).toBe(true);
+    await expect
+      .poll(() =>
+        apartmentMenu.evaluate((element) => {
+          const menu = element.getBoundingClientRect();
+          const last = element.querySelector('[role="option"]:last-child')!.getBoundingClientRect();
+          return last.top >= menu.top && last.bottom <= menu.bottom;
+        }),
+      )
+      .toBe(true);
     await page.screenshot({
       path: testInfo.outputPath('apartment-selector-short-mobile.png'),
       animations: 'disabled',

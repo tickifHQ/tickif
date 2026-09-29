@@ -62,6 +62,7 @@ export function ApartmentNameCombobox({
   const listboxId = useId();
   const customHintId = useId();
   const controlRef = useRef<HTMLDivElement>(null);
+  const activeOptionRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [menuRect, setMenuRect] = useState<{
@@ -81,6 +82,7 @@ export function ApartmentNameCombobox({
     );
   }, [selectedApartment, value]);
   const clampedActiveIndex = Math.min(activeIndex, Math.max(filteredApartments.length - 1, 0));
+  const menuPositioned = menuRect !== null;
   const isCustomName =
     value.trim().length > 0 && selectedApartment === null && filteredApartments.length === 0;
 
@@ -124,6 +126,12 @@ export function ApartmentNameCombobox({
       window.removeEventListener('scroll', updateMenuRect, true);
     };
   }, [open, updateMenuRect, value]);
+
+  useEffect(() => {
+    if (open && menuPositioned) {
+      activeOptionRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [open, menuPositioned, clampedActiveIndex]);
 
   function selectApartment(apartment: ConfiguredApartment) {
     onChange(apartment.name);
@@ -205,7 +213,7 @@ export function ApartmentNameCombobox({
           <div
             id={listboxId}
             role="listbox"
-            className="fixed z-50 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+            className="fixed z-50 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
             style={{
               bottom: menuRect.bottom,
               left: menuRect.left,
@@ -214,13 +222,14 @@ export function ApartmentNameCombobox({
               width: menuRect.width,
             }}
           >
-            <div className="max-h-full overflow-y-auto">
+            <div>
               {filteredApartments.length > 0 ? (
                 filteredApartments.map((apartment, index) => {
                   const selected = selectedApartment?.name === apartment.name;
                   return (
                     <button
                       key={apartment.name}
+                      ref={index === clampedActiveIndex ? activeOptionRef : undefined}
                       id={`${listboxId}-option-${index}`}
                       type="button"
                       tabIndex={-1}
