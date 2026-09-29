@@ -19,6 +19,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  [
+    'admin-summary.spec.ts',
+    'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
+  ],
   ...billingMatrixEntries,
   ...['Upgrade to Corporate', 'Downgrade to Professional+'].flatMap((action) =>
     [false, true].map((cancelled): [string, string] => [

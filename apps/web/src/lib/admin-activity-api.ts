@@ -1,8 +1,8 @@
 import {
   adminActivitySummarySchema,
-  type AdminActivitySummary,
   adminUserActivityResponseSchema,
   adminUsersResponseSchema,
+  type AdminActivitySummary,
   type AdminUserActivityResponse,
   type AdminUsersQuery,
   type AdminUsersResponse,
@@ -42,6 +42,7 @@ export async function fetchAdminUserActivity(userId: string): Promise<AdminUserA
 
   return handleApiResponse(response, adminUserActivityResponseSchema, ACTIVITY_ERROR);
 }
+
 export class AdminActivityAccessError extends Error {
   constructor() {
     super('Your admin access has expired. Sign in again.');

@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminUserActivityResponse, AdminUsersResponse } from '@repo/contracts';
-import { AdminActivityAccessError, fetchAdminActivitySummary, fetchAdminUserActivity, fetchAdminUsers } from '../../src/lib/admin-activity-api';
+import {
+  AdminActivityAccessError,
+  fetchAdminActivitySummary,
+  fetchAdminUserActivity,
+  fetchAdminUsers,
+} from '../../src/lib/admin-activity-api';
 
 const mocks = vi.hoisted(() => ({ activityGet: vi.fn(), usersGet: vi.fn(), summaryGet: vi.fn() }));
 
@@ -84,6 +89,7 @@ describe('admin activity API', () => {
     await expect(fetchAdminUsers({ page: 1, limit: 25 })).rejects.toThrow('Admin role required');
   });
 });
+
 const summary = {
   users: 10,
   activeUsers: 8,
