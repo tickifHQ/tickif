@@ -238,8 +238,11 @@ test.describe('E-278 portfolio publication readiness', () => {
 
   test('a saved experience center appears on the published portfolio and remains mobile-safe', async ({
     browser,
-  }) => {
-    const context = await browser.newContext({ baseURL: webUrl });
+  }, testInfo) => {
+    const context = await browser.newContext({
+      baseURL: webUrl,
+      viewport: { width: 1440, height: 1000 },
+    });
     try {
       const seed = await seedDesigner('experience-centers', {
         status: 'active',
@@ -296,12 +299,20 @@ test.describe('E-278 portfolio publication readiness', () => {
         'rel',
         'noopener noreferrer nofollow',
       );
+      await centers.screenshot({
+        path: testInfo.outputPath('experience-centers-desktop.png'),
+        animations: 'disabled',
+      });
 
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(centers).toBeVisible();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
+      await centers.screenshot({
+        path: testInfo.outputPath('experience-centers-mobile.png'),
+        animations: 'disabled',
+      });
     } finally {
       await context.close();
     }
