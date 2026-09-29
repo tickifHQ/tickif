@@ -261,6 +261,11 @@ const requiredEntries: [file: string, title: string][] = [
   ],
 ];
 
+requiredEntries.push([
+  'portfolio-publication.spec.ts',
+  'custom cities can be typed, saved, reloaded, and removed on desktop and mobile',
+]);
+
 export const requiredTests = requiredEntries.map(([file, title]) => ({ file, title }));
 
 const testSchema = z.object({

@@ -15,6 +15,7 @@ import {
   ACCOUNT_STATUS,
   ORGANIZATION_CAPABILITY,
   PLATFORM_ROLE,
+  PROFILE_FOOTPRINT_LIMITS,
   accountStatusSchema,
   platformRoleSchema,
   type AccountStatus,
@@ -24,6 +25,7 @@ import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import {
   DesignerOnboardingAccessDeniedError,
+  ProfileCityLimitExceededError,
   profilesRepository,
   type DesignerProfileRecord,
 } from './repository.js';
@@ -474,6 +476,7 @@ export const profilesService = {
       staffCount: profile.staffCount,
       testimonialBannerEnabled: profile.testimonialBannerEnabled,
       footprint,
+      customCities: profile.customCities,
       organization: {
         id: org.id,
         name: org.name,
@@ -509,6 +512,7 @@ export const profilesService = {
       reviewCount: profile.reviewCount,
       isKycVerified,
       footprint,
+      customCities: profile.customCities,
       createdAt: profile.createdAt.toISOString(),
     };
   },
@@ -537,6 +541,7 @@ export const profilesService = {
       reviewCount: profile.reviewCount,
       isKycVerified,
       footprint,
+      customCities: profile.customCities,
       createdAt: profile.createdAt.toISOString(),
     };
   },
@@ -584,7 +589,7 @@ export const profilesService = {
     }
 
     // Validate taxonomy IDs (shared helper — single round-trip, consistent reporting)
-    const { cityIds, scopeIds, themeIds, ...profileFields } = input;
+    const { cityIds, customCities, scopeIds, themeIds, ...profileFields } = input;
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
       cityIds,
       scopeIds,
@@ -594,11 +599,57 @@ export const profilesService = {
       throw AppError.unprocessable(taxonomyErrors.join('; '));
     }
 
-    const updated = await profilesRepository.updateProfileAndFootprint(profile.id, profileFields, {
-      cityIds,
-      scopeIds,
-      themeIds,
-    });
+    // Normalize custom (free-text) cities: trim, drop empties, and dedupe
+    // case-insensitively while preserving the first-seen casing/order.
+    let normalizedCustomCities: string[] | undefined;
+    if (customCities !== undefined) {
+      const seen = new Set<string>();
+      normalizedCustomCities = [];
+      for (const raw of customCities) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLocaleLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalizedCustomCities.push(trimmed);
+      }
+    }
+
+    // Enforce the combined city cap (taxonomy footprint + custom) against the
+    // FINAL persisted state, so partial updates (only one side sent) are covered.
+    const finalTaxonomyCityCount =
+      cityIds !== undefined
+        ? cityIds.length
+        : await profilesRepository.countFootprintByKind(profile.id, 'city');
+    const finalCustomCityCount =
+      normalizedCustomCities !== undefined
+        ? normalizedCustomCities.length
+        : profile.customCities.length;
+    if (finalTaxonomyCityCount + finalCustomCityCount > PROFILE_FOOTPRINT_LIMITS.city) {
+      throw AppError.unprocessable(
+        `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities in total.`,
+      );
+    }
+
+    const updated = await profilesRepository
+      .updateProfileAndFootprint(
+        profile.id,
+        {
+          ...profileFields,
+          ...(normalizedCustomCities !== undefined ? { customCities: normalizedCustomCities } : {}),
+        },
+        {
+          cityIds,
+          scopeIds,
+          themeIds,
+        },
+      )
+      .catch((error: unknown) => {
+        if (error instanceof ProfileCityLimitExceededError) {
+          throw AppError.unprocessable(error.message);
+        }
+        throw error;
+      });
 
     // Return owner projection
     const footprint = await profilesRepository.getFootprint(profile.id);
@@ -628,6 +679,7 @@ export const profilesService = {
       staffCount: updated.staffCount,
       testimonialBannerEnabled: updated.testimonialBannerEnabled,
       footprint,
+      customCities: updated.customCities,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
