@@ -72,6 +72,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await explore.click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Explore', exact: true })).toBeInViewport();
     await page.screenshot({ path: test.info().outputPath('homepage-desktop.png'), fullPage: false });
     await page.getByRole('link', { name: 'Browse professionals', exact: true }).click();
     await expect(page).toHaveURL('/designers');
@@ -112,6 +113,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await mobileExplore.click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Explore', exact: true })).toBeInViewport();
     await page.screenshot({ path: test.info().outputPath('homepage-mobile.png'), fullPage: false });
     await page.getByRole('link', { name: 'Browse professionals', exact: true }).click();
     await expect(page).toHaveURL('/designers');

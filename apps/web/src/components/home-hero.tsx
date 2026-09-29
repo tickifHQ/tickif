@@ -32,10 +32,8 @@ export function HomeHero({
             <span className="h-px w-8 bg-surface-subtle-border" />
           </div>
 
-          <h1 className="font-display text-5xl leading-none tracking-tight text-foreground sm:text-6xl xl:text-7xl">
-            Where great <span className="text-primary">spaces</span> and projects
-            <br />
-            meet their creators.
+          <h1 className="font-display text-5xl leading-none tracking-tight text-foreground sm:text-6xl">
+            Where great <span className="text-primary">spaces</span> and projects meet their creators.
           </h1>
 
           <p className="max-w-md text-base leading-relaxed text-foreground/80">
