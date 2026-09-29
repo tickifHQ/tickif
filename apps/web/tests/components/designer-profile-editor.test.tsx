@@ -437,9 +437,9 @@ describe('DesignerProfileEditor', () => {
       />,
     );
     await user.click(screen.getByRole('button', { name: /^cities:/i }));
-    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Pune', exact: true }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Pune' }));
     expect(screen.getByText('2/5')).toBeInTheDocument();
-    expect(screen.queryByRole('menuitemcheckbox', { name: 'pune', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'pune' })).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
@@ -954,4 +954,5 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('70% complete')).toBeInTheDocument();
   });
 });
+
 
