@@ -61,7 +61,7 @@ export function ShowcaseCard({
         )}
 
         {budgetLabel ? (
-          <span className="absolute bottom-3 left-3 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] font-medium leading-[1.1] text-foreground transition-opacity group-hover:opacity-0 sm:opacity-100">
+          <span className="absolute top-3 left-3 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] font-medium leading-[1.1] text-foreground transition-opacity sm:top-auto sm:bottom-3 sm:opacity-100 sm:group-hover:opacity-0">
             {budgetLabel}
           </span>
         ) : null}

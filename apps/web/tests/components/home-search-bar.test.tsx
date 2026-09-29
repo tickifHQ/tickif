@@ -94,6 +94,33 @@ describe('HomeSearchBar', () => {
     expect(input).not.toHaveAttribute('aria-controls');
   });
 
+  it('shows a custom city on project suggestions when no taxonomy city exists', async () => {
+    mock.suggestGet.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ...suggestions,
+        projects: [
+          {
+            ...suggestions.projects[0],
+            citySlug: null,
+            cityName: 'Pondicherry',
+          },
+        ],
+      }),
+    });
+    render(<HomeSearchBar />);
+
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'kitchen' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+
+    expect(screen.getByText('Studio One · Pondicherry')).toBeInTheDocument();
+  });
+
   it('applies a matching filter entity and removes the free-text query', async () => {
     mock.params = new URLSearchParams('q=kitchen&city=mumbai&page=3');
     render(<HomeSearchBar initialQuery="kitchen" />);
@@ -118,9 +145,7 @@ describe('HomeSearchBar', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen, Space' }));
 
-    expect(mock.push).toHaveBeenCalledWith(
-      '/home?room=bedroom%2Cliving-room%2Cbathroom%2Ckitchen',
-    );
+    expect(mock.push).toHaveBeenCalledWith('/home?room=bedroom%2Cliving-room%2Cbathroom%2Ckitchen');
   });
 
   it('clears stale suggestions and shows loading immediately for a changed query', async () => {

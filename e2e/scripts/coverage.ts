@@ -122,6 +122,10 @@ const requiredEntries: [file: string, title: string][] = [
   ),
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],
   ['homepage-feed.spec.ts', 'keeps a deep-linked result page in the infinite feed model'],
+  ...['desktop', 'mobile'].map((viewport): [string, string] => [
+    'homepage-feed.spec.ts',
+    `shows custom cities in suggestions and search cards on ${viewport}`,
+  ]),
   [
     'marketplace-journey.spec.ts',
     'designer onboarding and media processing connects to visitor onboarding and discovery, enquiry and lead management',
