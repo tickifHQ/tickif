@@ -11,7 +11,7 @@ import {
   makeTaxonomy,
   makeUser,
 } from '@repo/db/testing';
-import { putObject } from '@repo/storage';
+import { deleteObject, putObject } from '@repo/storage';
 import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
 
@@ -313,6 +313,7 @@ test.describe('E-278 portfolio publication readiness', () => {
     browser,
   }, testInfo) => {
     const context = await browser.newContext({ baseURL: webUrl });
+    const storageKeys: string[] = [];
     try {
       // Complete + active + public link on -> publicly visible.
       const seed = await seedDesigner('published', {
@@ -324,9 +325,24 @@ test.describe('E-278 portfolio publication readiness', () => {
         heroCover: true,
       });
       const project = await completeDashboardSetup(seed);
+      const logoKey = `originals/logos/${seed.profile.id}/logo.png`;
+      const coverKey = `originals/portfolio-covers/${seed.profile.id}/cover.jpg`;
+      for (const asset of [
+        { key: logoKey, file: 'email/tickif-mark.png', contentType: 'image/png' },
+        { key: coverKey, file: 'home-hero/neutral-living-room.jpg', contentType: 'image/jpeg' },
+      ]) {
+        storageKeys.push(asset.key);
+        await putObject({
+          key: asset.key,
+          body: await readFile(
+            resolve(import.meta.dirname, '../../apps/web/public/images', asset.file),
+          ),
+          contentType: asset.contentType,
+        });
+      }
       await db
         .update(schema.designerProfile)
-        .set({ yearsExperience: 7, projectCount: 12 })
+        .set({ yearsExperience: 7, projectCount: 12, logoImageId: logoKey })
         .where(eq(schema.designerProfile.id, seed.profile.id));
       const canonicalUrl = new URL(`/d/${seed.portfolioSlug}`, webUrl).toString();
       await signInPhone(context, seed.user.phoneNumber);
@@ -373,6 +389,16 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.goto('/designer/dashboard');
       await expect(page.getByTestId('post-setup-overview')).toBeVisible();
       await page.setViewportSize({ width: 1440, height: 1000 });
+      const shareImages = [
+        shareCard.getByAltText(`${seed.organization.name} logo`, { exact: true }),
+        shareCard.getByAltText(`${seed.organization.name} portfolio cover`, { exact: true }),
+      ];
+      for (const image of shareImages) {
+        await expect(image).toBeVisible();
+        await expect
+          .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+          .toBeGreaterThan(0);
+      }
       await page.screenshot({
         path: testInfo.outputPath('dashboard-overview-desktop.png'),
         animations: 'disabled',
@@ -387,6 +413,22 @@ test.describe('E-278 portfolio publication readiness', () => {
         path: testInfo.outputPath('dashboard-overview-mobile.png'),
         animations: 'disabled',
         fullPage: true,
+      });
+
+      // The workspace has an inner scroller, so a document full-page capture
+      // alone does not reveal the mobile share card below the recent projects.
+      await shareCard.scrollIntoViewIfNeeded();
+      for (const image of shareImages) {
+        await expect(image).toBeVisible();
+        await expect
+          .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+          .toBeGreaterThan(0);
+      }
+      await expect(viewPortfolio).toBeInViewport();
+      await expect(shareCard.getByRole('button', { name: 'Copy link', exact: true })).toBeInViewport();
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-share-card-mobile.png'),
+        animations: 'disabled',
       });
 
       // Regression G: the canonical URL is the real slug — never a placeholder.
@@ -406,7 +448,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       const publicPage = await page.goto(canonicalUrl);
       expect(publicPage?.status()).toBe(200);
     } finally {
-      await context.close();
+      await Promise.all([context.close(), ...storageKeys.map((key) => deleteObject(key))]);
     }
   });
 
