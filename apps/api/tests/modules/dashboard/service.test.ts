@@ -87,7 +87,9 @@ const completion = (
   ...overrides,
 });
 
-const counts = (items: ProjectStatusCount[] = [{ status: 'submitted', count: 1 }]) => items;
+const counts = (
+  items: ProjectStatusCount[] = [{ status: 'submitted', liveStatus: 'submitted', count: 1 }],
+) => items;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -119,14 +121,27 @@ afterEach(() => {
 });
 
 describe('dashboardService.getProfileDashboard', () => {
+  it('counts live projects once while reflecting their pending workflow statuses', async () => {
+    const pendingCounts = [
+      { status: 'in_review' as const, liveStatus: 'published' as const, count: 1 },
+      { status: 'submitted' as const, liveStatus: 'published' as const, count: 1 },
+      { status: 'draft' as const, liveStatus: 'published' as const, count: 1 },
+    ];
+    vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue(pendingCounts);
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.projects).toEqual({ total: 3, published: 3, inReview: 2, draft: 1 });
+  });
+
   it('returns the Linear E-140 dashboard summary contract', async () => {
     vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue([
-      { status: 'published', count: 4 },
-      { status: 'submitted', count: 1 },
-      { status: 'in_review', count: 2 },
-      { status: 'draft', count: 3 },
-      { status: 'changes_requested', count: 2 },
-      { status: 'rejected', count: 9 },
+      { status: 'published', liveStatus: 'published', count: 4 },
+      { status: 'submitted', liveStatus: 'submitted', count: 1 },
+      { status: 'in_review', liveStatus: 'in_review', count: 2 },
+      { status: 'draft', liveStatus: 'draft', count: 3 },
+      { status: 'changes_requested', liveStatus: 'changes_requested', count: 2 },
+      { status: 'rejected', liveStatus: 'rejected', count: 9 },
     ]);
     vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 7, new: 3 });
 
@@ -138,7 +153,7 @@ describe('dashboardService.getProfileDashboard', () => {
         missing: ['logo', 'scope'],
       },
       projects: {
-        total: 12,
+        total: 21,
         published: 4,
         inReview: 3,
         draft: 5,
@@ -150,9 +165,28 @@ describe('dashboardService.getProfileDashboard', () => {
       shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
       heroCoverUrl: 'https://cdn.example.com/portfolio-cover.png',
       publiclyVisible: true,
+      portfolioBasicsComplete: true,
       verificationStatus: null,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
+  });
+
+  it('includes every listed project in the total without changing workflow buckets', async () => {
+    vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue([
+      { status: 'published', liveStatus: 'published', count: 1 },
+      { status: 'submitted', liveStatus: 'submitted', count: 2 },
+      { status: 'in_review', liveStatus: 'in_review', count: 3 },
+      { status: 'draft', liveStatus: 'draft', count: 4 },
+      { status: 'changes_requested', liveStatus: 'changes_requested', count: 5 },
+      { status: 'rejected', liveStatus: 'rejected', count: 6 },
+      { status: 'archived', liveStatus: 'archived', count: 7 },
+      { status: 'delisted', liveStatus: 'delisted', count: 8 },
+      { status: 'deleted', liveStatus: 'deleted', count: 9 },
+    ]);
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.projects).toEqual({ total: 45, published: 1, inReview: 5, draft: 9 });
   });
 
   it('keeps the dashboard usable when the decorative cover cannot be presigned', async () => {
@@ -259,6 +293,7 @@ describe('dashboardService.getProfileDashboard', () => {
     const result = await dashboardService.getProfileDashboard(input);
 
     expect(result.publiclyVisible).toBe(true);
+    expect(result.portfolioBasicsComplete).toBe(true);
   });
 
   it('treats a missing portfolio row as incomplete even when the profile is active', async () => {
@@ -284,8 +319,20 @@ describe('dashboardService.getProfileDashboard', () => {
       const result = await dashboardService.getProfileDashboard(input);
 
       expect(result.publiclyVisible).toBe(false);
+      expect(result.portfolioBasicsComplete).toBe(false);
     },
   );
+
+  it('requires a hero cover for portfolio basics even for a legacy active profile', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ profileStatus: 'active', heroImageId: null }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.publiclyVisible).toBe(true);
+    expect(result.portfolioBasicsComplete).toBe(false);
+  });
 
   it('reports publiclyVisible=false for a draft (incomplete) profile even with the link on', async () => {
     vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
