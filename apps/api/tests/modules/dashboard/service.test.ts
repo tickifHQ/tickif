@@ -87,7 +87,9 @@ const completion = (
   ...overrides,
 });
 
-const counts = (items: ProjectStatusCount[] = [{ status: 'submitted', count: 1 }]) => items;
+const counts = (
+  items: ProjectStatusCount[] = [{ status: 'submitted', liveStatus: 'submitted', count: 1 }],
+) => items;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -119,14 +121,27 @@ afterEach(() => {
 });
 
 describe('dashboardService.getProfileDashboard', () => {
+  it('counts live projects once while reflecting their pending workflow statuses', async () => {
+    const pendingCounts = [
+      { status: 'in_review' as const, liveStatus: 'published' as const, count: 1 },
+      { status: 'submitted' as const, liveStatus: 'published' as const, count: 1 },
+      { status: 'draft' as const, liveStatus: 'published' as const, count: 1 },
+    ];
+    vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue(pendingCounts);
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.projects).toEqual({ total: 3, published: 3, inReview: 2, draft: 1 });
+  });
+
   it('returns the Linear E-140 dashboard summary contract', async () => {
     vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue([
-      { status: 'published', count: 4 },
-      { status: 'submitted', count: 1 },
-      { status: 'in_review', count: 2 },
-      { status: 'draft', count: 3 },
-      { status: 'changes_requested', count: 2 },
-      { status: 'rejected', count: 9 },
+      { status: 'published', liveStatus: 'published', count: 4 },
+      { status: 'submitted', liveStatus: 'submitted', count: 1 },
+      { status: 'in_review', liveStatus: 'in_review', count: 2 },
+      { status: 'draft', liveStatus: 'draft', count: 3 },
+      { status: 'changes_requested', liveStatus: 'changes_requested', count: 2 },
+      { status: 'rejected', liveStatus: 'rejected', count: 9 },
     ]);
     vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 7, new: 3 });
 
@@ -158,15 +173,15 @@ describe('dashboardService.getProfileDashboard', () => {
 
   it('includes every listed project in the total without changing workflow buckets', async () => {
     vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue([
-      { status: 'published', count: 1 },
-      { status: 'submitted', count: 2 },
-      { status: 'in_review', count: 3 },
-      { status: 'draft', count: 4 },
-      { status: 'changes_requested', count: 5 },
-      { status: 'rejected', count: 6 },
-      { status: 'archived', count: 7 },
-      { status: 'delisted', count: 8 },
-      { status: 'deleted', count: 9 },
+      { status: 'published', liveStatus: 'published', count: 1 },
+      { status: 'submitted', liveStatus: 'submitted', count: 2 },
+      { status: 'in_review', liveStatus: 'in_review', count: 3 },
+      { status: 'draft', liveStatus: 'draft', count: 4 },
+      { status: 'changes_requested', liveStatus: 'changes_requested', count: 5 },
+      { status: 'rejected', liveStatus: 'rejected', count: 6 },
+      { status: 'archived', liveStatus: 'archived', count: 7 },
+      { status: 'delisted', liveStatus: 'delisted', count: 8 },
+      { status: 'deleted', liveStatus: 'deleted', count: 9 },
     ]);
 
     const result = await dashboardService.getProfileDashboard(input);

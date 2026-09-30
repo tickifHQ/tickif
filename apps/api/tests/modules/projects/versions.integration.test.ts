@@ -8,6 +8,7 @@ import {
   makeProjectRoom,
 } from '@repo/db/testing';
 import { projectsRepository } from '../../../src/modules/projects/repository.js';
+import { dashboardRepository } from '../../../src/modules/dashboard/repository.js';
 import { adminProjectsRepository } from '../../../src/modules/admin-projects/repository.js';
 import { adminProjectsService } from '../../../src/modules/admin-projects/service.js';
 import { projectsService } from '../../../src/modules/projects/service.js';
@@ -70,6 +71,25 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('counts pending review and draft versions in dashboard workflow buckets without losing live status', async () => {
+    const fixture = await publishedProject();
+    await startPendingReview(fixture);
+    expect(await dashboardRepository.countProjectsByStatus(fixture.designer.id)).toEqual([
+      { status: 'in_review', liveStatus: 'published', count: 1 },
+    ]);
+
+    await projectsRepository.transition({
+      id: fixture.project.id,
+      fromStatus: 'in_review',
+      toStatus: 'draft',
+      actorUserId: fixture.actor.id,
+      action: 'withdraw',
+    });
+    expect(await dashboardRepository.countProjectsByStatus(fixture.designer.id)).toEqual([
+      { status: 'draft', liveStatus: 'published', count: 1 },
+    ]);
+  });
+
   it('submits a custom-city edit for review while preserving the live city', async () => {
     const fixture = await publishedProject();
     await projectsRepository.updateDraft(fixture.project.id, {

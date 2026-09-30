@@ -140,7 +140,7 @@ const emptyUploadImageCounts: UploadImageCounts = {
   taggedImageCount: 0,
 };
 
-const effectiveProjectStatus = sql<ProjectStatus>`case when ${schema.project.status} = 'published' then
+export const effectiveProjectStatus = sql<ProjectStatus>`case when ${schema.project.status} = 'published' then
   coalesce((select ${schema.projectPendingVersion.status} from ${schema.projectPendingVersion}
     where ${schema.projectPendingVersion.projectId} = ${schema.project.id}), ${schema.project.status})
   else ${schema.project.status} end`;

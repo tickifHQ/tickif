@@ -134,6 +134,7 @@ function RecentProjectRow({
   project: ProjectListItem;
   canWriteProjects: boolean;
 }) {
+  const liveWithPendingChanges = project.liveStatus === 'published' && project.pendingChanges;
   const content = (
     <>
       <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
@@ -158,9 +159,17 @@ function RecentProjectRow({
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <Badge variant={projectStatusVariant(project.status)} size="compact">
-          {projectStatusLabel(project.status)}
+        <Badge
+          variant={projectStatusVariant(liveWithPendingChanges ? 'published' : project.status)}
+          size="compact"
+        >
+          {projectStatusLabel(liveWithPendingChanges ? 'published' : project.status)}
         </Badge>
+        {liveWithPendingChanges ? (
+          <span className="max-w-32 text-right text-xs text-muted-foreground">
+            Pending changes · {projectStatusLabel(project.status)}
+          </span>
+        ) : null}
         <time dateTime={project.updatedAt} className="text-xs text-muted-foreground">
           {formatProjectUpdatedAt(project.updatedAt)}
         </time>
@@ -168,7 +177,7 @@ function RecentProjectRow({
     </>
   );
 
-  if (!canWriteProjects || !canEditProject(project.status)) {
+  if (!canWriteProjects || (!liveWithPendingChanges && !canEditProject(project.status))) {
     return <div className="flex items-center gap-3 px-4 py-3">{content}</div>;
   }
 
