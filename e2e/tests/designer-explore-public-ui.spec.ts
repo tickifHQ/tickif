@@ -11,6 +11,7 @@ async function openMobileNavigation(page: Page) {
   const trigger = page.getByRole('button', { name: 'Open navigation' });
   await trigger.focus();
   await trigger.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Designer navigation' })).toBeVisible();
 }
 
 test('designer workspace opens discovery via Explore Tickif and empty public review sections stay hidden', async ({
