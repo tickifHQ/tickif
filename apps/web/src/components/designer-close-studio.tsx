@@ -8,7 +8,6 @@ import {
   Loader2,
   Lock,
   RotateCcw,
-  ShieldCheck,
   TriangleAlert,
   UserRound,
 } from 'lucide-react';
@@ -335,7 +334,7 @@ export function DesignerCloseStudio({
         <EffectRow icon={Clock} tone="muted">
           A recovery period follows, during which you can restore the studio.
         </EffectRow>
-        <EffectRow icon={ShieldCheck} tone="positive">
+        <EffectRow icon={TriangleAlert} tone="destructive">
           After the recovery period ends, the studio and its data are permanently deleted.
         </EffectRow>
         <EffectRow icon={UserRound} tone="positive">
