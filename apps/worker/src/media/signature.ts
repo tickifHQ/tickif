@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 
 const BLOCK_SIZE = 8;
-const QUANTUM = 32;
+// Keep pixel changes restrained while retaining recovery through both encoders.
+const QUANTUM = 28;
 const MARKER = Buffer.from('TK');
 const SIGNATURE_BYTES = 12;
 const SIGNATURE_BITS = SIGNATURE_BYTES * 8;

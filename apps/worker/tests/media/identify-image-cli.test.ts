@@ -38,10 +38,16 @@ it('identifies a downloaded derivative through the CLI and rejects incorrect can
     expect(stdout).toContain('Image ID matches.');
     await expect(
       execute(process.execPath, [...cliArgs, signedPath, 'different-image-id']),
-    ).rejects.toMatchObject({ code: 1, stdout: expect.stringContaining('Image ID does not match.') });
+    ).rejects.toMatchObject({
+      code: 1,
+      stdout: expect.stringContaining('Image ID does not match.'),
+    });
     await expect(
       execute(process.execPath, [...cliArgs, originalPath, imageId]),
-    ).rejects.toMatchObject({ code: 1, stdout: expect.stringContaining('No Tickif image signature found.') });
+    ).rejects.toMatchObject({
+      code: 1,
+      stdout: expect.stringContaining('No Tickif image signature found.'),
+    });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

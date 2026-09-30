@@ -120,4 +120,24 @@ describe('generateDerivatives', () => {
     });
     expect(await readImageSignature(derivative!.buffer)).toBeNull();
   });
+
+  it.each([
+    { photo: 'bright-kitchen-living-room.jpg', width: 640, format: 'avif' as const },
+    { photo: 'neutral-living-room.jpg', width: 1024, format: 'webp' as const },
+  ])(
+    'retains the token with restrained perturbation: $photo $format',
+    async ({ photo, width, format }) => {
+      const input = await readFile(
+        new URL(`../../../web/public/images/home-hero/${photo}`, import.meta.url),
+      );
+      const [derivative] = await generateDerivatives(input, {
+        variants: [{ variant: 'preview', width }],
+        formats: [format],
+        watermark: { text: 'tickif', opacity: 0.65, scale: 0.08 },
+        signatureId: 'image-two',
+      });
+
+      expect(await readImageSignature(derivative!.buffer)).toBe(signatureToken('image-two'));
+    },
+  );
 });
