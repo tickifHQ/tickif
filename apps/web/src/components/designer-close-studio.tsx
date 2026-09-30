@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Clock,
@@ -113,6 +113,7 @@ export function DesignerCloseStudio({
   organizationName,
 }: DesignerCloseStudioProps) {
   const router = useRouter();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [retention, setRetention] = useState<OrganizationRetentionState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -318,6 +319,7 @@ export function DesignerCloseStudio({
         <Button
           variant="destructive"
           size="compact"
+          ref={closeButtonRef}
           className="shrink-0 shadow-md transition-shadow hover:shadow-lg hover:shadow-destructive/20"
           onClick={openDialog}
         >
@@ -349,6 +351,10 @@ export function DesignerCloseStudio({
       >
         <DialogContent
           role="alertdialog"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            closeButtonRef.current?.focus();
+          }}
           showCloseButton={!busy}
           onInteractOutside={(event) => event.preventDefault()}
           onEscapeKeyDown={busy ? (event) => event.preventDefault() : undefined}
