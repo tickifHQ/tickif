@@ -139,10 +139,21 @@ export function ApartmentNameCombobox({
     setActiveIndex(0);
   }
 
+  function openMenu() {
+    if (open) return;
+    setActiveIndex(
+      Math.max(0, filteredApartments.findIndex((apartment) => apartment === selectedApartment)),
+    );
+    setOpen(true);
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setOpen(true);
+      if (!open) {
+        openMenu();
+        return;
+      }
       setActiveIndex((current) =>
         filteredApartments.length === 0 ? 0 : Math.min(current + 1, filteredApartments.length - 1),
       );
@@ -151,7 +162,10 @@ export function ApartmentNameCombobox({
 
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setOpen(true);
+      if (!open) {
+        openMenu();
+        return;
+      }
       setActiveIndex((current) => Math.max(current - 1, 0));
       return;
     }
@@ -201,8 +215,8 @@ export function ApartmentNameCombobox({
             setOpen(true);
             setActiveIndex(0);
           }}
-          onFocus={() => setOpen(true)}
-          onClick={() => setOpen(true)}
+          onFocus={openMenu}
+          onClick={openMenu}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn('text-[13px] leading-[1.1]', selectedApartment ? 'pr-9 pl-11' : 'pr-9')}
@@ -213,6 +227,7 @@ export function ApartmentNameCombobox({
           <div
             id={listboxId}
             role="listbox"
+            aria-label={label}
             className="fixed z-50 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
             style={{
               bottom: menuRect.bottom,

@@ -21,6 +21,29 @@ function ApartmentField() {
 }
 
 describe('ApartmentNameCombobox', () => {
+  it('preserves the selected apartment when reopening and confirming with Enter', async () => {
+    const user = userEvent.setup();
+    render(<ApartmentField />);
+    const input = screen.getByRole('combobox');
+    await user.click(input);
+    await user.click(screen.getByRole('option', { name: /Prestige Lakeside/i }));
+
+    await user.click(input);
+    await user.keyboard('{Enter}');
+
+    expect(input).toHaveValue('Prestige Lakeside');
+  });
+
+  it('opens at the first option when ArrowDown reopens an empty field', async () => {
+    const user = userEvent.setup();
+    render(<ApartmentField />);
+    const input = screen.getByRole('combobox');
+    await user.click(input);
+    await user.keyboard('{Escape}{ArrowDown}{Enter}');
+
+    expect(input).toHaveValue('Casagrand First City');
+  });
+
   it('reopens a selected apartment without requiring the user to blur the field', async () => {
     const user = userEvent.setup();
     render(<ApartmentField />);
