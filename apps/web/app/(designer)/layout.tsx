@@ -1,21 +1,23 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { PLATFORM_ROLE } from '@repo/contracts';
 import { config } from '@repo/config/features';
 import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
-import { getCurrentOrgCapabilities, getCurrentOrgPlanTier } from '@/lib/current-org-role';
+import { getCurrentOrgCapabilities, getCurrentOrgPlanTier, getCurrentOrgRole } from '@/lib/current-org-role';
 import { PLAN_TIER_LABELS } from '@/lib/billing-types';
 
 /** Designer workspace chrome. Requires the exact designer platform role. */
 export default async function DesignerLayout({ children }: { children: ReactNode }) {
   const session = await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
-  const [profile, orgCapabilities, planTier] = await Promise.all([
+  const [profile, orgCapabilities, planTier, role] = await Promise.all([
     requireCurrentDesignerProfile(),
     getCurrentOrgCapabilities(),
     getCurrentOrgPlanTier(),
+    getCurrentOrgRole(),
   ]);
   const studioName = profile.displayName.trim() || session.user.name?.trim() || 'Your studio';
   if (!orgCapabilities) redirect('/unauthorized');
@@ -31,6 +33,14 @@ export default async function DesignerLayout({ children }: { children: ReactNode
       consultationsEnabled={config.CONSULTATIONS_ENABLED}
     >
       <ProtectedBfcacheGuard />
+      {role === 'owner' && !orgCapabilities.editOrganization ? (
+        <p className="m-6 rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
+          Studio editing is unavailable.{' '}
+          <Link href="/designer/portfolio" className="font-medium text-foreground underline underline-offset-4">
+            View studio closure and recovery
+          </Link>
+        </p>
+      ) : null}
       {children}
     </DesignerWorkspaceShell>
   );

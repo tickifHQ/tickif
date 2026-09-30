@@ -40,6 +40,13 @@ export async function getCurrentOrgPlanTier(): Promise<PlanTier | null> {
   return (await getCurrentOrgWorkspace())?.planTier ?? null;
 }
 
+/** Current organization identity (id/name/slug), cached with the workspace request. */
+export async function getCurrentOrgIdentity(): Promise<
+  OrganizationWorkspaceResponse['organization'] | null
+> {
+  return (await getCurrentOrgWorkspace())?.organization ?? null;
+}
+
 /** Billing access follows the live organization capability matrix. */
 export function hasBillingAccess(capabilities: OrganizationCapabilities | null): boolean {
   return capabilities?.billing === true;
