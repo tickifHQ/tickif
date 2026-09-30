@@ -206,14 +206,130 @@ describe('DesignerDashboardOverview', () => {
       'href',
       '/designer/portfolio',
     );
-    const copyButton = screen.getByRole('button', { name: /copy link/i });
-
-    expect(copyButton).toBeInTheDocument();
-    expect(copyButton).toHaveClass(
+    // E-324: "View portfolio" is the primary (fancy) share action; copy link is secondary.
+    const viewButton = screen.getByRole('link', { name: /view portfolio/i });
+    expect(viewButton).toHaveClass(
       'bg-button-fancy',
       'text-button-fancy-foreground',
       'shadow-button-fancy',
     );
+    expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+  });
+
+  // E-324: a prominent live-portfolio preview action, gated on public visibility.
+  it('offers a prominent View portfolio action opening the canonical public URL in a new tab', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
+        dashboard={dashboard}
+      />,
+    );
+
+    const viewPortfolio = screen.getByRole('link', { name: /view portfolio/i });
+    expect(viewPortfolio).toHaveAttribute('href', 'https://tickif.com/d/livspace');
+    expect(viewPortfolio).toHaveAttribute('target', '_blank');
+    expect(viewPortfolio).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('hides the View portfolio action and stats until the portfolio is publicly visible', () => {
+    render(
+      <DesignerDashboardOverview
+        canEditOrganization
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible={false}
+        yearsExperience={7}
+        projectCount={12}
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: /view portfolio/i })).not.toBeInTheDocument();
+    // Stats belong to the live portfolio card; an unpublished card stays a readiness prompt.
+    expect(screen.queryByText('Years experience')).not.toBeInTheDocument();
+    expect(screen.queryByText('Projects')).not.toBeInTheDocument();
+    // The existing readiness state is unchanged.
+    expect(screen.getByText(/not public yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /complete your portfolio/i }),
+    ).toBeInTheDocument();
+  });
+
+  // E-324: authoritative proof stats on the dashboard portfolio card.
+  it('renders years-of-experience and project-count stats from the authoritative counters', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
+        yearsExperience={7}
+        projectCount={12}
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('Years experience')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('Projects')).toBeInTheDocument();
+  });
+
+  it('uses singular stat labels for a single year and a single project', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
+        yearsExperience={1}
+        projectCount={1}
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByText('Year experience')).toBeInTheDocument();
+    expect(screen.getByText('Project')).toBeInTheDocument();
+  });
+
+  it('renders zero-value stats with plural labels and both stat cells present', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
+        yearsExperience={0}
+        projectCount={0}
+        dashboard={dashboard}
+      />,
+    );
+
+    // Both stat values render (two independent "0" cells) without collapsing.
+    expect(screen.getAllByText('0')).toHaveLength(2);
+    // Zero uses the plural labels, matching the public hero strip convention.
+    expect(screen.getByText('Years experience')).toBeInTheDocument();
+    expect(screen.getByText('Projects')).toBeInTheDocument();
+  });
+
+  it('defaults stats to zero when the values are omitted', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getAllByText('0')).toHaveLength(2);
+    expect(screen.getByText('Years experience')).toBeInTheDocument();
+    expect(screen.getByText('Projects')).toBeInTheDocument();
   });
 
   // E-278: the share card must not expose a public URL until the portfolio is live.

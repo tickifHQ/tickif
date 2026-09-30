@@ -21,6 +21,7 @@ import {
   CircleCheck,
   Clock3,
   Copy,
+  ExternalLink,
   Folders,
   ImagePlus,
   MessagesSquare,
@@ -305,6 +306,8 @@ export function DesignerDashboardOverview({
   logoUrl,
   portfolioUrl,
   portfolioPubliclyVisible = false,
+  yearsExperience = 0,
+  projectCount = 0,
   dashboard,
   completion,
   recentProjects = [],
@@ -326,6 +329,13 @@ export function DesignerDashboardOverview({
    * prompt so an unpublished/placeholder URL is never surfaced.
    */
   portfolioPubliclyVisible?: boolean;
+  /**
+   * E-324: proof stats surfaced on the dashboard portfolio card. Both are the
+   * authoritative denormalized counters read from the `designer_profile` row
+   * (via the already-fetched CurrentProfile) — never recomputed here.
+   */
+  yearsExperience?: number;
+  projectCount?: number;
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
   recentProjects?: ProjectListItem[];
@@ -481,6 +491,22 @@ export function DesignerDashboardOverview({
               <div className="mt-0.5 text-xs text-muted-foreground">{studioLocation}</div>
             </div>
             {portfolioPubliclyVisible ? (
+              <dl className="grid grid-cols-2 divide-x divide-border rounded-lg border border-border bg-background/60 px-2 py-2.5">
+                <div>
+                  <dd className="text-lg font-semibold tabular-nums text-foreground">{yearsExperience}</dd>
+                  <dt className="mt-1 text-[11px] text-muted-foreground">
+                    {yearsExperience === 1 ? 'Year experience' : 'Years experience'}
+                  </dt>
+                </div>
+                <div>
+                  <dd className="text-lg font-semibold tabular-nums text-foreground">{projectCount}</dd>
+                  <dt className="mt-1 text-[11px] text-muted-foreground">
+                    {projectCount === 1 ? 'Project' : 'Projects'}
+                  </dt>
+                </div>
+              </dl>
+            ) : null}
+            {portfolioPubliclyVisible ? (
               <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
                 <Copy className="size-3.5 shrink-0" />
                 <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
@@ -505,11 +531,17 @@ export function DesignerDashboardOverview({
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
             </p>
+            <Button asChild variant="fancy" size="fancy" className="mt-4 w-full">
+              <a href={portfolioUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+                View portfolio
+              </a>
+            </Button>
             <CopyLinkButton
               value={portfolioUrl}
-              variant="fancy"
+              variant="outline"
               size="fancy"
-              className="mt-4 w-full cursor-pointer"
+              className="mt-2 w-full cursor-pointer"
             />
           </>
         ) : (
