@@ -101,7 +101,9 @@ export const dashboardService = {
       presignPortfolioHeroCover(profile.profileId, profile).catch(() => null),
     ]);
 
-    const published = countProjectBucket(counts, ['published']);
+    const published = counts
+      .filter((count) => count.liveStatus === 'published')
+      .reduce((sum, count) => sum + count.count, 0);
     const inReview = countProjectBucket(counts, ['submitted', 'in_review']);
     const draft = countProjectBucket(counts, ['draft', 'changes_requested']);
     const publication = getPortfolioPublicationState(
@@ -127,7 +129,8 @@ export const dashboardService = {
         missing: completion.missing,
       },
       projects: {
-        total: published + inReview + draft,
+        // Match the All projects list, including projects outside the active workflow buckets.
+        total: counts.reduce((total, count) => total + count.count, 0),
         published,
         inReview,
         draft,
@@ -139,6 +142,7 @@ export const dashboardService = {
       shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.profileSlug),
       heroCoverUrl,
       publiclyVisible: publication.publiclyVisible,
+      portfolioBasicsComplete: publication.missingRequiredFields.length === 0,
       verificationStatus: effectiveVerificationStatus(profile),
     };
   },

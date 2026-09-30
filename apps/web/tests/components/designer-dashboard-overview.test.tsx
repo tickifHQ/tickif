@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProfileDashboardResponse } from '@repo/contracts';
+import type { ProfileDashboardResponse, ProjectListItem } from '@repo/contracts';
 import { DesignerDashboardOverview } from '../../src/components/designer-dashboard-overview';
 
 vi.mock('next/navigation', () => ({
@@ -28,10 +28,58 @@ const dashboard: ProfileDashboardResponse = {
   shareUrl: 'https://tickif.com/d/livspace',
   heroCoverUrl: 'https://cdn.example.com/livspace-cover.jpg',
   publiclyVisible: true,
+  portfolioBasicsComplete: false,
   verificationStatus: null,
 };
 
+const recentProject = {
+  id: '20000000-0000-4000-8000-000000000001',
+  slug: 'calm-chennai-home',
+  title: 'Calm Chennai Home',
+  propertyType: 'Apartment',
+  city: 'Chennai',
+  locality: 'Adyar',
+  status: 'published',
+  archiveReason: null,
+  rejectionReasonCode: null,
+  rejectionReasonCodes: [],
+  moderationNote: null,
+  coverImageUrl: 'https://cdn.example.com/project-cover.jpg',
+  reviewComments: [],
+  createdAt: '2026-09-01T10:00:00.000Z',
+  updatedAt: '2026-09-29T10:00:00.000Z',
+} satisfies ProjectListItem;
+
 describe('DesignerDashboardOverview', () => {
+  it.each(['submitted', 'in_review', 'draft'] as const)(
+    'keeps live projects with %s changes visibly live and reachable for editing',
+    (status) => {
+      render(
+        <DesignerDashboardOverview
+          studioName="Livspace"
+          studioLocation="Chennai"
+          portfolioUrl="https://tickif.com/d/livspace"
+          canWriteProjects
+          dashboard={{
+            ...dashboard,
+            portfolioBasicsComplete: true,
+            projects: { total: 1, published: 1, inReview: 0, draft: 0 },
+          }}
+          recentProjects={[
+            { ...recentProject, status, liveStatus: 'published', pendingChanges: true },
+          ]}
+        />,
+      );
+
+      expect(screen.getByText('Live')).toBeInTheDocument();
+      expect(screen.getByText(/Pending changes ·/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Calm Chennai Home/ })).toHaveAttribute(
+        'href',
+        `/designer/projects/${recentProject.id}/edit`,
+      );
+    },
+  );
+
   beforeEach(() => {
     window.sessionStorage.clear();
   });
@@ -72,19 +120,19 @@ describe('DesignerDashboardOverview', () => {
     expect(heading).toHaveClass('text-2xl');
     expect(heading).not.toHaveClass('text-4xl');
     expect(screen.getByTestId('designer-dashboard-overview')).toHaveClass('p-4', 'lg:p-6');
-    expect(screen.getByText(/let's get your profile ready to go live/i)).toBeInTheDocument();
+    expect(screen.getByText(/let's get your portfolio ready to go live/i)).toBeInTheDocument();
     expect(screen.getByTestId('profile-completion-progress')).toHaveClass('px-2');
     expect(screen.getByTestId('profile-completion-progress-bar')).toHaveClass('h-1.5');
-    expect(screen.getByRole('heading', { name: 'Complete profile' })).toHaveClass(
+    expect(screen.getByRole('heading', { name: 'Complete portfolio' })).toHaveClass(
       'text-muted-foreground',
     );
     expect(
-      screen.getByRole('heading', { name: 'Complete profile' }).closest('section'),
+      screen.getByRole('heading', { name: 'Complete portfolio' }).closest('section'),
     ).toHaveClass('bg-profile-completion-background', 'rounded-3xl');
     expect(screen.getByText('33%')).toBeInTheDocument();
     expect(screen.getByText(/account creation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/upload your first project/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/complete profile/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/complete portfolio basics/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/complete kyc/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/share the portfolio link in socials/i)).not.toBeInTheDocument();
   });
@@ -290,7 +338,7 @@ describe('DesignerDashboardOverview', () => {
     );
   });
 
-  it('removes the profile prompt once profile completion is done', () => {
+  it('removes the profile prompt once portfolio basics are complete', () => {
     render(
       <DesignerDashboardOverview
         canWriteProjects
@@ -301,7 +349,7 @@ describe('DesignerDashboardOverview', () => {
         portfolioUrl="https://tickif.com/d/livspace"
         dashboard={{
           ...dashboard,
-          profileCompletion: { score: 100, missing: [] },
+          portfolioBasicsComplete: true,
         }}
       />,
     );
@@ -337,6 +385,7 @@ describe('DesignerDashboardOverview', () => {
         workspaceKey="all-next-steps-complete"
         dashboard={{
           ...dashboard,
+          portfolioBasicsComplete: true,
           profileCompletion: { score: 100, missing: [] },
           verificationStatus: 'verified',
         }}
@@ -397,13 +446,7 @@ describe('DesignerDashboardOverview', () => {
     ).toBeTruthy();
   });
 
-  it('animates newly completed sections once and records the completed state', async () => {
-    const workspaceKey = 'completion-transition';
-    window.sessionStorage.setItem(
-      `tickif:dashboard-right-rail:v1:${workspaceKey}`,
-      JSON.stringify({ projectDone: false, nextStepsDone: false }),
-    );
-
+  it('does not retain onboarding transition regions after setup is complete', () => {
     render(
       <DesignerDashboardOverview
         canWriteProjects
@@ -412,32 +455,31 @@ describe('DesignerDashboardOverview', () => {
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
-        workspaceKey={workspaceKey}
+        workspaceKey="completion-transition"
         dashboard={{
           ...dashboard,
-          profileCompletion: { score: 100, missing: [] },
+          portfolioBasicsComplete: true,
+          profileCompletion: { score: 83, missing: ['scope'] },
           projects: { total: 1, published: 0, inReview: 1, draft: 0 },
           verificationStatus: 'verified',
+        }}
+        completion={{
+          score: 75,
+          missing: ['scope'],
+          steps: [
+            { key: 'signed-in-with-google', label: 'Sign in with Google', done: true },
+            { key: 'org-created', label: 'Create your organization', done: true },
+            { key: 'profile-completed', label: 'Complete your profile', done: false },
+            { key: 'first-project-uploaded', label: 'Upload your first project', done: true },
+          ],
         }}
       />,
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('dashboard-complete-setup')).toHaveAttribute(
-        'data-state',
-        'closed',
-      );
-      expect(screen.getByTestId('dashboard-next-steps')).toHaveAttribute('data-state', 'closed');
-    });
-
-    expect(window.sessionStorage.getItem(`tickif:dashboard-right-rail:v1:${workspaceKey}`)).toBe(
-      JSON.stringify({ projectDone: true, nextStepsDone: true }),
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('dashboard-complete-setup')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('dashboard-next-steps')).not.toBeInTheDocument();
-    });
+    expect(screen.queryByTestId('dashboard-complete-setup')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-next-steps')).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-workspace-illustration')).toBeInTheDocument();
+    expect(screen.getByTestId('post-setup-overview')).toBeInTheDocument();
     expect(screen.getByTestId('dashboard-share-card')).toBeInTheDocument();
   });
 
@@ -486,7 +528,7 @@ describe('DesignerDashboardOverview', () => {
     expect(document.querySelector('.lucide-shield-check')).not.toBeInTheDocument();
   });
 
-  it('shows setup complete once all tracked backend steps are done', () => {
+  it('replaces onboarding content with a useful overview once setup is complete', () => {
     render(
       <DesignerDashboardOverview
         canWriteProjects
@@ -497,6 +539,7 @@ describe('DesignerDashboardOverview', () => {
         portfolioUrl="https://tickif.com/d/livspace"
         dashboard={{
           ...dashboard,
+          portfolioBasicsComplete: true,
           profileCompletion: {
             score: 100,
             missing: [],
@@ -508,11 +551,98 @@ describe('DesignerDashboardOverview', () => {
             draft: 1,
           },
         }}
+        recentProjects={[recentProject]}
       />,
     );
 
-    expect(screen.getByText(/setup complete/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/profile setup steps/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('post-setup-overview')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /recent projects/i })).toBeInTheDocument();
+    expect(screen.getByText('Calm Chennai Home')).toBeInTheDocument();
+    expect(
+      screen.getByText('1', { selector: '[data-metric="total-projects"]' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('0', { selector: '[data-metric="new-enquiries"]' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^add project$/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-workspace-illustration')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-share-card')).toBeInTheDocument();
+    expect(screen.queryByText(/setup complete/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Complete portfolio' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/portfolio setup steps/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/what happens next/i)).toBeInTheDocument();
+  });
+
+  it('keeps the completed dashboard useful when recent projects fail to load', () => {
+    render(
+      <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{
+          ...dashboard,
+          portfolioBasicsComplete: true,
+          profileCompletion: { score: 100, missing: [] },
+          projects: { total: 2, published: 1, inReview: 1, draft: 0 },
+        }}
+        recentProjectsError="Could not load recent projects."
+      />,
+    );
+
+    expect(screen.getByTestId('post-setup-overview')).toBeInTheDocument();
+    expect(screen.getByText(/recent projects could not be loaded/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /view all/i })).toHaveAttribute(
+      'href',
+      '/designer/projects',
+    );
+    expect(screen.queryByRole('link', { name: /^add project$/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-workspace-illustration')).toBeInTheDocument();
+  });
+
+  it('hides completed-dashboard mutation actions from a read-only teammate', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Read-only studio"
+        studioLocation="Chennai"
+        portfolioUrl="https://tickif.com/d/read-only-studio"
+        dashboard={{
+          ...dashboard,
+          portfolioBasicsComplete: true,
+          profileCompletion: { score: 100, missing: [] },
+          projects: { total: 1, published: 1, inReview: 0, draft: 0 },
+        }}
+        recentProjects={[recentProject]}
+      />,
+    );
+
+    expect(screen.getByTestId('post-setup-overview')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^add project$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /manage portfolio/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /calm chennai home/i })).not.toBeInTheDocument();
+  });
+
+  it('does not link a recent project whose workflow status is not editable', () => {
+    render(
+      <DesignerDashboardOverview
+        canWriteProjects
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{
+          ...dashboard,
+          portfolioBasicsComplete: true,
+          profileCompletion: { score: 100, missing: [] },
+          projects: { total: 1, published: 0, inReview: 1, draft: 0 },
+        }}
+        recentProjects={[{ ...recentProject, status: 'in_review' }]}
+      />,
+    );
+
+    expect(screen.getByText('Calm Chennai Home')).toBeInTheDocument();
+    expect(screen.getAllByText('In review')).not.toHaveLength(0);
+    expect(screen.queryByRole('link', { name: /calm chennai home/i })).not.toBeInTheDocument();
   });
 
   it('uses API-provided completion steps when available', () => {

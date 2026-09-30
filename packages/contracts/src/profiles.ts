@@ -67,6 +67,8 @@ export const profileDashboardResponseSchema = z
      * expose the URL when this is false.
      */
     publiclyVisible: z.boolean(),
+    /** Whether every required portfolio hero field is saved, independent of link visibility. */
+    portfolioBasicsComplete: z.boolean(),
     /** Current organization verification state, or null before verification starts. */
     verificationStatus: verificationEffectiveStatusSchema.nullable(),
   })
@@ -434,7 +436,9 @@ export const updateProfileSchema = z
     // capped per item; the combined taxonomy + custom total is capped below and
     // authoritatively re-checked server-side against the final persisted state.
     customCities: z
-      .array(z.string().trim().min(1, 'Enter a city name.').max(100, 'Use 100 characters or fewer.'))
+      .array(
+        z.string().trim().min(1, 'Enter a city name.').max(100, 'Use 100 characters or fewer.'),
+      )
       .max(PROFILE_FOOTPRINT_LIMITS.city, `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`)
       .optional(),
     scopeIds: z

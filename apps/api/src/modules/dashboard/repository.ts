@@ -1,4 +1,5 @@
 import { db, schema, eq, and, sql } from '@repo/db';
+import { effectiveProjectStatus } from '../projects/repository.js';
 
 export type DashboardProfileContext = {
   profileId: string;
@@ -27,6 +28,7 @@ export type DashboardProfileContext = {
 
 export type ProjectStatusCount = {
   status: (typeof schema.projectStatusEnum.enumValues)[number];
+  liveStatus: (typeof schema.projectStatusEnum.enumValues)[number];
   count: number;
 };
 
@@ -87,7 +89,8 @@ export const dashboardRepository = {
   ): Promise<ProjectStatusCount[]> {
     return db
       .select({
-        status: schema.project.status,
+        status: effectiveProjectStatus,
+        liveStatus: schema.project.status,
         count: sql<number>`count(*)::int`,
       })
       .from(schema.project)
@@ -99,6 +102,6 @@ export const dashboardRepository = {
             : undefined,
         ),
       )
-      .groupBy(schema.project.status);
+      .groupBy(effectiveProjectStatus, schema.project.status);
   },
 };
