@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { db, eq, schema } from '@repo/db';
+import { deleteObject, putObject } from '@repo/storage';
 import {
   adminModerationDetailResponseSchema,
   projectDetailResponseSchema,
@@ -16,6 +19,7 @@ test('published project edits keep live content through rejection and replace it
   test.setTimeout(240_000);
   const fixture = await createProjectVersionFixture();
   const { target } = fixture;
+  const logoKey = `originals/logos/${target.designerId}/dashboard-regression.png`;
   const designerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const publicContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const designerPage = await designerContext.newPage();
@@ -99,6 +103,31 @@ test('published project edits keep live content through rejection and replace it
     await expect(designerPage.getByRole('button', { name: 'Withdraw and edit' })).toBeVisible();
   };
   try {
+    // Complete this guarded synthetic fixture's dashboard setup using real persistence.
+    await putObject({
+      key: logoKey,
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4d0AAAAASUVORK5CYII=',
+        'base64',
+      ),
+      contentType: 'image/png',
+    });
+    await db.insert(schema.account).values({
+      id: randomUUID(),
+      accountId: fixture.owner.id,
+      providerId: 'google',
+      userId: fixture.owner.id,
+    });
+    await db
+      .update(schema.designerProfile)
+      .set({ logoImageId: logoKey, bio: 'Thoughtful interiors for everyday living.' })
+      .where(eq(schema.designerProfile.id, target.designerId));
+    await db.insert(schema.designerPortfolio).values({
+      profileId: target.designerId,
+      tagline: 'Spaces designed around you',
+      showHero: false,
+      publicLinkEnabled: true,
+    });
     await signInProjectAdmin(adminContext, fixture.admin.phoneNumber);
     await signInProjectAdmin(designerContext, fixture.owner.phoneNumber);
     const active = await designerContext.request.post(
@@ -142,6 +171,40 @@ test('published project edits keep live content through rejection and replace it
       body: await designerPage.screenshot({ animations: 'disabled', caret: 'initial' }),
       contentType: 'image/png',
     });
+
+    await designerPage.goto('/designer/dashboard');
+    const overview = designerPage.getByTestId('post-setup-overview');
+    const recentRow = overview.getByRole('link', { name: new RegExp(rejectedTitle) });
+    for (const [size, viewport] of [
+      ['desktop', { width: 1440, height: 960 }],
+      ['mobile', { width: 390, height: 844 }],
+    ] as const) {
+      await designerPage.setViewportSize(viewport);
+      await expect(overview).toBeVisible();
+      await expect(overview.locator('[data-metric="total-projects"]')).toHaveText('1');
+      await expect(overview.locator('[data-metric="live-projects"]')).toHaveText('1');
+      await expect(overview.locator('[data-metric="in-review-projects"]')).toHaveText('1');
+      await expect(recentRow).toHaveAttribute('href', `/designer/projects/${target.id}/edit`);
+      await expect(recentRow.getByText('Live', { exact: true })).toBeVisible();
+      await expect(
+        recentRow.getByText('Pending changes · In review', { exact: true }),
+      ).toBeVisible();
+      await expect
+        .poll(() => designerPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+      await testInfo.attach(`dashboard-live-pending-${size}`, {
+        body: await designerPage.screenshot({
+          fullPage: true,
+          animations: 'disabled',
+          caret: 'initial',
+        }),
+        contentType: 'image/png',
+      });
+    }
+    await recentRow.click();
+    await expect(projectName).toHaveValue(rejectedTitle);
+    await expect(projectName).toBeDisabled();
+    await designerPage.setViewportSize({ width: 1440, height: 960 });
     await designerPage.getByRole('button', { name: 'Withdraw and edit' }).click();
     await expect(projectName).toBeEnabled();
     await expect(projectName).toHaveValue(rejectedTitle);
@@ -235,5 +298,6 @@ test('published project edits keep live content through rejection and replace it
   } finally {
     await Promise.allSettled([designerContext.close(), publicContext.close()]);
     await fixture.cleanup();
+    await deleteObject(logoKey);
   }
 });

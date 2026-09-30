@@ -125,6 +125,8 @@ export default async function DesignerDashboardPage() {
       logoUrl={profile?.logoUrl ?? null}
       portfolioUrl={portfolioUrl}
       portfolioPubliclyVisible={portfolioPubliclyVisible}
+      yearsExperience={profile?.yearsExperience ?? 0}
+      projectCount={profile?.projectCount ?? 0}
       dashboard={dashboard.data}
       completion={completion.data}
       recentProjects={recentProjects.data}
