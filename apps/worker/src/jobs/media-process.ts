@@ -40,6 +40,7 @@ type StoredDerivative = {
 
 // Revisioned derivative keys make immutable caching safe across watermark updates.
 const DERIVATIVE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const SIGNATURE_REVISION = 'sig-v1';
 
 /** Persist a permanent rejection and drop the now-orphaned original. Cleanup is best-effort. */
 async function failPermanently(
@@ -58,11 +59,14 @@ async function generateAndStoreDerivatives(
   original: Buffer,
 ): Promise<StoredDerivative[]> {
   const stored: StoredDerivative[] = [];
-  for await (const derivative of eachDerivative(original, { watermark: defaultWatermarkConfig })) {
+  for await (const derivative of eachDerivative(original, {
+    watermark: defaultWatermarkConfig,
+    signatureId: image.id,
+  })) {
     const key = buildDerivativeKey(
       image.projectId,
       image.id,
-      `${derivative.variant}-${config.WATERMARK_REVISION}`,
+      `${derivative.variant}-${config.WATERMARK_REVISION}-${SIGNATURE_REVISION}`,
       derivative.format,
     );
     // The high-density variant can be several MB. Persist each buffer before
