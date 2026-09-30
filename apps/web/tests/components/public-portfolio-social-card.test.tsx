@@ -46,6 +46,10 @@ describe('PublicPortfolioSocialCard', () => {
       'src',
       'https://cdn.example.test/logo.png',
     );
+    expect(screen.getByRole('img', { name: 'Anika Spaces logo' })).toHaveStyle({
+      borderRadius: '50%',
+      objectFit: 'cover',
+    });
     expect(screen.getByRole('img', { name: 'Google' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Tickif' })).toBeInTheDocument();
   });
@@ -58,6 +62,7 @@ describe('PublicPortfolioSocialCard', () => {
       />,
     );
     expect(screen.getByText('AS')).toBeInTheDocument();
+    expect(screen.getByText('AS')).toHaveStyle({ borderRadius: '50%' });
     expect(screen.getByRole('img', { name: 'Tickif rating' })).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
   });
