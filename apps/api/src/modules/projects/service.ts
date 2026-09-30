@@ -651,7 +651,9 @@ function buildPortfolioStatusCounts(
     total: counts.reduce((sum, item) => sum + item.count, 0),
     draft: count(['draft']),
     inReview: count(['submitted', 'in_review']),
-    published: count(['published']),
+    published: counts
+      .filter((item) => item.liveStatus === 'published')
+      .reduce((sum, item) => sum + item.count, 0),
     changesRequested: count(['changes_requested']),
     rejected: count(['rejected']),
     archived: count(['archived']),
@@ -688,6 +690,7 @@ const transitionRules: TransitionRule[] = [
   },
   { actorRole: 'designer', fromStatus: 'rejected', toStatus: 'submitted', action: 'resubmit' },
   { actorRole: 'designer', fromStatus: 'submitted', toStatus: 'draft', action: 'withdraw' },
+  { actorRole: 'designer', fromStatus: 'in_review', toStatus: 'draft', action: 'withdraw' },
   { actorRole: 'admin', fromStatus: 'submitted', toStatus: 'in_review', action: 'start_review' },
   { actorRole: 'admin', fromStatus: 'in_review', toStatus: 'published', action: 'publish' },
   {
@@ -732,6 +735,7 @@ const transitionRules: TransitionRule[] = [
   // POST /{id}/withdraw was reachable for them but always 409'd — the one action in the matrix
   // superadmin could not perform.
   { actorRole: 'superadmin', fromStatus: 'submitted', toStatus: 'draft', action: 'withdraw' },
+  { actorRole: 'superadmin', fromStatus: 'in_review', toStatus: 'draft', action: 'withdraw' },
 ];
 
 export function assertTransition(
@@ -2008,6 +2012,8 @@ export const projectsService = {
         toStatus: 'draft',
         patch: {
           submittedAt: null,
+          reviewedBy: null,
+          reviewStartedAt: null,
           moderationNote: null,
           rejectionReasonCode: null,
           rejectionReasonCodes: [],
@@ -2016,7 +2022,7 @@ export const projectsService = {
       caller,
     );
 
-    return toDetailResponse(withdrawn, await projectsRepository.listRooms(projectId));
+    return projectsService.getById(withdrawn.id, caller);
   },
 
   async moderationHistory(projectId: string, caller: Caller): Promise<ModerationHistoryResponse> {

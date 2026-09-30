@@ -194,7 +194,9 @@ const caller = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(projectsRepository.findLiveByIdWithRooms).mockImplementation((id) => projectsRepository.findByIdWithRooms(id));
+  vi.mocked(projectsRepository.findLiveByIdWithRooms).mockImplementation((id) =>
+    projectsRepository.findByIdWithRooms(id),
+  );
   vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
   vi.mocked(projectsRepository.listReviewComments).mockResolvedValue([]);
   vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([]);
@@ -297,12 +299,12 @@ describe('projectsService.portfolio', () => {
       total: 1,
     });
     vi.mocked(projectsRepository.countByStatus).mockResolvedValue([
-      { status: 'draft', count: 2 },
-      { status: 'submitted', count: 1 },
-      { status: 'in_review', count: 2 },
-      { status: 'published', count: 1 },
-      { status: 'changes_requested', count: 3 },
-      { status: 'rejected', count: 1 },
+      { status: 'draft', liveStatus: 'draft', count: 2 },
+      { status: 'submitted', liveStatus: 'published', count: 1 },
+      { status: 'in_review', liveStatus: 'in_review', count: 2 },
+      { status: 'published', liveStatus: 'published', count: 1 },
+      { status: 'changes_requested', liveStatus: 'changes_requested', count: 3 },
+      { status: 'rejected', liveStatus: 'rejected', count: 1 },
     ]);
     vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
       new Map([
@@ -343,7 +345,7 @@ describe('projectsService.portfolio', () => {
       total: 10,
       draft: 2,
       inReview: 3,
-      published: 1,
+      published: 2,
       changesRequested: 3,
       rejected: 1,
       archived: 0,
@@ -395,7 +397,7 @@ describe('projectsService.portfolio', () => {
       total: 2,
     });
     vi.mocked(projectsRepository.countByStatus).mockResolvedValue([
-      { status: 'published', count: 2 },
+      { status: 'published', liveStatus: 'published', count: 2 },
     ]);
     vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
       new Map([
@@ -1274,6 +1276,7 @@ describe('assertTransition', () => {
     ['designer:changes_requested:submitted', 'resubmit'],
     ['designer:rejected:submitted', 'resubmit'],
     ['designer:submitted:draft', 'withdraw'],
+    ['designer:in_review:draft', 'withdraw'],
     ['admin:submitted:in_review', 'start_review'],
     ['admin:in_review:published', 'publish'],
     ['admin:in_review:changes_requested', 'request_changes'],
@@ -1285,6 +1288,7 @@ describe('assertTransition', () => {
     ['superadmin:in_review:rejected', 'reject'],
     ['superadmin:published:in_review', 'unpublish'],
     ['superadmin:submitted:draft', 'withdraw'],
+    ['superadmin:in_review:draft', 'withdraw'],
   ]);
 
   it('accepts only declared transitions and derives their audit actions', () => {

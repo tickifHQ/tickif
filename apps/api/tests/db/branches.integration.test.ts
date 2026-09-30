@@ -175,7 +175,7 @@ describe('corporate branch persistence', () => {
     expect(projectRollup.items.map(({ title }) => title)).toEqual(['Mumbai Home', 'Pune Home']);
     expect(projectRollup.total).toBe(2);
     expect(leadRollup.items.map(({ name }) => name)).toEqual(['Mumbai Lead', 'Pune Lead']);
-    expect(projectCounts).toEqual([{ status: 'draft', count: 2 }]);
+    expect(projectCounts).toEqual([{ status: 'draft', liveStatus: 'draft', count: 2 }]);
     expect(leadCounts).toEqual([{ status: 'new', count: 2 }]);
   });
 

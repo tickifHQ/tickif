@@ -180,6 +180,7 @@ export type ProjectListItemRecord = Pick<
 export type ProjectCoverImageRecord = Pick<ProjectImageRecord, 'id' | 'derivatives' | 'status'>;
 export type ProjectStatusCountRecord = {
   status: ProjectStatus;
+  liveStatus: ProjectStatus;
   count: number;
 };
 
@@ -486,7 +487,14 @@ export const projectsRepository = {
               and ${schema.teamMember.userId} = ${params.userId}
           )`
         : undefined,
-      params.statuses?.length ? inArray(effectiveProjectStatus, params.statuses) : undefined,
+      params.statuses?.length
+        ? or(
+            inArray(effectiveProjectStatus, params.statuses),
+            params.statuses.includes('published')
+              ? eq(schema.project.status, 'published')
+              : undefined,
+          )
+        : undefined,
       searchPattern ? or(ilike(title, searchPattern), ilike(locality, searchPattern)) : undefined,
     ].filter((f) => f !== undefined);
 
@@ -592,12 +600,13 @@ export const projectsRepository = {
     return db
       .select({
         status: effectiveProjectStatus,
+        liveStatus: schema.project.status,
         count: sql<number>`count(*)::int`,
       })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(and(...filters))
-      .groupBy(effectiveProjectStatus);
+      .groupBy(effectiveProjectStatus, schema.project.status);
   },
 
   async listReviewComments(projectId: string): Promise<ProjectReviewCommentRecord[]> {
