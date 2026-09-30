@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Check,
   Copy,
+  ExternalLink,
   Plus,
   Shield,
   ShieldPlus,
@@ -159,6 +160,8 @@ export function DesignerDashboardOverview({
   logoUrl,
   portfolioUrl,
   portfolioPubliclyVisible = false,
+  yearsExperience = 0,
+  projectCount = 0,
   dashboard,
   completion,
   dashboardError,
@@ -178,6 +181,13 @@ export function DesignerDashboardOverview({
    * prompt so an unpublished/placeholder URL is never surfaced.
    */
   portfolioPubliclyVisible?: boolean;
+  /**
+   * E-324: proof stats surfaced on the dashboard portfolio card. Both are the
+   * authoritative denormalized counters read from the `designer_profile` row
+   * (via the already-fetched CurrentProfile) — never recomputed here.
+   */
+  yearsExperience?: number;
+  projectCount?: number;
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
   dashboardError?: string | null;
@@ -489,6 +499,30 @@ export function DesignerDashboardOverview({
                       <div className="text-base font-medium text-foreground">{studioName}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{studioLocation}</div>
                     </div>
+                    {/* E-324: proof stats (authoritative profile counters), mirroring
+                      the public hero strip labels so the preview matches the live page.
+                      Only shown once the portfolio is live, alongside the public link —
+                      an unpublished card stays a pure readiness prompt. */}
+                    {portfolioPubliclyVisible ? (
+                      <dl className="mx-auto grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+                        <div className="flex flex-col bg-background px-3 py-2">
+                          <dd className="text-lg font-medium leading-none text-foreground">
+                            {yearsExperience}
+                          </dd>
+                          <dt className="mt-1 text-[11px] text-muted-foreground">
+                            {yearsExperience === 1 ? 'Year experience' : 'Years experience'}
+                          </dt>
+                        </div>
+                        <div className="flex flex-col bg-background px-3 py-2">
+                          <dd className="text-lg font-medium leading-none text-foreground">
+                            {projectCount}
+                          </dd>
+                          <dt className="mt-1 text-[11px] text-muted-foreground">
+                            {projectCount === 1 ? 'Project' : 'Projects'}
+                          </dt>
+                        </div>
+                      </dl>
+                    ) : null}
                     {/* E-278: only reveal the public URL chip once the portfolio is
                       actually live. Otherwise show a neutral "not public yet" chip
                       so no unpublished/placeholder link leaks. */}
@@ -523,11 +557,20 @@ export function DesignerDashboardOverview({
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
                     </p>
+                    {/* E-324: the live portfolio preview is the primary action — open
+                      the canonical public page (portfolioUrl === backend shareUrl) in a
+                      new tab. Copy-link stays as the secondary share action. */}
+                    <Button asChild variant="fancy" size="fancy" className="mt-4 w-full">
+                      <a href={portfolioUrl} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="size-4" />
+                        View portfolio
+                      </a>
+                    </Button>
                     <CopyLinkButton
                       value={portfolioUrl}
-                      variant="fancy"
+                      variant="outline"
                       size="fancy"
-                      className="mt-4 w-full cursor-pointer"
+                      className="mt-2 w-full cursor-pointer"
                     />
                   </>
                 ) : (
