@@ -493,13 +493,17 @@ export function DesignerDashboardOverview({
             {portfolioPubliclyVisible ? (
               <dl className="grid grid-cols-2 divide-x divide-border rounded-lg border border-border bg-background/60 px-2 py-2.5">
                 <div>
-                  <dd className="text-lg font-semibold tabular-nums text-foreground">{yearsExperience}</dd>
+                  <dd className="text-lg font-semibold tabular-nums text-foreground">
+                    {yearsExperience}
+                  </dd>
                   <dt className="mt-1 text-[11px] text-muted-foreground">
                     {yearsExperience === 1 ? 'Year experience' : 'Years experience'}
                   </dt>
                 </div>
                 <div>
-                  <dd className="text-lg font-semibold tabular-nums text-foreground">{projectCount}</dd>
+                  <dd className="text-lg font-semibold tabular-nums text-foreground">
+                    {projectCount}
+                  </dd>
                   <dt className="mt-1 text-[11px] text-muted-foreground">
                     {projectCount === 1 ? 'Project' : 'Projects'}
                   </dt>
