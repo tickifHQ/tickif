@@ -75,6 +75,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
+import { ApartmentNameCombobox } from '@/components/apartment-name-combobox';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
@@ -3617,13 +3618,23 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                 </div>
                 {selectedProjectTypeBehavior.buildingNameLabel ? (
                   <div className="mt-5 max-w-[22.8125rem]">
-                    <FormField
-                      label={selectedProjectTypeBehavior.buildingNameLabel}
-                      id="project-building-name"
-                      value={buildingName}
-                      onChange={setBuildingName}
-                      placeholder="e.g. Prestige Lakeside"
-                    />
+                    {projectType === 'apartment' ? (
+                      <ApartmentNameCombobox
+                        label={selectedProjectTypeBehavior.buildingNameLabel}
+                        id="project-building-name"
+                        value={buildingName}
+                        onChange={setBuildingName}
+                        placeholder="e.g. Prestige Lakeside"
+                      />
+                    ) : (
+                      <FormField
+                        label={selectedProjectTypeBehavior.buildingNameLabel}
+                        id="project-building-name"
+                        value={buildingName}
+                        onChange={setBuildingName}
+                        placeholder="e.g. Prestige Lakeside"
+                      />
+                    )}
                   </div>
                 ) : null}
               </div>
