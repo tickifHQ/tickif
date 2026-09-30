@@ -46,6 +46,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
 import { ExperienceCentersEditor } from '@/components/experience-centers-editor';
 import {
@@ -1624,23 +1625,14 @@ export function DesignerPortfolioSettings() {
                     ) : null}
                   </div>
                   <div className="space-y-3 px-5 py-4 text-center">
-                    <div
-                      data-testid="portfolio-preview-logo"
-                      className="relative z-10 mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 shadow-sm"
-                    >
-                      {portfolio.logoUrl ? (
-                        <Image
-                          src={portfolio.logoUrl}
-                          alt="Portfolio logo"
-                          width={56}
-                          height={56}
-                          unoptimized
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-bold text-primary">{initials}</span>
-                      )}
-                    </div>
+                    <DesignerLogoAvatar
+                      testId="portfolio-preview-logo"
+                      logoUrl={portfolio.logoUrl}
+                      alt="Portfolio logo"
+                      sizePx={56}
+                      className="relative z-10 mx-auto -mt-10 size-14 bg-primary/10 shadow-sm"
+                      fallback={<span className="text-lg font-bold text-primary">{initials}</span>}
+                    />
                     <div>
                       <div className="text-base font-semibold text-foreground">
                         {form.displayName || 'Studio Meraki'}

@@ -603,7 +603,7 @@ export function DesignerOnboarding({
           <div className="flex flex-col gap-5">
             <div className="flex items-start gap-6">
               <div className="relative shrink-0">
-                <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
+                <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-full border bg-card shadow-xs">
                   <InitialsAvatar
                     seed={userName}
                     fallbackSeed={displayNamePlaceholder}
@@ -876,7 +876,7 @@ function CompanyBasicsFields({
     <div className="flex flex-col gap-5">
       <div className="flex items-start gap-6">
         <div className="relative shrink-0">
-          <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
+          <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-full border bg-card shadow-xs">
             <InitialsAvatar
               seed={companyName}
               fallbackSeed="Livspace Interiors"

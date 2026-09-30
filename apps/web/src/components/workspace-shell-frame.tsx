@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
@@ -25,8 +25,12 @@ export function WorkspaceShellFrame({
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const previousPathname = useRef(pathname);
 
   useEffect(() => {
+    // Preserve an early open during hydration; only navigation should close it.
+    if (previousPathname.current === pathname) return;
+    previousPathname.current = pathname;
     setMobileNavOpen(false);
   }, [pathname]);
 
