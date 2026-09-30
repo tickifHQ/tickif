@@ -324,6 +324,10 @@ test.describe('E-278 portfolio publication readiness', () => {
         heroCover: true,
       });
       const project = await completeDashboardSetup(seed);
+      await db
+        .update(schema.designerProfile)
+        .set({ yearsExperience: 7, projectCount: 12 })
+        .where(eq(schema.designerProfile.id, seed.profile.id));
       const canonicalUrl = new URL(`/d/${seed.portfolioSlug}`, webUrl).toString();
       await signInPhone(context, seed.user.phoneNumber);
       await selectOrganization(context, seed.organization.id);
@@ -349,6 +353,19 @@ test.describe('E-278 portfolio publication readiness', () => {
         page.getByRole('link', { name: 'Add new project', exact: true }),
       ).toHaveAttribute('href', '/designer/projects/new');
       await expect(page.getByTestId('dashboard-workspace-illustration')).toBeVisible();
+      const shareCard = page.getByTestId('dashboard-share-card');
+      const viewPortfolio = shareCard.getByRole('link', { name: 'View portfolio', exact: true });
+      await expect(viewPortfolio).toBeVisible();
+      await expect(viewPortfolio).toHaveAttribute('href', canonicalUrl);
+      await expect(viewPortfolio).toHaveAttribute('target', '_blank');
+      await expect(viewPortfolio).toHaveAttribute('rel', 'noopener noreferrer');
+      // Proof stats use profile counters, independently of the dashboard project total.
+      await expect(
+        shareCard.getByText('Years experience', { exact: true }).locator('..').getByRole('definition'),
+      ).toHaveText('7');
+      await expect(
+        shareCard.getByText('Projects', { exact: true }).locator('..').getByRole('definition'),
+      ).toHaveText('12');
       await expect(page.getByRole('button', { name: /copy link/i })).toBeVisible();
       await expect(page.getByText(seed.portfolioSlug).first()).toBeVisible();
       await page.getByRole('link', { name: 'Add new project', exact: true }).click();
