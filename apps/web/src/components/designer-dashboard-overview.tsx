@@ -10,6 +10,7 @@ import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { DashboardRightRailTransition } from '@/components/dashboard-right-rail-transition';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
   ArrowRight,
@@ -463,28 +464,21 @@ export function DesignerDashboardOverview({
                     ) : null}
                   </div>
                   <div className="space-y-2 px-4 py-3 text-center">
-                    <div
-                      data-testid="dashboard-preview-logo"
-                      className="relative z-10 mx-auto -mt-8 size-12 overflow-hidden rounded-xl bg-primary/10 shadow-sm"
-                    >
-                      {logoUrl ? (
-                        <Image
-                          src={logoUrl}
-                          alt={`${studioName} logo`}
-                          width={48}
-                          height={48}
-                          unoptimized
-                          className="size-full object-cover"
-                        />
-                      ) : (
+                    <DesignerLogoAvatar
+                      testId="dashboard-preview-logo"
+                      logoUrl={logoUrl}
+                      alt={`${studioName} logo`}
+                      sizePx={48}
+                      className="relative z-10 mx-auto -mt-8 size-12 bg-primary/10 shadow-sm"
+                      fallback={
                         <InitialsAvatar
                           seed={studioName}
                           fallbackSeed={studioLocation}
                           alt={`${studioName} generated profile initials`}
                           size={48}
                         />
-                      )}
-                    </div>
+                      }
+                    />
                     <div>
                       <div className="text-base font-medium text-foreground">{studioName}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{studioLocation}</div>

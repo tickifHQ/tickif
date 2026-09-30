@@ -193,7 +193,7 @@ export function DesignerLogoInput({
       ) : null}
 
       <div className={cn('relative', sizeClassName)}>
-        <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50 shadow-xs">
+        <div className="relative size-full overflow-hidden rounded-full border border-dashed border-border bg-muted/50 shadow-xs">
           <button
             ref={buttonRef}
             type="button"
@@ -289,7 +289,7 @@ export function DesignerLogoInput({
           <div className="flex flex-col items-center p-5">
             <div
               data-testid="saved-logo-preview"
-              className="relative aspect-square w-full max-w-48 overflow-hidden rounded-xl border border-border bg-muted"
+              className="relative aspect-square w-full max-w-48 overflow-hidden rounded-full border border-border bg-muted"
             >
               {value.logoUrl ? (
                 <Image
