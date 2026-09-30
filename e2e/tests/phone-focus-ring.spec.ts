@@ -174,6 +174,64 @@ test('composite fields show one visible focus indicator across login and designe
     });
 
     await page.goto('/designer/projects/new');
+    const apartment = page.getByRole('combobox', { name: 'Apartment / Building name' });
+    await apartment.fill('Prestige');
+    await page.getByRole('option', { name: /Prestige Lakeside/i }).click();
+    await expect(apartment).toHaveValue('Prestige Lakeside');
+    await apartment.click();
+    const apartmentMenu = page.getByRole('listbox');
+    await expect(apartmentMenu).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('apartment-selector-desktop.png'),
+      animations: 'disabled',
+    });
+    await apartment.press('Tab');
+    await expect(apartmentMenu).toBeHidden();
+    await expect(apartment).not.toBeFocused();
+    await apartment.fill('Casa');
+    await apartment.press('Enter');
+    await expect(apartment).toHaveValue('Casagrand First City');
+    await apartment.fill('Independent Residency');
+    await expect(page.getByText(/keep this custom apartment name/)).toBeVisible();
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await apartment.fill('');
+    await apartment.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+    await expect(apartmentMenu).toBeVisible();
+    await expect
+      .poll(() =>
+        apartmentMenu.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left >= 0 && rect.right <= window.innerWidth;
+        }),
+      )
+      .toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('apartment-selector-mobile.png'),
+      animations: 'disabled',
+    });
+
+    await page.setViewportSize({ width: 320, height: 360 });
+    await apartment.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+    await apartment.press('ArrowDown');
+    await apartment.press('ArrowDown');
+    await apartment.press('ArrowDown');
+    await expect
+      .poll(() =>
+        apartmentMenu.evaluate((element) => {
+          const menu = element.getBoundingClientRect();
+          const last = element.querySelector('[role="option"]:last-child')!.getBoundingClientRect();
+          return last.top >= menu.top && last.bottom <= menu.bottom;
+        }),
+      )
+      .toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('apartment-selector-short-mobile.png'),
+      animations: 'disabled',
+    });
+    await apartment.press('Enter');
+    await expect(apartment).toHaveValue('Sea View');
+    await page.setViewportSize({ width: 1280, height: 900 });
     await expect(page.getByRole('button', { name: /Step 4 Project images/ })).toBeVisible();
     await page.getByRole('button', { name: /Step 4 Project images/ }).click();
     const projectUpload = page.locator('input[type="file"]').first();
