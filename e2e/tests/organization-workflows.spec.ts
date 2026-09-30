@@ -411,20 +411,20 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     const closeStudio = dangerZone.getByRole('button', { name: 'Close studio', exact: true });
     await expect(closeStudio).toBeVisible();
     await closeStudio.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath('close-studio-desktop.png') });
+    await page.screenshot({ path: testInfo.outputPath('close-studio-desktop.png'), animations: 'disabled' });
     await closeStudio.click();
     const dialog = page.getByRole('alertdialog', { name: 'Close your studio?' });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('all its branches');
     await expect(dialog.getByRole('button', { name: 'Close studio', exact: true })).toBeDisabled();
-    await page.screenshot({ path: testInfo.outputPath('close-studio-dialog-desktop.png') });
+    await page.screenshot({ path: testInfo.outputPath('close-studio-dialog-desktop.png'), animations: 'disabled' });
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     await expect(closeStudio).toBeFocused();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await closeStudio.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath('close-studio-mobile.png') });
+    await page.screenshot({ path: testInfo.outputPath('close-studio-mobile.png'), animations: 'disabled' });
     await closeStudio.click();
     await expect(dialog).toBeVisible();
     const bounds = await dialog.boundingBox();
@@ -436,7 +436,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     await expect(confirm).toBeDisabled();
     await dialog.getByRole('textbox').fill(first.organization.slug);
     await expect(confirm).toBeEnabled();
-    await page.screenshot({ path: testInfo.outputPath('close-studio-dialog-mobile.png') });
+    await page.screenshot({ path: testInfo.outputPath('close-studio-dialog-mobile.png'), animations: 'disabled' });
     await confirm.click();
     await expect(dangerZone.getByText('Studio closure in progress', { exact: true })).toBeVisible();
     await expect(dangerZone.getByRole('button', { name: 'Restore studio' })).toBeVisible();
@@ -446,7 +446,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     await expect(dangerZone.getByRole('button', { name: 'Restore studio' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'View studio closure and recovery' })).toBeVisible();
     await dangerZone.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath('close-studio-recovery-mobile.png') });
+    await page.screenshot({ path: testInfo.outputPath('close-studio-recovery-mobile.png'), animations: 'disabled' });
     await dangerZone.getByRole('button', { name: 'Restore studio' }).click();
     await expect(closeStudio).toBeVisible();
     expect((await read(context, '/api/orgs/retention', organizationRetentionResponseSchema)).retention).toBeNull();
@@ -454,7 +454,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     await expect(closeStudio).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 900 });
     await closeStudio.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath('close-studio-restored-desktop.png') });
+    await page.screenshot({ path: testInfo.outputPath('close-studio-restored-desktop.png'), animations: 'disabled' });
   } finally {
     await adminContext.close();
     await memberContext.close();
