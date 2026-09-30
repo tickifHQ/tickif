@@ -139,6 +139,7 @@ export const dashboardService = {
       shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.profileSlug),
       heroCoverUrl,
       publiclyVisible: publication.publiclyVisible,
+      portfolioBasicsComplete: publication.missingRequiredFields.length === 0,
       verificationStatus: effectiveVerificationStatus(profile),
     };
   },

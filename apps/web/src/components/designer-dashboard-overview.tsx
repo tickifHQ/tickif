@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type {
   CompletionStep,
+  ProjectListItem,
   ProfileCompletionResponse,
   ProfileDashboardResponse,
 } from '@repo/contracts';
@@ -13,9 +14,15 @@ import { DashboardRightRailTransition } from '@/components/dashboard-right-rail-
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
   ArrowRight,
+  BarChart3,
   CalendarDays,
   Check,
+  CircleCheck,
+  Clock3,
   Copy,
+  Folders,
+  ImagePlus,
+  MessagesSquare,
   Plus,
   Shield,
   ShieldPlus,
@@ -34,6 +41,144 @@ type VerificationPrompt = {
   title: string;
   description: string;
 };
+
+type DashboardMetricCardProps = {
+  label: string;
+  value: number;
+  href: string;
+  metricKey: string;
+  icon: React.ReactNode;
+};
+
+function DashboardMetricCard({ label, value, href, metricKey, icon }: DashboardMetricCardProps) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <Card
+        radius="2xl"
+        className="h-full p-4 transition-[border-color,box-shadow,transform] group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div data-metric={metricKey} className="text-2xl font-semibold text-foreground">
+              {value}
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">{label}</div>
+          </div>
+          <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {icon}
+          </span>
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
+function projectStatusLabel(status: ProjectListItem['status']) {
+  switch (status) {
+    case 'published':
+      return 'Live';
+    case 'submitted':
+      return 'Submitted';
+    case 'in_review':
+      return 'In review';
+    case 'changes_requested':
+      return 'Needs changes';
+    case 'rejected':
+      return 'Rejected';
+    case 'archived':
+      return 'Archived';
+    case 'delisted':
+      return 'Delisted';
+    case 'deleted':
+      return 'Deleted';
+    default:
+      return 'Draft';
+  }
+}
+
+function projectStatusVariant(status: ProjectListItem['status']) {
+  if (status === 'published') return 'success' as const;
+  if (status === 'submitted' || status === 'in_review') return 'warning' as const;
+  if (status === 'changes_requested' || status === 'rejected' || status === 'deleted') {
+    return 'destructive' as const;
+  }
+  return 'secondary' as const;
+}
+
+function formatProjectUpdatedAt(value: string) {
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function canEditProject(status: ProjectListItem['status']) {
+  return (
+    status === 'published' ||
+    status === 'draft' ||
+    status === 'changes_requested' ||
+    status === 'rejected'
+  );
+}
+
+function RecentProjectRow({
+  project,
+  canWriteProjects,
+}: {
+  project: ProjectListItem;
+  canWriteProjects: boolean;
+}) {
+  const content = (
+    <>
+      <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+        {project.coverImageUrl ? (
+          <Image
+            src={project.coverImageUrl}
+            alt=""
+            width={48}
+            height={48}
+            unoptimized
+            className="size-full object-cover"
+          />
+        ) : (
+          <ImagePlus className="size-5 text-muted-foreground" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-foreground">{project.title}</div>
+        <div className="mt-1 truncate text-xs text-muted-foreground">
+          {[project.locality, project.city, project.propertyType].filter(Boolean).join(' · ') ||
+            'Project details pending'}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <Badge variant={projectStatusVariant(project.status)} size="compact">
+          {projectStatusLabel(project.status)}
+        </Badge>
+        <time dateTime={project.updatedAt} className="text-xs text-muted-foreground">
+          {formatProjectUpdatedAt(project.updatedAt)}
+        </time>
+      </div>
+    </>
+  );
+
+  if (!canWriteProjects || !canEditProject(project.status)) {
+    return <div className="flex items-center gap-3 px-4 py-3">{content}</div>;
+  }
+
+  return (
+    <Link
+      href={`/designer/projects/${project.id}/edit`}
+      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+    >
+      {content}
+    </Link>
+  );
+}
 
 function verificationPrompt(
   status: ProfileDashboardResponse['verificationStatus'],
@@ -161,6 +306,8 @@ export function DesignerDashboardOverview({
   portfolioPubliclyVisible = false,
   dashboard,
   completion,
+  recentProjects = [],
+  recentProjectsError,
   dashboardError,
   workspaceKey,
   canWriteProjects = false,
@@ -180,27 +327,27 @@ export function DesignerDashboardOverview({
   portfolioPubliclyVisible?: boolean;
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
+  recentProjects?: ProjectListItem[];
+  recentProjectsError?: string | null;
   dashboardError?: string | null;
   workspaceKey?: string;
   canWriteProjects?: boolean;
   canEditOrganization?: boolean;
   canManageVerification?: boolean;
 }) {
-  const profileDone = completion
-    ? completion.steps.some((step) => step.key === 'profile-completed' && step.done)
-    : dashboard.profileCompletion.missing.length === 0;
+  const portfolioBasicsDone = dashboard.portfolioBasicsComplete;
   const projectDone = completion
     ? completion.steps.some((step) => step.key === 'first-project-uploaded' && step.done)
     : dashboard.projects.total > 0;
   const verification = verificationPrompt(dashboard.verificationStatus);
-  const nextStepsDone = profileDone && verification === null;
+  const nextStepsDone = portfolioBasicsDone && verification === null;
 
   function checklistDescription(step: CompletionStep) {
     if (step.key === 'signed-in-with-google')
       return 'Use Google SSO so your designer workspace stays secure.';
     if (step.key === 'org-created') return 'Set up your workspace on Tickif.';
     if (step.key === 'profile-completed')
-      return 'Add your profile tags, social links, short bio, and customize your portfolio.';
+      return 'Add a cover, logo, display name, tagline, and bio to complete your portfolio.';
     if (step.key === 'first-project-uploaded')
       return 'Upload your first project to make your profile live and present it as a portfolio.';
     return 'Complete this step to keep your designer workspace moving.';
@@ -232,13 +379,19 @@ export function DesignerDashboardOverview({
   }
 
   const trackedChecklistItems: OverviewChecklistItem[] = completion
-    ? completion.steps.map((step) => ({
-        key: step.key,
-        title: step.label,
-        description: checklistDescription(step),
-        done: step.done,
-        action: checklistAction(step),
-      }))
+    ? completion.steps.map((step) => {
+        const dashboardStep =
+          step.key === 'profile-completed'
+            ? { ...step, label: 'Complete portfolio basics', done: portfolioBasicsDone }
+            : step;
+        return {
+          key: dashboardStep.key,
+          title: dashboardStep.label,
+          description: checklistDescription(dashboardStep),
+          done: dashboardStep.done,
+          action: checklistAction(dashboardStep),
+        };
+      })
     : [
         {
           key: 'account-creation',
@@ -264,12 +417,12 @@ export function DesignerDashboardOverview({
         },
         {
           key: 'profile',
-          title: 'Complete profile',
+          title: 'Complete portfolio basics',
           description:
-            'Add your profile tags, social links, short bio, and customize your portfolio.',
-          done: profileDone,
+            'Add a cover, logo, display name, tagline, and bio to complete your portfolio.',
+          done: portfolioBasicsDone,
           action:
-            profileDone || !canEditOrganization ? null : (
+            portfolioBasicsDone || !canEditOrganization ? null : (
               <Button asChild variant="outline" size="compact">
                 <Link href="/designer/portfolio">
                   Manage portfolio
@@ -289,79 +442,354 @@ export function DesignerDashboardOverview({
       )
     : dashboard.profileCompletion.score;
 
+  const portfolioShareCard = (
+    <Card variant="accent" radius="2xl" className="overflow-hidden">
+      <div className="px-4 pt-4">
+        <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
+          <div className="relative h-24 overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))]">
+            {dashboard.heroCoverUrl ? (
+              <Image
+                src={dashboard.heroCoverUrl}
+                alt={`${studioName} portfolio cover`}
+                fill
+                unoptimized
+                loading="eager"
+                sizes="(max-width: 1024px) 100vw, 22rem"
+                className="object-cover"
+              />
+            ) : null}
+          </div>
+          <div className="space-y-2 px-4 py-3 text-center">
+            <div
+              data-testid="dashboard-preview-logo"
+              className="relative z-10 mx-auto -mt-8 size-12 overflow-hidden rounded-xl bg-primary/10 shadow-sm"
+            >
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt={`${studioName} logo`}
+                  width={48}
+                  height={48}
+                  unoptimized
+                  className="size-full object-cover"
+                />
+              ) : (
+                <InitialsAvatar
+                  seed={studioName}
+                  fallbackSeed={studioLocation}
+                  alt={`${studioName} generated profile initials`}
+                  size={48}
+                />
+              )}
+            </div>
+            <div>
+              <div className="text-base font-medium text-foreground">{studioName}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">{studioLocation}</div>
+            </div>
+            {portfolioPubliclyVisible ? (
+              <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
+                <Copy className="size-3.5 shrink-0" />
+                <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
+              </div>
+            ) : (
+              <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                <span className="truncate">Not public yet</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="px-4 py-4">
+        <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
+          ONE LINK. EVERYWHERE.
+        </div>
+        <div className="mt-2 text-2xl font-medium tracking-tight text-foreground">
+          A portfolio worth <span className="text-primary">sharing.</span>
+        </div>
+        {portfolioPubliclyVisible ? (
+          <>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
+            </p>
+            <CopyLinkButton
+              value={portfolioUrl}
+              variant="fancy"
+              size="fancy"
+              className="mt-4 w-full cursor-pointer"
+            />
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Finish your portfolio to unlock a public link you can share anywhere. We&apos;ll show
+              it here the moment your page goes live.
+            </p>
+            {canEditOrganization ? (
+              <Button asChild variant="fancy" size="fancy" className="mt-4 w-full">
+                <Link href="/designer/portfolio">
+                  Complete your portfolio
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            ) : null}
+          </>
+        )}
+      </div>
+    </Card>
+  );
+
+  const rightRailSetupCard = canWriteProjects ? (
+    <Card variant="accent" radius="2xl" className="relative overflow-visible">
+      <div className="relative px-4 pt-4 pb-4">
+        <Badge
+          variant="outline"
+          className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
+        >
+          COMPLETE SETUP
+        </Badge>
+        <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
+          Add your first project
+        </div>
+        <p className="mt-1.5 text-sm font-medium leading-5 text-muted-foreground">
+          It goes public and gets indexed the moment your first project is approved. Usually 24–48
+          hours.
+        </p>
+        <Button
+          asChild
+          size="compact"
+          className="mt-4 w-full rounded-xl text-sm font-medium shadow-md"
+        >
+          <Link href="/designer/projects/new">
+            <Plus className="size-4" />
+            Add first project
+          </Link>
+        </Button>
+      </div>
+    </Card>
+  ) : null;
+
+  const rightRailNextStepsCard = (
+    <div>
+      <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
+        <ShieldPlus className="size-4" />
+        WHAT HAPPENS NEXT
+      </div>
+      <Card radius="2xl" className="overflow-hidden">
+        <RightRailInfoRow
+          icon={<CalendarDays className="size-4" />}
+          title="We review your project"
+          description="A human check, usually within 24–48 hours."
+        />
+        {!portfolioBasicsDone ? (
+          <RightRailInfoRow
+            icon={<User className="size-4" />}
+            title="Round out your profile"
+            description="Add a bio and tags while you wait."
+            href={canEditOrganization ? '/designer/portfolio' : undefined}
+          />
+        ) : null}
+        {verification ? (
+          <RightRailInfoRow
+            icon={<Shield className="size-4" />}
+            title={verification.title}
+            description={verification.description}
+            href={canManageVerification ? '/designer/verification' : undefined}
+          />
+        ) : null}
+      </Card>
+    </div>
+  );
+
   return (
     <div data-testid="designer-dashboard-overview" className="p-4 sm:p-5 lg:p-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Welcome, <span className="text-muted-foreground">{studioName}</span>
-        </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Let&apos;s get your profile ready to go live.
-        </p>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Welcome, <span className="text-muted-foreground">{studioName}</span>
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {trackedChecklistComplete
+              ? 'Manage your projects, enquiries, and portfolio performance.'
+              : "Let's get your portfolio ready to go live."}
+          </p>
+        </div>
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-3">
-        <div className="min-w-0 space-y-4 xl:col-span-2">
-          {dashboardError ? (
-            <Card radius="2xl" className="border-destructive/30 bg-destructive/5">
-              <div className="px-5 py-4">
-                <div className="text-base font-medium text-foreground">
-                  Could not load dashboard summary
-                </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Refresh the page in a moment to try again.
-                </p>
-              </div>
-            </Card>
-          ) : null}
+      {dashboardError ? (
+        <Card radius="2xl" className="mt-5 border-destructive/30 bg-destructive/5">
+          <div className="px-5 py-4">
+            <div className="text-base font-medium text-foreground">
+              Could not load dashboard summary
+            </div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Refresh the page in a moment to try again.
+            </p>
+          </div>
+        </Card>
+      ) : null}
 
-          <section
-            aria-labelledby="profile-completion-heading"
-            className="space-y-3 rounded-3xl bg-profile-completion-background px-2 pt-4 pb-2"
-          >
-            <div data-testid="profile-completion-progress" className="px-2 pt-1">
-              <div className="flex items-end justify-between gap-4">
-                <h2
-                  id="profile-completion-heading"
-                  className="text-lg font-medium text-muted-foreground"
-                >
-                  Complete profile
-                </h2>
-                <div className="text-lg font-medium text-primary">{checklistProgressScore}%</div>
-              </div>
-              <div
-                data-testid="profile-completion-progress-bar"
-                role="progressbar"
-                aria-label="Profile completion"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={checklistProgressScore}
-                className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
-              >
-                <div
-                  className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${checklistProgressScore}%` }}
+      {trackedChecklistComplete ? (
+        <section data-testid="post-setup-overview" className="mt-5">
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="min-w-0 space-y-5 xl:col-span-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DashboardMetricCard
+                  label="Total projects"
+                  value={dashboard.projects.total}
+                  href="/designer/projects"
+                  metricKey="total-projects"
+                  icon={<Folders className="size-5" />}
+                />
+                <DashboardMetricCard
+                  label="Live projects"
+                  value={dashboard.projects.published}
+                  href="/designer/projects?status=published"
+                  metricKey="live-projects"
+                  icon={<CircleCheck className="size-5" />}
+                />
+                <DashboardMetricCard
+                  label="In review"
+                  value={dashboard.projects.inReview}
+                  href="/designer/projects?status=in_review"
+                  metricKey="in-review-projects"
+                  icon={<Clock3 className="size-5" />}
+                />
+                <DashboardMetricCard
+                  label="New enquiries"
+                  value={dashboard.leads.new}
+                  href="/designer/leads?status=new"
+                  metricKey="new-enquiries"
+                  icon={<MessagesSquare className="size-5" />}
                 />
               </div>
-            </div>
 
-            <Card radius="2xl" className="shadow-sm">
-              <div className="px-5 pt-2 pb-4 sm:px-7">
-                {trackedChecklistComplete ? (
-                  <div className="flex items-start gap-4 py-4">
-                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary">
-                      <Check className="size-5" />
+              <Card radius="2xl" className="overflow-hidden">
+                <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-5">
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Recent projects</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Continue working on your latest portfolio updates.
+                    </p>
+                  </div>
+                  <Button asChild variant="ghost" size="compact">
+                    <Link href="/designer/projects">
+                      View all
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+
+                {recentProjectsError ? (
+                  <div className="px-4 py-8 text-center sm:px-5">
+                    <p className="text-sm font-medium text-foreground">
+                      Recent projects could not be loaded.
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Your projects are still available from the Projects page.
+                    </p>
+                  </div>
+                ) : recentProjects.length > 0 ? (
+                  <div className="divide-y divide-border">
+                    {recentProjects.map((project) => (
+                      <RecentProjectRow
+                        key={project.id}
+                        project={project}
+                        canWriteProjects={canWriteProjects}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-8 text-center sm:px-5">
+                    <ImagePlus className="mx-auto size-6 text-muted-foreground" />
+                    <p className="mt-3 text-sm font-medium text-foreground">
+                      No recent projects yet
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Add a project to start building your portfolio.
+                    </p>
+                    {canWriteProjects ? (
+                      <Button asChild size="compact" className="mt-4">
+                        <Link href="/designer/projects/new">
+                          <Plus className="size-4" />
+                          Add project
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
+              </Card>
+
+              <Card variant="muted" radius="2xl" className="p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <BarChart3 className="size-5" />
                     </span>
                     <div>
-                      <div className="text-base font-medium text-foreground">Setup complete</div>
-                      <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-                        Your core workspace setup is done. Keep your portfolio fresh by adding more
-                        projects and sharing your link.
+                      <h2 className="text-base font-semibold text-foreground">
+                        Understand what is working
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Review portfolio views, project performance, and enquiry trends.
                       </p>
                     </div>
                   </div>
-                ) : (
-                  <ol aria-label="Profile setup steps">
+                  <Button asChild variant="outline" size="compact">
+                    <Link href="/designer/analytics">
+                      View analytics
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </Card>
+            </div>
+
+            <DashboardRightRailTransition
+              workspaceKey={workspaceKey ?? portfolioUrl}
+              projectDone={projectDone}
+              nextStepsDone={nextStepsDone}
+              setupCard={rightRailSetupCard}
+              nextStepsCard={rightRailNextStepsCard}
+              shareCard={portfolioShareCard}
+            />
+          </div>
+        </section>
+      ) : (
+        <div className="mt-5 grid gap-5 xl:grid-cols-3">
+          <div className="min-w-0 space-y-4 xl:col-span-2">
+            <section
+              aria-labelledby="profile-completion-heading"
+              className="space-y-3 rounded-3xl bg-profile-completion-background px-2 pt-4 pb-2"
+            >
+              <div data-testid="profile-completion-progress" className="px-2 pt-1">
+                <div className="flex items-end justify-between gap-4">
+                  <h2
+                    id="profile-completion-heading"
+                    className="text-lg font-medium text-muted-foreground"
+                  >
+                    Complete portfolio
+                  </h2>
+                  <div className="text-lg font-medium text-primary">{checklistProgressScore}%</div>
+                </div>
+                <div
+                  data-testid="profile-completion-progress-bar"
+                  role="progressbar"
+                  aria-label="Portfolio setup"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={checklistProgressScore}
+                  className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width]"
+                    style={{ width: `${checklistProgressScore}%` }}
+                  />
+                </div>
+              </div>
+
+              <Card radius="2xl" className="shadow-sm">
+                <div className="px-5 pt-2 pb-4 sm:px-7">
+                  <ol aria-label="Portfolio setup steps">
                     {trackedChecklistItems.map((item, index) => (
                       <ChecklistStep
                         key={item.key}
@@ -370,187 +798,21 @@ export function DesignerDashboardOverview({
                       />
                     ))}
                   </ol>
-                )}
-              </div>
-            </Card>
-          </section>
-        </div>
+                </div>
+              </Card>
+            </section>
+          </div>
 
-        <DashboardRightRailTransition
-          workspaceKey={workspaceKey ?? portfolioUrl}
-          projectDone={projectDone || !canWriteProjects}
-          nextStepsDone={nextStepsDone}
-          setupCard={
-            canWriteProjects ? (
-              <Card variant="accent" radius="2xl" className="relative overflow-visible">
-                <div className="relative px-4 pt-4 pb-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <Badge
-                        variant="outline"
-                        className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
-                      >
-                        COMPLETE SETUP
-                      </Badge>
-                      <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
-                        Add your first project
-                      </div>
-                      <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
-                        It goes public and gets indexed the moment your first project is approved.
-                        Usually 24–48 hours.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    asChild
-                    size="compact"
-                    className="mt-4 w-full rounded-xl text-sm font-medium shadow-md"
-                  >
-                    <Link href="/designer/projects/new">
-                      <Plus className="size-4" />
-                      Add first project
-                    </Link>
-                  </Button>
-                </div>
-              </Card>
-            ) : null
-          }
-          nextStepsCard={
-            <div>
-              <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
-                <ShieldPlus className="size-4" />
-                WHAT HAPPENS NEXT
-              </div>
-              <Card radius="2xl" className="overflow-hidden">
-                <RightRailInfoRow
-                  icon={<CalendarDays className="size-4" />}
-                  title="We review your project"
-                  description="A human check, usually within 24–48 hours."
-                />
-                {!profileDone ? (
-                  <RightRailInfoRow
-                    icon={<User className="size-4" />}
-                    title="Round out your profile"
-                    description="Add a bio and tags while you wait."
-                    href={canEditOrganization ? '/designer/portfolio' : undefined}
-                  />
-                ) : null}
-                {verification ? (
-                  <RightRailInfoRow
-                    icon={<Shield className="size-4" />}
-                    title={verification.title}
-                    description={verification.description}
-                    href={canManageVerification ? '/designer/verification' : undefined}
-                  />
-                ) : null}
-              </Card>
-            </div>
-          }
-          shareCard={
-            <Card variant="accent" radius="2xl" className="overflow-hidden">
-              <div className="px-4 pt-4">
-                <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
-                  <div className="relative h-24 overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))]">
-                    {dashboard.heroCoverUrl ? (
-                      <Image
-                        src={dashboard.heroCoverUrl}
-                        alt={`${studioName} portfolio cover`}
-                        fill
-                        unoptimized
-                        sizes="(max-width: 1024px) 100vw, 22rem"
-                        className="object-cover"
-                      />
-                    ) : null}
-                  </div>
-                  <div className="space-y-2 px-4 py-3 text-center">
-                    <div
-                      data-testid="dashboard-preview-logo"
-                      className="relative z-10 mx-auto -mt-8 size-12 overflow-hidden rounded-xl bg-primary/10 shadow-sm"
-                    >
-                      {logoUrl ? (
-                        <Image
-                          src={logoUrl}
-                          alt={`${studioName} logo`}
-                          width={48}
-                          height={48}
-                          unoptimized
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <InitialsAvatar
-                          seed={studioName}
-                          fallbackSeed={studioLocation}
-                          alt={`${studioName} generated profile initials`}
-                          size={48}
-                        />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-base font-medium text-foreground">{studioName}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">{studioLocation}</div>
-                    </div>
-                    {/* E-278: only reveal the public URL chip once the portfolio is
-                      actually live. Otherwise show a neutral "not public yet" chip
-                      so no unpublished/placeholder link leaks. */}
-                    {portfolioPubliclyVisible ? (
-                      <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
-                        <Copy className="size-3.5 shrink-0" />
-                        <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
-                      </div>
-                    ) : (
-                      <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                        <span className="truncate">Not public yet</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="px-4 py-4">
-                <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
-                  ONE LINK. EVERYWHERE.
-                </div>
-                <div className="mt-2 text-2xl font-medium tracking-tight text-foreground">
-                  A portfolio worth <span className="text-primary">sharing.</span>
-                </div>
-                {/*
-                E-278: the copyable public link is only offered once the portfolio
-                is genuinely live (backend `publiclyVisible`). Until then the card
-                explains what's left and links to Portfolio Settings — it never
-                exposes an unpublished or placeholder `/d/{slug}` URL to copy.
-              */}
-                {portfolioPubliclyVisible ? (
-                  <>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
-                    </p>
-                    <CopyLinkButton
-                      value={portfolioUrl}
-                      variant="fancy"
-                      size="fancy"
-                      className="mt-4 w-full cursor-pointer"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Finish your portfolio to unlock a public link you can share anywhere.
-                      We&apos;ll show it here the moment your page goes live.
-                    </p>
-                    {canEditOrganization && (
-                      <Button asChild variant="fancy" size="fancy" className="mt-4 w-full">
-                        <Link href="/designer/portfolio">
-                          Complete your portfolio
-                          <ArrowRight className="size-4" />
-                        </Link>
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            </Card>
-          }
-        />
-      </div>
+          <DashboardRightRailTransition
+            workspaceKey={workspaceKey ?? portfolioUrl}
+            projectDone={projectDone || !canWriteProjects}
+            nextStepsDone={nextStepsDone}
+            setupCard={rightRailSetupCard}
+            nextStepsCard={rightRailNextStepsCard}
+            shareCard={portfolioShareCard}
+          />
+        </div>
+      )}
     </div>
   );
 }

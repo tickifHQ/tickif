@@ -150,6 +150,7 @@ describe('dashboardService.getProfileDashboard', () => {
       shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
       heroCoverUrl: 'https://cdn.example.com/portfolio-cover.png',
       publiclyVisible: true,
+      portfolioBasicsComplete: true,
       verificationStatus: null,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
@@ -259,6 +260,7 @@ describe('dashboardService.getProfileDashboard', () => {
     const result = await dashboardService.getProfileDashboard(input);
 
     expect(result.publiclyVisible).toBe(true);
+    expect(result.portfolioBasicsComplete).toBe(true);
   });
 
   it('treats a missing portfolio row as incomplete even when the profile is active', async () => {
@@ -284,8 +286,20 @@ describe('dashboardService.getProfileDashboard', () => {
       const result = await dashboardService.getProfileDashboard(input);
 
       expect(result.publiclyVisible).toBe(false);
+      expect(result.portfolioBasicsComplete).toBe(false);
     },
   );
+
+  it('requires a hero cover for portfolio basics even for a legacy active profile', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ profileStatus: 'active', heroImageId: null }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.publiclyVisible).toBe(true);
+    expect(result.portfolioBasicsComplete).toBe(false);
+  });
 
   it('reports publiclyVisible=false for a draft (incomplete) profile even with the link on', async () => {
     vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
