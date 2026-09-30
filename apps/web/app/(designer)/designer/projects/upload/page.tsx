@@ -22,5 +22,10 @@ export default async function DesignerProjectUploadPage({
   if (!capabilities?.writeProjects) redirect('/unauthorized');
   const params = await searchParams;
 
-  return <DesignerProjectUpload initialProjectId={params.projectId} />;
+  return (
+    <DesignerProjectUpload
+      initialProjectId={params.projectId}
+      canSubmitProjects={capabilities.submitProjects}
+    />
+  );
 }
