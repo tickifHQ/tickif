@@ -72,8 +72,8 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
               width={96}
               height={96}
               style={{
-                objectFit: 'contain',
-                borderRadius: 16,
+                objectFit: 'cover',
+                borderRadius: '50%',
                 backgroundColor: '#ffffff',
                 flexShrink: 0,
               }}
@@ -87,7 +87,7 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
                 width: 96,
                 height: 96,
                 flexShrink: 0,
-                borderRadius: 16,
+                borderRadius: '50%',
                 backgroundColor: accent,
                 color: '#07130f',
                 fontSize: 32,

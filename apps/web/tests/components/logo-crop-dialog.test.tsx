@@ -37,7 +37,7 @@ vi.mock('react-easy-crop', () => ({
 }));
 
 describe('LogoCropDialog', () => {
-  it('uses one square crop workflow and returns the selected pixels', async () => {
+  it('previews the circular logo while returning square crop pixels', async () => {
     const onSave = vi.fn();
     const user = userEvent.setup();
     render(
@@ -56,7 +56,8 @@ describe('LogoCropDialog', () => {
     expect(screen.getByRole('dialog', { name: 'Crop logo' })).toHaveClass('sm:max-w-md');
     expect(screen.getByTestId('logo-crop-surface')).toHaveClass('h-[min(42dvh,22rem)]', 'min-h-56');
     expect(screen.getByTestId('cropper')).toHaveAttribute('data-aspect', '1');
-    expect(screen.getByTestId('cropper')).toHaveAttribute('data-crop-shape', 'rect');
+    expect(screen.getByTestId('cropper')).toHaveAttribute('data-crop-shape', 'round');
+    expect(screen.getByText(/circular preview looks right/i)).toBeInTheDocument();
     const zoom = screen.getByRole('slider', { name: 'Logo zoom' });
     const chooseAnother = screen.getByRole('button', { name: 'Choose another' });
     const saveLogo = screen.getByRole('button', { name: 'Save logo' });
