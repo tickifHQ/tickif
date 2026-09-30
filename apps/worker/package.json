@@ -11,6 +11,7 @@
     "search:reindex": "tsx src/reindex-search.ts",
     "media:reprocess": "tsx src/reprocess-media.ts",
     "media:backfill-duplicates": "tsx src/backfill-duplicate-flags.ts",
+    "media:identify": "tsx src/identify-image.ts",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { generateDerivatives, MEDIA_VARIANTS, MEDIA_FORMATS } from '../../src/media/derivatives.js';
+import { readImageSignature, signatureToken } from '../../src/media/signature.js';
 
 let source: Buffer;
 let orientedSource: Buffer;
@@ -86,5 +88,36 @@ describe('generateDerivatives', () => {
     const meta = await sharp(d!.buffer).metadata();
     expect(meta.exif).toBeUndefined();
     expect(meta.orientation).toBeUndefined();
+  });
+
+  it.each(['webp', 'avif'] as const)(
+    'embeds an identifiable image signature in a %s public derivative',
+    async (format) => {
+      const imageId = '12345678-90ab-4cde-8f01-23456789abcd';
+      const photo = await readFile(
+        new URL(
+          '../../../web/public/images/home-hero/warm-pendant-living-room.jpg',
+          import.meta.url,
+        ),
+      );
+      const original = Buffer.from(photo);
+      const [derivative] = await generateDerivatives(photo, {
+        variants: [{ variant: 'thumb', width: 320 }],
+        formats: [format],
+        watermark: { text: 'tickif', opacity: 0.65, scale: 0.08 },
+        signatureId: imageId,
+      });
+
+      expect(await readImageSignature(derivative!.buffer)).toBe(signatureToken(imageId));
+      expect(photo).toEqual(original);
+    },
+  );
+
+  it('does not mistake an ordinary derivative for a signed image', async () => {
+    const [derivative] = await generateDerivatives(source, {
+      variants: [{ variant: 'thumb', width: 320 }],
+      formats: ['webp'],
+    });
+    expect(await readImageSignature(derivative!.buffer)).toBeNull();
   });
 });
