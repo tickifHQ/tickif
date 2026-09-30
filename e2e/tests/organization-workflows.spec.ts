@@ -8,6 +8,7 @@ import {
   currentProfileResponseSchema,
   listLeadsResponseSchema,
   listProjectsResponseSchema,
+  organizationRetentionResponseSchema,
   portfolioResponseSchema,
   verificationStateResponseSchema,
 } from '@repo/contracts';
@@ -47,6 +48,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
   await assertTestDb();
   const userIds: string[] = [];
   const organizationIds: string[] = [];
+  const projectIds: string[] = [];
   const adminContext = await browser.newContext({ baseURL: webUrl });
   const memberContext = await browser.newContext({ baseURL: webUrl });
   const suffix = randomUUID();
@@ -118,6 +120,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
         title: `${name} Draft ${label}`,
         status: 'draft',
       });
+      projectIds.push(...published.map((project) => project.id), draft.id);
       const lead = await makeLead({
         organizationId: organization.id,
         teamId: profile.teamId,
@@ -170,6 +173,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
       title: `Member Draft ${label}`,
       status: 'draft',
     });
+    projectIds.push(assignedProject.id);
     first.projectCount++;
     const assignedLead = await makeLead({
       organizationId: first.organization.id,
@@ -304,6 +308,9 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     ).toContain(first.lead.id);
     expect((await adminContext.request.get(`${apiUrl}/api/billing/payments`)).status()).toBe(403);
     const adminPage = await adminContext.newPage();
+    await adminPage.goto('/designer/portfolio');
+    await expect(adminPage.getByPlaceholder('your-studio', { exact: true })).toBeVisible();
+    await expect(adminPage.getByRole('region', { name: 'Danger zone' })).toHaveCount(0);
     await adminPage.goto('/designer/plan-billing');
     await expect(
       adminPage.getByRole('heading', { name: 'Billing access restricted', exact: true }),
@@ -400,12 +407,71 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     expect(
       (await read(context, '/api/profiles/me/portfolio', portfolioResponseSchema)).tagline,
     ).toBe('Admin updated Amber portfolio');
+
+    // The owner closes only this disposable studio through the actual UI, then recovers it.
+    await page.goto('/designer/portfolio');
+    const dangerZone = page.getByRole('region', { name: 'Danger zone' });
+    const closeStudio = dangerZone.getByRole('button', { name: 'Close studio', exact: true });
+    await expect(closeStudio).toBeVisible();
+    await closeStudio.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('close-studio-desktop.png') });
+    await closeStudio.click();
+    const dialog = page.getByRole('alertdialog', { name: 'Close your studio?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('all its branches');
+    await expect(dialog.getByRole('button', { name: 'Close studio', exact: true })).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath('close-studio-dialog-desktop.png') });
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(closeStudio).toBeFocused();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await closeStudio.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('close-studio-mobile.png') });
+    await closeStudio.click();
+    await expect(dialog).toBeVisible();
+    const bounds = await dialog.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    const confirm = dialog.getByRole('button', { name: 'Close studio', exact: true });
+    await dialog.getByRole('textbox').fill('incorrect-studio');
+    await expect(confirm).toBeDisabled();
+    await dialog.getByRole('textbox').fill(first.organization.slug);
+    await expect(confirm).toBeEnabled();
+    await page.screenshot({ path: testInfo.outputPath('close-studio-dialog-mobile.png') });
+    await confirm.click();
+    await expect(dangerZone.getByText('Studio closure in progress', { exact: true })).toBeVisible();
+    await expect(dangerZone.getByRole('button', { name: 'Restore studio' })).toBeVisible();
+    const closed = await read(context, '/api/orgs/retention', organizationRetentionResponseSchema);
+    expect(closed.retention?.status).toBe('deletion_requested');
+    await page.reload();
+    await expect(dangerZone.getByRole('button', { name: 'Restore studio' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View studio closure and recovery' })).toBeVisible();
+    await dangerZone.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('close-studio-recovery-mobile.png') });
+    await dangerZone.getByRole('button', { name: 'Restore studio' }).click();
+    await expect(closeStudio).toBeVisible();
+    expect((await read(context, '/api/orgs/retention', organizationRetentionResponseSchema)).retention).toBeNull();
+    await page.reload();
+    await expect(closeStudio).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await closeStudio.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('close-studio-restored-desktop.png') });
   } finally {
     await adminContext.close();
     await memberContext.close();
     await assertTestDb();
-    if (organizationIds.length)
+    if (projectIds.length) {
+      // Production moderation history is intentionally retained; these IDs belong only to this test.
+      await db.delete(schema.projectReviewComment).where(inArray(schema.projectReviewComment.projectId, projectIds));
+      await db.delete(schema.projectModerationEvent).where(inArray(schema.projectModerationEvent.projectId, projectIds));
+    }
+    if (organizationIds.length) {
+      // Closure intentionally restricts production deletion; remove only these test fixtures.
+      await db.delete(schema.organizationRetention).where(inArray(schema.organizationRetention.organizationId, organizationIds));
       await db.delete(schema.organization).where(inArray(schema.organization.id, organizationIds));
+    }
     if (userIds.length) await db.delete(schema.user).where(inArray(schema.user.id, userIds));
   }
 });
