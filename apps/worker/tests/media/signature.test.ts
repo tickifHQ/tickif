@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { embedImageSignature, readImageSignature, signatureToken } from '../../src/media/signature.js';
+import {
+  embedImageSignature,
+  readImageSignature,
+  signatureToken,
+} from '../../src/media/signature.js';
 
 describe('image signatures', () => {
+  it('limits per-channel perturbations to avoid pronounced texture in smooth areas', () => {
+    const pixels = Buffer.from(
+      Array.from({ length: 256 * 192 * 3 }, (_, index) => 80 + (index % 90)),
+    );
+    const original = Buffer.from(pixels);
+
+    embedImageSignature(pixels, 256, 192, 3, 'image-one');
+
+    const maximumChange = pixels.reduce(
+      (maximum, value, index) => Math.max(maximum, Math.abs(value - original[index]!)),
+      0,
+    );
+    expect(maximumChange).toBeLessThanOrEqual(6);
+  });
+
   it('recovers distinct IDs from losslessly encoded pixels without modifying alpha', async () => {
     const width = 256;
     const height = 192;
@@ -16,7 +35,9 @@ describe('image signatures', () => {
       }
 
       expect(embedImageSignature(pixels, width, height, 4, imageId)).toBe(true);
-      const encoded = await sharp(pixels, { raw: { width, height, channels: 4 } }).png().toBuffer();
+      const encoded = await sharp(pixels, { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer();
 
       expect(await readImageSignature(encoded)).toBe(signatureToken(imageId));
       expect(signatureToken(imageId)).not.toBe(signatureToken('unrelated-image'));

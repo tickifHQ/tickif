@@ -32,16 +32,19 @@ afterEach(() => {
 });
 
 describe('media:identify', () => {
-  it.each([{ prefix: [] }, { prefix: ['--'] }])('accepts the documented optional argument separator $prefix', async ({ prefix }) => {
-    process.argv = ['node', 'identify-image.ts', ...prefix, 'photo.webp', 'image-id'];
+  it.each([{ prefix: [] }, { prefix: ['--'] }])(
+    'accepts the documented optional argument separator $prefix',
+    async ({ prefix }) => {
+      process.argv = ['node', 'identify-image.ts', ...prefix, 'photo.webp', 'image-id'];
 
-    await import('../src/identify-image.js');
+      await import('../src/identify-image.js');
 
-    await vi.waitFor(() => expect(console.log).toHaveBeenCalledWith('Image ID matches.'));
-    expect(mocks.readFile).toHaveBeenCalledWith('photo.webp');
-    expect(mocks.signatureToken).toHaveBeenCalledWith('image-id');
-    expect(process.exitCode).toBeUndefined();
-  });
+      await vi.waitFor(() => expect(console.log).toHaveBeenCalledWith('Image ID matches.'));
+      expect(mocks.readFile).toHaveBeenCalledWith('photo.webp');
+      expect(mocks.signatureToken).toHaveBeenCalledWith('image-id');
+      expect(process.exitCode).toBeUndefined();
+    },
+  );
 
   it('reports a nonzero exit code for a different candidate ID', async () => {
     process.argv = ['node', 'identify-image.ts', 'photo.avif', 'different-id'];
