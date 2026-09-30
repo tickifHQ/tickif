@@ -48,6 +48,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
   await assertTestDb();
   const userIds: string[] = [];
   const organizationIds: string[] = [];
+  const projectIds: string[] = [];
   const adminContext = await browser.newContext({ baseURL: webUrl });
   const memberContext = await browser.newContext({ baseURL: webUrl });
   const suffix = randomUUID();
@@ -119,6 +120,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
         title: `${name} Draft ${label}`,
         status: 'draft',
       });
+      projectIds.push(...published.map((project) => project.id), draft.id);
       const lead = await makeLead({
         organizationId: organization.id,
         teamId: profile.teamId,
@@ -171,6 +173,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
       title: `Member Draft ${label}`,
       status: 'draft',
     });
+    projectIds.push(assignedProject.id);
     first.projectCount++;
     const assignedLead = await makeLead({
       organizationId: first.organization.id,
@@ -459,6 +462,11 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     await adminContext.close();
     await memberContext.close();
     await assertTestDb();
+    if (projectIds.length) {
+      // Production moderation history is intentionally retained; these IDs belong only to this test.
+      await db.delete(schema.projectReviewComment).where(inArray(schema.projectReviewComment.projectId, projectIds));
+      await db.delete(schema.projectModerationEvent).where(inArray(schema.projectModerationEvent.projectId, projectIds));
+    }
     if (organizationIds.length) {
       // Closure intentionally restricts production deletion; remove only these test fixtures.
       await db.delete(schema.organizationRetention).where(inArray(schema.organizationRetention.organizationId, organizationIds));
