@@ -52,13 +52,13 @@ function DesignerCard({
           </div>
           <CardContent className="flex min-h-32 flex-1 flex-col px-3 py-3">
             <div className="flex min-w-0 items-start gap-2">
-              <Avatar className="size-10 shrink-0 rounded-lg bg-muted shadow-sm">
+              <Avatar className="size-10 shrink-0 bg-muted shadow-sm">
                 <AvatarImage
                   src={designer.logoUrl ?? undefined}
                   alt={`${designer.displayName} logo`}
-                  className="rounded-lg object-cover"
+                  className="object-cover"
                 />
-                <AvatarFallback className="rounded-lg text-sm">
+                <AvatarFallback className="text-sm">
                   {designer.displayName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
