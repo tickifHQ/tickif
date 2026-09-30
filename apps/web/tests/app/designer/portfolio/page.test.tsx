@@ -39,6 +39,7 @@ describe('DesignerPortfolioPage', () => {
   it.each([null, { editOrganization: false }])(
     'denies portfolio settings without live edit capability (%j)',
     async (capabilities) => {
+      mock.getCurrentOrgRole.mockResolvedValue('member');
       mock.getCurrentOrgCapabilities.mockResolvedValue(capabilities);
       const { default: Page } = await import('../../../../app/(designer)/designer/portfolio/page');
 
@@ -73,5 +74,13 @@ describe('DesignerPortfolioPage', () => {
     render(await Page());
     expect(screen.getByTestId('designer-portfolio-settings')).toBeInTheDocument();
     expect(screen.queryByTestId('close-studio')).not.toBeInTheDocument();
+  });
+
+  it('keeps recovery available to owners when closure removes editing capabilities', async () => {
+    mock.getCurrentOrgCapabilities.mockResolvedValue({ editOrganization: false });
+    const { default: Page } = await import('../../../../app/(designer)/designer/portfolio/page');
+    render(await Page());
+    expect(screen.getByTestId('close-studio')).toBeInTheDocument();
+    expect(screen.queryByTestId('designer-portfolio-settings')).not.toBeInTheDocument();
   });
 });
