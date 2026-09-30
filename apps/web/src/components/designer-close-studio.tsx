@@ -44,7 +44,10 @@ function formatDate(value: string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
     timeZone: 'Asia/Kolkata',
+    timeZoneName: 'short',
   }).format(new Date(value));
 }
 
@@ -52,7 +55,6 @@ function formatDate(value: string) {
 function isRecoverable(retention: OrganizationRetentionState): boolean {
   return (
     retention.status === ORGANIZATION_RETENTION_STATUS.DELETION_REQUESTED &&
-    !retention.holdPlacedAt &&
     new Date(retention.archiveDueAt).getTime() > Date.now()
   );
 }
@@ -242,6 +244,15 @@ export function DesignerCloseStudio({
         </div>
 
         <div className="space-y-4 p-5">
+          {onHold ? (
+            <Alert variant="info" aria-label="Closure paused">
+              <Lock />
+              <AlertTitle>Closure paused under a legal hold</AlertTitle>
+              <AlertDescription>
+                <p>Processing is paused. Contact support for details.</p>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {recoverable ? (
             <Alert variant="warning" aria-label="Recovery window">
               <RotateCcw />
@@ -254,15 +265,7 @@ export function DesignerCloseStudio({
                 </p>
               </AlertDescription>
             </Alert>
-          ) : onHold ? (
-            <Alert variant="info" aria-label="Closure paused">
-              <Lock />
-              <AlertTitle>Closure paused under a legal hold</AlertTitle>
-              <AlertDescription>
-                <p>Processing is paused. Contact support for details.</p>
-              </AlertDescription>
-            </Alert>
-          ) : (
+          ) : !onHold ? (
             <Alert variant="destructive" aria-label="Permanent deletion scheduled">
               <TriangleAlert />
               <AlertTitle>The recovery window has passed</AlertTitle>
@@ -273,7 +276,7 @@ export function DesignerCloseStudio({
                 </p>
               </AlertDescription>
             </Alert>
-          )}
+          ) : null}
 
           <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
             <UserRound className="size-4 shrink-0 text-success" aria-hidden />
@@ -303,12 +306,12 @@ export function DesignerCloseStudio({
 
   return (
     <DangerZoneFrame>
-      <div className="flex items-start justify-between gap-4 border-b border-destructive/15 bg-destructive/5 p-5">
+      <div className="flex flex-col items-start justify-between gap-4 border-b border-destructive/15 bg-destructive/5 p-5 sm:flex-row">
         <div className="min-w-0">
           <p className="max-w-md text-[13px] leading-relaxed text-muted-foreground">
             Take{' '}
-            <span className="font-medium text-foreground">{organizationName}</span> and its public
-            profile offline. You can restore it during the recovery period before it is permanently
+            <span className="font-medium text-foreground">{organizationName}</span> and all its
+            branches and public profiles offline. You can restore it during the recovery period before it is permanently
             deleted.
           </p>
         </div>
@@ -324,7 +327,7 @@ export function DesignerCloseStudio({
 
       <ul className="grid grid-rows-2 gap-x-8 gap-y-3 p-5 sm:grid-flow-col sm:grid-cols-2">
         <EffectRow icon={EyeOff} tone="destructive">
-          Your public profile and published projects are removed from discovery and search
+          All studio branches, public profiles, and published projects are removed from discovery and search
           immediately.
         </EffectRow>
         <EffectRow icon={Clock} tone="muted">
@@ -355,7 +358,7 @@ export function DesignerCloseStudio({
             Close your studio?
           </DialogTitle>
           <DialogDescription>
-            This takes {organizationName} and its public profile offline and starts the recovery
+            This takes {organizationName}, all its branches, and their public profiles offline and starts the recovery
             period before permanent deletion. Your personal account is not deleted.
           </DialogDescription>
 

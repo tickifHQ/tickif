@@ -16,6 +16,7 @@ export default async function DesignerPortfolioPage() {
       <DesignerPortfolioSettings />
       {organization ? (
         <DesignerCloseStudio
+          key={organization.id}
           organizationSlug={organization.slug}
           organizationName={organization.name}
         />
