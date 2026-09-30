@@ -3,7 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
-import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
+import {
+  assertTestDb,
+  makeDesigner,
+  makeOrganization,
+  makeProject,
+  makeTaxonomy,
+  makeUser,
+} from '@repo/db/testing';
 import { putObject } from '@repo/storage';
 import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
@@ -107,6 +114,33 @@ test.describe('E-278 portfolio publication readiness', () => {
     return { user, organization, profile, portfolioSlug };
   }
 
+  async function completeDashboardSetup(seed: Awaited<ReturnType<typeof seedDesigner>>) {
+    const city = await makeTaxonomy({ kind: 'city', label: 'Chennai' });
+
+    await Promise.all([
+      db.insert(schema.account).values({
+        id: randomUUID(),
+        accountId: seed.user.email,
+        providerId: 'google',
+        userId: seed.user.id,
+      }),
+      db
+        .insert(schema.designerProfileFootprint)
+        .values({ profileId: seed.profile.id, taxonomyId: city.id }),
+      db
+        .update(schema.designerProfile)
+        .set({ address: 'Adyar, Chennai' })
+        .where(eq(schema.designerProfile.id, seed.profile.id)),
+    ]);
+
+    return makeProject({
+      designerId: seed.profile.id,
+      title: 'Calm Chennai Home',
+      status: 'published',
+      citySlug: 'chennai',
+    });
+  }
+
   test('custom cities can be typed, saved, reloaded, and removed on desktop and mobile', async ({
     page,
     context,
@@ -203,7 +237,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.goto('/designer/dashboard');
       await expect(page.getByRole('button', { name: /copy link/i })).toHaveCount(0);
       await expect(page.getByText(seed.portfolioSlug)).toHaveCount(0);
-      await expect(page.getByRole('progressbar', { name: 'Profile completion' })).toBeVisible();
+      await expect(page.getByRole('progressbar', { name: 'Portfolio setup' })).toBeVisible();
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.screenshot({
         path: testInfo.outputPath('dashboard-setup-desktop.png'),
@@ -277,7 +311,7 @@ test.describe('E-278 portfolio publication readiness', () => {
 
   test('a published portfolio exposes the canonical URL everywhere and resolves publicly (state F + regression G)', async ({
     browser,
-  }) => {
+  }, testInfo) => {
     const context = await browser.newContext({ baseURL: webUrl });
     try {
       // Complete + active + public link on -> publicly visible.
@@ -289,6 +323,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         tagline: true,
         heroCover: true,
       });
+      const project = await completeDashboardSetup(seed);
       const canonicalUrl = new URL(`/d/${seed.portfolioSlug}`, webUrl).toString();
       await signInPhone(context, seed.user.phoneNumber);
       await selectOrganization(context, seed.organization.id);
@@ -303,8 +338,39 @@ test.describe('E-278 portfolio publication readiness', () => {
 
       // Dashboard: the share card shows and copies the same canonical URL.
       await page.goto('/designer/dashboard');
+      await expect(page.getByTestId('post-setup-overview')).toBeVisible();
+      await expect(page.getByRole('progressbar', { name: 'Portfolio setup' })).toHaveCount(0);
+      await expect(page.getByText('Setup complete', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Recent projects' })).toBeVisible();
+      await expect(page.getByText(project.title, { exact: true })).toBeVisible();
+      await expect(page.locator('[data-metric="total-projects"]')).toHaveText('1');
+      await expect(page.getByRole('link', { name: 'Add project', exact: true })).toHaveCount(0);
+      await expect(
+        page.getByRole('link', { name: 'Add new project', exact: true }),
+      ).toHaveAttribute('href', '/designer/projects/new');
+      await expect(page.getByTestId('dashboard-workspace-illustration')).toBeVisible();
       await expect(page.getByRole('button', { name: /copy link/i })).toBeVisible();
       await expect(page.getByText(seed.portfolioSlug).first()).toBeVisible();
+      await page.getByRole('link', { name: 'Add new project', exact: true }).click();
+      await expect(page).toHaveURL(/\/designer\/projects\/upload$/);
+      await page.goto('/designer/dashboard');
+      await expect(page.getByTestId('post-setup-overview')).toBeVisible();
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-overview-desktop.png'),
+        animations: 'disabled',
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+      await expect(page.getByTestId('post-setup-overview')).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-overview-mobile.png'),
+        animations: 'disabled',
+        fullPage: true,
+      });
 
       // Regression G: the canonical URL is the real slug — never a placeholder.
       expect(canonicalUrl).not.toContain('/d/studio');

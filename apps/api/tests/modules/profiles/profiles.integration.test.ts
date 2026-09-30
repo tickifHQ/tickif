@@ -401,6 +401,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       // E-278: this fixture is missing hero fields (bio, logo) so the profile
       // never reaches `active` — the dashboard reports it as not publicly visible.
       publiclyVisible: false,
+      portfolioBasicsComplete: false,
       verificationStatus: null,
     });
     const shareUrl = new URL(body.shareUrl);
