@@ -101,7 +101,9 @@ export const dashboardService = {
       presignPortfolioHeroCover(profile.profileId, profile).catch(() => null),
     ]);
 
-    const published = countProjectBucket(counts, ['published']);
+    const published = counts
+      .filter((count) => count.liveStatus === 'published')
+      .reduce((sum, count) => sum + count.count, 0);
     const inReview = countProjectBucket(counts, ['submitted', 'in_review']);
     const draft = countProjectBucket(counts, ['draft', 'changes_requested']);
     const publication = getPortfolioPublicationState(

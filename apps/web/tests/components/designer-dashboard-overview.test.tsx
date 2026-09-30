@@ -51,6 +51,35 @@ const recentProject = {
 } satisfies ProjectListItem;
 
 describe('DesignerDashboardOverview', () => {
+  it.each(['submitted', 'in_review', 'draft'] as const)(
+    'keeps live projects with %s changes visibly live and reachable for editing',
+    (status) => {
+      render(
+        <DesignerDashboardOverview
+          studioName="Livspace"
+          studioLocation="Chennai"
+          portfolioUrl="https://tickif.com/d/livspace"
+          canWriteProjects
+          dashboard={{
+            ...dashboard,
+            portfolioBasicsComplete: true,
+            projects: { total: 1, published: 1, inReview: 0, draft: 0 },
+          }}
+          recentProjects={[
+            { ...recentProject, status, liveStatus: 'published', pendingChanges: true },
+          ]}
+        />,
+      );
+
+      expect(screen.getByText('Live')).toBeInTheDocument();
+      expect(screen.getByText(/Pending changes ·/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Calm Chennai Home/ })).toHaveAttribute(
+        'href',
+        `/designer/projects/${recentProject.id}/edit`,
+      );
+    },
+  );
+
   beforeEach(() => {
     window.sessionStorage.clear();
   });
