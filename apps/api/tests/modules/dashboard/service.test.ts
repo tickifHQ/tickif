@@ -138,7 +138,7 @@ describe('dashboardService.getProfileDashboard', () => {
         missing: ['logo', 'scope'],
       },
       projects: {
-        total: 12,
+        total: 21,
         published: 4,
         inReview: 3,
         draft: 5,
@@ -154,6 +154,24 @@ describe('dashboardService.getProfileDashboard', () => {
       verificationStatus: null,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
+  });
+
+  it('includes every listed project in the total without changing workflow buckets', async () => {
+    vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue([
+      { status: 'published', count: 1 },
+      { status: 'submitted', count: 2 },
+      { status: 'in_review', count: 3 },
+      { status: 'draft', count: 4 },
+      { status: 'changes_requested', count: 5 },
+      { status: 'rejected', count: 6 },
+      { status: 'archived', count: 7 },
+      { status: 'delisted', count: 8 },
+      { status: 'deleted', count: 9 },
+    ]);
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.projects).toEqual({ total: 45, published: 1, inReview: 5, draft: 9 });
   });
 
   it('keeps the dashboard usable when the decorative cover cannot be presigned', async () => {

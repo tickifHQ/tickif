@@ -127,7 +127,8 @@ export const dashboardService = {
         missing: completion.missing,
       },
       projects: {
-        total: published + inReview + draft,
+        // Match the All projects list, including projects outside the active workflow buckets.
+        total: counts.reduce((total, count) => total + count.count, 0),
         published,
         inReview,
         draft,
