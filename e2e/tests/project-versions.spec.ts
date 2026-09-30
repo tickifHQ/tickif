@@ -96,7 +96,7 @@ test('published project edits keep live content through rejection and replace it
     await designerPage.getByRole('button', { name: 'Confirm & submit', exact: true }).click();
     await expect.poll(async () => (await readInternal()).status).toBe('submitted');
     await designerPage.reload();
-    await expect(designerPage.getByText(/Editing is paused during review/)).toBeVisible();
+    await expect(designerPage.getByRole('button', { name: 'Withdraw and edit' })).toBeVisible();
   };
   try {
     await signInProjectAdmin(adminContext, fixture.admin.phoneNumber);
@@ -128,12 +128,39 @@ test('published project edits keep live content through rejection and replace it
       .poll(() => designerPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
       .toBe(true);
     await testInfo.attach('e252-pending-designer-mobile', {
-      body: await designerPage.screenshot({ animations: 'disabled' }),
+      body: await designerPage.screenshot({ animations: 'disabled', caret: 'initial' }),
       contentType: 'image/png',
     });
     await submitPending();
     await expectPublicTitle(target.title);
     await startReview(rejectedTitle);
+    await designerPage.reload();
+    await designerPage.setViewportSize({ width: 1440, height: 960 });
+    await expect(projectName).toHaveValue(rejectedTitle);
+    await expect(projectName).toBeDisabled();
+    await testInfo.attach('live-project-review-locked', {
+      body: await designerPage.screenshot({ animations: 'disabled', caret: 'initial' }),
+      contentType: 'image/png',
+    });
+    await designerPage.getByRole('button', { name: 'Withdraw and edit' }).click();
+    await expect(projectName).toBeEnabled();
+    await expect(projectName).toHaveValue(rejectedTitle);
+    await expect.poll(async () => (await readInternal()).status).toBe('draft');
+    await expectPublicTitle(target.title);
+    await testInfo.attach('live-project-withdrawn-for-editing', {
+      body: await designerPage.screenshot({ animations: 'disabled', caret: 'initial' }),
+      contentType: 'image/png',
+    });
+    await submitPending();
+    await startReview(rejectedTitle);
+    await designerPage.goto('/designer/projects');
+    await expect(designerPage.getByRole('link', { name: /Live 1/ })).toBeVisible();
+    await expect(designerPage.getByRole('link', { name: /In review 1/ })).toBeVisible();
+    await expect(designerPage.getByText('Pending changes · In review')).toBeVisible();
+    await testInfo.attach('live-project-count-and-review-status', {
+      body: await designerPage.screenshot({ animations: 'disabled', caret: 'initial' }),
+      contentType: 'image/png',
+    });
     await expect(
       adminPage.getByRole('heading', { name: 'Reviewing pending changes' }),
     ).toBeVisible();
@@ -141,7 +168,7 @@ test('published project edits keep live content through rejection and replace it
     await expect(comparison.getByText(target.title, { exact: true })).toBeVisible();
     await expect(comparison.getByText(rejectedTitle, { exact: true })).toBeVisible();
     await testInfo.attach('e252-live-pending-review-desktop', {
-      body: await adminPage.screenshot({ animations: 'disabled' }),
+      body: await adminPage.screenshot({ animations: 'disabled', caret: 'initial' }),
       contentType: 'image/png',
     });
     await adminPage.getByRole('button', { name: 'Reject', exact: true }).click();
@@ -183,7 +210,7 @@ test('published project edits keep live content through rejection and replace it
       .poll(() => publicPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
       .toBe(true);
     await testInfo.attach('e252-approved-public-mobile', {
-      body: await publicPage.screenshot({ animations: 'disabled' }),
+      body: await publicPage.screenshot({ animations: 'disabled', caret: 'initial' }),
       contentType: 'image/png',
     });
     const save = publicPage.getByRole('button', { name: 'Sign in to save project' });
@@ -198,7 +225,7 @@ test('published project edits keep live content through rejection and replace it
     await expect(like).toBeEnabled();
     await like.scrollIntoViewIfNeeded();
     await testInfo.attach('e252-public-actions-mobile', {
-      body: await publicPage.screenshot({ animations: 'disabled' }),
+      body: await publicPage.screenshot({ animations: 'disabled', caret: 'initial' }),
       contentType: 'image/png',
     });
     await like.click();

@@ -1512,7 +1512,13 @@ function RoomCard({
   );
 }
 
-export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?: string }) {
+export function DesignerProjectUpload({
+  initialProjectId,
+  canSubmitProjects = false,
+}: {
+  initialProjectId?: string;
+  canSubmitProjects?: boolean;
+}) {
   const router = useRouter();
   const [loadingTaxonomy, setLoadingTaxonomy] = useState(true);
   const [cities, setCities] = useState<TaxonomyTerm[]>([]);
@@ -2949,6 +2955,34 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     }
   }
 
+  async function withdrawForEditing() {
+    if (!projectId || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await api.api.projects[':id'].withdraw.$post({
+        param: { id: projectId },
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok) throw new Error(extractApiMessage(payload, 'Could not withdraw changes.'));
+      const project = parseApiPayload(
+        payload,
+        projectDetailResponseSchema,
+        'Could not read the withdrawn project.',
+      );
+      setProjectStatus(project.status);
+      setIsLive(project.liveStatus === 'published' || project.status === 'published');
+      setPendingChanges(project.pendingChanges ?? false);
+      setNotice('Changes withdrawn from review. You can edit and resubmit them.');
+    } catch (withdrawError) {
+      setError(
+        withdrawError instanceof Error ? withdrawError.message : 'Could not withdraw changes.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function goToProjectList() {
     setSubmittedOpen(false);
     router.push('/designer/projects');
@@ -3370,20 +3404,33 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           <Check className="size-4" />
           <AlertTitle>{pendingChanges ? 'Live · Pending changes' : 'Live project'}</AlertTitle>
           <AlertDescription>
-            {pendingChanges ? (
-              <>
-                Your approved project remains live at its existing URL. These changes are{' '}
-                {projectStatus === 'draft'
-                  ? 'saved as a draft'
-                  : projectStatus?.replaceAll('_', ' ')}
-                .
-                {reviewLocked
-                  ? ' Editing is paused during review.'
-                  : ' Submit them when ready for review.'}
-              </>
-            ) : (
-              'Minor edits appear immediately. Material changes require review while your approved project stays live.'
-            )}
+            <span>
+              {pendingChanges ? (
+                <>
+                  Your approved project remains live at its existing URL. These changes are{' '}
+                  {projectStatus === 'draft'
+                    ? 'saved as a draft'
+                    : projectStatus?.replaceAll('_', ' ')}
+                  .
+                  {reviewLocked
+                    ? ' Withdraw changes to edit and resubmit them.'
+                    : ' Submit them when ready for review.'}
+                </>
+              ) : (
+                'Minor edits appear immediately. Material changes require review while your approved project stays live.'
+              )}
+            </span>
+            {reviewLocked && canSubmitProjects ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2"
+                disabled={saving}
+                onClick={() => void withdrawForEditing()}
+              >
+                Withdraw and edit
+              </Button>
+            ) : null}
           </AlertDescription>
         </Alert>
       ) : null}

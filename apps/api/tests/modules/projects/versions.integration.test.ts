@@ -241,6 +241,94 @@ describe('bounded live project versions', () => {
     ).toBe('Approved home');
   });
 
+  it('keeps a live project in Live while its changes are submitted for review', async () => {
+    const fixture = await publishedProject();
+    await db.insert(schema.member).values({
+      id: `owner-${fixture.actor.id}`,
+      userId: fixture.actor.id,
+      organizationId: fixture.designer.orgId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await projectsRepository.updateDraft(fixture.project.id, { budgetBandSlug: 'luxury' });
+    await projectsRepository.submitWithUploadCounts(fixture.project.id, {
+      actorUserId: fixture.actor.id,
+      expectedStatus: 'draft',
+      action: 'submit',
+      minImageCount: 3,
+    });
+    const params = {
+      userId: fixture.actor.id,
+      activeOrgId: fixture.designer.orgId,
+      activeTeamId: null,
+      limit: 12,
+      offset: 0,
+      sort: '-updatedAt' as const,
+    };
+
+    expect((await projectsRepository.list({ ...params, statuses: ['published'] })).items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: fixture.project.id, liveStatus: 'published' }),
+      ]),
+    );
+    expect(
+      (await projectsRepository.list({ ...params, statuses: ['submitted', 'in_review'] })).total,
+    ).toBe(1);
+    expect(await projectsRepository.countByStatus(params)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 'submitted', liveStatus: 'published', count: 1 }),
+      ]),
+    );
+  });
+
+  it('lets a designer withdraw an in-review live edit and edit its saved fields', async () => {
+    const fixture = await publishedProject();
+    await db.insert(schema.member).values({
+      id: `owner-${fixture.actor.id}`,
+      userId: fixture.actor.id,
+      organizationId: fixture.designer.orgId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await projectsRepository.updateDraft(fixture.project.id, {
+      budgetBandSlug: 'luxury',
+      bhkSlug: '2-bhk',
+    });
+    await projectsRepository.submitWithUploadCounts(fixture.project.id, {
+      actorUserId: fixture.actor.id,
+      expectedStatus: 'draft',
+      action: 'submit',
+      minImageCount: 3,
+    });
+    await projectsRepository.transition({
+      id: fixture.project.id,
+      fromStatus: 'submitted',
+      toStatus: 'in_review',
+      actorUserId: fixture.actor.id,
+      action: 'start_review',
+    });
+
+    const withdrawn = await projectsService.withdraw(fixture.project.id, {
+      userId: fixture.actor.id,
+      userRole: 'designer',
+      isBanned: false,
+      activeOrgId: fixture.designer.orgId,
+      activeTeamId: fixture.designer.teamId,
+    });
+    expect(withdrawn).toMatchObject({
+      status: 'draft',
+      liveStatus: 'published',
+      pendingChanges: true,
+      bhkSlug: '2-bhk',
+    });
+    expect(
+      (await projectsRepository.updateDraft(fixture.project.id, { bhkSlug: '3-bhk' }))?.bhkSlug,
+    ).toBe('3-bhk');
+    expect(
+      (await projectsRepository.findLiveByIdWithRooms(fixture.project.id))?.project.status,
+    ).toBe('published');
+  });
+
   it('duplicates approved scalar fields and media together while material edits are pending', async () => {
     const fixture = await publishedProject();
     await projectsRepository.updateDraft(fixture.project.id, {
