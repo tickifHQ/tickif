@@ -1,6 +1,7 @@
 import sharp, { type Sharp } from 'sharp';
 import { config } from '@repo/config';
 import { buildWatermarkSvg, type WatermarkConfig } from './watermark.js';
+import { embedImageSignature } from './signature.js';
 
 export type DerivativeFormat = 'webp' | 'avif';
 
@@ -36,6 +37,7 @@ export type GenerateOptions = {
   formats?: readonly DerivativeFormat[];
   /** When set, public derivatives are watermarked (E-109); the original is never touched. */
   watermark?: WatermarkConfig | null;
+  signatureId?: string;
   /** Decompression-bomb guard at decode time; defaults to the configured pixel budget. */
   limitInputPixels?: number;
 };
@@ -80,6 +82,15 @@ export async function* eachDerivative(
       },
       limitInputPixels,
     };
+    if (options.signatureId) {
+      embedImageSignature(
+        resizedRaw,
+        resizedInfo.width,
+        resizedInfo.height,
+        resizedInfo.channels,
+        options.signatureId,
+      );
+    }
     const resized = sharp(resizedRaw, resizedInput);
     const base = watermark
       ? resized.composite([

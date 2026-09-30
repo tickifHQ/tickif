@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { generateDerivatives, MEDIA_VARIANTS, MEDIA_FORMATS } from '../../src/media/derivatives.js';
+import { readImageSignature, signatureToken } from '../../src/media/signature.js';
 
 let source: Buffer;
 let orientedSource: Buffer;
@@ -87,4 +89,55 @@ describe('generateDerivatives', () => {
     expect(meta.exif).toBeUndefined();
     expect(meta.orientation).toBeUndefined();
   });
+
+  it.each(['webp', 'avif'] as const)(
+    'embeds an identifiable image signature in a %s public derivative',
+    async (format) => {
+      const imageId = '12345678-90ab-4cde-8f01-23456789abcd';
+      const photo = await readFile(
+        new URL(
+          '../../../web/public/images/home-hero/warm-pendant-living-room.jpg',
+          import.meta.url,
+        ),
+      );
+      const original = Buffer.from(photo);
+      const [derivative] = await generateDerivatives(photo, {
+        variants: [{ variant: 'thumb', width: 320 }],
+        formats: [format],
+        watermark: { text: 'tickif', opacity: 0.65, scale: 0.08 },
+        signatureId: imageId,
+      });
+
+      expect(await readImageSignature(derivative!.buffer)).toBe(signatureToken(imageId));
+      expect(photo).toEqual(original);
+    },
+  );
+
+  it('does not mistake an ordinary derivative for a signed image', async () => {
+    const [derivative] = await generateDerivatives(source, {
+      variants: [{ variant: 'thumb', width: 320 }],
+      formats: ['webp'],
+    });
+    expect(await readImageSignature(derivative!.buffer)).toBeNull();
+  });
+
+  it.each([
+    { photo: 'bright-kitchen-living-room.jpg', width: 640, format: 'avif' as const },
+    { photo: 'neutral-living-room.jpg', width: 1024, format: 'webp' as const },
+  ])(
+    'retains the token with restrained perturbation: $photo $format',
+    async ({ photo, width, format }) => {
+      const input = await readFile(
+        new URL(`../../../web/public/images/home-hero/${photo}`, import.meta.url),
+      );
+      const [derivative] = await generateDerivatives(input, {
+        variants: [{ variant: 'preview', width }],
+        formats: [format],
+        watermark: { text: 'tickif', opacity: 0.65, scale: 0.08 },
+        signatureId: 'image-two',
+      });
+
+      expect(await readImageSignature(derivative!.buffer)).toBe(signatureToken('image-two'));
+    },
+  );
 });
