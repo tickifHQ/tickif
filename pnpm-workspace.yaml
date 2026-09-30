@@ -28,6 +28,8 @@ overrides:
   # MCP HTTP/cache parsing and rate-limit address validation advisories.
   undici: 7.29.1
   ip-address: 10.3.1
+  # Typesense HTTP client: patch Axios HTTP/2, ReDoS, and prototype gadgets.
+  'axios@>=1.0.0 <1.20.0': 1.20.0
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
   sharp: ^0.35.4
   # postcss sourceMappingURL file disclosure (GHSA-6g55-p6wh-862q <=8.5.11,
