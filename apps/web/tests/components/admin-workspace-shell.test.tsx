@@ -38,11 +38,17 @@ describe('AdminWorkspaceShell', () => {
       'href',
       '/review-moderation',
     );
+    const usersLink = screen.getAllByRole('link', { name: 'Users' })[0];
+    expect(usersLink).toHaveAttribute('href', '/users');
+    expect(usersLink?.querySelector('.lucide-users-round')).toBeInTheDocument();
     const profileVerificationLink = screen.getAllByRole('link', {
       name: 'Profile verification',
     })[0];
     expect(profileVerificationLink).toHaveAttribute('href', '/verifications');
     expect(profileVerificationLink?.querySelector('.lucide-shield-user')).toBeInTheDocument();
+    const enquiriesLink = screen.getAllByRole('link', { name: 'Enquiries' })[0];
+    expect(enquiriesLink).toHaveAttribute('href', '/admin/enquiries');
+    expect(enquiriesLink?.querySelector('.lucide-inbox')).toBeInTheDocument();
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
     expect(screen.getByText('Admin User')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Explore Tickif/i })).not.toBeInTheDocument();
@@ -51,6 +57,21 @@ describe('AdminWorkspaceShell', () => {
     expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
     expect(supportLink).toHaveAttribute('target', '_blank');
     expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('marks the admin enquiries destination active', () => {
+    mocks.pathname = '/admin/enquiries';
+    render(
+      <AdminWorkspaceShell adminName="Admin User">
+        <p>Enquiries content</p>
+      </AdminWorkspaceShell>,
+    );
+
+    expect(screen.getAllByRole('link', { name: 'Enquiries' })[0]).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getAllByText('Enquiries').length).toBeGreaterThan(1);
   });
 
   it('exposes the same mobile navigation pattern as the designer workspace', () => {

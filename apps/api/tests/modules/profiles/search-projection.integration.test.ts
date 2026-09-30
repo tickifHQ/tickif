@@ -5,6 +5,41 @@ import { portfolioRepository } from '../../../src/modules/profiles/portfolio-rep
 import { profilesRepository } from '../../../src/modules/profiles/repository.js';
 
 describe('profile search projection events', () => {
+  it('serializes partial city updates and rolls back a change exceeding the shared limit', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    const cities = await Promise.all([
+      makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' }),
+      makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' }),
+    ]);
+    const results = await Promise.allSettled([
+      profilesRepository.updateProfileAndFootprint(
+        designer.id,
+        { customCities: ['Mapusa', 'Vapi', 'Kochi', 'Mysuru'] },
+        {},
+      ),
+      profilesRepository.updateProfileAndFootprint(
+        designer.id,
+        {},
+        { cityIds: cities.map((city) => city.id) },
+      ),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: { name: 'ProfileCityLimitExceededError' },
+    });
+    const [profile, footprint, events] = await Promise.all([
+      profilesRepository.findById(designer.id),
+      profilesRepository.getFootprint(designer.id),
+      db
+        .select()
+        .from(schema.searchProjectionOutbox)
+        .where(eq(schema.searchProjectionOutbox.entityId, designer.id)),
+    ]);
+    const cityCount = footprint.filter((term) => term.kind === 'city').length;
+    expect(cityCount + profile!.customCities.length).toBeLessThanOrEqual(5);
+    expect(events).toHaveLength(1);
+  });
+
   it('commits profile fields, footprint, and the projection event atomically', async () => {
     const designer = await makeDesigner({ status: 'active', displayName: 'Before' });
     const city = await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
@@ -46,6 +81,49 @@ describe('profile search projection events', () => {
         'originals/logos/new',
         null,
         null,
+      ),
+    ).resolves.toBe(false);
+
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(eq(schema.searchProjectionOutbox.entityId, designer.id));
+    expect(events).toHaveLength(0);
+  });
+
+  it('records a designer reindex when the portfolio hero changes', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    await portfolioRepository.findOrCreate(designer.id);
+
+    await expect(
+      portfolioRepository.setHeroImageIfMatch(
+        designer.id,
+        null,
+        `originals/portfolio-covers/${designer.id}/new-cover`,
+      ),
+    ).resolves.toBe(true);
+
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(eq(schema.searchProjectionOutbox.entityId, designer.id));
+    expect(events).toEqual([
+      expect.objectContaining({
+        entityKind: 'designer',
+        operation: 'index',
+      }),
+    ]);
+  });
+
+  it('does not record a hero event when compare-and-set loses the race', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    await portfolioRepository.findOrCreate(designer.id);
+
+    await expect(
+      portfolioRepository.setHeroImageIfMatch(
+        designer.id,
+        'originals/portfolio-covers/stale',
+        `originals/portfolio-covers/${designer.id}/new-cover`,
       ),
     ).resolves.toBe(false);
 

@@ -383,7 +383,7 @@ export function AdminReviewQueue({
                 </Badge>
                 <span>{detail.review.rating} / 5</span>
                 {detail.review.verifiedConsultation ? (
-                  <Badge variant="secondary">Verified consultation</Badge>
+                  <Badge variant="secondary">Verified client</Badge>
                 ) : null}
                 <RefreshIconButton
                   label="Refresh details"
@@ -410,7 +410,7 @@ export function AdminReviewQueue({
                 </div>
                 {detail.review.bookingId ? (
                   <div>
-                    <dt className="text-muted-foreground">Consultation reference</dt>
+                    <dt className="text-muted-foreground">Verification reference</dt>
                     <dd className="break-all">{detail.review.bookingId}</dd>
                   </div>
                 ) : null}

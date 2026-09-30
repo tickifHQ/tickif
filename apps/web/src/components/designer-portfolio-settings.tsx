@@ -113,11 +113,7 @@ const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
 type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
 
 type SectionKey =
-  | 'linkUrl'
-  | 'customizations'
-  | 'hero'
-  | 'experienceCenters'
-  | ToggleableSectionKey;
+  'linkUrl' | 'customizations' | 'hero' | 'experienceCenters' | ToggleableSectionKey;
 
 /** Hero fields that have to be filled before the public page goes live. */
 const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
@@ -1545,6 +1541,7 @@ export function DesignerPortfolioSettings() {
                 subtitle="List your physical experience centers. They appear grouped by state on your public page."
                 expanded={sectionExpanded.experienceCenters}
                 onToggleExpanded={() => toggleExpanded('experienceCenters')}
+                compact
               >
                 <div
                   data-slot="portfolio-section-content"
@@ -1627,7 +1624,10 @@ export function DesignerPortfolioSettings() {
                     ) : null}
                   </div>
                   <div className="space-y-3 px-5 py-4 text-center">
-                    <div className="mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl border border-border bg-amber-700 shadow-sm">
+                    <div
+                      data-testid="portfolio-preview-logo"
+                      className="relative z-10 mx-auto -mt-10 flex size-14 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 shadow-sm"
+                    >
                       {portfolio.logoUrl ? (
                         <Image
                           src={portfolio.logoUrl}
@@ -1638,7 +1638,7 @@ export function DesignerPortfolioSettings() {
                           className="size-full object-cover"
                         />
                       ) : (
-                        <span className="text-lg font-bold text-white">{initials}</span>
+                        <span className="text-lg font-bold text-primary">{initials}</span>
                       )}
                     </div>
                     <div>
@@ -1960,7 +1960,10 @@ function CollapsibleSection({
               {subtitle}
             </p>
           </div>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <ChevronsUpDown
+            className={cn('size-4 shrink-0 text-muted-foreground', compact && 'mt-2')}
+            aria-hidden
+          />
         </button>
         <AnimatedCollapsibleContent open={expanded}>{children}</AnimatedCollapsibleContent>
       </div>

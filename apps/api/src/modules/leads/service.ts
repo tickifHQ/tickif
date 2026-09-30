@@ -40,18 +40,37 @@ function toListItem(row: LeadListRecord): LeadListItem {
     contactNumber: row.contactNumber,
     budgetBand: row.budgetBandSlug,
     assignedMemberId: row.assignedMemberId,
+    source: row.source,
     status: row.status,
     receivedAt: row.receivedAt.toISOString(),
   };
 }
 
 function toDetail(row: LeadDetailRecord): LeadDetailResponse {
+  const consultation =
+    row.consultationBookingId &&
+    row.consultationStatus &&
+    row.consultationPreferredSlots &&
+    row.consultationRequestedAt &&
+    row.consultationRequesterEmail
+      ? {
+          id: row.consultationBookingId,
+          status: row.consultationStatus,
+          requesterEmail: row.consultationRequesterEmail,
+          preferredSlots: row.consultationPreferredSlots,
+          confirmedSlot: row.consultationConfirmedSlot,
+          cancelledBy: row.consultationCancelledBy,
+          cancelReason: row.consultationCancelReason,
+          requestedAt: row.consultationRequestedAt.toISOString(),
+        }
+      : null;
+
   return {
     ...toListItem(row),
     referredProjectId: row.referredProjectId,
     message: row.message,
     notes: row.notes,
-    source: row.source,
+    consultation,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

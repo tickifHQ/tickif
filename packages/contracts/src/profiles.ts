@@ -57,6 +57,8 @@ export const profileDashboardResponseSchema = z
       new: z.number().int(),
     }),
     shareUrl: z.string().url(),
+    /** Presigned dedicated portfolio cover for the dashboard share preview. */
+    heroCoverUrl: z.string().url().nullable(),
     /**
      * E-278: whether `/d/{slug}` actually serves the portfolio right now
      * (`status === 'active' && publicLinkEnabled`). The dashboard uses this to
@@ -280,6 +282,12 @@ const profileBaseSchema = z.object({
   staffCount: z.number().nullable(),
   testimonialBannerEnabled: z.boolean(),
   footprint: z.array(footprintEntrySchema),
+  /**
+   * Free-text service-area cities not present in the seeded `city` taxonomy.
+   * Display-only companion to the taxonomy-backed `footprint` cities; the two
+   * together are capped at PROFILE_FOOTPRINT_LIMITS.city.
+   */
+  customCities: z.array(z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -422,6 +430,13 @@ export const updateProfileSchema = z
       .array(z.string().uuid())
       .max(PROFILE_FOOTPRINT_LIMITS.city, `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`)
       .optional(),
+    // Free-text service-area cities not in the seeded taxonomy. Trimmed, non-empty,
+    // capped per item; the combined taxonomy + custom total is capped below and
+    // authoritatively re-checked server-side against the final persisted state.
+    customCities: z
+      .array(z.string().trim().min(1, 'Enter a city name.').max(100, 'Use 100 characters or fewer.'))
+      .max(PROFILE_FOOTPRINT_LIMITS.city, `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`)
+      .optional(),
     scopeIds: z
       .array(z.string().uuid())
       .max(
@@ -436,6 +451,20 @@ export const updateProfileSchema = z
         `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`,
       )
       .optional(),
+  })
+  .superRefine((data, context) => {
+    // When a request sets both taxonomy and custom cities, their combined count
+    // must not exceed the city limit. (The service also enforces this against the
+    // final persisted state to cover partial updates.)
+    if (data.cityIds !== undefined && data.customCities !== undefined) {
+      if (data.cityIds.length + data.customCities.length > PROFILE_FOOTPRINT_LIMITS.city) {
+        context.addIssue({
+          code: 'custom',
+          path: ['customCities'],
+          message: `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities in total.`,
+        });
+      }
+    }
   })
   .meta({ id: 'UpdateProfile' });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

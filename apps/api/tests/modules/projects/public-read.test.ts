@@ -948,6 +948,80 @@ describe('projectsService.getPublicImageDetail', () => {
     });
   });
 
+  it('uses the custom city on public image detail cards', async () => {
+    const activeImageId = '22222222-2222-4222-8222-222222222222';
+    vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue({
+      project: makeProject({
+        citySlug: null,
+        cityName: 'Pondicherry',
+        localitySlug: null,
+        coverImageId: activeImageId,
+      }),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'individual',
+        logoImageId: null,
+        bio: null,
+        firmType: null,
+        foundedYear: null,
+        yearsExperience: 0,
+        isKycVerified: false,
+      },
+    });
+    vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
+      {
+        id: activeImageId,
+        roomId: null,
+        derivatives: [
+          {
+            variant: 'small',
+            format: 'webp',
+            key: 'deriv/custom-city.webp',
+            width: 640,
+            height: 480,
+          },
+        ],
+        width: 640,
+        height: 480,
+        sortOrder: 0,
+        roomName: null,
+        themeSlugs: [],
+        materialSlugs: [],
+        finishSlugs: [],
+        tagSlugs: [],
+      },
+    ]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          activeImageId,
+          {
+            id: activeImageId,
+            status: 'ready',
+            derivatives: [
+              {
+                variant: 'small',
+                format: 'webp',
+                key: 'deriv/custom-city.webp',
+                width: 640,
+                height: 480,
+              },
+            ],
+          },
+        ],
+      ]),
+    );
+
+    const result = await projectsService.getPublicImageDetail(activeImageId);
+
+    expect(result.project).toMatchObject({ city: 'Pondicherry', locality: null });
+  });
+
   it('returns 404 when the active image cannot be signed into the gallery', async () => {
     vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue({
       project: makeProject(),

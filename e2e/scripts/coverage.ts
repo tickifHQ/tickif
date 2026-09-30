@@ -19,6 +19,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  [
+    'admin-summary.spec.ts',
+    'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
+  ],
   ...billingMatrixEntries,
   ...['Upgrade to Corporate', 'Downgrade to Professional+'].flatMap((action) =>
     [false, true].map((cancelled): [string, string] => [
@@ -45,6 +49,11 @@ const requiredEntries: [file: string, title: string][] = [
     'halted mandate requires payment recovery and blocks a replacement purchase',
     'scheduled provider plan update retains current access and blocks conflicting selections',
   ].map((title): [string, string] => ['billing-provider-failures.spec.ts', title]),
+  [
+    'admin-user-activity.spec.ts',
+    'E-340 and E-341 admin directory filters users and shows their recent history',
+  ],
+  ['admin-user-activity.spec.ts', 'E-340 users directory rejects unauthenticated visitors'],
   [
     'authentication.spec.ts',
     'anonymous designer routes never paint protected workspace content and retain the callback',
@@ -91,7 +100,7 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   [
     'consultation-participants.spec.ts',
-    'consultation lifecycle: visitor books, studio confirms and completes, visitor reviews and cancels another request',
+    'disabled consultations route public requests through enquiries and hide legacy surfaces',
   ],
   [
     'designer-discovery.spec.ts',
@@ -101,6 +110,8 @@ const requiredEntries: [file: string, title: string][] = [
     'designer-discovery.spec.ts',
     'applies combined filters at page one, and can recover from empty results',
   ],
+  ['designer-discovery.spec.ts', 'applies draft designer types at 1440px'],
+  ['designer-discovery.spec.ts', 'applies draft designer types at 390px'],
   [
     'designer-discovery.spec.ts',
     'is reachable on mobile and contains cards and filters without horizontal overflow',
@@ -117,9 +128,17 @@ const requiredEntries: [file: string, title: string][] = [
   ),
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],
   ['homepage-feed.spec.ts', 'keeps a deep-linked result page in the infinite feed model'],
+  ...['desktop', 'mobile'].map((viewport): [string, string] => [
+    'homepage-feed.spec.ts',
+    `shows custom cities in suggestions and search cards on ${viewport}`,
+  ]),
   [
     'marketplace-journey.spec.ts',
     'designer onboarding and media processing connects to visitor onboarding and discovery, enquiry and lead management',
+  ],
+  [
+    'admin-enquiries.spec.ts',
+    'admin enquiries filter and paginate while non-admin accounts stay denied',
   ],
   [
     'organization-access.spec.ts',
@@ -203,6 +222,10 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   [
     'portfolio-publication.spec.ts',
+    'a saved experience center appears on the published portfolio and remains mobile-safe',
+  ],
+  [
+    'portfolio-publication.spec.ts',
     'uploading the final required cover publishes the portfolio and renders responsively',
   ],
   [
@@ -237,6 +260,11 @@ const requiredEntries: [file: string, title: string][] = [
     'phone OTP in the dialog rejects a wrong code then completes visitor sign-in',
   ],
 ];
+
+requiredEntries.push([
+  'portfolio-publication.spec.ts',
+  'custom cities can be typed, saved, reloaded, and removed on desktop and mobile',
+]);
 
 export const requiredTests = requiredEntries.map(([file, title]) => ({ file, title }));
 

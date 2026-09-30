@@ -641,6 +641,25 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       expect(pgProject?.imageHeight).toBe(683);
     });
 
+    it('returns a custom city name through the Postgres fallback', async () => {
+      const designer = await activeDesigner({ displayName: 'Custom City Studio' });
+      const project = await makePublishedProject(designer.id, {
+        title: 'Pondicherry Courtyard',
+        citySlug: null,
+        cityName: 'Pondicherry',
+        localitySlug: null,
+      });
+      await attachReadyCover(project.id);
+
+      const { res, body } = await getFeed();
+
+      expect(res.status).toBe(200);
+      expect(body.items.find((item) => item.id === project.id)).toMatchObject({
+        city: 'Pondicherry',
+        locality: null,
+      });
+    });
+
     it('searches published projects by text with the Postgres path', async () => {
       const designer = await activeDesigner();
       const uniqueTerm = `calm-${Date.now()}`;

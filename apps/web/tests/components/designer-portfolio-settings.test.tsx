@@ -834,6 +834,19 @@ describe('DesignerPortfolioSettings', () => {
     expect(removeLogo.parentElement).not.toHaveClass('overflow-hidden');
   });
 
+  it('layers the live-preview logo above the portfolio cover', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      heroCoverUrl: 'https://cdn.tickif.test/portfolio-cover.jpg',
+      logoUrl: 'https://cdn.tickif.test/logo.jpg',
+    });
+    await renderSettings();
+
+    expect(screen.getByTestId('portfolio-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('portfolio-preview-logo')).toHaveClass('bg-primary/10');
+    expect(screen.getByTestId('portfolio-preview-logo')).not.toHaveClass('border');
+  });
+
   it('keeps collapsible content mounted while the close transition runs', async () => {
     const slugInput = await renderSettings();
     const linkSectionToggle = screen.getByRole('button', { name: /link & url/i });
@@ -952,6 +965,20 @@ describe('DesignerPortfolioSettings', () => {
     initiallyExpandedContent.forEach((content) => {
       expect(content).toHaveClass('border', 'border-border');
     });
+  });
+
+  it('uses the compact section treatment for Experience Centers', async () => {
+    await renderSettings();
+
+    const heading = screen.getByRole('heading', { name: 'Experience Centers' });
+    const section = heading.closest('[data-slot="portfolio-section"]');
+    const toggle = heading.closest('button');
+    const chevron = toggle?.querySelector('svg');
+
+    expect(section).toHaveClass('rounded-2xl', 'bg-muted/30', 'p-1');
+    expect(section).not.toHaveClass('bg-muted/70');
+    expect(toggle).toHaveClass('items-start', 'p-2');
+    expect(chevron).toHaveClass('mt-2');
   });
 
   it('shows the complete Google reviews connection summary', async () => {

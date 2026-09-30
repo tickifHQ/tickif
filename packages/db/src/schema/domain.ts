@@ -342,6 +342,11 @@ export const designerProfile = pgTable(
     // Company metadata
     firmType: text('firm_type'),
     foundedYear: integer('founded_year'),
+    // Free-text service-area cities the designer typed that are not in the seeded
+    // `city` taxonomy. Complements the FK-backed footprint (which stays taxonomy-only
+    // for search/filtering). Display-only, mirroring `project.city_name`. The combined
+    // count of taxonomy footprint cities + these custom cities is capped at 5.
+    customCities: jsonb('custom_cities').$type<string[]>().default([]).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -708,6 +713,7 @@ export const consultationBooking = pgTable(
     requesterId: text('requester_id')
       .notNull()
       .references(() => user.id, { onDelete: 'restrict' }),
+    leadId: uuid('lead_id').references(() => lead.id, { onDelete: 'set null' }),
     referredProjectId: uuid('referred_project_id').references(() => project.id, {
       onDelete: 'set null',
     }),
@@ -798,6 +804,7 @@ export const consultationBooking = pgTable(
     index('consultation_booking_organization_idx').on(t.organizationId),
     index('consultation_booking_designer_profile_idx').on(t.designerProfileId),
     index('consultation_booking_requester_idx').on(t.requesterId),
+    uniqueIndex('consultation_booking_lead_idx').on(t.leadId),
     index('consultation_booking_referred_project_idx').on(t.referredProjectId),
     index('consultation_booking_requester_designer_status_idx').on(
       t.requesterId,

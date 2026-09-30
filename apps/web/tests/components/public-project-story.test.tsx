@@ -107,7 +107,7 @@ describe('PublicProjectStory', () => {
     const narrative = screen.getByRole('region', { name: /their words/i });
     expect(within(narrative).getByText(project.narrative!.body)).toBeInTheDocument();
     expect(within(narrative).getByText('Priya K., 3 BHK in Mylapore')).toBeInTheDocument();
-    expect(within(narrative).getByLabelText('Verified consultation')).toBeInTheDocument();
+    expect(within(narrative).getByLabelText('Verified client')).toBeInTheDocument();
   });
 
   it('returns signed-out enquiries to the project after login', () => {

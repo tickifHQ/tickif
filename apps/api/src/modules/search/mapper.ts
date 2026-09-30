@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  * - Transform ProjectSearchDocument → ProjectHit with presigned coverImageUrl
- * - Transform DesignerSearchDocument → DesignerHit with presigned logoUrl
+ * - Transform DesignerSearchDocument → DesignerHit with presigned portfolio media URLs
  * - Transform documents to minimal suggest response shapes
  * - Handle null image keys by setting URL to null
  */
@@ -112,16 +112,20 @@ export async function mapSuggestProject(doc: ProjectSearchDocument): Promise<Sug
 
 /**
  * Transform a DesignerSearchDocument from Typesense to a DesignerHit API response.
- * Presigns the logoImageKey to generate a logoUrl.
+ * Presigns the logo and portfolio hero media keys for discovery cards.
  */
 export async function mapDesignerHit(doc: DesignerSearchDocument): Promise<DesignerHit> {
-  const logoUrl = doc.logoImageKey ? await presignDownload({ key: doc.logoImageKey }) : null;
+  const [logoUrl, heroUrl] = await Promise.all([
+    doc.logoImageKey ? presignDownload({ key: doc.logoImageKey }) : null,
+    doc.heroImageKey ? presignDownload({ key: doc.heroImageKey }) : null,
+  ]);
 
   return {
     id: doc.id,
     slug: doc.slug ?? null,
     displayName: doc.displayName,
     bio: doc.bio ?? null,
+    tagline: doc.tagline ?? null,
     entityType: doc.entityType,
     citySlugs: doc.citySlugs,
     localitySlugs: doc.localitySlugs,
@@ -135,6 +139,7 @@ export async function mapDesignerHit(doc: DesignerSearchDocument): Promise<Desig
     googleRatingCount: null,
     isKycVerified: doc.isKycVerified === true && (doc.kycExpiresAt ?? 0) > Date.now(),
     logoUrl,
+    heroUrl,
   };
 }
 

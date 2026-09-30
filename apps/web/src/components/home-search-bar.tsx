@@ -242,7 +242,7 @@ export function HomeSearchBar({
               handleDropdownKeys(event);
             }
           }}
-          placeholder="Search by city, style, budget, room type…"
+          placeholder="Search interiors, construction, a style, or a city…"
           aria-label="Search homes"
           className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
@@ -341,7 +341,9 @@ export function HomeSearchBar({
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{project.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {[project.designerName, project.citySlug].filter(Boolean).join(' · ')}
+                      {[project.designerName, project.cityName ?? project.citySlug]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                   </span>
                 </Link>

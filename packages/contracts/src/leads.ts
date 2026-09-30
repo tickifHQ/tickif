@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bookingSlotSchema, bookingStatusSchema } from './bookings';
 
 export const leadStatus = z.enum(['new', 'contacted', 'closed', 'spam']).meta({ id: 'LeadStatus' });
 export type LeadStatus = z.infer<typeof leadStatus>;
@@ -37,6 +38,7 @@ export const leadListItemSchema = z
     contactNumber: z.string(),
     budgetBand: z.string().nullable(),
     assignedMemberId: z.string().min(1).nullable(),
+    source: z.string(),
     status: leadStatus,
     receivedAt: z.string().datetime(),
   })
@@ -54,12 +56,26 @@ export const listLeadsResponseSchema = z
   .meta({ id: 'ListLeadsResponse' });
 export type ListLeadsResponse = z.infer<typeof listLeadsResponseSchema>;
 
+export const leadConsultationSchema = z
+  .object({
+    id: z.uuid(),
+    status: bookingStatusSchema,
+    requesterEmail: z.email(),
+    preferredSlots: z.array(bookingSlotSchema).min(1).max(3),
+    confirmedSlot: bookingSlotSchema.nullable(),
+    cancelledBy: z.enum(['requester', 'designer']).nullable(),
+    cancelReason: z.string().nullable(),
+    requestedAt: z.string().datetime(),
+  })
+  .meta({ id: 'LeadConsultation' });
+export type LeadConsultation = z.infer<typeof leadConsultationSchema>;
+
 export const leadDetailResponseSchema = leadListItemSchema
   .extend({
     referredProjectId: z.uuid().nullable(),
     message: z.string().nullable(),
     notes: z.string().nullable(),
-    source: z.string(),
+    consultation: leadConsultationSchema.nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

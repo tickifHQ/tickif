@@ -2,12 +2,14 @@ import Image from 'next/image';
 import type { ReactNode } from 'react';
 import {
   BadgeCheck,
-  CalendarCheck,
   CalendarDays,
   Check,
   Globe,
+  MapPin,
   Link2,
   MessageSquare,
+  Navigation,
+  Phone,
   Quote,
   Shield,
   Sparkle,
@@ -24,7 +26,7 @@ import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-cta';
-import { BookingCta } from '@/components/booking-cta';
+import { ConsultationCta } from '@/components/consultation-cta';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -84,6 +86,24 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
+}
+
+function safeExternalHref(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function phoneHref(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return null;
+  return `tel:${trimmed.startsWith('+') ? '+' : ''}${digits}`;
 }
 
 /** Logo when the designer uploaded one, else an initials monogram. */
@@ -153,7 +173,7 @@ function StudioBar({ portfolio, view }: SectionProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <BookingCta
+          <ConsultationCta
             designerProfileId={portfolio.profileId}
             designerName={portfolio.displayName}
             loginHref={view.loginHref}
@@ -511,11 +531,11 @@ function StorySection({ portfolio, view }: SectionProps) {
                   designerProfileId={portfolio.profileId}
                   loginHref={view.loginHref}
                   variant="emphasis"
-                  ariaLabel="Book Consultation"
+                  ariaLabel="Send enquiry"
                   className="mt-5 h-8 w-full transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
                 >
-                  <CalendarCheck className="size-4" />
-                  Book Consultation
+                  <MessageSquare className="size-4" />
+                  Send enquiry
                 </EnquiryCta>
               </div>
 
@@ -582,7 +602,7 @@ function ReviewCard({ review }: { review: PublicPortfolioReview }) {
               {review.author}
               {review.verifiedConsultation ? (
                 <BadgeCheck
-                  aria-label="Verified consultation"
+                  aria-label="Verified client"
                   className="size-4 fill-primary text-primary-foreground"
                 />
               ) : null}
@@ -830,6 +850,91 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
   );
 }
 
+function ExperienceCentersSection({ portfolio }: SectionProps) {
+  const groups = (portfolio.experienceCenterGroups ?? []).filter(
+    (group) => group.centers.length > 0,
+  );
+  const centers = groups.flatMap((group) => group.centers);
+  if (centers.length === 0) return null;
+
+  return (
+    <section
+      aria-labelledby="experience-centers-heading"
+      className="border-t border-surface-subtle-border bg-surface-subtle px-4 py-20 sm:px-6"
+    >
+      <div className="mx-auto max-w-7xl">
+        <SectionEyebrow>Visit the studio</SectionEyebrow>
+        <h2 id="experience-centers-heading" className="mt-2 text-4xl font-medium tracking-tight">
+          Experience centers
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Explore materials, finishes, and ideas in person at a studio near you.
+        </p>
+
+        <ul
+          className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          aria-label="Experience centers"
+        >
+          {centers.map((center, index) => {
+            const mapsHref = safeExternalHref(center.mapsUrl);
+            const callHref = phoneHref(center.phone);
+            const location = [center.city, center.state].filter(Boolean).join(', ');
+            const locationWithPostalCode = center.postalCode
+              ? `${location} · ${center.postalCode}`
+              : location;
+
+            return (
+              <li key={`${center.name}-${center.city}-${index}`} className="min-w-0">
+                <Card
+                  data-slot="experience-center-card"
+                  className="h-full overflow-hidden border-surface-subtle-border bg-background p-0"
+                >
+                  <div className="flex items-center gap-1.5 border-b border-surface-subtle-border px-3 py-2.5">
+                    <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                    <h3 className="min-w-0 break-words text-lg font-medium">{center.name}</h3>
+                  </div>
+                  <article className="min-w-0 p-3">
+                    <address className="max-w-xl break-words text-sm leading-5 not-italic text-muted-foreground [overflow-wrap:anywhere]">
+                      <span className="block font-medium text-foreground">
+                        {locationWithPostalCode}
+                      </span>
+                      <span className="mt-0.5 block">{center.address}</span>
+                    </address>
+                    {callHref || mapsHref ? (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        {callHref && center.phone ? (
+                          <a
+                            href={callHref}
+                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <Phone className="size-4 shrink-0" aria-hidden="true" />
+                            <span className="break-all">{center.phone}</span>
+                          </a>
+                        ) : null}
+                        {mapsHref ? (
+                          <a
+                            href={mapsHref}
+                            target="_blank"
+                            rel="noopener noreferrer nofollow"
+                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <Navigation className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                            Open in Maps
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 function ShareSection({ portfolio, view }: SectionProps) {
   return (
     <section className="overflow-hidden bg-muted px-4 py-20 sm:px-6">
@@ -910,11 +1015,11 @@ function ShareSection({ portfolio, view }: SectionProps) {
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"
-              ariaLabel="Book Consultation"
+              ariaLabel="Send enquiry"
               className="h-10 px-6 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
             >
-              <CalendarCheck className="size-4" />
-              Book Consultation
+              <MessageSquare className="size-4" />
+              Send enquiry
             </EnquiryCta>
             <CopyLinkButton
               value={view.publicProfileHref}
@@ -946,11 +1051,10 @@ function ConsultationSection({ portfolio, view }: SectionProps) {
           <span className="block">living without.</span>
         </h2>
         <p className="mt-6 max-w-md leading-6 text-surface-inverse-foreground/80">
-          Book a consultation with {portfolio.displayName} on Tickif. The first consultation is
-          free.
+          Send an enquiry to {portfolio.displayName} on Tickif and start discussing your project.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <BookingCta
+          <ConsultationCta
             designerProfileId={portfolio.profileId}
             designerName={portfolio.displayName}
             loginHref={view.loginHref}
@@ -1004,6 +1108,7 @@ export function PublicDesignerProfile({
         {portfolio.sections.reviews ? <ReviewsSection {...props} /> : null}
         {tickifReviews}
         <StudioDetailsSection {...props} />
+        <ExperienceCentersSection {...props} />
         {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
         <ConsultationSection {...props} />
       </main>

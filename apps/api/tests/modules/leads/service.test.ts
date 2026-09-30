@@ -42,6 +42,7 @@ const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord =>
   contactNumber: '+919800000001',
   budgetBandSlug: 'premium',
   assignedMemberId: null,
+  source: 'enquiry',
   status: 'new',
   receivedAt: new Date('2026-06-26T10:00:00.000Z'),
   ...overrides,
@@ -57,6 +58,14 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
   source: 'enquiry',
   createdAt: new Date('2026-06-26T10:00:00.000Z'),
   updatedAt: new Date('2026-06-26T10:00:00.000Z'),
+  consultationBookingId: null,
+  consultationStatus: null,
+  consultationPreferredSlots: null,
+  consultationConfirmedSlot: null,
+  consultationCancelledBy: null,
+  consultationCancelReason: null,
+  consultationRequestedAt: null,
+  consultationRequesterEmail: null,
   ...overrides,
 });
 
@@ -127,6 +136,29 @@ describe('leadsService.list', () => {
 });
 
 describe('leadsService.getById', () => {
+  it('includes scheduling details for a consultation lead', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({
+        source: 'consultation',
+        consultationBookingId: '33333333-3333-4333-8333-333333333333',
+        consultationStatus: 'requested',
+        consultationPreferredSlots: [{ date: '2026-10-02', window: 'morning' }],
+        consultationRequestedAt: new Date('2026-09-29T10:00:00.000Z'),
+        consultationRequesterEmail: 'priya@example.com',
+      }),
+    );
+
+    await expect(leadsService.getById(leadDetailRow().id, caller)).resolves.toMatchObject({
+      source: 'consultation',
+      consultation: {
+        id: '33333333-3333-4333-8333-333333333333',
+        status: 'requested',
+        requesterEmail: 'priya@example.com',
+        preferredSlots: [{ date: '2026-10-02', window: 'morning' }],
+      },
+    });
+  });
+
   it('requires organization membership for lead reads', async () => {
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
     vi.mocked(orgsService.getCapabilities).mockResolvedValue(null);

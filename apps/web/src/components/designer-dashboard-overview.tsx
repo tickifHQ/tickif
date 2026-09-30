@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import Image from 'next/image';
+import Link from 'next/link';
 import type {
   CompletionStep,
   ProfileCompletionResponse,
@@ -71,17 +71,17 @@ function verificationPrompt(
 
 function ChecklistStep({ item, isLast }: { item: OverviewChecklistItem; isLast: boolean }) {
   return (
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 py-5 last:pb-0">
-      <div className="relative flex justify-center">
+    <li className="flex gap-3 py-4 last:pb-0">
+      <div className="relative flex w-8 shrink-0 justify-center">
         {!isLast ? (
           <span
             aria-hidden="true"
-            className="absolute top-[calc(0.125rem+1.75rem)] bottom-[-2.5rem] left-1/2 w-px -translate-x-1/2 bg-border"
+            className="absolute top-8 -bottom-4 left-1/2 w-px -translate-x-1/2 bg-border"
           />
         ) : null}
         <span className="relative z-10 mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background">
           {item.done ? (
-            <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#77DB89] text-white">
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-success text-success-foreground">
               <Check className="size-3" />
             </span>
           ) : (
@@ -90,18 +90,18 @@ function ChecklistStep({ item, isLast }: { item: OverviewChecklistItem; isLast: 
         </span>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
         <div className="min-w-0 flex-1">
           <div
             className={
               item.done
-                ? 'text-lg font-semibold text-muted-foreground line-through'
-                : 'text-lg font-semibold text-foreground'
+                ? 'text-base font-semibold text-muted-foreground line-through'
+                : 'text-base font-semibold text-foreground'
             }
           >
             {item.title}
           </div>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+          <p className="mt-0.5 max-w-xl text-sm leading-5 text-muted-foreground">
             {item.description}
           </p>
         </div>
@@ -129,7 +129,7 @@ function RightRailInfoRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-foreground">{title}</div>
-        <div className="text-[13px] leading-4 text-muted-foreground">{description}</div>
+        <div className="text-xs leading-4 text-muted-foreground">{description}</div>
       </div>
       {href ? <ArrowRight className="size-4 shrink-0 text-muted-foreground" /> : null}
     </>
@@ -210,7 +210,7 @@ export function DesignerDashboardOverview({
     if (step.done) return null;
     if (step.key === 'profile-completed' && canEditOrganization) {
       return (
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" size="compact">
           <Link href="/designer/portfolio">
             Manage portfolio
             <ArrowRight className="size-4" />
@@ -220,7 +220,7 @@ export function DesignerDashboardOverview({
     }
     if (step.key === 'first-project-uploaded' && canWriteProjects) {
       return (
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" size="compact">
           <Link href="/designer/projects/new">
             <Plus className="size-4" />
             Add new project
@@ -254,7 +254,7 @@ export function DesignerDashboardOverview({
           done: projectDone,
           action:
             projectDone || !canWriteProjects ? null : (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="compact">
                 <Link href="/designer/projects/new">
                   <Plus className="size-4" />
                   Add new project
@@ -270,7 +270,7 @@ export function DesignerDashboardOverview({
           done: profileDone,
           action:
             profileDone || !canEditOrganization ? null : (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="compact">
                 <Link href="/designer/portfolio">
                   Manage portfolio
                   <ArrowRight className="size-4" />
@@ -290,21 +290,21 @@ export function DesignerDashboardOverview({
     : dashboard.profileCompletion.score;
 
   return (
-    <div className="p-6 md:p-8 xl:p-10">
+    <div data-testid="designer-dashboard-overview" className="p-4 sm:p-5 lg:p-6">
       <div>
-        <h1 className="text-4xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Welcome, <span className="text-muted-foreground">{studioName}</span>
         </h1>
-        <p className="mt-3 text-lg text-muted-foreground">
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Let&apos;s get your profile ready to go live.
         </p>
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
-        <div className="min-w-0 space-y-5">
+      <div className="mt-5 grid gap-5 xl:grid-cols-3">
+        <div className="min-w-0 space-y-4 xl:col-span-2">
           {dashboardError ? (
             <Card radius="2xl" className="border-destructive/30 bg-destructive/5">
-              <div className="px-6 py-5">
+              <div className="px-5 py-4">
                 <div className="text-base font-medium text-foreground">
                   Could not load dashboard summary
                 </div>
@@ -315,49 +315,65 @@ export function DesignerDashboardOverview({
             </Card>
           ) : null}
 
-          <Card radius="2xl" className="overflow-hidden">
-            <div className="px-6 pt-6 pb-6">
+          <section
+            aria-labelledby="profile-completion-heading"
+            className="space-y-3 rounded-3xl bg-profile-completion-background px-2 pt-4 pb-2"
+          >
+            <div data-testid="profile-completion-progress" className="px-2 pt-1">
               <div className="flex items-end justify-between gap-4">
-                <div className="text-base font-medium text-muted-foreground">Complete profile</div>
-                <div className="text-base font-medium text-primary">{checklistProgressScore}%</div>
+                <h2
+                  id="profile-completion-heading"
+                  className="text-lg font-medium text-muted-foreground"
+                >
+                  Complete profile
+                </h2>
+                <div className="text-lg font-medium text-primary">{checklistProgressScore}%</div>
               </div>
-              <div className="mt-3 h-1.5 rounded-full bg-muted">
+              <div
+                data-testid="profile-completion-progress-bar"
+                role="progressbar"
+                aria-label="Profile completion"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={checklistProgressScore}
+                className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+              >
                 <div
                   className="h-full rounded-full bg-primary transition-[width]"
                   style={{ width: `${checklistProgressScore}%` }}
                 />
               </div>
             </div>
-          </Card>
 
-          <Card radius="2xl" className="shadow-md">
-            <div className="px-6 pt-4 pb-6">
-              {trackedChecklistComplete ? (
-                <div className="flex items-start gap-4 py-4">
-                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary">
-                    <Check className="size-5" />
-                  </span>
-                  <div>
-                    <div className="text-base font-medium text-foreground">Setup complete</div>
-                    <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-                      Your core workspace setup is done. Keep your portfolio fresh by adding more
-                      projects and sharing your link.
-                    </p>
+            <Card radius="2xl" className="shadow-sm">
+              <div className="px-5 pt-2 pb-4 sm:px-7">
+                {trackedChecklistComplete ? (
+                  <div className="flex items-start gap-4 py-4">
+                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary">
+                      <Check className="size-5" />
+                    </span>
+                    <div>
+                      <div className="text-base font-medium text-foreground">Setup complete</div>
+                      <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+                        Your core workspace setup is done. Keep your portfolio fresh by adding more
+                        projects and sharing your link.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <ol aria-label="Profile setup steps">
-                  {trackedChecklistItems.map((item, index) => (
-                    <ChecklistStep
-                      key={item.key}
-                      item={item}
-                      isLast={index === trackedChecklistItems.length - 1}
-                    />
-                  ))}
-                </ol>
-              )}
-            </div>
-          </Card>
+                ) : (
+                  <ol aria-label="Profile setup steps">
+                    {trackedChecklistItems.map((item, index) => (
+                      <ChecklistStep
+                        key={item.key}
+                        item={item}
+                        isLast={index === trackedChecklistItems.length - 1}
+                      />
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </Card>
+          </section>
         </div>
 
         <DashboardRightRailTransition
@@ -385,7 +401,11 @@ export function DesignerDashboardOverview({
                       </p>
                     </div>
                   </div>
-                  <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
+                  <Button
+                    asChild
+                    size="compact"
+                    className="mt-4 w-full rounded-xl text-sm font-medium shadow-md"
+                  >
                     <Link href="/designer/projects/new">
                       <Plus className="size-4" />
                       Add first project
@@ -427,18 +447,32 @@ export function DesignerDashboardOverview({
             </div>
           }
           shareCard={
-            <Card variant="accent" radius="3xl" className="overflow-hidden">
+            <Card variant="accent" radius="2xl" className="overflow-hidden">
               <div className="px-4 pt-4">
                 <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
-                  <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
-                  <div className="space-y-3 px-5 py-4 text-center">
-                    <div className="mx-auto -mt-10 size-16 overflow-hidden rounded-2xl border border-border bg-primary/10 shadow-sm">
+                  <div className="relative h-24 overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))]">
+                    {dashboard.heroCoverUrl ? (
+                      <Image
+                        src={dashboard.heroCoverUrl}
+                        alt={`${studioName} portfolio cover`}
+                        fill
+                        unoptimized
+                        sizes="(max-width: 1024px) 100vw, 22rem"
+                        className="object-cover"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="space-y-2 px-4 py-3 text-center">
+                    <div
+                      data-testid="dashboard-preview-logo"
+                      className="relative z-10 mx-auto -mt-8 size-12 overflow-hidden rounded-xl bg-primary/10 shadow-sm"
+                    >
                       {logoUrl ? (
                         <Image
                           src={logoUrl}
                           alt={`${studioName} logo`}
-                          width={64}
-                          height={64}
+                          width={48}
+                          height={48}
                           unoptimized
                           className="size-full object-cover"
                         />
@@ -447,13 +481,13 @@ export function DesignerDashboardOverview({
                           seed={studioName}
                           fallbackSeed={studioLocation}
                           alt={`${studioName} generated profile initials`}
-                          size={64}
+                          size={48}
                         />
                       )}
                     </div>
                     <div>
-                      <div className="text-lg font-medium text-foreground">{studioName}</div>
-                      <div className="mt-1 text-sm text-muted-foreground">{studioLocation}</div>
+                      <div className="text-base font-medium text-foreground">{studioName}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{studioLocation}</div>
                     </div>
                     {/* E-278: only reveal the public URL chip once the portfolio is
                       actually live. Otherwise show a neutral "not public yet" chip
@@ -471,11 +505,11 @@ export function DesignerDashboardOverview({
                   </div>
                 </div>
               </div>
-              <div className="px-5 pt-6 pb-5">
+              <div className="px-4 py-4">
                 <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
                   ONE LINK. EVERYWHERE.
                 </div>
-                <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
+                <div className="mt-2 text-2xl font-medium tracking-tight text-foreground">
                   A portfolio worth <span className="text-primary">sharing.</span>
                 </div>
                 {/*
@@ -486,24 +520,24 @@ export function DesignerDashboardOverview({
               */}
                 {portfolioPubliclyVisible ? (
                   <>
-                    <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
                     </p>
                     <CopyLinkButton
                       value={portfolioUrl}
                       variant="fancy"
                       size="fancy"
-                      className="mt-6 w-full cursor-pointer"
+                      className="mt-4 w-full cursor-pointer"
                     />
                   </>
                 ) : (
                   <>
-                    <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       Finish your portfolio to unlock a public link you can share anywhere.
                       We&apos;ll show it here the moment your page goes live.
                     </p>
                     {canEditOrganization && (
-                      <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
+                      <Button asChild variant="fancy" size="fancy" className="mt-4 w-full">
                         <Link href="/designer/portfolio">
                           Complete your portfolio
                           <ArrowRight className="size-4" />

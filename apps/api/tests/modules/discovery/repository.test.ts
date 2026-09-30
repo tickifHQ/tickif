@@ -62,6 +62,7 @@ vi.mock('@repo/db', () => ({
       slug: 'project.slug',
       title: 'project.title',
       citySlug: 'project.citySlug',
+      cityName: 'project.cityName',
       bhkSlug: 'project.bhkSlug',
       localitySlug: 'project.localitySlug',
       propertyTypeSlug: 'project.propertyTypeSlug',
@@ -212,7 +213,7 @@ describe('discoveryRepository.searchFeed', () => {
       page: 2,
       per_page: 12,
       include_fields:
-        'id,slug,title,designerSlug,designerName,citySlug,localitySlug,bhkSlug,budgetBandSlug,themes,coverImageKey,coverImageId,coverImageWidth,coverImageHeight,avgRating,reviewCount',
+        'id,slug,title,designerSlug,designerName,citySlug,cityName,localitySlug,bhkSlug,budgetBandSlug,themes,coverImageKey,coverImageId,coverImageWidth,coverImageHeight,avgRating,reviewCount',
     });
   });
 
@@ -346,6 +347,7 @@ describe('discoveryRepository.searchFeed', () => {
         'designerSlug',
         'designerName',
         'citySlug',
+        'cityName',
         'localitySlug',
         'bhkSlug',
         'budgetBandSlug',
@@ -383,6 +385,7 @@ describe('discoveryRepository.listFeedFallback', () => {
     slug: 'test-project',
     title: 'Test Project',
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: 'bandra',
     bhkSlug: '3-bhk',
     budgetBandSlug: '40-60-lakh',
@@ -581,6 +584,7 @@ describe('discoveryRepository.listFeedFallback', () => {
           'slug',
           'title',
           'citySlug',
+          'cityName',
           'localitySlug',
           'bhkSlug',
           'budgetBandSlug',

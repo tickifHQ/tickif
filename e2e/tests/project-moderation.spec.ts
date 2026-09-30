@@ -216,7 +216,18 @@ test('project moderation lifecycle: admin paginates, claims, comments, resolves 
   };
   const open = (title: string) =>
     page.getByRole('button', { name: `Open review for ${title}` }).click();
-  const close = () => page.getByRole('button', { name: 'Close', exact: true }).first().click();
+  const close = async () => {
+    // A committed API decision can become visible before its nested dialog has
+    // closed. Wait for that transition before targeting the review inspector.
+    await expect(
+      page.getByRole('dialog', { name: /^(Reject project|Unpublish project|Request changes)$/ }),
+    ).toHaveCount(0);
+    const inspector = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Project review', exact: true }),
+    });
+    await inspector.getByRole('button', { name: 'Close', exact: true }).last().click();
+    await expect(inspector).toHaveCount(0);
+  };
   const screenshot = async (name: string) => {
     const path = join(tmpdir(), `tickif-project-moderation-${testInfo.workerIndex}-${name}.png`);
     await page.screenshot({ path, fullPage: false, animations: 'disabled' });

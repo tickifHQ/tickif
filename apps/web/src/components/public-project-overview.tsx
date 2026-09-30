@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { PublicProjectDetailResponse } from '@repo/contracts';
+import { config } from '@repo/config/features';
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components/card';
@@ -9,7 +10,7 @@ import { ArrowLeft, CalendarDays, MessageSquare, Star, UserRound } from 'lucide-
 import { TickifBrandIcon } from '@/components/brand-icons';
 import { PublicGoogleRating } from '@/components/public-google-rating';
 import { EnquiryCta } from '@/components/enquiry-cta';
-import { BookingCta } from '@/components/booking-cta';
+import { ConsultationCta } from '@/components/consultation-cta';
 import { ProjectActions } from '@/components/project-actions';
 import { ProjectHeroCarousel } from '@/components/project-hero-carousel';
 import { PublicProjectRecommendations } from '@/components/public-project-recommendations';
@@ -222,14 +223,17 @@ function DesignerCard({
             </Button>
           ) : null}
         </CardFooter>
-        <div className="pt-3">
-          <BookingCta
-            designerProfileId={designer.id}
-            designerName={designer.displayName}
-            referredProjectId={project.id}
-            loginHref={loginHref}
-          />
-        </div>
+        {config.CONSULTATIONS_ENABLED ? (
+          <div className="pt-3">
+            <ConsultationCta
+              designerProfileId={designer.id}
+              designerName={designer.displayName}
+              referredProjectId={project.id}
+              projectName={project.title}
+              loginHref={loginHref}
+            />
+          </div>
+        ) : null}
       </Card>
       <Separator />
       <ProjectActions projectId={project.id} loginHref={loginHref} canonicalUrl={canonicalUrl} />
@@ -245,7 +249,10 @@ export function PublicProjectOverview({
   canonicalUrl: string;
 }) {
   const specifications = projectSpecifications(project);
-  const location = [project.specifications.locality?.label, projectCityLabel(project.specifications)]
+  const location = [
+    project.specifications.locality?.label,
+    projectCityLabel(project.specifications),
+  ]
     .filter(Boolean)
     .join(', ');
   const hasRecommendations = Object.values(project.recommendations).some(

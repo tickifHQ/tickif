@@ -64,6 +64,7 @@ type FormState = {
   foundedYear: string;
   staffCount: string;
   cityIds: string[];
+  customCities: string[];
   scopeIds: string[];
   themeIds: string[];
 };
@@ -128,6 +129,7 @@ function profileToForm(profile: ProfileOwnerResponse): FormState {
     cityIds: profile.footprint
       .filter((term) => term.kind === PROFILE_TAXONOMY_KIND.CITY)
       .map((term) => term.id),
+    customCities: [...profile.customCities],
     scopeIds: profile.footprint
       .filter((term) => term.kind === PROFILE_TAXONOMY_KIND.SCOPE)
       .map((term) => term.id),
@@ -176,9 +178,15 @@ function formsEqual(left: FormState, right: FormState): boolean {
     left.youtubeHandle === right.youtubeHandle &&
     companyFieldsEqual &&
     sameIds(left.cityIds, right.cityIds) &&
+    sameCustomCities(left.customCities, right.customCities) &&
     sameIds(left.scopeIds, right.scopeIds) &&
     sameIds(left.themeIds, right.themeIds)
   );
+}
+
+/** Order-sensitive equality for the free-text custom-city list. */
+function sameCustomCities(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function formToInput(
@@ -228,7 +236,16 @@ function formToInput(
     if (form.staffCount !== saved.staffCount) input.staffCount = nullableNumber(form.staffCount);
   }
 
-  if (!sameIds(form.cityIds, saved.cityIds)) input.cityIds = form.cityIds;
+  // Taxonomy and custom cities share one 5-city budget, so send both whenever
+  // either side changes — this lets the contract validate the combined total in
+  // a single request and keeps the persisted pair consistent.
+  const citiesChanged =
+    !sameIds(form.cityIds, saved.cityIds) ||
+    !sameCustomCities(form.customCities, saved.customCities);
+  if (citiesChanged) {
+    input.cityIds = form.cityIds;
+    input.customCities = form.customCities;
+  }
   if (!sameIds(form.scopeIds, saved.scopeIds)) input.scopeIds = form.scopeIds;
   if (!sameIds(form.themeIds, saved.themeIds)) input.themeIds = form.themeIds;
 
@@ -351,6 +368,43 @@ export function DesignerProfileEditor({
   const formRevisionRef = useRef(0);
   const isDirty = !formsEqual(form, savedForm);
 
+  /** Add a free-text city (from the Cities dropdown's inline input) if it is new
+   * and the combined budget allows it. Behaviour is unchanged from before; only
+   * the input source moved into the dropdown. */
+  function addCustomCity(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (form.cityIds.length + form.customCities.length >= PROFILE_FOOTPRINT_LIMITS.city) return;
+
+    const key = trimmed.toLocaleLowerCase();
+    const alreadyCustom = form.customCities.some((city) => city.toLocaleLowerCase() === key);
+    const matchesTaxonomy = taxonomy.cities.some(
+      (option) => form.cityIds.includes(option.id) && option.label.toLocaleLowerCase() === key,
+    );
+    if (alreadyCustom || matchesTaxonomy) return;
+    updateField('customCities', [...form.customCities, trimmed]);
+  }
+
+  function removeCustomCity(city: string) {
+    updateField(
+      'customCities',
+      form.customCities.filter((value) => value !== city),
+    );
+  }
+
+  function updateCityIds(values: string[]) {
+    const selectedLabels = new Set(
+      taxonomy.cities
+        .filter((option) => values.includes(option.id))
+        .map((option) => option.label.toLocaleLowerCase()),
+    );
+    updateField('cityIds', values);
+    updateField(
+      'customCities',
+      form.customCities.filter((city) => !selectedLabels.has(city.toLocaleLowerCase())),
+    );
+  }
+
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     formRevisionRef.current += 1;
     setForm((current) => ({ ...current, [key]: value }));
@@ -415,9 +469,11 @@ export function DesignerProfileEditor({
     return null;
   }
 
+  // Taxonomy cities and free-text custom cities share one budget of 5.
+  const cityCombinedCount = form.cityIds.length + form.customCities.length;
   const cityLimitError =
-    form.cityIds.length > PROFILE_FOOTPRINT_LIMITS.city
-      ? `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`
+    cityCombinedCount > PROFILE_FOOTPRINT_LIMITS.city
+      ? `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities in total.`
       : undefined;
   const scopeLimitError =
     form.scopeIds.length > PROFILE_FOOTPRINT_LIMITS.scope
@@ -761,10 +817,15 @@ export function DesignerProfileEditor({
             id="profile-cities"
             label="Cities"
             limit={PROFILE_FOOTPRINT_LIMITS[PROFILE_TAXONOMY_KIND.CITY]}
-            error={validationErrors.cityIds ?? cityLimitError}
+            error={validationErrors.cityIds ?? validationErrors.customCities ?? cityLimitError}
             options={taxonomy.cities}
             values={form.cityIds}
-            onValuesChange={(values) => updateField('cityIds', values)}
+            onValuesChange={updateCityIds}
+            customValues={form.customCities}
+            onAddCustom={addCustomCity}
+            onRemoveCustom={removeCustomCity}
+            customAddLabel="Add a custom city"
+            customInputPlaceholder="Enter a city name"
           />
           <TaxonomyMultiSelect
             id="profile-services"

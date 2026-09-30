@@ -1,91 +1,66 @@
+import '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { apiUrl, webUrl } from '../lib/environment';
+import { db, eq, schema } from '@repo/db';
+import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
 import { signInPhone as signIn } from '../lib/auth';
+import { apiUrl, webUrl } from '../lib/environment';
 import { makePublicPortfolio } from '../lib/public-portfolio';
 
-import { db, eq, inArray, schema } from '@repo/db';
-import {
-  assertTestDb,
-  makeDesigner,
-  makeOrganization,
-  makeProject,
-  makeUser,
-} from '@repo/db/testing';
-
-test('consultation lifecycle: visitor books, studio confirms and completes, visitor reviews and cancels another request', async ({
+test('disabled consultations route public requests through enquiries and hide legacy surfaces', async ({
   browser,
   baseURL,
 }, testInfo) => {
-  test.setTimeout(180000);
+  test.setTimeout(120_000);
   await assertTestDb();
   const suffix = randomUUID();
-  const cleanup: Array<() => Promise<unknown>> = [];
+  const visitorUser = await makeUser({
+    name: 'Enquiry Journey Visitor',
+    email: `enquiry-visitor-${suffix}@test.local`,
+    phoneNumber: `+9195${randomInt(10_000_000, 99_999_999)}`,
+    phoneNumberVerified: true,
+    status: 'active',
+  });
+  const owner = await makeUser({
+    name: 'Enquiry Journey Owner',
+    email: `enquiry-owner-${suffix}@test.local`,
+    phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
+    phoneNumberVerified: true,
+    role: 'designer',
+    status: 'active',
+  });
+  const org = await makeOrganization({
+    name: 'Enquiry Journey Studio',
+    slug: `enquiry-journey-${suffix}`,
+  });
+  const profile = await makeDesigner({
+    userId: owner.id,
+    orgId: org.id,
+    slug: org.slug,
+    displayName: org.name,
+    status: 'active',
+    phone: owner.phoneNumber,
+    bio: 'Enquiry journey studio biography.',
+    logoImageId: 'e2e/public/enquiry-journey-logo.png',
+  });
+  await makePublicPortfolio({ profileId: profile.id, portfolioSlug: profile.slug });
+  await db.insert(schema.member).values({
+    id: randomUUID(),
+    organizationId: org.id,
+    userId: owner.id,
+    role: 'owner',
+    createdAt: new Date(),
+  });
+
+  const visitorContext = await browser.newContext({ baseURL });
+  const designerContext = await browser.newContext({ baseURL });
+  const visitor = await visitorContext.newPage();
+  const designer = await designerContext.newPage();
+  const pageErrors: string[] = [];
+  visitor.on('pageerror', (error) => pageErrors.push(error.message));
+  designer.on('pageerror', (error) => pageErrors.push(error.message));
+
   try {
-    const visitorUser = await makeUser({
-      name: 'Consultation Journey Visitor',
-      email: `consultation-visitor-${suffix}@test.local`,
-      phoneNumber: `+9195${randomInt(10_000_000, 99_999_999)}`,
-      phoneNumberVerified: true,
-      status: 'active',
-    });
-    cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, visitorUser.id)));
-    const owner = await makeUser({
-      name: 'Consultation Journey Owner',
-      email: `consultation-owner-${suffix}@test.local`,
-      phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
-      phoneNumberVerified: true,
-      role: 'designer',
-      status: 'active',
-    });
-    cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, owner.id)));
-    const org = await makeOrganization({
-      name: 'Consultation Journey Studio',
-      slug: `consultation-journey-${suffix}`,
-    });
-    cleanup.push(() => db.delete(schema.organization).where(eq(schema.organization.id, org.id)));
-    const profile = await makeDesigner({
-      userId: owner.id,
-      orgId: org.id,
-      slug: org.slug,
-      displayName: org.name,
-      status: 'active',
-      phone: owner.phoneNumber,
-      bio: 'Consultation journey studio biography.',
-      logoImageId: 'e2e/public/consultation-journey-logo.png',
-    });
-    await makePublicPortfolio({ profileId: profile.id, portfolioSlug: profile.slug });
-    cleanup.push(async () => {
-      const reviews = db
-        .select({ id: schema.review.id })
-        .from(schema.review)
-        .where(eq(schema.review.designerProfileId, profile.id));
-      await db
-        .delete(schema.reviewModerationEvent)
-        .where(inArray(schema.reviewModerationEvent.reviewId, reviews));
-      await db.delete(schema.review).where(eq(schema.review.designerProfileId, profile.id));
-    });
-    await db.insert(schema.member).values({
-      id: randomUUID(),
-      organizationId: org.id,
-      userId: owner.id,
-      role: 'owner',
-      createdAt: new Date(),
-    });
-    const project = await makeProject({
-      designerId: profile.id,
-      title: 'Consultation Journey Kitchen',
-      status: 'published',
-    });
-    const visitorContext = await browser.newContext({ baseURL });
-    cleanup.push(() => visitorContext.close());
-    const designerContext = await browser.newContext({ baseURL });
-    cleanup.push(() => designerContext.close());
-    const visitor = await visitorContext.newPage();
-    const designer = await designerContext.newPage();
-    const pageErrors: string[] = [];
-    visitor.on('pageerror', (error) => pageErrors.push(error.message));
-    designer.on('pageerror', (error) => pageErrors.push(error.message));
     await signIn(visitorContext, visitorUser.phoneNumber!);
     await signIn(designerContext, owner.phoneNumber!);
     expect(
@@ -104,86 +79,59 @@ test('consultation lifecycle: visitor books, studio confirms and completes, visi
         })
       ).ok(),
     ).toBeTruthy();
+
     await visitor.goto(`/d/${profile.slug}`);
-    await visitor.getByRole('button', { name: 'Book consultation', exact: true }).first().click();
-    await visitor.getByRole('button', { name: 'Add another time' }).click();
-    await visitor.getByLabel('Time window 2').selectOption('afternoon');
-    await visitor
-      .getByLabel('What would you like to discuss? (optional)')
-      .fill('Planning our kitchen renovation.');
-    await visitor.getByRole('button', { name: 'Request consultation', exact: true }).click();
-    await expect(
-      visitor.getByRole('status').filter({ hasText: 'Consultation requested' }),
-    ).toBeVisible();
-    await visitor.getByRole('link', { name: 'View my consultations' }).click();
-    await expect(visitor).toHaveURL(/\/home\/consultations/);
-    await expect(visitor.getByText('Awaiting confirmation', { exact: true })).toBeVisible();
-    await visitor.reload();
-    await expect(visitor.getByText('Planning our kitchen renovation.')).toBeVisible();
-    // Keep this requester screen stale while the designer confirms the appointment.
-    await designer.goto('/designer/consultations?status=requested');
-    await expect(
-      designer.getByText(`Private contact: ${visitorUser.email}`, { exact: false }),
-    ).toBeVisible();
-    await designer.getByLabel('Confirm preferred time').selectOption('1');
-    await designer.getByRole('button', { name: 'Confirm consultation', exact: true }).click();
-    await expect(designer.getByText('No consultations match this status.')).toBeVisible();
-    await visitor.getByRole('button', { name: 'Cancel consultation', exact: true }).click();
-    await visitor.getByLabel('Cancellation reason').fill('Stale cancellation should be rejected');
-    await visitor.getByRole('button', { name: 'Confirm cancellation' }).click();
-    await expect(visitor.getByRole('alert').filter({ hasText: 'Booking changed' })).toContainText(
-      'Booking changed',
-    );
-    await visitor.getByRole('button', { name: 'Reload consultations' }).click();
-    await expect(visitor.getByText(/Confirmed: .*afternoon IST/)).toBeVisible();
-    await designer.getByRole('link', { name: 'confirmed', exact: true }).click();
-    await designer.getByRole('button', { name: 'Mark completed' }).click();
-    await designer.getByRole('button', { name: 'Confirm completion' }).click();
-    await expect(designer.getByText('No consultations match this status.')).toBeVisible();
-    await visitor.reload();
-    const reviewLink = visitor.getByRole('link', { name: 'Review consultation' });
-    await expect(reviewLink).toHaveAttribute(
-      'href',
-      new RegExp(`/d/${profile.slug}\\?bookingId=.*#tickif-reviews`),
-    );
-    await reviewLink.click();
-    await expect(
-      visitor.getByText('Your completed consultation will be checked when you submit.'),
-    ).toBeVisible();
-    await visitor.getByLabel('Your rating').selectOption('5');
-    await visitor.getByRole('button', { name: 'Submit review' }).click();
-    await expect(visitor.getByRole('region', { name: 'Your review' })).toContainText('pending');
-    // A second request from a project must retain the project reference.
-    await visitor.goto(`/projects/${project.id}`);
-    await visitor.getByRole('button', { name: 'Book consultation', exact: true }).click();
-    await visitor.getByRole('button', { name: 'Request consultation', exact: true }).click();
-    await visitor.getByRole('link', { name: 'View my consultations' }).click();
-    await expect(visitor).toHaveURL(/\/home\/consultations/);
-    await expect(visitor.getByText(/Consultation Journey Kitchen/)).toBeVisible();
-    await visitor.getByRole('button', { name: 'Cancel consultation', exact: true }).click();
-    await visitor.getByLabel('Cancellation reason').fill('Our renovation schedule changed.');
-    await visitor.getByRole('button', { name: 'Confirm cancellation' }).click();
-    await expect(
-      visitor.getByText(/Cancelled by the requester: Our renovation schedule changed/),
-    ).toBeVisible();
-    await visitor.reload();
-    await expect(
-      visitor.getByText(/Cancelled by the requester: Our renovation schedule changed/),
-    ).toBeVisible();
-    await visitor.screenshot({
-      path: testInfo.outputPath('consultations-desktop.png'),
-      fullPage: true,
+    await expect(visitor.getByRole('button', { name: 'Book consultation' })).toHaveCount(0);
+    await visitor.getByRole('button', { name: 'Send enquiry', exact: true }).first().click();
+    const enquiryDialog = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
+    await enquiryDialog
+      .getByLabel('Description', { exact: false })
+      .fill('Please help us plan a kitchen renovation.');
+    await enquiryDialog.getByRole('button', { name: 'Send Enquiry', exact: true }).click();
+    await expect(enquiryDialog.getByText('Enquiry sent successfully!')).toBeVisible();
+
+    const leads = await db
+      .select({ name: schema.lead.name, source: schema.lead.source })
+      .from(schema.lead)
+      .where(eq(schema.lead.organizationId, org.id));
+    expect(leads).toEqual([{ name: visitorUser.name, source: 'enquiry' }]);
+
+    const futureDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const disabledBooking = await visitorContext.request.post(`${apiUrl}/api/bookings`, {
+      headers: { origin: webUrl },
+      data: {
+        designerProfileId: profile.id,
+        preferredSlots: [{ date: futureDate, window: 'morning' }],
+      },
     });
-    await visitor.setViewportSize({ width: 390, height: 844 });
-    await visitor.screenshot({
-      path: testInfo.outputPath('consultations-mobile.png'),
-      fullPage: true,
-    });
+    expect(disabledBooking.status()).toBe(404);
     expect(
-      await visitor.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true);
+      await db
+        .select({ id: schema.consultationBooking.id })
+        .from(schema.consultationBooking)
+        .where(eq(schema.consultationBooking.requesterId, visitorUser.id)),
+    ).toEqual([]);
+
+    await visitor.goto('/home/consultations');
+    await expect(visitor).toHaveURL(/\/enquiries$/);
+
+    await designer.goto('/designer/leads');
+    await expect(designer.getByRole('link', { name: 'Consultations', exact: true })).toHaveCount(0);
+    await expect(designer.getByRole('columnheader', { name: 'Type', exact: true })).toHaveCount(0);
+    await expect(designer.getByText(visitorUser.name, { exact: true })).toBeVisible();
+    await designer.goto('/designer/consultations');
+    await expect(designer).toHaveURL(/\/designer\/leads$/);
+
+    await designer.screenshot({
+      path: testInfo.outputPath('enquiry-only-leads.png'),
+      fullPage: true,
+    });
     expect(pageErrors).toEqual([]);
   } finally {
-    for (const dispose of cleanup.reverse()) await dispose();
+    await Promise.allSettled([visitorContext.close(), designerContext.close()]);
+    await assertTestDb();
+    await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
+    await db.delete(schema.user).where(eq(schema.user.id, visitorUser.id));
+    await db.delete(schema.user).where(eq(schema.user.id, owner.id));
   }
 });

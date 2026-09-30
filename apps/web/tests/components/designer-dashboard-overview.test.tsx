@@ -26,6 +26,7 @@ const dashboard: ProfileDashboardResponse = {
     new: 0,
   },
   shareUrl: 'https://tickif.com/d/livspace',
+  heroCoverUrl: 'https://cdn.example.com/livspace-cover.jpg',
   publiclyVisible: true,
   verificationStatus: null,
 };
@@ -67,8 +68,19 @@ describe('DesignerDashboardOverview', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: /welcome, livspace/i })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: /welcome, livspace/i });
+    expect(heading).toHaveClass('text-2xl');
+    expect(heading).not.toHaveClass('text-4xl');
+    expect(screen.getByTestId('designer-dashboard-overview')).toHaveClass('p-4', 'lg:p-6');
     expect(screen.getByText(/let's get your profile ready to go live/i)).toBeInTheDocument();
+    expect(screen.getByTestId('profile-completion-progress')).toHaveClass('px-2');
+    expect(screen.getByTestId('profile-completion-progress-bar')).toHaveClass('h-1.5');
+    expect(screen.getByRole('heading', { name: 'Complete profile' })).toHaveClass(
+      'text-muted-foreground',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Complete profile' }).closest('section'),
+    ).toHaveClass('bg-profile-completion-background', 'rounded-3xl');
     expect(screen.getByText('33%')).toBeInTheDocument();
     expect(screen.getByText(/account creation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/upload your first project/i).length).toBeGreaterThan(0);
@@ -92,6 +104,8 @@ describe('DesignerDashboardOverview', () => {
       'src',
       'https://storage.example.com/livspace.webp',
     );
+    expect(screen.getByTestId('dashboard-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('dashboard-preview-logo')).not.toHaveClass('border');
     expect(
       screen.queryByRole('img', { name: 'Livspace generated profile initials' }),
     ).not.toBeInTheDocument();
@@ -111,7 +125,38 @@ describe('DesignerDashboardOverview', () => {
     expect(
       screen.getByRole('img', { name: 'Livspace generated profile initials' }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-preview-logo')).toHaveClass('relative', 'z-10');
+    expect(screen.getByTestId('dashboard-preview-logo')).not.toHaveClass('border');
     expect(screen.queryByRole('img', { name: 'Livspace logo' })).not.toBeInTheDocument();
+  });
+
+  it('renders the saved portfolio cover in the dashboard share preview', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Livspace portfolio cover' })).toHaveAttribute(
+      'src',
+      expect.stringContaining('livspace-cover.jpg'),
+    );
+  });
+
+  it('uses the existing gradient fallback when no portfolio cover is saved', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{ ...dashboard, heroCoverUrl: null }}
+      />,
+    );
+
+    expect(screen.queryByRole('img', { name: 'Livspace portfolio cover' })).not.toBeInTheDocument();
   });
 
   it('links the shipped project, profile, and share actions', () => {

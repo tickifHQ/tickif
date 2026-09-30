@@ -9,11 +9,13 @@ import {
   type LeadStatus,
 } from '@repo/contracts';
 import { Avatar } from '@repo/ui/components/avatar';
+import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
-import { ImagePlus, X } from 'lucide-react';
+import { CalendarDays, ImagePlus, X } from 'lucide-react';
+import { ConsultationScheduleActions } from '@/components/consultation-schedule-actions';
 import { leadStatusOptions } from '@/components/designer-lead-status';
 import { api } from '@/lib/api';
 
@@ -76,9 +78,13 @@ function DetailField({
 export function DesignerLeadDetailDialog({
   lead,
   error,
+  canManageConsultations,
+  consultationsEnabled,
 }: {
   lead: LeadDetailResponse | null;
   error?: string;
+  canManageConsultations: boolean;
+  consultationsEnabled: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -163,10 +169,19 @@ export function DesignerLeadDetailDialog({
           <>
             <div className="flex items-center gap-4 px-6 pt-5 pb-4">
               <Avatar className="size-12 bg-primary text-primary-foreground">
-                <span className="flex size-full items-center justify-center text-sm font-bold">{initials(lead.name)}</span>
+                <span className="flex size-full items-center justify-center text-sm font-bold">
+                  {initials(lead.name)}
+                </span>
               </Avatar>
               <div className="min-w-0">
-                <h2 className="truncate text-base font-medium text-foreground">{lead.name}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-base font-medium text-foreground">{lead.name}</h2>
+                  {consultationsEnabled ? (
+                    <Badge variant="secondary">
+                      {lead.source === 'consultation' ? 'Consultation' : 'Enquiry'}
+                    </Badge>
+                  ) : null}
+                </div>
                 <p className="mt-1 truncate text-sm text-muted-foreground">
                   {lead.city ?? 'Location not added'}
                 </p>
@@ -181,6 +196,32 @@ export function DesignerLeadDetailDialog({
                 <DetailField label="Contact number" value={lead.contactNumber} />
                 <DetailField label="Received on" value={formatDate(lead.receivedAt)} />
               </dl>
+
+              {consultationsEnabled && lead.consultation ? (
+                <section className="mt-5 rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="mb-4 flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <CalendarDays className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-medium text-foreground">Consultation schedule</h3>
+                      <p className="mt-1 break-words text-sm text-muted-foreground">
+                        {lead.consultation.requesterEmail}
+                      </p>
+                    </div>
+                  </div>
+                  <ConsultationScheduleActions
+                    key={`${lead.consultation.id}:${lead.consultation.status}`}
+                    consultation={lead.consultation}
+                    scope="inbox"
+                    canWrite={canManageConsultations}
+                  />
+                </section>
+              ) : consultationsEnabled && lead.source === 'consultation' ? (
+                <p className="mt-5 rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Scheduling details are unavailable for this older consultation lead.
+                </p>
+              ) : null}
 
               <div className="mt-5">
                 <div className="text-sm font-medium text-muted-foreground">Referred project</div>
@@ -270,9 +311,7 @@ export function DesignerLeadDetailDialog({
             variant="inverted"
             className="min-w-32"
             disabled={
-              !lead ||
-              (selectedStatus === lead.status && notes === (lead.notes ?? '')) ||
-              isPending
+              !lead || (selectedStatus === lead.status && notes === (lead.notes ?? '')) || isPending
             }
             onClick={saveLead}
           >

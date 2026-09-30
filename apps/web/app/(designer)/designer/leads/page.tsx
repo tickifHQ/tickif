@@ -8,9 +8,11 @@ import {
   type ListLeadsQuery,
   type ListLeadsResponse,
 } from '@repo/contracts';
+import { config } from '@repo/config/features';
 import { api } from '@/lib/api';
 import { requireAuth } from '@/lib/auth-guard';
 import { DesignerLeadsList } from '@/components/designer-leads-list';
+import { getCurrentOrgRole } from '@/lib/current-org-role';
 
 export const metadata = {
   title: 'Leads · Tickif',
@@ -124,10 +126,11 @@ export default async function DesignerLeadsPage({ searchParams }: DesignerLeadsP
   await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
   const params = await searchParams;
   const query = parseLeadQuery(params);
-  const [leads, tabCounts, selectedLead] = await Promise.all([
+  const [leads, tabCounts, selectedLead, role] = await Promise.all([
     getLeads(query),
     getLeadTabCounts(query),
     getLeadDetail(firstParam(params.leadId)),
+    config.CONSULTATIONS_ENABLED ? getCurrentOrgRole() : Promise.resolve(null),
   ]);
 
   return (
@@ -141,6 +144,8 @@ export default async function DesignerLeadsPage({ searchParams }: DesignerLeadsP
       sortBy={query.sortBy}
       sortOrder={query.sortOrder}
       error={leads.ok ? undefined : leads.message}
+      canManageConsultations={role === 'owner' || role === 'admin'}
+      consultationsEnabled={config.CONSULTATIONS_ENABLED}
     />
   );
 }

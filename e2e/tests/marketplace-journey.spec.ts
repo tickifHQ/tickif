@@ -406,8 +406,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       whatsappNumber: visitorPhone,
     });
     await visitor.goto(`/designers?q=${encodeURIComponent(`Journey Studio ${suffix}`)}`);
-    await visitor.getByRole('combobox', { name: 'Designer type' }).selectOption('individual');
-    await visitor.getByRole('button', { name: 'Find designers', exact: true }).click();
+    await visitor.getByRole('button', { name: 'Individuals', exact: true }).click();
     await expect(visitor).toHaveURL(/entityType=individual/);
     const studioLink = visitor
       .getByRole('link', { name: new RegExp(`Journey Studio ${suffix}`) })
@@ -537,6 +536,30 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await visitor.goto(`/projects/${project.id}`);
     await visitor.setViewportSize({ width: 1280, height: 720 });
     const projectActions = visitor.getByRole('complementary', { name: `Journey Studio ${suffix}` });
+    await expect(
+      projectActions.getByRole('button', { name: 'Send enquiry', exact: true }),
+    ).toHaveCount(0);
+    const sidebarEnquiry = projectActions.getByRole('button', {
+      name: `Enquire about ${project.title}`,
+      exact: true,
+    });
+    await expect(sidebarEnquiry).toHaveCount(1);
+    await sidebarEnquiry.scrollIntoViewIfNeeded();
+    await visitor.screenshot({
+      path: testInfo.outputPath('project-enquiry-sidebar-desktop.png'),
+      animations: 'disabled',
+    });
+    const projectViewport = visitor.viewportSize()!;
+    await visitor.setViewportSize({ width: 390, height: 844 });
+    await sidebarEnquiry.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      .toBe(true);
+    await visitor.screenshot({
+      path: testInfo.outputPath('project-enquiry-sidebar-mobile.png'),
+      animations: 'disabled',
+    });
+    await visitor.setViewportSize(projectViewport);
     await projectActions.getByRole('button', { name: 'Like project', exact: true }).click();
     await expect(
       projectActions.getByRole('button', { name: 'Unlike project', exact: true }),

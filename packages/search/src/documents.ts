@@ -49,6 +49,8 @@ export type DesignerSearchDocument = {
   slug: string | null;
   displayName: string;
   bio: string | null;
+  /** Public portfolio tagline, preferred over the longer profile bio on discovery cards. */
+  tagline?: string | null;
   /** Terms from published portfolio content only. */
   portfolioTerms?: string[];
   entityType: 'individual' | 'company';
@@ -70,6 +72,8 @@ export type DesignerSearchDocument = {
   kycExpiresAt?: number;
   /** Stable media key. API responses mint URLs at read time. */
   logoImageKey: string | null;
+  /** Optional public portfolio hero used by designer discovery cards. */
+  heroImageKey?: string | null;
   /** Unix epoch milliseconds, kept numeric for deterministic sorting. */
   updatedAt: number;
 };

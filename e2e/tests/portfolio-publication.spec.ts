@@ -1,8 +1,10 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
+import { putObject } from '@repo/storage';
 import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
 
@@ -105,9 +107,83 @@ test.describe('E-278 portfolio publication readiness', () => {
     return { user, organization, profile, portfolioSlug };
   }
 
+  test('custom cities can be typed, saved, reloaded, and removed on desktop and mobile', async ({
+    page,
+    context,
+  }, testInfo) => {
+    await assertTestDb();
+    const seed = await seedDesigner('custom-cities', {
+      status: 'active',
+      publicLinkEnabled: true,
+      logo: true,
+      bio: true,
+      tagline: true,
+      heroCover: true,
+    });
+    await signInPhone(context, seed.user.phoneNumber);
+    await selectOrganization(context, seed.organization.id);
+    await page.goto('/designer/profile');
+    await expect(page).toHaveTitle('Edit profile · Tickif');
+    await expect(page.getByRole('heading', { name: 'Edit your profile' })).toBeVisible();
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const cities = page.getByRole('button', { name: /^Cities:/ });
+    await cities.click();
+    await page.getByRole('menuitemcheckbox', { name: 'Mumbai', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Add a custom city' }).click();
+    const input = page.getByRole('textbox', { name: 'Add a custom city' });
+    // M must remain in the text input rather than activate Mumbai's menu typeahead.
+    await input.pressSequentially('Mapusa', { delay: 50 });
+    await expect(input).toHaveValue('Mapusa');
+    await expect(input).toBeFocused();
+    await input.press('Enter');
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true })).toBeChecked();
+    // Adding a selected row must not push the still-focused entry below the
+    // scrollable menu's visible edge.
+    const inputBounds = await input.boundingBox();
+    const menuBounds = await page.getByRole('menu').boundingBox();
+    expect(inputBounds).not.toBeNull();
+    expect(menuBounds).not.toBeNull();
+    expect(inputBounds!.y + inputBounds!.height).toBeLessThanOrEqual(
+      menuBounds!.y + menuBounds!.height,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath('custom-cities-desktop.png'),
+      animations: 'disabled',
+    });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(cities).toContainText('Mapusa');
+    const published = await context.request.get(`${apiUrl}/api/portfolios/${seed.portfolioSlug}`);
+    expect(published.ok()).toBeTruthy();
+    expect(await published.json()).toMatchObject({
+      cities: expect.arrayContaining(['Mumbai', 'Mapusa']),
+      stats: { cityPresenceCount: 2 },
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await cities.click();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true })).toBeChecked();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('custom-cities-mobile.png'),
+      animations: 'disabled',
+    });
+    await page.getByRole('menuitemcheckbox', { name: 'Mapusa', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(cities).not.toContainText('Mapusa');
+    expect(errors).toEqual([]);
+  });
+
   test('an incomplete portfolio never exposes an actionable public URL (state D)', async ({
     browser,
-  }) => {
+  }, testInfo) => {
     const context = await browser.newContext({ baseURL: webUrl });
     try {
       // Legacy active profile missing Hero fields must still never be publicly visible.
@@ -127,6 +203,21 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.goto('/designer/dashboard');
       await expect(page.getByRole('button', { name: /copy link/i })).toHaveCount(0);
       await expect(page.getByText(seed.portfolioSlug)).toHaveCount(0);
+      await expect(page.getByRole('progressbar', { name: 'Profile completion' })).toBeVisible();
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-setup-desktop.png'),
+        animations: 'disabled',
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath('dashboard-setup-mobile.png'),
+        animations: 'disabled',
+      });
+      await page.setViewportSize({ width: 1440, height: 1000 });
 
       // Portfolio settings: no "Open full", no "Copy link".
       await page.goto('/designer/portfolio');
@@ -236,10 +327,96 @@ test.describe('E-278 portfolio publication readiness', () => {
     }
   });
 
+  test('a saved experience center appears on the published portfolio and remains mobile-safe', async ({
+    browser,
+  }, testInfo) => {
+    const context = await browser.newContext({
+      baseURL: webUrl,
+      viewport: { width: 1440, height: 1000 },
+    });
+    try {
+      const seed = await seedDesigner('experience-centers', {
+        status: 'active',
+        publicLinkEnabled: true,
+        logo: true,
+        bio: true,
+        tagline: true,
+        heroCover: true,
+      });
+      await signInPhone(context, seed.user.phoneNumber);
+      await selectOrganization(context, seed.organization.id);
+      const page = await context.newPage();
+
+      await page.goto('/designer/portfolio');
+      await page
+        .getByRole('heading', { name: 'Experience Centers' })
+        .locator('xpath=ancestor::button')
+        .click();
+      await page.getByRole('button', { name: 'Add experience center' }).click();
+      await page.getByLabel('Name').fill('Whitefield Experience Center');
+      await page.getByLabel('Address').fill('12, 1st Main Road, Whitefield');
+      await page.getByLabel('City').fill('Bengaluru');
+      await page.getByLabel('State', { exact: true }).selectOption('Karnataka');
+      await page.getByLabel('Postal code (optional)').fill('560066');
+      await page.getByLabel('Phone (optional)').fill('+91 99946-45911');
+      await page
+        .getByLabel('Google Maps link (optional)')
+        .fill('https://maps.google.com/?q=Whitefield');
+      await page.getByRole('button', { name: 'Add center' }).click();
+      await page.getByRole('button', { name: 'Add experience center' }).click();
+      await page.getByLabel('Name').fill('Powai Studio');
+      await page.getByLabel('Address').fill('4, Hiranandani Gardens, Powai');
+      await page.getByLabel('City').fill('Mumbai');
+      await page.getByLabel('State', { exact: true }).selectOption('Maharashtra');
+      await page.getByRole('button', { name: 'Add center' }).click();
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+
+      await page.goto(`/d/${seed.portfolioSlug}`);
+      const centers = page.getByRole('region', { name: 'Experience centers' });
+      await expect(centers).toBeVisible();
+      await expect(
+        centers.getByRole('heading', { name: 'Whitefield Experience Center' }),
+      ).toBeVisible();
+      await expect(centers.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
+      await expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
+      await expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeVisible();
+      await expect(centers.getByText('Mumbai, Maharashtra')).toBeVisible();
+      await expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
+        'href',
+        'tel:+919994645911',
+      );
+      await expect(centers.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
+        'rel',
+        'noopener noreferrer nofollow',
+      );
+      await centers.screenshot({
+        path: testInfo.outputPath('experience-centers-desktop.png'),
+        animations: 'disabled',
+      });
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(centers).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await centers.screenshot({
+        path: testInfo.outputPath('experience-centers-mobile.png'),
+        animations: 'disabled',
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
   test('uploading the final required cover publishes the portfolio and renders responsively', async ({
     browser,
-  }) => {
-    const context = await browser.newContext({ baseURL: webUrl });
+  }, testInfo) => {
+    test.setTimeout(60_000);
+    const context = await browser.newContext({
+      baseURL: webUrl,
+      permissions: ['clipboard-read', 'clipboard-write'],
+    });
     try {
       const seed = await seedDesigner('cover-upload', {
         status: 'draft',
@@ -249,9 +426,31 @@ test.describe('E-278 portfolio publication readiness', () => {
         tagline: true,
         heroCover: false,
       });
+      // Use an owned, real image so visual checks cannot pass with a broken logo.
+      const logoKey = `originals/logos/${seed.profile.id}/logo.png`;
+      await putObject({
+        key: logoKey,
+        body: await readFile(
+          resolve(import.meta.dirname, '../../apps/web/public/images/email/tickif-mark.png'),
+        ),
+        contentType: 'image/png',
+      });
+      await db
+        .update(schema.designerProfile)
+        .set({ logoImageId: logoKey })
+        .where(eq(schema.designerProfile.id, seed.profile.id));
       await signInPhone(context, seed.user.phoneNumber);
       await selectOrganization(context, seed.organization.id);
       const page = await context.newPage();
+      const pageErrors: string[] = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+
+      await page.goto('/designer/dashboard');
+      await expect(page.getByTestId('dashboard-preview-logo')).toBeVisible();
+      await expect(page.getByAltText(`${seed.organization.name} portfolio cover`)).toHaveCount(0);
+      await page.getByTestId('dashboard-share-card').screenshot({
+        path: testInfo.outputPath('dashboard-gradient-fallback.png'),
+      });
 
       await page.goto('/designer/portfolio');
       await expect(page.getByRole('button', { name: 'Upload portfolio cover' })).toBeVisible();
@@ -266,6 +465,66 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByRole('button', { name: 'Replace portfolio cover' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Open full' })).toBeVisible();
 
+      for (const surface of [
+        {
+          route: '/designer/portfolio',
+          logo: 'portfolio-preview-logo',
+          cover: 'Portfolio cover preview',
+        },
+        {
+          route: '/designer/dashboard',
+          logo: 'dashboard-preview-logo',
+          cover: `${seed.organization.name} portfolio cover`,
+        },
+      ]) {
+        await page.goto(surface.route);
+        const logo = page.getByTestId(surface.logo);
+        const cover = page.getByAltText(surface.cover, { exact: true });
+        await expect(cover).toBeVisible();
+        await expect
+          .poll(() => cover.evaluate((image: HTMLImageElement) => image.naturalWidth))
+          .toBeGreaterThan(0);
+        await expect
+          .poll(() => logo.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth))
+          .toBeGreaterThan(0);
+        for (const viewport of [
+          { width: 1440, height: 1000 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          // Settings deliberately reserves its side-by-side live preview for
+          // desktop; on mobile the editing form uses the full screen width.
+          if (surface.logo === 'portfolio-preview-logo' && viewport.width < 1024) {
+            await expect(logo).toBeHidden();
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.screenshot({ path: testInfo.outputPath('portfolio-settings-mobile.png') });
+            continue;
+          }
+          await logo.scrollIntoViewIfNeeded();
+          await expect(logo).toHaveCSS('border-top-width', '0px');
+          // The overlapping top of the logo must win hit testing over the cover.
+          expect(
+            await logo.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              return element.contains(
+                document.elementFromPoint(rect.x + rect.width / 2, rect.y + 8),
+              );
+            }),
+          ).toBe(true);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          ).toBe(true);
+          await page.screenshot({
+            path: testInfo.outputPath(`${surface.logo}-${viewport.width}.png`),
+          });
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.getByRole('button', { name: 'Copy link', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+      }
+      expect(pageErrors).toEqual([]);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+
       const publicUrl = `/d/${seed.portfolioSlug}`;
       await page.goto(publicUrl);
       await expect(page.getByRole('region', { name: 'Portfolio hero' })).toBeVisible();
@@ -276,7 +535,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByText('Projects', { exact: true })).toBeVisible();
       await expect(page.getByText('Cities present')).toBeVisible();
       await expect(
-        page.getByRole('button', { name: 'Book consultation', exact: true }).first(),
+        page.getByRole('button', { name: 'Send enquiry', exact: true }).first(),
       ).toBeVisible();
 
       const ownEnquire = page.getByRole('button', { name: 'Enquire', exact: true }).first();
