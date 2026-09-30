@@ -8,12 +8,12 @@ export const metadata = {
 };
 
 export default async function DesignerPortfolioPage() {
-  const capabilities = await getCurrentOrgCapabilities();
-  if (!capabilities?.editOrganization) redirect('/unauthorized');
-  const [organization, role] = await Promise.all([getCurrentOrgIdentity(), getCurrentOrgRole()]);
+  const [capabilities, role] = await Promise.all([getCurrentOrgCapabilities(), getCurrentOrgRole()]);
+  if (!capabilities || (!capabilities.editOrganization && role !== 'owner')) redirect('/unauthorized');
+  const organization = await getCurrentOrgIdentity();
   return (
     <>
-      <DesignerPortfolioSettings />
+      {capabilities.editOrganization ? <DesignerPortfolioSettings /> : null}
       {organization && role === 'owner' ? (
         <DesignerCloseStudio
           key={organization.id}

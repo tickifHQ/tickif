@@ -444,6 +444,7 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     expect(closed.retention?.status).toBe('deletion_requested');
     await page.reload();
     await expect(dangerZone.getByRole('button', { name: 'Restore studio' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View studio closure and recovery' })).toBeVisible();
     await dangerZone.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath('close-studio-recovery-mobile.png') });
     await dangerZone.getByRole('button', { name: 'Restore studio' }).click();
@@ -458,8 +459,11 @@ test('studio workspaces isolate all business surfaces and enforce owner, admin a
     await adminContext.close();
     await memberContext.close();
     await assertTestDb();
-    if (organizationIds.length)
+    if (organizationIds.length) {
+      // Closure intentionally restricts production deletion; remove only these test fixtures.
+      await db.delete(schema.organizationRetention).where(inArray(schema.organizationRetention.organizationId, organizationIds));
       await db.delete(schema.organization).where(inArray(schema.organization.id, organizationIds));
+    }
     if (userIds.length) await db.delete(schema.user).where(inArray(schema.user.id, userIds));
   }
 });
