@@ -59,7 +59,7 @@ export function LogoCropDialog({
         <DialogHeader className="shrink-0 border-b border-border px-5 py-3.5 pr-14 text-left">
           <DialogTitle>Crop logo</DialogTitle>
           <DialogDescription>
-            Drag to position your logo, then zoom until the square preview looks right.
+            Drag to position your logo, then zoom until the circular preview looks right.
           </DialogDescription>
         </DialogHeader>
 
@@ -77,7 +77,7 @@ export function LogoCropDialog({
                 maxZoom={3}
                 initialCroppedAreaPercentages={initialCrop ?? undefined}
                 aspect={1}
-                cropShape="rect"
+                cropShape="round"
                 showGrid
                 objectFit="contain"
                 onCropChange={setCrop}
