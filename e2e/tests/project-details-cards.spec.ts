@@ -73,8 +73,15 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     const row = page.getByRole('row').filter({ hasText: pendingTitle });
     await expect(row.getByText('Pending changes · Submitted')).toBeVisible();
     const preview = row.getByRole('button', { name: 'Preview ' + pendingTitle });
-    await preview.hover();
     const card = page.locator('[data-slot="tooltip-content"]');
+    // A click is replayed across hydration; an early pointer hover is not.
+    // Establish the interactive preview before checking each input modality.
+    await preview.click();
+    await expect(card).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
+    await page.mouse.move(0, 0);
+    await preview.hover();
     await expect(card).toBeVisible();
     await expect(card).toContainText(pendingTitle);
     await expect(card).toContainText('Last updated');
@@ -88,6 +95,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await expect(card).toContainText('waiting for review');
     await capture('pending-status-keyboard-desktop', page);
     await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await preview.scrollIntoViewIfNeeded();
     await preview.tap();
@@ -98,6 +106,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
     await capture('project-preview-mobile-touch', page);
     await page.keyboard.press('Escape');
+    await expect(card).toHaveCount(0);
     await status.scrollIntoViewIfNeeded();
     await status.tap();
     await expect(card).toContainText('Your published version is still live.');
@@ -105,6 +114,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await page.keyboard.press('Escape');
     await expect(card).toHaveCount(0);
     expect(errors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   } finally {
     await testInfo.attach('console-errors', {
       body: JSON.stringify(consoleErrors),
