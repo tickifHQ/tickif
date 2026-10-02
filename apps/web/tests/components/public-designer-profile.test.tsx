@@ -272,6 +272,39 @@ describe('PublicDesignerProfile', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('omits unknown experience and offices without creating a false zero metric', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, yearsExperience: null, officeCount: null },
+        }}
+      />,
+    );
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.queryByText('Years experience')).not.toBeInTheDocument();
+    expect(screen.queryByText('Offices', { exact: true })).not.toBeInTheDocument();
+    expect(hero.getByText('Projects', { exact: true })).toBeInTheDocument();
+    expect(hero.getByText('Cities present', { exact: true })).toBeInTheDocument();
+  });
+
+  it('preserves explicitly supplied zero experience and office count', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, yearsExperience: 0, officeCount: 0 },
+        }}
+      />,
+    );
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.getByText('Years experience')).toBeInTheDocument();
+    expect(hero.getByText('0', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('Offices', { exact: true }).parentElement).toHaveTextContent('0');
+  });
+
   it('omits the selected projects section when the public portfolio has no projects', () => {
     const portfolio = makePublicPortfolio();
     render(

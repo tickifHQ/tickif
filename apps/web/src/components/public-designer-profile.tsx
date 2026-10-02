@@ -265,7 +265,9 @@ function HeroSection({ portfolio, view }: SectionProps) {
             </p>
           ) : null}
 
-          <dl className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded border bg-border p-px">
+          <dl
+            className={`mt-6 grid ${tiles.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-px overflow-hidden rounded border bg-border p-px`}
+          >
             {tiles.map((tile) => (
               <div
                 key={tile.label}
