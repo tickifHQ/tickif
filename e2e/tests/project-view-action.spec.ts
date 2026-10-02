@@ -15,7 +15,22 @@ test('project view action opens the live version while submitted edits remain pr
   const fixture = await createProjectVersionFixture();
   const { target } = fixture;
   const errors: string[] = [];
+  const consoleErrors: string[] = [];
+  context.on('page', (openedPage) => {
+    openedPage.on('pageerror', (error) => errors.push(error.message));
+    openedPage.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+  });
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  const capture = async (name: string, targetPage = page) => {
+    const path = testInfo.outputPath(name + '.png');
+    await targetPage.screenshot({ path, animations: 'disabled' });
+    await testInfo.attach(name, { path, contentType: 'image/png' });
+  };
   try {
     await db
       .update(schema.project)
@@ -61,20 +76,14 @@ test('project view action opens the live version while submitted edits remain pr
       name: `View project: ${pendingTitle} (opens in new tab)`,
     });
     await expect(view).toBeVisible();
-    await testInfo.attach('view-project-desktop', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('view-project-desktop', page);
     const popupPromise = page.waitForEvent('popup');
     await view.click();
     const popup = await popupPromise;
     await expect(popup).toHaveURL(`${webUrl}/projects/${target.id}`);
     await expect(popup.getByRole('heading', { name: target.title, exact: true })).toBeVisible();
     await expect(popup.getByRole('heading', { name: pendingTitle, exact: true })).toHaveCount(0);
-    await testInfo.attach('view-project-published-version', {
-      body: await popup.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('view-project-published-version', popup);
     await popup.close();
     await row.getByRole('button', { name: `More actions for ${pendingTitle}` }).click();
     await expect(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
@@ -82,12 +91,13 @@ test('project view action opens the live version while submitted edits remain pr
     await page.setViewportSize({ width: 390, height: 844 });
     await view.scrollIntoViewIfNeeded();
     await expect(view).toBeVisible();
-    await testInfo.attach('view-project-mobile', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('view-project-mobile', page);
     expect(errors).toEqual([]);
   } finally {
+    await testInfo.attach('console-errors', {
+      body: JSON.stringify(consoleErrors),
+      contentType: 'application/json',
+    });
     await fixture.cleanup();
   }
 });
