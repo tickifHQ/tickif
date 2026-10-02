@@ -196,6 +196,7 @@ describe('search projection mapper', () => {
       scopeSlugs: ['full-home'],
       themeSlugs: ['minimal'],
       yearsExperience: 8,
+      foundedYear: null,
       projectCount: 12,
       avgRating: 4.75,
       paidUntil: 0,

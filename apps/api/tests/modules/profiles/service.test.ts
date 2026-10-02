@@ -72,6 +72,7 @@ const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileR
   foundedYear: null,
   testimonialBannerEnabled: false,
   staffCount: null,
+  officeCount: null,
   customCities: [],
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
