@@ -806,9 +806,11 @@ export function DesignerPortfolioSettings() {
             <p className="text-sm text-muted-foreground">
               {portfolio.missingRequiredFields.length > 0
                 ? 'Finish the required Hero details and save to publish your portfolio.'
-                : !portfolio.publiclyVisible
+                : !portfolio.publicLinkEnabled
                   ? 'Your portfolio is hidden. Enable Public link and save to publish it.'
-                  : 'Your public portfolio link is unavailable. Refresh to try again.'}
+                  : !portfolio.publiclyVisible
+                    ? 'Your portfolio is not publicly available yet.'
+                    : 'Your public portfolio link is unavailable. Refresh to try again.'}
             </p>
           )}
         </div>

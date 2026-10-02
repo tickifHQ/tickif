@@ -269,6 +269,14 @@ describe('DesignerPortfolioSettings', () => {
         screen.getByText('Your public portfolio link is unavailable. Refresh to try again.'),
       ).toBeVisible();
     });
+
+    it('does not suggest enabling an already enabled link when publication is restricted', async () => {
+      mock.fetchPortfolio.mockResolvedValue({ ...basePortfolio, publiclyVisible: false });
+      await renderSettings();
+      expect(screen.queryByRole('link', { name: 'View portfolio' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Enable Public link and save/)).not.toBeInTheDocument();
+      expect(screen.getByText('Your portfolio is not publicly available yet.')).toBeVisible();
+    });
   });
 
   it('renders the fetched portfolio data', async () => {
