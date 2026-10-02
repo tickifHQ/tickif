@@ -565,6 +565,7 @@ function toListItemFields(
   reviewComments: ProjectReviewComment[],
 ): ProjectListItem {
   return {
+    publicAvailable: row.publicAvailable ?? false,
     ...(row.pendingChanges
       ? { pendingChanges: true, liveStatus: 'published' as const, pendingStatus: row.status }
       : {}),
