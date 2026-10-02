@@ -37,7 +37,11 @@ test('anonymous social cards cover public routes and disappear immediately when 
   const logoKey = `originals/logos/${profile.id}/mark.png`;
   const coverKey = `derivatives/social-${suffix}/large.jpg`;
   const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
   try {
     await putObject({
       key: logoKey,
@@ -130,6 +134,20 @@ test('anonymous social cards cover public routes and disappear immediately when 
     await expect(page.locator('h1').first()).toContainText(project.title);
     await page.screenshot({ path: testInfo.outputPath('project-mobile.png') });
 
+    await db
+      .update(schema.project)
+      .set({
+        title:
+          'Maison Élan — A carefully considered home with natural materials, warm lighting and room for everyday family life'.repeat(
+            2,
+          ),
+      })
+      .where(eq(schema.project.id, project.id));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(`/projects/${project.id}/social-card`);
+    await expect(page.locator('img')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('long-unicode-project-title.png') });
+
     await deleteObject(coverKey);
     const fallback = await request.get(`/projects/${project.id}/social-card`);
     expect(fallback.status()).toBe(200);
@@ -154,6 +172,11 @@ test('anonymous social cards cover public routes and disappear immediately when 
     expect((await request.get(`/d/${profile.slug}/social-card`)).status()).toBe(404);
     expect((await request.get('/blog/unpublished-article/social-card')).status()).toBe(404);
     expect(pageErrors).toEqual([]);
+    await testInfo.attach('browser-console', {
+      body: JSON.stringify(consoleErrors, null, 2),
+      contentType: 'application/json',
+    });
+    expect(consoleErrors).toEqual([]);
   } finally {
     await assertTestDb();
     await db.delete(schema.organization).where(eq(schema.organization.id, organization.id));
