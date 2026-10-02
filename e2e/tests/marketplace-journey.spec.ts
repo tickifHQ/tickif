@@ -392,9 +392,12 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .getByRole('textbox', { name: 'OTP digit 1', exact: true })
       .fill(await phoneCode(visitorPhone));
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
+    // Confirm the interactive form is hydrated before filling text fields that
+    // React initializes from the server-provided onboarding state.
+    await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
+    await expect(visitor.getByLabel('WhatsApp number (Recommended)')).toBeDisabled();
     await visitor.getByLabel(/^Display name/).fill(`Journey Visitor ${suffix}`);
     await visitor.getByLabel('Address', { exact: true }).fill('Mumbai');
-    await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(visitor).toHaveURL(`${webUrl}/home`);
     const [persistedVisitor] = await db
