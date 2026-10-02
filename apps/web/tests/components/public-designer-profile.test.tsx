@@ -135,8 +135,8 @@ describe('PublicDesignerProfile', () => {
 
     const hero = screen.getByRole('region', { name: 'Portfolio hero' });
     expect(within(hero).getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeVisible();
-    expect(within(hero).getByRole('button', { name: 'Enquire', exact: true })).toBeVisible();
-    expect(within(hero).getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    expect(within(hero).getByRole('button', { name: 'Enquire' })).toBeVisible();
+    expect(within(hero).getByRole('button', { name: 'Share' })).toBeVisible();
     expect(hero.previousElementSibling).not.toHaveTextContent('Anika Spaces');
   });
 
@@ -150,8 +150,8 @@ describe('PublicDesignerProfile', () => {
 
     expect(screen.queryByRole('region', { name: 'Portfolio hero' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Anika Spaces/, level: 1 })).toBeVisible();
-    expect(screen.getAllByRole('button', { name: 'Send enquiry', exact: true })[0]).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Send enquiry' })[0]).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeVisible();
   });
 
   it('respects disabled sharing in the hero action group', () => {
