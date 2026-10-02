@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'project-details-cards.spec.ts',
+    'project preview and status cards support hover, keyboard and mobile touch',
+  ],
+  [
     'project-view-action.spec.ts',
     'project view action opens the live version while submitted edits remain private',
   ],
