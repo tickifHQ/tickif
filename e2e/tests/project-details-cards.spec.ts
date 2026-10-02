@@ -15,7 +15,22 @@ test('project preview and status cards support hover, keyboard and mobile touch'
   const fixture = await createProjectVersionFixture();
   const { target } = fixture;
   const errors: string[] = [];
+  const consoleErrors: string[] = [];
+  context.on('page', (openedPage) => {
+    openedPage.on('pageerror', (error) => errors.push(error.message));
+    openedPage.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+  });
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  const capture = async (name: string, targetPage = page) => {
+    const path = testInfo.outputPath(name + '.png');
+    await targetPage.screenshot({ path, animations: 'disabled' });
+    await testInfo.attach(name, { path, contentType: 'image/png' });
+  };
   try {
     await db
       .update(schema.project)
@@ -63,10 +78,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await expect(card).toBeVisible();
     await expect(card).toContainText(pendingTitle);
     await expect(card).toContainText('Last updated');
-    await testInfo.attach('project-preview-desktop', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('project-preview-desktop', page);
     await page.keyboard.press('Escape');
     await expect(card).toHaveCount(0);
     const status = row.getByRole('button', { name: 'Submitted details' });
@@ -74,10 +86,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await expect(card).toBeVisible();
     await expect(card).toContainText('Your published version is still live.');
     await expect(card).toContainText('waiting for review');
-    await testInfo.attach('pending-status-keyboard-desktop', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('pending-status-keyboard-desktop', page);
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
     await preview.scrollIntoViewIfNeeded();
@@ -87,22 +96,20 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-    await testInfo.attach('project-preview-mobile-touch', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('project-preview-mobile-touch', page);
     await page.keyboard.press('Escape');
     await status.scrollIntoViewIfNeeded();
     await status.tap();
     await expect(card).toContainText('Your published version is still live.');
-    await testInfo.attach('pending-status-mobile-touch', {
-      body: await page.screenshot({ animations: 'disabled' }),
-      contentType: 'image/png',
-    });
+    await capture('pending-status-mobile-touch', page);
     await page.keyboard.press('Escape');
     await expect(card).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
+    await testInfo.attach('console-errors', {
+      body: JSON.stringify(consoleErrors),
+      contentType: 'application/json',
+    });
     await fixture.cleanup();
   }
 });
