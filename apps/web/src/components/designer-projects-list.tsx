@@ -209,6 +209,7 @@ export function DesignerProjectsList({
                         <StatusBadge status="published" />
                         <StatusWithFeedback
                           status={project.status}
+                          publicAvailable={project.publicAvailable}
                           moderationNote={project.moderationNote}
                           rejectionReasonCode={project.rejectionReasonCode}
                           rejectionReasonCodes={project.rejectionReasonCodes}
@@ -223,6 +224,7 @@ export function DesignerProjectsList({
                     ) : (
                       <StatusWithFeedback
                         status={project.status}
+                        publicAvailable={project.publicAvailable}
                         moderationNote={project.moderationNote}
                         rejectionReasonCode={project.rejectionReasonCode}
                         rejectionReasonCodes={project.rejectionReasonCodes}

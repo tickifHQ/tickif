@@ -110,6 +110,7 @@ export function StatusWithFeedback({
   rejectionReasonCodes,
   updatedLabel,
   livePending = false,
+  publicAvailable,
   children,
 }: {
   status: ProjectStatus;
@@ -118,6 +119,7 @@ export function StatusWithFeedback({
   rejectionReasonCodes: ModerationReasonCode[];
   updatedLabel: string;
   livePending?: boolean;
+  publicAvailable?: boolean;
   children: ReactNode;
 }) {
   const reasonCodes =
@@ -142,9 +144,18 @@ export function StatusWithFeedback({
             : projectStatusLabel(status)}
         </p>
         {livePending ? (
-          <p>Your published version is still live. This status applies to your pending edits.</p>
+          <p>
+            {publicAvailable === false
+              ? 'Your published version is currently unavailable to visitors.'
+              : 'Your published version is still live.'}{' '}
+            This status applies to your pending edits.
+          </p>
         ) : null}
-        <p className="text-muted-foreground">{projectStatusDescriptions[status]}</p>
+        <p className="text-muted-foreground">
+          {status === 'published' && publicAvailable === false
+            ? 'This project has a published version, but it is currently unavailable to visitors.'
+            : projectStatusDescriptions[status]}
+        </p>
         {hasFeedback ? (
           <div className="space-y-2 border-t border-border pt-3">
             <p className="font-medium">

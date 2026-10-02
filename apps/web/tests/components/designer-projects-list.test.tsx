@@ -56,6 +56,39 @@ const projects: ListProjectsResponse = {
 };
 
 describe('DesignerProjectsList', () => {
+  it.each(['published', 'submitted'] as const)(
+    'explains unavailable %s versions without promising public access',
+    async (status) => {
+      const user = userEvent.setup();
+      render(
+        <DesignerProjectsList
+          projects={{
+            ...projects,
+            items: [
+              {
+                ...projects.items[0]!,
+                status,
+                publicAvailable: false,
+                liveStatus: 'published',
+                pendingChanges: status === 'submitted',
+              },
+            ],
+          }}
+          activeStatus="all"
+        />,
+      );
+      await user.click(
+        screen.getByRole('button', {
+          name: status === 'published' ? 'Live details' : 'Submitted details',
+        }),
+      );
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip).toHaveTextContent('currently unavailable to visitors');
+      expect(tooltip).not.toHaveTextContent('still live');
+      expect(tooltip).not.toHaveTextContent('published and available to visitors');
+    },
+  );
+
   it.each([
     ['draft', 'Draft', 'Saved privately'],
     ['submitted', 'Submitted', 'waiting for review'],
