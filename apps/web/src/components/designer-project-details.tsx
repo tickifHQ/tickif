@@ -31,7 +31,11 @@ function ProjectDetailsCard({
             className ??
             'inline-flex rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
           }
-          onClick={() => setOpen(true)}
+          onClick={(event) => {
+            // Keep a tap open instead of Radix's default click-to-close behavior.
+            event.preventDefault();
+            setOpen(true);
+          }
         >
           {trigger}
         </button>

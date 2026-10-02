@@ -5,7 +5,7 @@ import { createProjectVersionFixture } from '../lib/project-version-fixtures';
 import { moderationApiUrl, signInProjectAdmin } from '../lib/project-moderation-fixtures';
 import { webUrl } from '../lib/environment';
 
-test.use({ video: 'on', viewport: { width: 1440, height: 1000 } });
+test.use({ hasTouch: true, video: 'on', viewport: { width: 1440, height: 1000 } });
 
 test('project preview and status cards support hover, keyboard and mobile touch', async ({
   page,
@@ -81,7 +81,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
     await preview.scrollIntoViewIfNeeded();
-    await preview.click();
+    await preview.tap();
     await expect(card).toBeVisible();
     const bounds = await card.boundingBox();
     expect(bounds).not.toBeNull();
@@ -93,7 +93,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     });
     await page.keyboard.press('Escape');
     await status.scrollIntoViewIfNeeded();
-    await status.click();
+    await status.tap();
     await expect(card).toContainText('Your published version is still live.');
     await testInfo.attach('pending-status-mobile-touch', {
       body: await page.screenshot({ animations: 'disabled' }),
