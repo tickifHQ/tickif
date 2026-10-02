@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'project-view-action.spec.ts',
+    'project view action opens the live version while submitted edits remain private',
+  ],
+  [
     'admin-summary.spec.ts',
     'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
   ],
