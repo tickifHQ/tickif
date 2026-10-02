@@ -93,6 +93,22 @@ clear before it ships.
 
 ## Projection pipeline
 
+### Studio experience rollover
+
+Designer documents now include optional `foundedYear`. Apply the schema update
+before deploying the worker, then reindex existing documents using the commands
+above. Public responses derive studio experience from the current UTC year;
+documents without a founding year retain positive legacy experience, while an
+unqualified zero is treated as unknown.
+
+The worker schedules a daily UTC-midnight check and a startup catch-up. One
+successful designer-only refresh per year updates experience sorting in bounded
+batches under the normal projection locks. Completed annual jobs are retained
+for 400 days to deduplicate checks. Failed annual jobs use the normal retry
+policy and are removed after failure so the next daily check can retry. A
+worker outage at New Year therefore catches up on restart. Ordinary profile
+edits continue through the transactional projection outbox.
+
 Search writes are asynchronous. PostgreSQL remains the source of truth:
 
 1. Project, profile, portfolio, logo, and terminal media-failure transactions

@@ -199,11 +199,15 @@ type HeroStatTile = { value: string; label: string; detail: string };
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
   const tiles: HeroStatTile[] = [
-    {
-      value: String(stats.yearsExperience),
-      label: 'Years experience',
-      detail: 'Industry experience',
-    },
+    ...(stats.yearsExperience != null
+      ? [
+          {
+            value: String(stats.yearsExperience),
+            label: 'Years experience',
+            detail: 'Studio experience',
+          },
+        ]
+      : []),
     {
       value: String(stats.projectCount),
       label: 'Projects',
@@ -261,7 +265,9 @@ function HeroSection({ portfolio, view }: SectionProps) {
             </p>
           ) : null}
 
-          <dl className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded border bg-border p-px">
+          <dl
+            className={`mt-6 grid ${tiles.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-px overflow-hidden rounded border bg-border p-px`}
+          >
             {tiles.map((tile) => (
               <div
                 key={tile.label}
@@ -499,7 +505,7 @@ function StorySection({ portfolio, view }: SectionProps) {
                     <p className="flex items-center gap-1.5">
                       <CalendarDays className="size-3.5 text-muted-foreground" />
                       <span>{portfolio.foundedYear}</span>
-                      {portfolio.stats.yearsExperience > 0 ? (
+                      {(portfolio.stats.yearsExperience ?? 0) > 0 ? (
                         <span className="text-muted-foreground">
                           ({portfolio.stats.yearsExperience} Years of Experience)
                         </span>
@@ -768,6 +774,9 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
   const facts = [
     portfolio.foundedYear ? { label: 'Established', value: String(portfolio.foundedYear) } : null,
     { label: 'Projects published', value: String(stats.projectCount) },
+    stats.officeCount != null
+      ? { label: stats.officeCount === 1 ? 'Office' : 'Offices', value: String(stats.officeCount) }
+      : null,
     stats.startingBudget
       ? { label: 'Typical budget', value: formatCompactBudgetLabel(stats.startingBudget) }
       : null,
@@ -918,7 +927,10 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
                             rel="noopener noreferrer nofollow"
                             className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
-                            <Navigation className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                            <Navigation
+                              className="size-4 shrink-0 text-primary"
+                              aria-hidden="true"
+                            />
                             Open in Maps
                           </a>
                         ) : null}

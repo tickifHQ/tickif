@@ -135,6 +135,22 @@ describe('GET /api/search/designers', () => {
       expect(body.hits).toHaveLength(1);
     });
 
+    it('reads current studio age from founding year while retaining unknown legacy values', async () => {
+      const year = new Date().getUTCFullYear();
+      mockSearchDesigners([
+        makeDesignerDoc({ id: 'founded', foundedYear: year - 8, yearsExperience: 0 }),
+        makeDesignerDoc({ id: 'unknown', yearsExperience: 0 }),
+        makeDesignerDoc({ id: 'new', foundedYear: year, yearsExperience: 0 }),
+      ]);
+      const response = await get('/api/search/designers?q=studio');
+      expect(response.status).toBe(200);
+      expect(
+        (await json(response)).hits.map(
+          (hit: { yearsExperience: number | null }) => hit.yearsExperience,
+        ),
+      ).toEqual([8, null, 0]);
+    });
+
     it('returns empty hits array when no designers match', async () => {
       mockSearchDesigners([]);
 
