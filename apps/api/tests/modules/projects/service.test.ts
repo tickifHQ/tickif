@@ -206,6 +206,33 @@ beforeEach(() => {
 });
 
 describe('projectsService.list', () => {
+  it.each([true, false])(
+    'preserves the public availability projection (%s) through pending edits',
+    async (publicAvailable) => {
+      vi.mocked(projectsRepository.list).mockResolvedValue({
+        items: [
+          {
+            ...row({ status: 'submitted', coverImageId: null }),
+            pendingChanges: true,
+            liveStatus: 'published',
+            publicAvailable,
+          },
+        ],
+        total: 1,
+      });
+      vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
+      const result = await projectsService.list(
+        { status: 'all', page: 1, limit: 12, sort: '-updatedAt' },
+        caller,
+      );
+      expect(result.items[0]).toMatchObject({
+        status: 'submitted',
+        liveStatus: 'published',
+        publicAvailable,
+      });
+    },
+  );
+
   it('maps owner rows to the dashboard response shape and passes filters through', async () => {
     vi.mocked(projectsRepository.list).mockResolvedValue({
       items: [row({ coverImageId: null })],
