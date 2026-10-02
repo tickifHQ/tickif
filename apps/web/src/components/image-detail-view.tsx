@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
@@ -315,17 +316,13 @@ export function ImageDetailView({
               {/* Designer card — Finding #8: no fabricated badge/rating */}
               <div className="rounded-xl bg-muted/70 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                    {designer.logoUrl ? (
-                      <img
-                        src={designer.logoUrl}
-                        alt=""
-                        className="size-11 rounded-full object-cover"
-                      />
-                    ) : (
-                      designer.displayName.charAt(0)
-                    )}
-                  </div>
+                  <DesignerLogoAvatar
+                    logoUrl={designer.logoUrl}
+                    alt={`${designer.displayName} logo`}
+                    sizePx={44}
+                    className="size-11 bg-primary/10 text-sm font-bold text-primary"
+                    fallback={designer.displayName.charAt(0)}
+                  />
                   <div className="flex-1">
                     <p className="text-sm font-semibold">{designer.displayName}</p>
                     {hasRating ? (

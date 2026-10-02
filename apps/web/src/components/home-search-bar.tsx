@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, History, Search, X } from 'lucide-react';
@@ -390,24 +391,13 @@ export function HomeSearchBar({
               {suggestions.designers.map((designer) => {
                 const content = (
                   <>
-                    {designer.logoUrl ? (
-                      <img
-                        src={designer.logoUrl}
-                        alt=""
-                        width={40}
-                        height={40}
-                        loading="lazy"
-                        draggable={false}
-                        className="size-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span
-                        className="grid size-10 place-items-center rounded-full bg-muted text-xs font-medium"
-                        aria-hidden
-                      >
-                        {designer.displayName.slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
+                    <DesignerLogoAvatar
+                      logoUrl={designer.logoUrl}
+                      alt=""
+                      sizePx={40}
+                      className="size-10 text-xs font-medium"
+                      fallback={designer.displayName.slice(0, 2).toUpperCase()}
+                    />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">
                         {designer.displayName}
