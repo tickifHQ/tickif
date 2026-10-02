@@ -339,8 +339,7 @@ describe('DesignerDashboardOverview', () => {
     );
 
     // Both stat values render (two independent "0" cells) without collapsing.
-    expect(screen.getAllByText('0')).toHaveLength(1);
-    expect(screen.getByText('Years experience').parentElement).toHaveTextContent('—');
+    expect(screen.getAllByText('0')).toHaveLength(2);
     // Zero uses the plural labels, matching the public hero strip convention.
     expect(screen.getByText('Years experience')).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
@@ -357,7 +356,8 @@ describe('DesignerDashboardOverview', () => {
       />,
     );
 
-    expect(screen.getAllByText('0')).toHaveLength(2);
+    expect(screen.getAllByText('0')).toHaveLength(1);
+    expect(screen.getByText('Years experience').parentElement).toHaveTextContent('—');
     expect(screen.getByText('Years experience')).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
   });
