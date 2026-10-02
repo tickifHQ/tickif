@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'social-metadata.spec.ts',
+    'anonymous social cards cover public routes and disappear immediately when unpublished',
+  ],
+  [
     'admin-summary.spec.ts',
     'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
   ],

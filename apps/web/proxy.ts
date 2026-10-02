@@ -3,7 +3,16 @@ import { getSessionCookie } from 'better-auth/cookies';
 import { api } from '@/lib/api';
 import { REQUEST_PATH_HEADER } from '@/lib/auth-paths';
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers', '/blog', '/health']);
+const PUBLIC_PATHS = new Set([
+  '/',
+  '/login',
+  '/design-system',
+  '/designers',
+  '/blog',
+  '/health',
+  '/social-card',
+  '/designers/social-card',
+]);
 
 /**
  * Route trees anonymous visitors may enter.

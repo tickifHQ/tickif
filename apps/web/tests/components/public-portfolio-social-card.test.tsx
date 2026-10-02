@@ -48,7 +48,7 @@ describe('PublicPortfolioSocialCard', () => {
     );
     expect(screen.getByRole('img', { name: 'Anika Spaces logo' })).toHaveStyle({
       borderRadius: '50%',
-      objectFit: 'cover',
+      objectFit: 'contain',
     });
     expect(screen.getByRole('img', { name: 'Google' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Tickif' })).toBeInTheDocument();
