@@ -35,7 +35,7 @@ function ProjectDetailsCard({
             // Keep a tap open instead of Radix's default click-to-close behavior.
             event.preventDefault();
             setOpen(true);
-          }
+          }}
         >
           {trigger}
         </button>
