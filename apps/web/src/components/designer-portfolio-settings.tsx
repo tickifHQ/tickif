@@ -9,6 +9,7 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
+  ExternalLink,
   Globe,
   ImagePlus,
   Info,
@@ -776,11 +777,43 @@ export function DesignerPortfolioSettings() {
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="px-6 py-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Portfolio</h1>
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Manage your public link, customize the look, and configure each section visitors see.
-        </p>
+      <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Portfolio</h1>
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            Manage your public link, customize the look, and configure each section visitors see.
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 sm:max-w-xs sm:items-end sm:text-right">
+          {portfolio.publiclyVisible && portfolio.portfolioUrl ? (
+            <>
+              <Button asChild className="w-full sm:w-auto">
+                <a
+                  href={portfolio.portfolioUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-describedby="portfolio-public-version-note"
+                >
+                  View portfolio
+                  <ExternalLink className="size-4" aria-hidden />
+                </a>
+              </Button>
+              <p id="portfolio-public-version-note" className="text-xs text-muted-foreground">
+                Opens your saved public version. Unsaved edits stay here.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {portfolio.missingRequiredFields.length > 0
+                ? 'Finish the required Hero details and save to publish your portfolio.'
+                : !portfolio.publicLinkEnabled
+                  ? 'Your portfolio is hidden. Enable Public link and save to publish it.'
+                  : !portfolio.publiclyVisible
+                    ? 'Your portfolio is not publicly available yet.'
+                    : 'Your public portfolio link is unavailable. Refresh to try again.'}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Main content */}
