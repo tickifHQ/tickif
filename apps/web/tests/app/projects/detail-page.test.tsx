@@ -109,6 +109,13 @@ describe('/projects/[id]', () => {
 
     expect(metadata.title).toBe(`${project.title} | Tickif`);
     expect(metadata.alternates?.canonical).toBe(`http://localhost:3000/projects/${project.id}`);
-    expect(metadata.openGraph).not.toHaveProperty('images');
+    expect(metadata.openGraph?.images).toEqual([
+      expect.objectContaining({
+        url: `http://localhost:3000/projects/${project.id}/social-card`,
+        width: 1200,
+        height: 630,
+      }),
+    ]);
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image' });
   });
 });

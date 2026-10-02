@@ -15,10 +15,11 @@ import { api } from '@/lib/api';
  * missing portfolio as an error. Other failures throw, so a broken API surfaces
  * as a 500 rather than silently rendering an empty page.
  */
-export async function fetchPublicPortfolio(
-  slug: string,
-): Promise<PublicPortfolioResponse | null> {
-  const response = await api.api.portfolios[':slug'].$get({ param: { slug } });
+export async function fetchPublicPortfolio(slug: string): Promise<PublicPortfolioResponse | null> {
+  const response = await api.api.portfolios[':slug'].$get(
+    { param: { slug } },
+    { init: { cache: 'no-store' } },
+  );
 
   if (response.status === 404) return null;
   if (!response.ok) {
