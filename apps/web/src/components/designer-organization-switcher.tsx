@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { InitialsAvatar } from '@/components/initials-avatar';
-import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,14 +77,13 @@ export function DesignerOrganizationSwitcher({
           disabled={isBusy}
           className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <Avatar className="size-10">
-            {logoUrl ? (
-              <AvatarImage src={logoUrl} alt={`${studioName} logo`} className="object-cover" />
-            ) : null}
-            <AvatarFallback asChild>
-              <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
-            </AvatarFallback>
-          </Avatar>
+          <DesignerLogoAvatar
+            logoUrl={logoUrl}
+            alt={`${studioName} logo`}
+            sizePx={40}
+            className="size-10"
+            fallback={<InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />}
+          />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium leading-snug text-foreground">
               {studioName}

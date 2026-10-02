@@ -1,0 +1,37 @@
+name: Studio logo visual evidence
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/web/src/components/designer-logo-avatar.tsx'
+      - 'apps/web/src/components/designer-logo-input.tsx'
+      - 'e2e/visual/logo-*'
+      - 'e2e/scripts/logo-evidence-server.ts'
+      - 'e2e/logo-evidence.config.ts'
+      - '.github/workflows/logo-visual-evidence.yml'
+permissions:
+  contents: read
+jobs:
+  logo-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @repo/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @repo/e2e exec playwright test --config logo-evidence.config.ts
+      - name: Upload screenshots and videos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: studio-logo-screenshots-and-videos
+          path: test-results/logo-evidence/
+          if-no-files-found: error
+          retention-days: 30
