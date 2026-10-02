@@ -28,7 +28,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
   });
   const capture = async (name: string, targetPage = page) => {
     const path = testInfo.outputPath(name + '.png');
-    await targetPage.screenshot({ path, animations: 'disabled' });
+    await targetPage.screenshot({ path, animations: 'disabled', caret: 'initial' });
     await testInfo.attach(name, { path, contentType: 'image/png' });
   };
   try {
