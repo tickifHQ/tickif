@@ -119,8 +119,12 @@ function StudioMark({
       logoUrl={portfolio.logoUrl}
       alt={`${portfolio.displayName} logo`}
       sizePx={sizePx}
-      className={`${className} bg-foreground font-semibold text-background`}
-      fallback={view.initials}
+      className={`${className} font-semibold`}
+      fallback={
+        <span className="grid size-full place-items-center bg-foreground text-background">
+          {view.initials}
+        </span>
+      }
     />
   );
 }
