@@ -56,6 +56,70 @@ const projects: ListProjectsResponse = {
 };
 
 describe('DesignerProjectsList', () => {
+  it.each([
+    ['draft', 'Draft', 'Saved privately'],
+    ['submitted', 'Submitted', 'waiting for review'],
+    ['in_review', 'In review', 'reviewing your submission'],
+    ['published', 'Live', 'available to visitors'],
+    ['changes_requested', 'Needs Change', 'Update the requested details'],
+    ['rejected', 'Rejected', 'was not approved'],
+    ['archived', 'Archived', 'no longer visible'],
+    ['delisted', 'Delisted', 'removed from public discovery'],
+    ['deleted', 'Deleted', 'has been deleted'],
+  ] as const)(
+    'explains %s on keyboard focus and dismisses on Escape',
+    async (status, label, description) => {
+      const user = userEvent.setup();
+      render(
+        <DesignerProjectsList
+          projects={{ ...projects, items: [{ ...projects.items[0]!, status }] }}
+          activeStatus="all"
+        />,
+      );
+      const trigger = screen.getByRole('button', { name: label + ' details' });
+      fireEvent.focus(trigger);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(description);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    },
+  );
+
+  it('opens project details by touch and dismisses them with Escape', async () => {
+    const user = userEvent.setup();
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+    const trigger = screen.getByRole('button', { name: 'Preview 2BHK Apartment in Velachery' });
+    await user.click(trigger);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Velachery, Chennai');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Apartment');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Last updated');
+    expect(screen.getByRole('tooltip').closest('table')).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('explains a submitted revision while keeping the public version distinct', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProjectsList
+        projects={{
+          ...projects,
+          items: [
+            {
+              ...projects.items[0]!,
+              status: 'submitted',
+              pendingChanges: true,
+              liveStatus: 'published',
+            },
+          ],
+        }}
+        activeStatus="all"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Submitted details' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Your published version is still live.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('waiting for review');
+  });
+
   it('keeps the live badge visible while changes await review', () => {
     const pendingProject = {
       ...projects.items[0]!,
@@ -92,6 +156,7 @@ describe('DesignerProjectsList', () => {
 
     expect(screen.getByText('Pending changes · Needs Change')).toBeInTheDocument();
     expect(screen.getByLabelText('Needs Change details')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Needs Change details' }));
     expect(screen.getByRole('tooltip')).toHaveTextContent('Add clearer room labels.');
   });
 
@@ -120,6 +185,7 @@ describe('DesignerProjectsList', () => {
     expect(screen.getByText('Villa')).toBeInTheDocument();
     expect(screen.getAllByText('Live')).toHaveLength(2);
     expect(screen.getByText('Needs Change')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Needs Change details' }));
     expect(screen.getByRole('tooltip')).toHaveTextContent('Changes needed on:');
     expect(screen.getByRole('tooltip')).toHaveTextContent('Add clearer room labels.');
     expect(screen.getByRole('tooltip')).toHaveTextContent('Image quality');
@@ -174,7 +240,8 @@ describe('DesignerProjectsList', () => {
     expect(screen.getAllByText('Archived')).toHaveLength(2);
     expect(screen.getByText('Delisted')).toBeInTheDocument();
     expect(screen.getByText('Deleted')).toBeInTheDocument();
-    expect(screen.getAllByRole('tooltip')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: / details$/ })).toHaveLength(9);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
   it('shows an empty state when no projects match', () => {
