@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { socialImageData } from '@/lib/social-image';
 
-vi.mock('@repo/config', () => ({ config: { R2_ENDPOINT: 'https://storage.example.test' } }));
+vi.mock('@/env', () => ({ env: { R2_ENDPOINT: 'https://storage.example.test' } }));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('social image embedding', () => {

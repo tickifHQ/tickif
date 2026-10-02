@@ -1,4 +1,4 @@
-import { config } from '@repo/config';
+import { env } from '@/env';
 import sharp from 'sharp';
 
 // No CDN/browser retention: unpublishing takes effect at the next anonymous read.
@@ -13,8 +13,8 @@ const MAX_BYTES = 6 * 1024 * 1024;
 export async function socialImageData(url: string | null | undefined): Promise<string | null> {
   if (!url) return null;
   const endpoint =
-    config.R2_ENDPOINT ??
-    (config.R2_ACCOUNT_ID ? `https://${config.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : null);
+    env.R2_ENDPOINT ??
+    (env.R2_ACCOUNT_ID ? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : null);
   if (!endpoint) return null;
   try {
     const imageUrl = new URL(url);
