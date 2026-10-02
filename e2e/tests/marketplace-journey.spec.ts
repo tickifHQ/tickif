@@ -581,6 +581,14 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(
       projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
+    await projectActions
+      .getByRole('button', { name: `Enquire about ${project.title}`, exact: true })
+      .click();
+    const projectEnquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
+    await expect(projectEnquiry).toBeVisible();
+    await visitor.keyboard.press('Escape');
+    await expect(projectEnquiry).not.toBeVisible();
+
     // The portfolio hero offers one studio identity and a single enquiry action;
     // this entry point must deliver the same real lead as a project enquiry.
     await visitor.goto(publicProfileUrl);
@@ -615,6 +623,8 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .fill(`Please discuss the kitchen renovation for synthetic household ${suffix}.`);
     await enquiry.getByRole('button', { name: 'Send Enquiry', exact: true }).click();
     await expect(enquiry.getByText('Enquiry sent successfully!')).toBeVisible();
+    await visitor.keyboard.press('Escape');
+    await expect(enquiry).not.toBeVisible();
     await visitor.goto(`${publicProfileUrl}#tickif-reviews`);
     await visitor.getByLabel('Your rating').selectOption('5');
     await visitor
