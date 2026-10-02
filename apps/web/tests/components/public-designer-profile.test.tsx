@@ -130,6 +130,44 @@ describe('PublicDesignerProfile', () => {
     mocks.session = null;
   });
 
+  it('keeps identity and primary actions together in the hero without a duplicate studio bar', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    const hero = screen.getByRole('region', { name: 'Portfolio hero' });
+    expect(within(hero).getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeVisible();
+    expect(within(hero).getByRole('button', { name: 'Enquire' })).toBeVisible();
+    expect(within(hero).getByRole('button', { name: 'Share' })).toBeVisible();
+    expect(hero.previousElementSibling).not.toHaveTextContent('Anika Spaces');
+  });
+
+  it('retains a primary studio heading and enquiry action when the hero is hidden', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{ ...portfolio, sections: { ...portfolio.sections, hero: false } }}
+      />,
+    );
+
+    expect(screen.queryByRole('region', { name: 'Portfolio hero' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Anika Spaces/, level: 1 })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Send enquiry' })[0]).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeVisible();
+  });
+
+  it('respects disabled sharing in the hero action group', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{ ...portfolio, sections: { ...portfolio.sections, shareBlock: false } }}
+      />,
+    );
+    expect(
+      within(screen.getByRole('region', { name: 'Portfolio hero' })).queryByRole('button', {
+        name: 'Share',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it('uses the dedicated portfolio cover instead of a project image', () => {
     const portfolio = makePublicPortfolio({
       heroCoverUrl: 'https://cdn.example.test/portfolio-covers/hero.webp',
@@ -235,7 +273,7 @@ describe('PublicDesignerProfile', () => {
   it('shows studio verification marks after current KYC approval', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByLabelText('Verified studio')).toHaveLength(4);
+    expect(screen.getAllByLabelText('Verified studio')).toHaveLength(3);
     expect(screen.getByText('KYC verified')).toBeInTheDocument();
   });
 
@@ -585,7 +623,7 @@ describe('PublicDesignerProfile', () => {
   it('opens login in place for signed-out profile actions', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByRole('button', { name: 'Send enquiry' })).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: 'Send enquiry' })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Enquire' })).toBeEnabled();
     fireEvent.click(screen.getAllByRole('button', { name: 'Send enquiry' })[0]!);
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
@@ -604,7 +642,7 @@ describe('PublicDesignerProfile', () => {
 
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByRole('button', { name: 'Send enquiry' })).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: 'Send enquiry' })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Enquire' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Send enquiry' })).not.toBeInTheDocument();
   });
