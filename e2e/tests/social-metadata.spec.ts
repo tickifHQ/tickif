@@ -31,6 +31,8 @@ test('anonymous social cards cover public routes and disappear immediately when 
     userId: owner.id,
     orgId: organization.id,
     displayName: 'Maison Élan Studio',
+    slug: `social-${suffix}`,
+    projectCount: 1,
     status: 'active',
     bio: 'Thoughtful homes, natural materials and everyday comfort.',
   });

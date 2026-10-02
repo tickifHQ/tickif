@@ -18,10 +18,10 @@ import { api } from '@/lib/api';
 export async function fetchPublicPortfolio(slug: string): Promise<PublicPortfolioResponse | null> {
   const response = await api.api.portfolios[':slug'].$get(
     { param: { slug } },
-    { init: { cache: 'no-store' } },
+    { init: { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } },
   );
 
-  if (response.status === 404) return null;
+  if ([400, 404, 422].includes(response.status)) return null;
   if (!response.ok) {
     throw new Error(`Could not load the portfolio at /d/${slug} (HTTP ${response.status}).`);
   }

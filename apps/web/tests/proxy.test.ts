@@ -9,6 +9,9 @@ vi.mock('better-auth/cookies', () => ({ getSessionCookie: authMock.getSessionCoo
 describe('isPublicPath', () => {
   it('allows the directory without exposing similarly prefixed workspace routes', () => {
     expect(isPublicPath('/designers')).toBe(true);
+    expect(isPublicPath('/social-card')).toBe(true);
+    expect(isPublicPath('/designers/social-card')).toBe(true);
+    expect(isPublicPath('/social-card-private')).toBe(false);
     expect(isPublicPath('/designers/')).toBe(true);
     expect(isPublicPath('/designers-private')).toBe(false);
     expect(isPublicPath('/designer/dashboard')).toBe(false);

@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 export const fetchPublicProject = cache(async (id: string) => {
   const response = await api.api.projects.public[':id'].$get(
     { param: { id } },
-    { init: { cache: 'no-store' } },
+    { init: { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } },
   );
   if ([400, 404, 410, 422].includes(response.status)) return null;
   if (!response.ok) throw new Error(`Could not load project ${id}.`);
@@ -29,7 +29,7 @@ export function isUnavailableProject(
 export const fetchPublicImage = cache(async (imageId: string) => {
   const response = await api.api.projects.images[':imageId'].$get(
     { param: { imageId } },
-    { init: { cache: 'no-store' } },
+    { init: { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } },
   );
   if ([400, 404, 410, 422].includes(response.status)) return null;
   if (!response.ok) throw new Error(`Could not load image detail for ${imageId}.`);

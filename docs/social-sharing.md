@@ -28,9 +28,11 @@ derivatives to PNG before Satori embeds them. Broken/missing/unsupported media
 uses text or initials. Logos use proportional containment; stored crops are not
 rewritten. Expiring storage signatures never appear in metadata image URLs.
 
-Content cards and their API reads use `no-store`, so edits, unpublishing and
-visibility changes apply on the next request without a separate invalidation
-service. Static branded cards cache for at most one hour and then revalidate.
+Content cards and their API reads use `no-store`. API requests also send
+`Cache-Control: no-cache` to require intermediary revalidation of any previously
+cached public response. Edits, unpublishing and visibility changes therefore apply
+on the next request without a separate invalidation service; reverse proxies must
+honor those HTTP cache directives. Static branded cards cache for at most one hour and then revalidate.
 Social providers can retain their own preview copies; a provider preview refresh
 may still be needed after a change.
 

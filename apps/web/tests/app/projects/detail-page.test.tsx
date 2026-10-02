@@ -54,7 +54,10 @@ describe('/projects/[id]', () => {
     );
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining(`/api/projects/public/${project.id}`),
-      expect.objectContaining({ credentials: 'include' }),
+      expect.objectContaining({ credentials: 'include', cache: 'no-store' }),
+    );
+    expect(new Headers(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).get('Cache-Control')).toBe(
+      'no-cache',
     );
   });
 
