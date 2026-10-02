@@ -37,8 +37,14 @@ test('designer onboarding and media processing connects to visitor onboarding an
     phoneNumberVerified: true,
   });
   const visitorPhone = `+9193${randomInt(10_000_000, 99_999_999)}`;
-  const designerContext = await browser.newContext({ baseURL: webUrl });
-  const visitorContext = await browser.newContext({ baseURL: webUrl });
+  const designerContext = await browser.newContext({
+    baseURL: webUrl,
+    recordVideo: { dir: testInfo.outputPath('designer-video'), size: { width: 1280, height: 720 } },
+  });
+  const visitorContext = await browser.newContext({
+    baseURL: webUrl,
+    recordVideo: { dir: testInfo.outputPath('visitor-video'), size: { width: 1280, height: 720 } },
+  });
   const adminContext = await browser.newContext({ baseURL: webUrl });
   const designer = await designerContext.newPage();
   const visitor = await visitorContext.newPage();
@@ -575,9 +581,34 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(
       projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
-    await projectActions
-      .getByRole('button', { name: `Enquire about ${project.title}`, exact: true })
-      .click();
+    // The portfolio hero offers one studio identity and a single enquiry action;
+    // this entry point must deliver the same real lead as a project enquiry.
+    await visitor.goto(publicProfileUrl);
+    const portfolioHero = visitor.getByRole('region', { name: 'Portfolio hero' });
+    await expect(portfolioHero.getByRole('heading', { level: 1 })).toHaveText(
+      `Journey Studio ${suffix}`,
+    );
+    await expect(portfolioHero.getByRole('button', { name: 'Enquire', exact: true })).toHaveCount(
+      1,
+    );
+    await expect(portfolioHero.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    await expect(visitor.getByRole('button', { name: /Book consultation/i })).toHaveCount(0);
+    await visitor.screenshot({
+      path: testInfo.outputPath('portfolio-hero-desktop.png'),
+      animations: 'disabled',
+    });
+    await visitor.setViewportSize({ width: 390, height: 844 });
+    await portfolioHero
+      .getByRole('button', { name: 'Enquire', exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await visitor.screenshot({
+      path: testInfo.outputPath('portfolio-hero-mobile.png'),
+      animations: 'disabled',
+    });
+    await portfolioHero.getByRole('button', { name: 'Enquire', exact: true }).click();
     const enquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
     await enquiry
       .getByLabel('Description', { exact: false })
