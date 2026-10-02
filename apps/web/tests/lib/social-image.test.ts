@@ -53,4 +53,36 @@ describe('social image embedding', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('redirect rejected')));
     expect(await socialImageData('https://storage.example.test/derivatives/asset')).toBeNull();
   });
+
+  it.each([
+    [40, 10],
+    [10, 40],
+    [40, 40],
+  ])(
+    'preserves %s×%s artwork inside circular frames without changing saved square crops',
+    async (width, height) => {
+      const original = await sharp({
+        create: { width, height, channels: 4, background: '#abcdef' },
+      })
+        .png()
+        .toBuffer();
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(new Response(original, { headers: { 'content-type': 'image/png' } })),
+      );
+      const result = await socialImageData('https://storage.example.test/logo.png', {
+        circularLogo: true,
+      });
+      expect(result).not.toBeNull();
+      const decoded = sharp(Buffer.from(result!.split(',')[1]!, 'base64'));
+      const metadata = await decoded.metadata();
+      const side = width === height ? width : Math.ceil(Math.hypot(width, height));
+      expect(metadata.width).toBe(side);
+      expect(metadata.height).toBe(side);
+      const pixels = await decoded.ensureAlpha().raw().toBuffer();
+      expect(pixels[3]).toBe(width === height ? 255 : 0);
+    },
+  );
 });

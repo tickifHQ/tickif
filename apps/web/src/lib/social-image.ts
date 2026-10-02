@@ -10,7 +10,10 @@ export const SOCIAL_IMAGE_HEADERS = {
 const MAX_BYTES = 6 * 1024 * 1024;
 
 /** Only API-approved storage derivatives are fetched, never arbitrary user URLs. */
-export async function socialImageData(url: string | null | undefined): Promise<string | null> {
+export async function socialImageData(
+  url: string | null | undefined,
+  { circularLogo = false }: { circularLogo?: boolean } = {},
+): Promise<string | null> {
   if (!url) return null;
   const endpoint =
     env.R2_ENDPOINT ??
@@ -50,11 +53,30 @@ export async function socialImageData(url: string | null | undefined): Promise<s
     }
     // Satori embeds PNG/JPEG; public derivatives are normally WebP. Decoding also
     // rejects corrupt assets and limits decompression before ImageResponse runs.
-    const png = await sharp(Buffer.concat(chunks), { limitInputPixels: 16_000_000 })
+    const { data: png, info } = await sharp(Buffer.concat(chunks), { limitInputPixels: 16_000_000 })
       .rotate()
       .resize({ width: 1200, height: 630, fit: 'inside', withoutEnlargement: true })
       .png()
-      .toBuffer();
+      .toBuffer({ resolveWithObject: true });
+    if (circularLogo && info.width !== info.height) {
+      // A non-square logo's diagonal, rather than its longest edge, must fit
+      // within a circular frame. Transparent padding preserves all corners.
+      // Saved square crops intentionally retain their existing framing.
+      const side = Math.ceil(Math.hypot(info.width, info.height));
+      const left = Math.floor((side - info.width) / 2);
+      const top = Math.floor((side - info.height) / 2);
+      const padded = await sharp(png)
+        .extend({
+          left,
+          right: side - info.width - left,
+          top,
+          bottom: side - info.height - top,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+      return `data:image/png;base64,${padded.toString('base64')}`;
+    }
     return `data:image/png;base64,${png.toString('base64')}`;
   } catch {
     return null;

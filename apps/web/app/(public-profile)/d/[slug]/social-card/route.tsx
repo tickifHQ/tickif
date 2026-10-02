@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     return new Response('Portfolio not found', { status: 404, headers: SOCIAL_IMAGE_HEADERS });
   }
 
-  const logoUrl = await socialImageData(portfolio.logoUrl);
+  const logoUrl = await socialImageData(portfolio.logoUrl, { circularLogo: true });
   return new ImageResponse(<PublicPortfolioSocialCard portfolio={{ ...portfolio, logoUrl }} />, {
     ...SOCIAL_IMAGE_SIZE,
     headers: SOCIAL_IMAGE_HEADERS,
