@@ -156,7 +156,7 @@ export const designerHitSchema = z
     localitySlugs: z.array(z.string()),
     scopeSlugs: z.array(z.string()),
     themeSlugs: z.array(z.string()),
-    yearsExperience: z.number(),
+    yearsExperience: z.number().int().min(0).nullable(),
     projectCount: z.number(),
     avgRating: z.number(),
     reviewCount: z.number(),

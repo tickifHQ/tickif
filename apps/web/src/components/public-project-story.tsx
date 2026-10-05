@@ -211,11 +211,11 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
             <span>{designer.projectCount} Projects</span>
             <span className="text-foreground-disabled">published</span>
           </p>
-          {designer.foundedYear || designer.yearsExperience > 0 ? (
+          {designer.foundedYear || (designer.yearsExperience ?? 0) > 0 ? (
             <p className="flex items-center gap-1.5">
               <CalendarDays aria-hidden className="size-3.5 text-muted-foreground" />
               {designer.foundedYear ? <span>{designer.foundedYear}</span> : null}
-              {designer.yearsExperience > 0 ? (
+              {(designer.yearsExperience ?? 0) > 0 ? (
                 <span className="text-foreground-disabled">
                   ({designer.yearsExperience} {designer.yearsExperience === 1 ? 'Year' : 'Years'} of
                   Experience)

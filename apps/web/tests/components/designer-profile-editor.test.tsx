@@ -151,6 +151,44 @@ describe('DesignerProfileEditor', () => {
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile());
   });
 
+  it('saves physical office count independently of the service cities', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ officeCount: 2 }));
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    await user.type(screen.getByLabelText('Number of offices'), '2');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ officeCount: 2 }),
+    );
+    expect(screen.getByLabelText('Number of offices')).toHaveValue(2);
+    expect(screen.getByRole('button', { name: /cities: mumbai/i })).toBeInTheDocument();
+  });
+
+  it('clears an unknown office count without converting it into zero', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ officeCount: null }));
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, officeCount: 2 }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    await user.clear(screen.getByLabelText('Number of offices'));
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ officeCount: null }),
+    );
+  });
+
   it('prefills every section from the live profile and taxonomy data', () => {
     render(
       <DesignerProfileEditor

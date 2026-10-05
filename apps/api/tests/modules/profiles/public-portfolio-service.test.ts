@@ -90,6 +90,7 @@ const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfile
   foundedYear: 2019,
   testimonialBannerEnabled: false,
   staffCount: 4,
+  officeCount: null,
   customCities: [],
   createdAt: new Date('2020-01-01'),
   updatedAt: new Date('2026-01-01'),
@@ -295,6 +296,29 @@ describe('publicPortfolioService.getBySlug — projection', () => {
       'Mumbai',
       'Pune',
     ]);
+  });
+
+  it('derives studio experience and keeps physical offices separate from city coverage', async () => {
+    resolveTo(makeProfile({ foundedYear: 2018, yearsExperience: 0, officeCount: 2 }));
+    const result = await publicPortfolioService.getBySlug('test-studio');
+    expect(result.stats).toMatchObject({
+      yearsExperience: 8,
+      officeCount: 2,
+      cityPresenceCount: 0,
+    });
+  });
+
+  it('keeps unknown statistics distinct from a genuinely new studio', async () => {
+    resolveTo(makeProfile({ foundedYear: null, yearsExperience: 0 }));
+    expect((await publicPortfolioService.getBySlug('test-studio')).stats).toMatchObject({
+      yearsExperience: null,
+      officeCount: null,
+    });
+    resolveTo(makeProfile({ foundedYear: 2026, yearsExperience: 0, officeCount: 0 }));
+    expect((await publicPortfolioService.getBySlug('test-studio')).stats).toMatchObject({
+      yearsExperience: 0,
+      officeCount: 0,
+    });
   });
 
   it('never exposes private contact fields', async () => {
