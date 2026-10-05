@@ -21,6 +21,15 @@ entryPoints:
         certResolver: letsencrypt
   ping:
     address: ":8082"
+  metrics:
+    address: ":8083"
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: false
 
 providers:
   swarm:
@@ -53,11 +62,16 @@ accessLog:
     defaultMode: keep
     names:
       ClientUsername: drop
+      ClientAddr: drop
+      ClientHost: drop
+      RequestPath: drop
+      RequestAddr: drop
+      RequestHost: drop
     headers:
       defaultMode: drop
       names:
-        User-Agent: keep
-        Referer: keep
+        User-Agent: drop
+        Referer: drop
         Authorization: redact
         Cookie: redact
         Set-Cookie: redact

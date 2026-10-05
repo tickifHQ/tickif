@@ -3,6 +3,7 @@ import { parse as parseDotenv } from 'dotenv';
 import { z } from 'zod';
 import { loadRootEnv } from './load-env';
 import { featureFlagsSchema } from './features';
+import { refineTelemetryConfig, telemetryIdentity, telemetrySchema } from './telemetry';
 
 loadRootEnv();
 
@@ -109,9 +110,10 @@ const phoneOtpEmailAllowedNumbersSchema = z.preprocess(
  * readable error rather than surfacing as a confusing runtime bug.
  */
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  ...telemetrySchema.shape,
+  NODE_ENV: telemetrySchema.shape.NODE_ENV,
   // Deployment identity is separate from Node's production runtime optimizations.
-  DEPLOYMENT_ENV: z.enum(['production', 'staging']).default('production'),
+  DEPLOYMENT_ENV: telemetrySchema.shape.DEPLOYMENT_ENV,
   // Docker/secret-manager mounted dotenv file. Values are validated by this schema.
   CONFIG_SECRETS_FILE: z.string().min(1).optional(),
 
@@ -158,10 +160,7 @@ const envSchema = z.object({
   // Comma-separated list of trusted origins for cross-origin auth requests.
   // In dev: the web app origin (e.g. "http://localhost:3000").
   // In prod same-origin: leave empty. Cross-origin: add the web app domain.
-  TRUSTED_ORIGINS: z
-    .string()
-    .optional()
-    .transform((val) => (val ? val.split(',').map((s) => s.trim()) : [])),
+  TRUSTED_ORIGINS: telemetrySchema.shape.TRUSTED_ORIGINS,
 
   // Google / Gmail SSO — optional in dev, required for the social flow.
   // Both must be provided together or both omitted.
@@ -177,7 +176,7 @@ const envSchema = z.object({
   // Public web origin for shareable URLs returned by the API. Mirrors the
   // web app's NEXT_PUBLIC_WEB_URL default so client- and server-built links
   // resolve to the same origin in every environment.
-  PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+  PUBLIC_WEB_URL: telemetrySchema.shape.PUBLIC_WEB_URL,
   OWNERSHIP_TRANSFER_EXPIRY_SECONDS: z.coerce
     .number()
     .int()
@@ -287,7 +286,7 @@ const envSchema = z.object({
  * be provided or both omitted. A single value without its pair is a
  * misconfiguration that should fail fast.
  */
-const refinedEnvSchema = envSchema.refine(
+const refinedEnvSchema = envSchema.superRefine(refineTelemetryConfig).refine(
   (env) => {
     const hasId = Boolean(env.GOOGLE_CLIENT_ID);
     const hasSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
@@ -339,6 +338,7 @@ export type Config = Omit<
   | 'TYPESENSE_HOST'
   | 'TYPESENSE_API_KEY'
   | 'TYPESENSE_SEARCH_API_KEY'
+  | 'TELEMETRY_BROWSER_ALLOWED_ORIGINS'
 > & {
   DATABASE_URL: string;
   DATABASE_URL_TEST: string;
@@ -348,6 +348,8 @@ export type Config = Omit<
   TYPESENSE_SEARCH_API_KEY: string;
   /** Explicit host and search key were supplied, including mounted secrets, before local defaults. */
   TYPESENSE_SEARCH_CONFIGURED: boolean;
+  DEPLOYMENT_ENVIRONMENT: ReturnType<typeof telemetryIdentity>['DEPLOYMENT_ENVIRONMENT'];
+  TELEMETRY_BROWSER_ALLOWED_ORIGINS: string[];
 };
 
 function postgresUrl(env: RawEnv, database: string): string {
@@ -444,7 +446,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   );
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .map((i) => `  - ${i.path.join('.') || '(root)'}: ${Object.hasOwn(telemetrySchema.shape, String(i.path[0])) ? 'invalid telemetry setting' : i.message}`)
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
@@ -470,6 +472,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   assertProductionSmsConfig(env);
   return {
     ...env,
+    ...telemetryIdentity(env),
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
     DATABASE_URL_TEST: env.DATABASE_URL_TEST ?? postgresUrl(env, `${env.POSTGRES_DB}_test`),
     REDIS_URL:

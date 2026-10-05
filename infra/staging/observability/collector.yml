@@ -1,0 +1,203 @@
+# Pinned to contrib 0.148.0. App logs use stdout only; OTLP log ingestion is absent.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        max_request_body_size: 4194304
+  filelog:
+    include: [/var/lib/docker/containers/*/*-json.log]
+    start_at: end
+    storage: file_storage/offsets
+    max_log_size: 64KiB
+    include_file_path: true
+    operators:
+      - type: json_parser
+        id: docker
+        parse_to: attributes.docker
+        on_error: drop
+        timestamp:
+          parse_from: attributes.docker.time
+          layout: '%Y-%m-%dT%H:%M:%S.%f%z'
+      # Only services explicitly marked for collection; collector/proxy excluded.
+      - type: filter
+        expr: 'attributes.docker.attrs == nil or attributes.docker.attrs["tickif.telemetry.service"] == nil'
+      - type: move
+        from: attributes.docker.attrs["tickif.telemetry.service"]
+        to: resource["service.name"]
+      - type: move
+        from: attributes.docker.log
+        to: body
+      # Unstructured dependency/runtime output stays in Docker until a sanitizer exists.
+      - type: filter
+        expr: 'not (body matches "^\\s*\\{")'
+      - type: json_parser
+        id: application
+        parse_to: attributes.log
+        on_error: drop
+      - type: filter
+        expr: 'resource["service.name"] != "tickif-traefik" and (attributes.log.schema_version != 1 or attributes.log.timestamp == nil or attributes.log.event == nil or attributes.log.service == nil)'
+      - type: filter
+        expr: 'resource["service.name"] == "tickif-traefik" and attributes.log.DownstreamStatus == nil'
+      - type: time_parser
+        if: 'resource["service.name"] != "tickif-traefik" and attributes.log.timestamp != nil'
+        parse_from: attributes.log.timestamp
+        layout: '%Y-%m-%dT%H:%M:%S.%f%z'
+        on_error: drop
+      - type: trace_parser
+        if: 'attributes.log.trace_id != nil and attributes.log.span_id != nil'
+        trace_id: { parse_from: attributes.log.trace_id }
+        span_id: { parse_from: attributes.log.span_id }
+      - type: severity_parser
+        if: 'attributes.log.level != nil'
+        parse_from: attributes.log.level
+        mapping:
+          debug: [10, 20, debug, trace]
+          info: [30, info]
+          warn: [40, warn]
+          error: [50, error]
+          fatal: [60, fatal]
+  hostmetrics:
+    collection_interval: 60s
+    root_path: /hostfs
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization: { enabled: true }
+      memory:
+        metrics:
+          system.memory.utilization: { enabled: true }
+      load: {}
+      disk: {}
+      network: {}
+      filesystem:
+        exclude_fs_types:
+          match_type: strict
+          fs_types: [overlay, tmpfs, proc, sysfs, devtmpfs, cgroup, cgroup2, squashfs]
+        metrics:
+          system.filesystem.inodes.usage: { enabled: true }
+  docker_stats:
+    endpoint: http://docker-proxy:2375
+    collection_interval: 30s
+    timeout: 10s
+    container_labels_to_metric_labels:
+      com.docker.stack.namespace: docker.stack.name
+      com.docker.swarm.service.name: docker.service.name
+  httpcheck:
+    collection_interval: 30s
+    targets:
+      - endpoint: http://api:3001/readyz
+        timeout: 3s
+      - endpoint: http://web:3000/health
+        timeout: 3s
+      - endpoint: http://worker:3002/readyz
+        timeout: 3s
+      - endpoint: http://typesense:8108/health
+        timeout: 3s
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: tickif-collector
+          scrape_interval: 30s
+          static_configs: [{ targets: ['127.0.0.1:8888'] }]
+        - job_name: tickif-traefik
+          scrape_interval: 30s
+          static_configs: [{ targets: ['traefik:8083'] }]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 80
+  resource/environment:
+    attributes:
+      - { key: deployment.environment.name, value: '${env:DEPLOYMENT_ENV}', action: upsert }
+      - { key: service.namespace, value: tickif, action: upsert }
+  resource/host:
+    attributes:
+      - { key: host.name, value: '${env:TELEMETRY_HOST_NAME}', action: upsert }
+      - { key: host.id, value: '${env:TELEMETRY_HOST_ID}', action: upsert }
+      - { key: os.type, value: linux, action: upsert }
+  transform/logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(severity_text, "DEBUG") where severity_number >= 5 and severity_number < 9
+          - set(severity_text, "INFO") where severity_number >= 9 and severity_number < 13
+          - set(severity_text, "WARN") where severity_number >= 13 and severity_number < 17
+          - set(severity_text, "ERROR") where severity_number >= 17 and severity_number < 21
+          - set(severity_text, "FATAL") where severity_number >= 21
+          - keep_keys(attributes["log"], ["StartUTC", "Duration", "OriginDuration", "OriginStatus", "DownstreamStatus", "RequestMethod", "RequestProtocol", "RouterName", "ServiceName", "RetryAttempts", "entryPointName"]) where resource.attributes["service.name"] == "tickif-traefik"
+          - set(resource.attributes["service.name"], attributes["log"]["service"]) where attributes["log"]["service"] != nil
+          - set(resource.attributes["service.version"], attributes["log"]["version"]) where attributes["log"]["version"] != nil
+          - set(resource.attributes["service.name"], "tickif-browser") where attributes["log"]["service"] == "tickif-api" and IsMatch(attributes["log"]["event"], "^browser\\.") and attributes["log"]["attributes"]["telemetrySource"] == "browser" and attributes["log"]["attributes"]["sourceService"] == "tickif-browser"
+          - set(resource.attributes["service.version"], attributes["log"]["attributes"]["browserRelease"]) where resource.attributes["service.name"] == "tickif-browser" and attributes["log"]["attributes"]["browserRelease"] != nil
+          - set(attributes["event.name"], attributes["log"]["event"]) where attributes["log"]["event"] != nil
+          - set(body, attributes["log"])
+          - delete_key(attributes, "docker")
+          - delete_key(attributes, "log")
+          - delete_key(attributes, "log.file.path")
+  batch:
+    timeout: 5s
+    send_batch_size: 256
+    send_batch_max_size: 512
+
+exporters:
+  otlphttp/signoz:
+    endpoint: ${env:SIGNOZ_OTLP_ENDPOINT}
+    headers:
+      signoz-ingestion-key: '${file:/run/secrets/signoz_ingestion_key}'
+    compression: gzip
+    timeout: 10s
+    sending_queue:
+      enabled: true
+      storage: file_storage/queue
+      sizer: bytes
+      queue_size: 134217728 # 128 MiB per signal, plus storage overhead (1 GiB filesystem).
+      num_consumers: 2
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 10m
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  file_storage/offsets:
+    directory: /var/lib/otelcol/offsets
+    create_directory: true
+  file_storage/queue:
+    directory: /var/lib/otelcol/queue
+    create_directory: true
+
+service:
+  extensions: [health_check, file_storage/offsets, file_storage/queue]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 127.0.0.1
+                port: 8888
+                without_type_suffix: true
+                without_units: true
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/environment, batch]
+      exporters: [otlphttp/signoz]
+    metrics/application:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/environment, batch]
+      exporters: [otlphttp/signoz]
+    metrics/infrastructure:
+      receivers: [hostmetrics, docker_stats, httpcheck, prometheus]
+      processors: [memory_limiter, resource/environment, resource/host, batch]
+      exporters: [otlphttp/signoz]
+    logs:
+      receivers: [filelog]
+      processors: [memory_limiter, resource/environment, resource/host, transform/logs, batch]
+      exporters: [otlphttp/signoz]

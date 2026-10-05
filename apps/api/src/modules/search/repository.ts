@@ -21,6 +21,7 @@ import {
 } from '@repo/search';
 import { db, schema, eq, and, asc, desc, gt, isNotNull, isNull, inArray, or, sql } from '@repo/db';
 import { exists, ilike } from 'drizzle-orm';
+import { log } from '../../lib/logger.js';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
@@ -68,7 +69,7 @@ export async function insertSearchActivity(input: {
       `);
     });
   } catch (error) {
-    console.error('[search] Failed to record authenticated search activity:', error);
+    log.error({ event: 'search.activity.record.failed', err: error });
   }
 }
 

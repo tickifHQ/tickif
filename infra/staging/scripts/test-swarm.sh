@@ -9,6 +9,7 @@ docker run -d --name staging-test-registry -p 127.0.0.1:5000:5000 \
 revision=$(git rev-parse HEAD)
 for service in api worker web operations; do docker push "localhost:5000/tickif/$service:$revision"; done
 docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" >/dev/null
+docker network create --driver overlay --opt encrypted tickif_telemetry >/dev/null
 docker node update --label-add tickif.stateful=true --label-add tickif.traefik=true "$(docker info --format '{{.Swarm.NodeID}}')"
 set -a
 source infra/staging/.env.example

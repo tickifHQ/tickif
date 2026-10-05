@@ -1,16 +1,20 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const reportBrowserError = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/logger.browser', () => ({ reportBrowserError }));
+
 import GlobalError from '../../app/global-error';
 
 describe('GlobalError', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it('renders a recoverable document and retries through the App Router reset callback', async () => {
     const error = new Error('root layout failed');
     const reset = vi.fn();
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     render(<GlobalError error={error} reset={reset} />);
 
@@ -22,6 +26,6 @@ describe('GlobalError', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(reset).toHaveBeenCalledOnce();
-    await waitFor(() => expect(consoleError).toHaveBeenCalledWith(error));
+    await waitFor(() => expect(reportBrowserError).toHaveBeenCalledWith(error, 'global.boundary'));
   });
 });
