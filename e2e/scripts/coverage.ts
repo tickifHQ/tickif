@@ -180,6 +180,10 @@ const requiredEntries: [file: string, title: string][] = [
     'composite fields show one visible focus indicator across login and designer workflows',
   ],
   [
+    'project-details-cards.spec.ts',
+    'project preview and status cards support hover, keyboard and mobile touch',
+  ],
+  [
     'project-view-action.spec.ts',
     'project view action opens the live version while submitted edits remain private',
   ],
