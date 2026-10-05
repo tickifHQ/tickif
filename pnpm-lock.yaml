@@ -16,8 +16,8 @@ catalogs:
       specifier: ^7.29.0
       version: 7.29.7
     '@dicebear/core':
-      specifier: ^10.3.0
-      version: 10.3.0
+      specifier: ^10.7.0
+      version: 10.7.0
     '@dicebear/styles':
       specifier: ^10.6.0
       version: 10.6.0
@@ -339,7 +339,7 @@ importers:
     dependencies:
       '@dicebear/core':
         specifier: 'catalog:'
-        version: 10.3.0
+        version: 10.7.0
       '@dicebear/styles':
         specifier: 'catalog:'
         version: 10.6.0
@@ -1295,8 +1295,8 @@ packages:
   '@better-fetch/fetch@1.3.1':
     resolution: {integrity: sha512-ABkD1WhyfPZprKRQI3bhATjeiFuNWC9PXhfGWqL+sg/gKrM977oFrYkdb4msM3hgUGonr7KlOsOFT5TU2rht9g==}
 
-  '@dicebear/core@10.3.0':
-    resolution: {integrity: sha512-HbzHvYY/E0m3B7BfBjs8SO7JyqJnORJgQhM2YM7VoN/EQzrqJ3Z0j4+op+WfEWXWzZj75tQqBU5SZpUssi5m/Q==}
+  '@dicebear/core@10.7.0':
+    resolution: {integrity: sha512-JUOzKOd8RUByJJo8ZL+C7YE/pvEsWewfpbWUmR8OIQZWv/PvUQHnohdevySC3icyyxe6EIU/8B/rQgA42us1QA==}
     engines: {node: '>=22.0.0'}
 
   '@dicebear/styles@10.6.0':
@@ -6178,7 +6178,7 @@ snapshots:
 
   '@better-fetch/fetch@1.3.1': {}
 
-  '@dicebear/core@10.3.0': {}
+  '@dicebear/core@10.7.0': {}
 
   '@dicebear/styles@10.6.0': {}
 
