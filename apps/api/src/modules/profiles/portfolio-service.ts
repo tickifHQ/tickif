@@ -1,3 +1,4 @@
+import { resolveProfileExperience } from '@repo/contracts';
 import type {
   PortfolioBadge,
   PortfolioResponse,
@@ -156,7 +157,8 @@ export function computeBadges(
     profile.reviewCount >= BADGE_TOP_PERFORMER_REVIEWS
   )
     badges.push('top-performer');
-  if (profile.yearsExperience >= BADGE_ESTABLISHED_YEARS) badges.push('established');
+  if ((resolveProfileExperience(profile) ?? 0) >= BADGE_ESTABLISHED_YEARS)
+    badges.push('established');
   if (profile.projectCount >= BADGE_PROJECTS_PUBLISHED_COUNT) badges.push('projects-published');
   return badges;
 }
