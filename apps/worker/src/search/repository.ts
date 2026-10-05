@@ -169,6 +169,7 @@ export async function findDesignerSearchSource(
       tagline: schema.designerPortfolio.tagline,
       entityType: schema.designerProfile.entityType,
       yearsExperience: schema.designerProfile.yearsExperience,
+      foundedYear: schema.designerProfile.foundedYear,
       projectCount: schema.designerProfile.projectCount,
       avgRating: schema.designerProfile.avgRating,
       paidUntil: paidUntilProjection(),

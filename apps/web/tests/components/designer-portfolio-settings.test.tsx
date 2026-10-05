@@ -214,6 +214,71 @@ describe('DesignerPortfolioSettings', () => {
     vi.useRealTimers();
   });
 
+  describe('prominent portfolio action', () => {
+    it('opens the saved portfolio in a new tab while preserving unsaved edits', async () => {
+      const slugInput = await renderSettings();
+      fireEvent.change(slugInput, { target: { value: 'unsaved-studio' } });
+      fireEvent.change(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER), {
+        target: { value: 'An unsaved tagline' },
+      });
+
+      const action = screen.getByRole('link', { name: 'View portfolio' });
+      expect(action).toHaveAttribute('href', basePortfolio.portfolioUrl);
+      expect(action).toHaveAttribute('target', '_blank');
+      expect(action).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(
+        screen.getByText('Opens your saved public version. Unsaved edits stay here.'),
+      ).toBeVisible();
+      fireEvent.click(action);
+      expect(slugInput).toHaveValue('unsaved-studio');
+      expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('An unsaved tagline');
+      expect(mock.updatePortfolio).not.toHaveBeenCalled();
+    });
+
+    it('explains completion in the header without offering an unavailable portfolio', async () => {
+      mock.fetchPortfolio.mockResolvedValue({
+        ...basePortfolio,
+        publiclyVisible: false,
+        missingRequiredFields: ['tagline'],
+      });
+      await renderSettings();
+      expect(screen.queryByRole('link', { name: 'View portfolio' })).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Finish the required Hero details and save to publish your portfolio.'),
+      ).toBeVisible();
+    });
+
+    it('explains visibility in the header for a hidden portfolio', async () => {
+      mock.fetchPortfolio.mockResolvedValue({
+        ...basePortfolio,
+        publiclyVisible: false,
+        publicLinkEnabled: false,
+      });
+      await renderSettings();
+      expect(screen.queryByRole('link', { name: 'View portfolio' })).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Your portfolio is hidden. Enable Public link and save to publish it.'),
+      ).toBeVisible();
+    });
+
+    it('does not invent a link when the saved canonical URL is missing', async () => {
+      mock.fetchPortfolio.mockResolvedValue({ ...basePortfolio, portfolioUrl: null });
+      await renderSettings();
+      expect(screen.queryByRole('link', { name: 'View portfolio' })).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Your public portfolio link is unavailable. Refresh to try again.'),
+      ).toBeVisible();
+    });
+
+    it('does not suggest enabling an already enabled link when publication is restricted', async () => {
+      mock.fetchPortfolio.mockResolvedValue({ ...basePortfolio, publiclyVisible: false });
+      await renderSettings();
+      expect(screen.queryByRole('link', { name: 'View portfolio' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Enable Public link and save/)).not.toBeInTheDocument();
+      expect(screen.getByText('Your portfolio is not publicly available yet.')).toBeVisible();
+    });
+  });
+
   it('renders the fetched portfolio data', async () => {
     const slugInput = await renderSettings();
 

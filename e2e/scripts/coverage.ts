@@ -20,8 +20,8 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
-    'project-view-action.spec.ts',
-    'project view action opens the live version while submitted edits remain private',
+    'portfolio-details.spec.ts',
+    'portfolio details persist from editor to public studio on desktop and mobile',
   ],
   [
     'admin-summary.spec.ts',
@@ -132,6 +132,10 @@ const requiredEntries: [file: string, title: string][] = [
   ),
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],
   ['homepage-feed.spec.ts', 'keeps a deep-linked result page in the infinite feed model'],
+  ...[1440, 390].map((width): [string, string] => [
+    'homepage-wording.spec.ts',
+    `homepage wording and discovery controls at ${width}px`,
+  ]),
   ...['desktop', 'mobile'].map((viewport): [string, string] => [
     'homepage-feed.spec.ts',
     `shows custom cities in suggestions and search cards on ${viewport}`,
@@ -174,6 +178,10 @@ const requiredEntries: [file: string, title: string][] = [
   [
     'phone-focus-ring.spec.ts',
     'composite fields show one visible focus indicator across login and designer workflows',
+  ],
+  [
+    'project-view-action.spec.ts',
+    'project view action opens the live version while submitted edits remain private',
   ],
   [
     'project-likes.spec.ts',

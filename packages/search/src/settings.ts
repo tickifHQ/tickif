@@ -90,6 +90,7 @@ const DESIGNER_COLLECTION_FIELDS = [
   { name: 'scopeSlugs', type: 'string[]', facet: true },
   { name: 'themeSlugs', type: 'string[]', facet: true },
   { name: 'yearsExperience', type: 'int32', sort: true },
+  { name: 'foundedYear', type: 'int32', optional: true },
   { name: 'projectCount', type: 'int32', sort: true },
   { name: 'paidUntil', type: 'int64', sort: true, optional: true },
   { name: 'rankingTier', type: 'int32', sort: true, optional: true },

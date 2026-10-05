@@ -37,8 +37,14 @@ test('designer onboarding and media processing connects to visitor onboarding an
     phoneNumberVerified: true,
   });
   const visitorPhone = `+9193${randomInt(10_000_000, 99_999_999)}`;
-  const designerContext = await browser.newContext({ baseURL: webUrl });
-  const visitorContext = await browser.newContext({ baseURL: webUrl });
+  const designerContext = await browser.newContext({
+    baseURL: webUrl,
+    recordVideo: { dir: testInfo.outputPath('designer-video'), size: { width: 1280, height: 720 } },
+  });
+  const visitorContext = await browser.newContext({
+    baseURL: webUrl,
+    recordVideo: { dir: testInfo.outputPath('visitor-video'), size: { width: 1280, height: 720 } },
+  });
   const adminContext = await browser.newContext({ baseURL: webUrl });
   const designer = await designerContext.newPage();
   const visitor = await visitorContext.newPage();
@@ -386,9 +392,12 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .getByRole('textbox', { name: 'OTP digit 1', exact: true })
       .fill(await phoneCode(visitorPhone));
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
+    // Confirm the interactive form is hydrated before filling text fields that
+    // React initializes from the server-provided onboarding state.
+    await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
+    await expect(visitor.getByLabel('WhatsApp number (Recommended)')).toBeDisabled();
     await visitor.getByLabel(/^Display name/).fill(`Journey Visitor ${suffix}`);
     await visitor.getByLabel('Address', { exact: true }).fill('Mumbai');
-    await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(visitor).toHaveURL(`${webUrl}/home`);
     const [persistedVisitor] = await db
@@ -578,12 +587,47 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await projectActions
       .getByRole('button', { name: `Enquire about ${project.title}`, exact: true })
       .click();
+    const projectEnquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
+    await expect(projectEnquiry).toBeVisible();
+    await visitor.keyboard.press('Escape');
+    await expect(projectEnquiry).not.toBeVisible();
+
+    // The portfolio hero offers one studio identity and a single enquiry action;
+    // this entry point must deliver the same real lead as a project enquiry.
+    await visitor.goto(publicProfileUrl);
+    const portfolioHero = visitor.getByRole('region', { name: 'Portfolio hero' });
+    await expect(portfolioHero.getByRole('heading', { level: 1 })).toHaveText(
+      `Journey Studio ${suffix}`,
+    );
+    await expect(portfolioHero.getByRole('button', { name: 'Enquire', exact: true })).toHaveCount(
+      1,
+    );
+    await expect(portfolioHero.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    await expect(visitor.getByRole('button', { name: /Book consultation/i })).toHaveCount(0);
+    await visitor.screenshot({
+      path: testInfo.outputPath('portfolio-hero-desktop.png'),
+      animations: 'disabled',
+    });
+    await visitor.setViewportSize({ width: 390, height: 844 });
+    await portfolioHero
+      .getByRole('button', { name: 'Enquire', exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await visitor.screenshot({
+      path: testInfo.outputPath('portfolio-hero-mobile.png'),
+      animations: 'disabled',
+    });
+    await portfolioHero.getByRole('button', { name: 'Enquire', exact: true }).click();
     const enquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
     await enquiry
       .getByLabel('Description', { exact: false })
       .fill(`Please discuss the kitchen renovation for synthetic household ${suffix}.`);
     await enquiry.getByRole('button', { name: 'Send Enquiry', exact: true }).click();
     await expect(enquiry.getByText('Enquiry sent successfully!')).toBeVisible();
+    await visitor.keyboard.press('Escape');
+    await expect(enquiry).not.toBeVisible();
     await visitor.goto(`${publicProfileUrl}#tickif-reviews`);
     await visitor.getByLabel('Your rating').selectOption('5');
     await visitor
