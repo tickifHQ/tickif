@@ -677,6 +677,34 @@ describe('PATCH /api/profiles/me — update', () => {
     });
   });
 
+  it('persists and clears office counts and derives experience from the saved founding year', async () => {
+    const { cookie } = await setupDesignerWithSession();
+    const year = new Date().getUTCFullYear();
+    const write = await request('PATCH', '/api/profiles/me', {
+      cookie,
+      body: { officeCount: 2, foundedYear: year - 8 },
+    });
+    expect(write.status).toBe(200);
+    expect(await json(write)).toMatchObject({
+      officeCount: 2,
+      foundedYear: year - 8,
+      yearsExperience: 8,
+    });
+    const read = await request('GET', '/api/profiles/me', { cookie });
+    expect(await json(read)).toMatchObject({ officeCount: 2, yearsExperience: 8 });
+    const cleared = await request('PATCH', '/api/profiles/me', {
+      cookie,
+      body: { officeCount: null },
+    });
+    expect(await json(cleared)).toMatchObject({ officeCount: null });
+  });
+
+  it.each([-1, 1.5, 10001])('rejects invalid office count %s', async (officeCount) => {
+    const { cookie } = await setupDesignerWithSession();
+    const response = await request('PATCH', '/api/profiles/me', { cookie, body: { officeCount } });
+    expect(response.status).toBe(422);
+  });
+
   it('updates profile fields (partial — bio only)', async () => {
     const { cookie } = await setupDesignerWithSession();
     const res = await request('PATCH', '/api/profiles/me', {

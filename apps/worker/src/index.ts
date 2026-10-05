@@ -10,6 +10,7 @@ import {
   scheduleGoogleReviewsSweep,
   scheduleVerificationNotificationSweep,
   scheduleBillingLifecycleSweep,
+  scheduleDesignerExperienceRefresh,
 } from '@repo/queue';
 import { searchWriteClient } from '@repo/search';
 import {
@@ -116,6 +117,9 @@ const searchIndexWorker = new Worker<SearchIndexJob>(QUEUES.searchIndex, process
   connection,
   concurrency: config.SEARCH_WORKER_CONCURRENCY,
 });
+void scheduleDesignerExperienceRefresh().catch((err) =>
+  console.error('[worker] failed to register designer experience refresh:', err),
+);
 
 // E-239 plan-lapse lifecycle sweep: advances grace→locked→downgraded on
 // config-driven windows and folds org-retention (invitation expiry) into the

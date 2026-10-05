@@ -333,6 +333,7 @@ export const designerProfile = pgTable(
     googleBusinessUrl: text('google_business_url'),
     testimonialBannerEnabled: boolean('testimonial_banner_enabled').default(false).notNull(),
     staffCount: integer('staff_count'),
+    officeCount: integer('office_count'),
     // Contact & social presence
     phone: text('phone'),
     address: text('address'),
