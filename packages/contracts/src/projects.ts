@@ -266,6 +266,7 @@ export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 
 export const projectListItemSchema = z
   .object({
+    publicAvailable: z.boolean().optional(),
     liveStatus: z.literal('published').optional(),
     pendingChanges: z.boolean().optional(),
     pendingStatus: projectStatus.nullable().optional(),

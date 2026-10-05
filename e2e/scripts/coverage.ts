@@ -180,6 +180,10 @@ const requiredEntries: [file: string, title: string][] = [
     'composite fields show one visible focus indicator across login and designer workflows',
   ],
   [
+    'project-view-action.spec.ts',
+    'project view action opens the live version while submitted edits remain private',
+  ],
+  [
     'project-likes.spec.ts',
     'visitor likes persist across project and portfolio views independently of bookmarks',
   ],

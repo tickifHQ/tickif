@@ -244,16 +244,53 @@ describe('DesignerProjectRowActions', () => {
       />,
     );
 
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
-      { button: 0, ctrlKey: false },
-    );
-
-    expect(screen.getByRole('menuitem', { name: /view project/i })).toHaveAttribute(
-      'href',
-      '/projects/11111111-1111-4111-8111-111111111111',
-    );
+    expect(
+      screen.getByRole('link', { name: /view project.*warm walnut family home/i }),
+    ).toHaveAttribute('href', '/projects/11111111-1111-4111-8111-111111111111');
   });
+
+  it.each(['draft', 'submitted', 'in_review', 'changes_requested', 'rejected'] as const)(
+    'keeps the public version available while edits are %s',
+    (projectStatus) => {
+      render(
+        <DesignerProjectRowActions
+          projectId="11111111-1111-4111-8111-111111111111"
+          projectTitle="Live home"
+          projectStatus={projectStatus}
+          liveStatus="published"
+          publicAvailable
+        />,
+      );
+      const link = screen.getByRole('link', { name: /view project.*live home/i });
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      fireEvent.pointerDown(screen.getByRole('button', { name: /more actions/i }), {
+        button: 0,
+        ctrlKey: false,
+      });
+      expect(screen.getByRole('menuitem', { name: /copy link/i })).toBeInTheDocument();
+    },
+  );
+
+  it.each(['draft', 'archived', 'delisted', 'deleted', 'published'] as const)(
+    'omits public actions when the server marks a %s project unavailable',
+    (projectStatus) => {
+      render(
+        <DesignerProjectRowActions
+          projectId="11111111-1111-4111-8111-111111111111"
+          projectTitle="Unavailable home"
+          projectStatus={projectStatus}
+          publicAvailable={false}
+        />,
+      );
+      expect(screen.queryByRole('link', { name: /view project/i })).not.toBeInTheDocument();
+      fireEvent.pointerDown(screen.getByRole('button', { name: /more actions/i }), {
+        button: 0,
+        ctrlKey: false,
+      });
+      expect(screen.queryByRole('menuitem', { name: /copy link/i })).not.toBeInTheDocument();
+    },
+  );
 
   it('does not offer View project or Copy link for an unpublished draft', () => {
     render(
@@ -394,9 +431,7 @@ describe('DesignerProjectRowActions', () => {
       { button: 0, ctrlKey: false },
     );
     // Duplicate is unavailable for an archived project, even from the menu.
-    expect(
-      screen.queryByRole('menuitem', { name: /duplicate project/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /duplicate project/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('separator')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: /restore to drafts/i }));
 
