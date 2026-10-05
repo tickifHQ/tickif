@@ -148,7 +148,7 @@ function StudioBar({ portfolio, view }: SectionProps) {
         <div className="flex min-w-0 items-center gap-3">
           <StudioMark portfolio={portfolio} view={view} className="size-9 text-xs" sizePx={36} />
           <div className="min-w-0">
-            <p className="flex items-center gap-1 truncate text-sm font-medium">
+            <h1 className="flex items-center gap-1 truncate text-sm font-medium">
               {portfolio.displayName}
               {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                 <BadgeCheck
@@ -156,7 +156,7 @@ function StudioBar({ portfolio, view }: SectionProps) {
                   className="size-4 shrink-0 fill-primary text-primary-foreground"
                 />
               ) : null}
-            </p>
+            </h1>
             <p className="truncate text-xs text-muted-foreground">
               {view.type}
               {headlineRating && headlineRating.reviewCount > 0 ? (
@@ -184,7 +184,7 @@ function StudioBar({ portfolio, view }: SectionProps) {
               label="Share"
               icon="share"
               variant="outline"
-              className="hidden h-9 rounded-full px-4 sm:inline-flex"
+              className="h-9 rounded-full px-4"
             />
           ) : null}
         </div>
@@ -293,6 +293,15 @@ function HeroSection({ portfolio, view }: SectionProps) {
               <MessageSquare className="size-4" />
               Enquire
             </EnquiryCta>
+            {portfolio.sections.shareBlock ? (
+              <CopyLinkButton
+                value={view.publicProfileHref}
+                label="Share"
+                icon="share"
+                variant="outline"
+                className="h-10 px-4"
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -918,7 +927,10 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
                             rel="noopener noreferrer nofollow"
                             className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
-                            <Navigation className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                            <Navigation
+                              className="size-4 shrink-0 text-primary"
+                              aria-hidden="true"
+                            />
                             Open in Maps
                           </a>
                         ) : null}
@@ -1098,8 +1110,7 @@ export function PublicDesignerProfile({
         style={{ '--primary': portfolio.accentColor } as React.CSSProperties}
       >
         <TrustStrip items={profileTrustItems} />
-        <StudioBar {...props} />
-        {portfolio.sections.hero ? <HeroSection {...props} /> : null}
+        {portfolio.sections.hero ? <HeroSection {...props} /> : <StudioBar {...props} />}
         {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
           <CredentialsSection {...props} />
         ) : null}
