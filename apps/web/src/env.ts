@@ -9,6 +9,14 @@ import { z } from 'zod';
  * Add new variables here, never read process.env directly elsewhere.
  */
 export const env = createEnv({
+  server: {
+    // Origin allow-list for social-image reads; no storage credentials are needed.
+    R2_ENDPOINT: z.url().optional(),
+    R2_ACCOUNT_ID: z
+      .string()
+      .regex(/^[a-f0-9]{32}$/i)
+      .optional(),
+  },
   client: {
     // Public base URL the web app uses to reach the API.
     NEXT_PUBLIC_API_URL: z.url().default('http://localhost:8008'),
@@ -29,7 +37,9 @@ export const env = createEnv({
   },
   // NEXT_PUBLIC_* vars are inlined by Next at build time, so they must be
   // referenced literally here for the client bundle to see them.
-  experimental__runtimeEnv: {
+  runtimeEnv: {
+    R2_ENDPOINT: process.env.R2_ENDPOINT,
+    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_WEB_URL: process.env.NEXT_PUBLIC_WEB_URL,
     NEXT_PUBLIC_TELEMETRY_ENABLED: process.env.NEXT_PUBLIC_TELEMETRY_ENABLED,

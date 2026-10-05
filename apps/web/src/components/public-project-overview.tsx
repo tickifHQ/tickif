@@ -1,7 +1,7 @@
 import Link from 'next/link';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import type { PublicProjectDetailResponse } from '@repo/contracts';
 import { config } from '@repo/config/features';
-import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { Separator } from '@repo/ui/components/separator';
@@ -117,21 +117,20 @@ function DesignerCard({
   const profileHref = designer.slug ? `/d/${designer.slug}` : null;
   const rating = Number.parseFloat(designer.avgRating);
   const showRating = Number.isFinite(rating) && designer.reviewCount > 0;
-  const showExperience = designer.foundedYear !== null || designer.yearsExperience > 0;
+  const showExperience = designer.foundedYear !== null || (designer.yearsExperience ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-5 lg:pt-9">
       <Card variant="accent" radius="2xl" className="p-2">
         <Card radius="lg" className="overflow-hidden shadow-none">
           <CardHeader className="flex-row items-start gap-3 p-5 pb-0">
-            <Avatar className="size-17 rounded-xl border-2 border-background shadow-md">
-              {designer.logoUrl ? (
-                <AvatarImage src={designer.logoUrl} alt={`${designer.displayName} logo`} />
-              ) : null}
-              <AvatarFallback className="rounded-xl">
-                {designerInitials(designer.displayName) || 'T'}
-              </AvatarFallback>
-            </Avatar>
+            <DesignerLogoAvatar
+              logoUrl={designer.logoUrl}
+              alt={`${designer.displayName} logo`}
+              sizePx={68}
+              className="size-17 border-2 border-background shadow-md"
+              fallback={designerInitials(designer.displayName) || 'T'}
+            />
             <div className="min-w-0 pt-0.5">
               <p className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
                 {designer.firmType ??
@@ -152,8 +151,8 @@ function DesignerCard({
                   {designer.foundedYear ? (
                     <span className="text-foreground">Founded {designer.foundedYear}</span>
                   ) : null}
-                  {designer.foundedYear && designer.yearsExperience > 0 ? ' ' : null}
-                  {designer.yearsExperience > 0 ? (
+                  {designer.foundedYear && (designer.yearsExperience ?? 0) > 0 ? ' ' : null}
+                  {(designer.yearsExperience ?? 0) > 0 ? (
                     <span className="text-foreground-disabled">
                       ({designer.yearsExperience}{' '}
                       {designer.yearsExperience === 1 ? 'year' : 'years'} of experience)

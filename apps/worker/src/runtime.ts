@@ -10,6 +10,7 @@ import {
   scheduleGoogleReviewsSweep,
   scheduleVerificationNotificationSweep,
   scheduleBillingLifecycleSweep,
+  scheduleDesignerExperienceRefresh,
 } from '@repo/queue';
 import { searchWriteClient } from '@repo/search';
 import {
@@ -174,6 +175,12 @@ const searchIndexWorker = new Worker<SearchIndexJob>(
     concurrency: config.SEARCH_WORKER_CONCURRENCY,
     telemetry,
   },
+);
+void scheduleDesignerExperienceRefresh().catch((err) =>
+  logger.error(
+    { event: 'scheduler.registration_failed', scheduler: 'designer-experience', err },
+    'Scheduler registration failed',
+  ),
 );
 
 // E-239 plan-lapse lifecycle sweep: advances grace→locked→downgraded on

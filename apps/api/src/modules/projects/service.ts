@@ -1,3 +1,4 @@
+import { resolveProfileExperience } from '@repo/contracts';
 import type {
   AssignProjectResponsibleMemberInput,
   CreateProjectInput,
@@ -565,6 +566,7 @@ function toListItemFields(
   reviewComments: ProjectReviewComment[],
 ): ProjectListItem {
   return {
+    publicAvailable: row.publicAvailable ?? false,
     ...(row.pendingChanges
       ? { pendingChanges: true, liveStatus: 'published' as const, pendingStatus: row.status }
       : {}),
@@ -1442,7 +1444,7 @@ async function buildPublicProjectDetail(
       bio: designer.bio,
       firmType: designer.firmType,
       foundedYear: designer.foundedYear,
-      yearsExperience: designer.yearsExperience,
+      yearsExperience: resolveProfileExperience(designer),
       projectCount,
       footprintCities,
     },

@@ -170,6 +170,8 @@ services:
       APP_VERSION: ${GITHUB_SHA:-unknown}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
+      # Only the origin is needed; social cards use public-API signed media URLs.
+      R2_ENDPOINT: ${R2_ENDPOINT}
     networks:
       - edge
       - telemetry

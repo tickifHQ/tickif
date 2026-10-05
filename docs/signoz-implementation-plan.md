@@ -118,8 +118,8 @@ Rollback disables SDK export/browser ingestion or restores prior immutable app i
 
 ## Local verification — 5 October 2026
 
-- Workspace `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass. The full test run passed 4,246 tests; four credential-dependent Razorpay connectivity tests were skipped.
+- Workspace `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass. After incorporating main's dependency and runtime updates, the full test run passed 4,327 tests; four credential-dependent Razorpay connectivity tests were skipped.
 - API, worker, and Next.js production builds pass. API and worker compiled telemetry smoke tests pass inside the pinned Node 22 Docker build images. Next standalone startup, unavailable-collector resilience, and actual trace export to a local OTLP receiver pass.
 - Frozen-lockfile installation, shell syntax, deployment preflight checks, pinned collector/proxy validation, log privacy/severity/timestamp mapping, and checkpoint restart regression checks pass. The official SigNoz Terraform provider schema and formatting validate; live workspace queries and alert delivery remain operator acceptance work.
 - The test host's WSL kernel lacks `/proc/self/io`, triggering a [Typesense startup defect](https://github.com/typesense/typesense/issues/2998). Tests used a separate disposable Typesense 30.2 instance from an existing local compatibility image. Deployment images were unchanged, and the disposable database, Redis, and search containers were removed after validation.
-- `pnpm audit --audit-level=high` reports an existing unpatched [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) through the UI's `shadcn` tooling. This dependency existed before the observability change; the audit remains failing independently of the successful typecheck/lint/test gates.
+- After incorporating main's dependency updates and removal of unused `shadcn` tooling, `pnpm audit --audit-level=high` passes (one moderate advisory remains below the high-severity gate).

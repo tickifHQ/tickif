@@ -8,6 +8,7 @@ const JOBS = new Set([
   'refresh-google-reviews', 'sweep-google-reviews', 'index-project', 'delete-project',
   'index-designer', 'delete-designer', 'reindex-all', 'send-verification-email',
   'sweep-verification-notifications', 'sweep-billing-lifecycle',
+  'sweep-designer-experience', 'refresh-designer-experience',
 ]);
 const NUMERIC_KEYS = new Set([
   'http.response.status_code', 'http.status_code', 'http.request.body.size',

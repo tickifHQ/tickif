@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DESIGNERS_SOCIAL_COPY, publicMetadata } from '@/lib/social-metadata';
 import { DesignerDiscoveryFilters } from '@/components/designer-discovery-filters';
 import { DesignerDiscoveryResults } from '@/components/designer-discovery-results';
 import { fetchDesignerFacetOptions, fetchDesignerSearch } from '@/lib/designer-discovery-api';
@@ -13,12 +14,11 @@ import {
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const query = parseDesignerParams(await searchParams);
-  return {
-    title: 'Find interior designers | Tickif',
-    description:
-      'Discover designers and studios by city, style and experience. Explore their published portfolios on Tickif.',
-    alternates: { canonical: designerPageHref(query) },
-  };
+  return publicMetadata({
+    ...DESIGNERS_SOCIAL_COPY,
+    path: designerPageHref(query),
+    imagePath: '/designers/social-card',
+  });
 }
 
 export default async function DesignersPage({ searchParams }: Props) {

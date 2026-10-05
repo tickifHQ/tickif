@@ -5,6 +5,16 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { safeSpanName, sanitizeReadableSpan, sanitizeTraceAttributes } from '../src/privacy.js';
 
 describe('trace export privacy', () => {
+  it('retains bounded designer experience job dimensions and excludes dynamic identifiers', () => {
+    for (const name of ['sweep-designer-experience', 'refresh-designer-experience']) {
+      expect(sanitizeTraceAttributes({ 'job.type': name, 'bullmq.job.name': name })).toEqual({
+        'job.type': name, 'bullmq.job.name': name,
+      });
+    }
+    expect(sanitizeTraceAttributes({
+      'job.type': 'refresh-designer-experience-2026', 'bullmq.job.id': 'designer-experience-2026',
+    })).toEqual({});
+  });
   it('keeps operational dimensions and rejects sensitive or unknown attributes', () => {
     expect(sanitizeTraceAttributes({
       'http.method': 'POST', 'http.route': '/api/projects/:id', 'http.status_code': 500,

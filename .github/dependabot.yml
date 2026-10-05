@@ -16,6 +16,13 @@ updates:
       aws-sdk:
         patterns:
           - "@aws-sdk/*"
+      # React DOM requires the matching React runtime and type definitions.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
     reviewers:
       - "shikharx06"
 

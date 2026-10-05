@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { HOME_SOCIAL_COPY, publicMetadata } from '@/lib/social-metadata';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
@@ -122,11 +123,7 @@ export async function generateMetadata({
 }: HomePageProps = {}): Promise<Metadata> {
   const params = await searchParams;
   const page = parseFeedPage(params.page);
-  return {
-    alternates: {
-      canonical: feedPageLink(params, page),
-    },
-  };
+  return publicMetadata({ ...HOME_SOCIAL_COPY, path: feedPageLink(params, page) });
 }
 
 /** Real-data homepage shared by logged-out discovery and the logged-in infinite feed. */
