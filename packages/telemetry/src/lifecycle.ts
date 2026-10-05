@@ -15,6 +15,7 @@ import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import { IORedisInstrumentation } from '@opentelemetry/instrumentation-ioredis';
 import { PrivateSpanExporter, sanitizeTraceAttributes } from './privacy';
 import { privateTracePropagator } from './propagation';
+import { signalEndpoint } from './endpoint';
 
 export interface TelemetryRuntime {
   start(): void;
@@ -32,10 +33,6 @@ export interface InitTelemetryOptions {
   sdkFactory?: (options: Partial<NodeSDKConfiguration>) => TelemetryRuntime;
 }
 
-function endpoint(base: string, signal: string): string {
-  return `${base.replace(/\/+$/, '')}/v1/${signal}`;
-}
-
 function sdkOptions(options: InitTelemetryOptions, config: TelemetryConfig): Partial<NodeSDKConfiguration> {
   const base = config.OTEL_EXPORTER_OTLP_ENDPOINT;
   if (!base) throw new Error('Missing telemetry endpoint');
@@ -50,10 +47,10 @@ function sdkOptions(options: InitTelemetryOptions, config: TelemetryConfig): Par
     new IORedisInstrumentation({ dbStatementSerializer: () => '[redacted]', requireParentSpan: true }),
   ];
   const exporter = options.spanExporter ?? new OTLPTraceExporter({
-    url: endpoint(base, 'traces'), timeoutMillis: 2_000, headers: {}, concurrencyLimit: 1,
+    url: signalEndpoint(base, 'traces'), timeoutMillis: 2_000, headers: {}, concurrencyLimit: 1,
   });
   const metricExporter = options.metricExporter ?? new OTLPMetricExporter({
-    url: endpoint(base, 'metrics'), timeoutMillis: 2_000, headers: {}, concurrencyLimit: 1,
+    url: signalEndpoint(base, 'metrics'), timeoutMillis: 2_000, headers: {}, concurrencyLimit: 1,
     temporalityPreference: AggregationTemporality.CUMULATIVE,
   });
   return {

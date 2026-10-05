@@ -16,6 +16,19 @@ cleanup() {
   docker rm -f "$proxy_container" >/dev/null 2>&1 || true
   docker rm -f "$label_container" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
+  # The runner cannot remove offsets owned by UID 10001. Clean only this
+  # disposable store through its dedicated mount before removing the fixture.
+  if [[ -d "$fixture/storage" ]]; then
+    docker run --rm --network none \
+      --mount "type=bind,source=$(docker_path "$fixture/storage"),target=/storage" \
+      node:22-bookworm-slim node -e '
+        const fs = require("node:fs");
+        for (const entry of fs.readdirSync("/storage")) {
+          fs.rmSync("/storage/" + entry, {recursive: true, force: true});
+        }
+        fs.chmodSync("/storage", 0o755);
+      ' || true
+  fi
   rm -rf -- "$fixture"
 }
 trap cleanup EXIT
@@ -26,6 +39,17 @@ repository=$(docker_path "$PWD")
 scratch=$(docker_path "$fixture")
 printf '%s' synthetic-collector-key >"$fixture/key"
 mkdir -p "$fixture/logs" "$fixture/storage"
+# mktemp creates 0700 directories on Linux. Keep the collector's image UID
+# (10001); expose only synthetic read fixtures and its disposable offset store.
+chmod 0755 "$fixture" "$fixture/logs"
+chmod 0644 "$fixture/key"
+docker run --rm --network none \
+  --mount "type=bind,source=$scratch/storage,target=/storage" \
+  node:22-bookworm-slim node -e '
+    const fs = require("node:fs");
+    fs.chownSync("/storage", 10001, 10001);
+    fs.chmodSync("/storage", 0o700);
+  '
 docker run --rm --network none \
   --env SIGNOZ_OTLP_ENDPOINT=https://ingest.in.signoz.cloud:443 \
   --env DEPLOYMENT_ENV=staging --env TELEMETRY_HOST_NAME=fixture --env TELEMETRY_HOST_ID=fixture \
@@ -94,10 +118,12 @@ service:
 CONFIG
 } >"$fixture/parser.yml"
 : >"$fixture/logs/fixture-json.log"
+chmod 0644 "$fixture/parser.yml" "$fixture/logs/fixture-json.log"
 start_collector() {
   docker run -d --name "$container" --network none \
     --env DEPLOYMENT_ENV=staging --env TELEMETRY_HOST_NAME=fixture --env TELEMETRY_HOST_ID=node-fixture \
-    --mount "type=bind,source=$scratch,target=/fixture" \
+    --mount "type=bind,source=$scratch,target=/fixture,readonly" \
+    --mount "type=bind,source=$scratch/storage,target=/fixture/storage" \
     "$image" --config=/fixture/parser.yml >/dev/null
   sleep 2
 }
