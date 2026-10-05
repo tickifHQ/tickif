@@ -536,7 +536,7 @@ export const publicProjectDesignerSchema = designerSummarySchema
     bio: z.string().nullable(),
     firmType: z.string().nullable(),
     foundedYear: z.number().int().nullable(),
-    yearsExperience: z.number().int().min(0),
+    yearsExperience: z.number().int().min(0).nullable(),
     projectCount: z.number().int().min(0),
     footprintCities: z.array(publicTaxonomyValueSchema),
     /** Null when Google is disconnected, stale, hidden, or has no ratings. */

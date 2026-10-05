@@ -87,7 +87,10 @@ function DesignerCard({
                 <p className="line-clamp-1 break-words text-2xs text-muted-foreground">{summary}</p>
               ) : null}
               <p className="text-2xs">
-                {designer.yearsExperience} years of experience · {designer.projectCount} projects
+                {designer.yearsExperience != null
+                  ? `${designer.yearsExperience} years of experience · `
+                  : ''}
+                {designer.projectCount} projects
               </p>
               {designer.googleRating !== null && designer.googleRatingCount !== null ? (
                 <p className="flex items-center gap-1 text-2xs" aria-label="Google Business rating">

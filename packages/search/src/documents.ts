@@ -59,6 +59,8 @@ export type DesignerSearchDocument = {
   scopeSlugs: string[];
   themeSlugs: string[];
   yearsExperience: number;
+  /** Founding year allows experience to advance without waiting for reindexing. */
+  foundedYear?: number | null;
   projectCount: number;
   avgRating: number;
   /** Paid coverage end in epoch ms. Zero means no paid discovery priority. */

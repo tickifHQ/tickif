@@ -117,7 +117,7 @@ function DesignerCard({
   const profileHref = designer.slug ? `/d/${designer.slug}` : null;
   const rating = Number.parseFloat(designer.avgRating);
   const showRating = Number.isFinite(rating) && designer.reviewCount > 0;
-  const showExperience = designer.foundedYear !== null || designer.yearsExperience > 0;
+  const showExperience = designer.foundedYear !== null || (designer.yearsExperience ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-5 lg:pt-9">
@@ -152,8 +152,8 @@ function DesignerCard({
                   {designer.foundedYear ? (
                     <span className="text-foreground">Founded {designer.foundedYear}</span>
                   ) : null}
-                  {designer.foundedYear && designer.yearsExperience > 0 ? ' ' : null}
-                  {designer.yearsExperience > 0 ? (
+                  {designer.foundedYear && (designer.yearsExperience ?? 0) > 0 ? ' ' : null}
+                  {(designer.yearsExperience ?? 0) > 0 ? (
                     <span className="text-foreground-disabled">
                       ({designer.yearsExperience}{' '}
                       {designer.yearsExperience === 1 ? 'year' : 'years'} of experience)
