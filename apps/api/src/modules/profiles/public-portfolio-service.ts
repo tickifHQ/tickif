@@ -1,3 +1,4 @@
+import { resolveProfileExperience } from '@repo/contracts';
 import type {
   GoogleReview,
   PublicPortfolioResponse,
@@ -226,8 +227,9 @@ export const publicPortfolioService = {
               }
             : null,
         projectCount: profile.projectCount,
-        yearsExperience: profile.yearsExperience,
+        yearsExperience: resolveProfileExperience(profile),
         cityPresenceCount: allCities.length,
+        officeCount: profile.officeCount,
         startingBudget,
       },
       social: sections.socialLinks

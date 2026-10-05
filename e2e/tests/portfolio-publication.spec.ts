@@ -699,7 +699,8 @@ test.describe('E-278 portfolio publication readiness', () => {
       const portfolioCover = page.getByAltText(`${seed.organization.name} portfolio cover`);
       await expect(portfolioCover).toBeVisible();
       await expect(portfolioCover).toHaveAttribute('loading', 'eager');
-      await expect(page.getByText('Years experience')).toBeVisible();
+      // This studio has no founding year or legacy experience, so omit the unknown value.
+      await expect(page.getByText('Years experience')).toHaveCount(0);
       await expect(page.getByText('Projects', { exact: true })).toBeVisible();
       await expect(page.getByText('Cities present')).toBeVisible();
       await expect(

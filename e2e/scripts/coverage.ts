@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'portfolio-details.spec.ts',
+    'portfolio details persist from editor to public studio on desktop and mobile',
+  ],
+  [
     'admin-summary.spec.ts',
     'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
   ],

@@ -1,3 +1,4 @@
+import { resolveProfileExperience } from '@repo/contracts';
 /**
  * Search response mappers — transform Typesense documents to API response shapes.
  *
@@ -131,7 +132,7 @@ export async function mapDesignerHit(doc: DesignerSearchDocument): Promise<Desig
     localitySlugs: doc.localitySlugs,
     scopeSlugs: doc.scopeSlugs,
     themeSlugs: doc.themeSlugs,
-    yearsExperience: doc.yearsExperience,
+    yearsExperience: resolveProfileExperience(doc),
     projectCount: doc.projectCount,
     avgRating: doc.avgRating,
     reviewCount: doc.reviewCount,
