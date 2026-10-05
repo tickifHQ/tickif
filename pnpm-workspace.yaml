@@ -45,7 +45,7 @@ onlyBuiltDependencies:
 catalog:
   # Language / tooling
   typescript: ^6.0.3
-  tsx: ^4.20.3
+  tsx: ^4.23.15
   '@types/node': 26.6.1
   eslint-config-prettier: ^10.1.8
 
@@ -65,7 +65,7 @@ catalog:
   react-email: ^6.9.3
 
   # Data layer
-  drizzle-orm: ^0.45.2
+  drizzle-orm: ^0.45.3
   drizzle-kit: ^0.31.11
   pg: ^8.22.0
   '@types/pg': ^8.11.10
@@ -75,8 +75,8 @@ catalog:
   ioredis: ^5.11.0
 
   # Storage (Cloudflare R2 via S3 API) + image processing
-  '@aws-sdk/client-s3': ^3.1140.0
-  '@aws-sdk/s3-request-presigner': ^3.1140.0
+  '@aws-sdk/client-s3': ^3.1145.0
+  '@aws-sdk/s3-request-presigner': ^3.1145.0
   sharp: ^0.35.4
 
   # Search
@@ -114,7 +114,7 @@ catalog:
   libphonenumber-js: 1.13.13
   '@tailwindcss/postcss': ^4.3.3
   tailwindcss: ^4.3.3
-  tailwind-merge: ^3.3.1
+  tailwind-merge: ^3.7.0
   tw-animate-css: ^1.4.0
 
   # Testing

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { BlogBody } from '@/components/blog-body';
 import { getBlogPost, getBlogPosts } from '@/lib/blog';
+import { publicMetadata } from '@/lib/social-metadata';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -15,11 +16,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const post = await getBlogPost(slug);
   if (!post) return { title: 'Article not found | Tickif', robots: { index: false } };
-  return {
-    title: `${post.title} | Tickif`,
+  return publicMetadata({
+    title: post.title,
     description: post.description,
-    alternates: { canonical: `/blog/${post.slug}` },
-  };
+    path: `/blog/${post.slug}`,
+    imagePath: `/blog/${post.slug}/social-card`,
+    type: 'article',
+  });
 }
 
 export default async function BlogPostPage({ params }: Props) {

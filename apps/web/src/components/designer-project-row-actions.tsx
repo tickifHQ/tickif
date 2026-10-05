@@ -48,6 +48,8 @@ export function DesignerProjectRowActions({
   projectId,
   projectTitle,
   projectStatus,
+  liveStatus,
+  publicAvailable,
   archiveReason = null,
   canArchive = false,
   canDelete = false,
@@ -55,6 +57,8 @@ export function DesignerProjectRowActions({
   projectId: string;
   projectTitle: string;
   projectStatus: ProjectStatus;
+  liveStatus?: 'published';
+  publicAvailable?: boolean;
   archiveReason?: ProjectArchiveReason | null;
   canArchive?: boolean;
   canDelete?: boolean;
@@ -76,9 +80,11 @@ export function DesignerProjectRowActions({
   const restoreEnabled = canArchive && projectStatus === 'archived' && !isRetentionManaged;
   const deleteEnabled = canDelete && !isTerminal && !isRetentionManaged;
   const withdrawEnabled = canWithdrawProject(projectStatus);
-  // Only a published project has a live public page. Its relative path is what
-  // the public site links to elsewhere (showcase card, image detail, etc.).
-  const isPublished = projectStatus === 'published';
+  // Workflow status describes pending edits; the server checks the live record and studio.
+  const isPublished =
+    !isTerminal &&
+    projectStatus !== 'archived' &&
+    (publicAvailable ?? (projectStatus === 'published' || liveStatus === 'published'));
   const duplicateEnabled = !isTerminal && projectStatus !== 'archived';
   const publicPath = `/projects/${projectId}`;
   // Copy Link shares an absolute URL, so build it from the public web origin.
@@ -218,6 +224,20 @@ export function DesignerProjectRowActions({
         </Button>
       ) : null}
 
+      {isPublished ? (
+        <Button asChild variant="ghost" size="sm" className="size-8 px-0 sm:w-auto sm:px-2">
+          <Link
+            href={publicPath}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`View project: ${projectTitle} (opens in new tab)`}
+          >
+            <ExternalLink className="size-4" />
+            <span className="hidden sm:inline">View project</span>
+          </Link>
+        </Button>
+      ) : null}
+
       <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -231,14 +251,6 @@ export function DesignerProjectRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          {isPublished ? (
-            <DropdownMenuItem asChild>
-              <Link href={publicPath}>
-                <ExternalLink className="size-4" />
-                View project
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
           {isPublished ? (
             <DropdownMenuItem
               onSelect={(event) => {

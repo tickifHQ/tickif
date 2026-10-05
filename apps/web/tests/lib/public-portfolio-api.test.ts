@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  fetchDesignerProjects,
-  fetchPublicPortfolio,
-} from '../../src/lib/public-portfolio-api';
+import { fetchDesignerProjects, fetchPublicPortfolio } from '../../src/lib/public-portfolio-api';
 import { makeProject, makePublicPortfolio } from '../fixtures/public-portfolio';
 
 const mock = vi.hoisted(() => ({
@@ -37,7 +34,10 @@ describe('fetchPublicPortfolio', () => {
     mock.portfolioGet.mockResolvedValue(jsonResponse(portfolio));
 
     await expect(fetchPublicPortfolio('anika-spaces')).resolves.toEqual(portfolio);
-    expect(mock.portfolioGet).toHaveBeenCalledWith({ param: { slug: 'anika-spaces' } });
+    expect(mock.portfolioGet).toHaveBeenCalledWith(
+      { param: { slug: 'anika-spaces' } },
+      { init: { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } },
+    );
   });
 
   it('returns null on 404 so the page can render notFound rather than an error', async () => {
@@ -45,6 +45,14 @@ describe('fetchPublicPortfolio', () => {
 
     await expect(fetchPublicPortfolio('missing')).resolves.toBeNull();
   });
+
+  it.each([400, 422])(
+    'treats a malformed public slug rejected with %s as not found',
+    async (status) => {
+      mock.portfolioGet.mockResolvedValue(jsonResponse({}, status));
+      await expect(fetchPublicPortfolio('invalid_slug')).resolves.toBeNull();
+    },
+  );
 
   it('throws on any other failure so a broken API is not shown as an empty page', async () => {
     mock.portfolioGet.mockResolvedValue(jsonResponse({ error: { message: 'boom' } }, 500));

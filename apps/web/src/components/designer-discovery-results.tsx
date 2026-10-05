@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import Image from 'next/image';
 import Link from 'next/link';
 import { GoogleBrandIcon } from '@/components/brand-icons';
 import { Star, UsersRound } from 'lucide-react';
 import type { SearchDesignersQuery, SearchDesignersResponse } from '@repo/contracts';
-import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent } from '@repo/ui/components/card';
@@ -52,16 +52,13 @@ function DesignerCard({
           </div>
           <CardContent className="flex min-h-32 flex-1 flex-col px-3 py-3">
             <div className="flex min-w-0 items-start gap-2">
-              <Avatar className="size-10 shrink-0 bg-muted shadow-sm">
-                <AvatarImage
-                  src={designer.logoUrl ?? undefined}
-                  alt={`${designer.displayName} logo`}
-                  className="object-cover"
-                />
-                <AvatarFallback className="text-sm">
-                  {designer.displayName.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <DesignerLogoAvatar
+                logoUrl={designer.logoUrl}
+                alt={`${designer.displayName} logo`}
+                sizePx={40}
+                className="size-10 text-sm shadow-sm"
+                fallback={designer.displayName.slice(0, 2).toUpperCase()}
+              />
               <div className="min-w-0 flex-1">
                 <h2 className="line-clamp-2 text-sm font-semibold leading-tight">
                   {designer.displayName}

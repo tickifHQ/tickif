@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { MessageSquare } from 'lucide-react';
 import type { EnquiryResponse, ListEnquiriesResponse } from '@repo/contracts';
 import { api } from '@/lib/api';
@@ -74,22 +75,18 @@ export function EnquiriesPageClient() {
               }`}
             >
               {/* Designer avatar */}
-              {enquiry.designerProfile.logoUrl ? (
-                <img
-                  src={enquiry.designerProfile.logoUrl}
-                  alt=""
-                  className="size-10 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                  {enquiry.designerProfile.displayName
-                    .split(' ')
-                    .map((w) => w[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </div>
-              )}
+              <DesignerLogoAvatar
+                logoUrl={enquiry.designerProfile.logoUrl}
+                alt={`${enquiry.designerProfile.displayName} logo`}
+                sizePx={40}
+                className="size-10 text-xs bg-primary/10 font-bold text-primary"
+                fallback={enquiry.designerProfile.displayName
+                  .split(/\s+/)
+                  .map((word) => word[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   {enquiry.designerProfile.displayName}
@@ -111,28 +108,26 @@ export function EnquiriesPageClient() {
           <div className="mx-auto max-w-2xl">
             {/* Header */}
             <div className="flex items-center gap-3">
-              {selected.designerProfile.logoUrl ? (
-                <img
-                  src={selected.designerProfile.logoUrl}
-                  alt=""
-                  className="size-12 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                  {selected.designerProfile.displayName
-                    .split(' ')
-                    .map((w) => w[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </div>
-              )}
+              <DesignerLogoAvatar
+                logoUrl={selected.designerProfile.logoUrl}
+                alt={`${selected.designerProfile.displayName} logo`}
+                sizePx={48}
+                className="size-12 text-sm bg-primary/10 font-bold text-primary"
+                fallback={selected.designerProfile.displayName
+                  .split(/\s+/)
+                  .map((word) => word[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()}
+              />
               <div>
                 <p className="text-base font-medium text-foreground">
                   {selected.designerProfile.displayName}
                 </p>
                 {selected.designerProfile.location && (
-                  <p className="text-sm text-muted-foreground">{selected.designerProfile.location}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selected.designerProfile.location}
+                  </p>
                 )}
               </div>
             </div>
