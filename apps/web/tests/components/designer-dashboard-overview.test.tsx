@@ -345,7 +345,7 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.getByText('Projects')).toBeInTheDocument();
   });
 
-  it('defaults stats to zero when the values are omitted', () => {
+  it('keeps omitted experience unknown while project count defaults to zero', () => {
     render(
       <DesignerDashboardOverview
         studioName="Livspace"
@@ -356,7 +356,8 @@ describe('DesignerDashboardOverview', () => {
       />,
     );
 
-    expect(screen.getAllByText('0')).toHaveLength(2);
+    expect(screen.getAllByText('0')).toHaveLength(1);
+    expect(screen.getByText('Years experience').parentElement).toHaveTextContent('—');
     expect(screen.getByText('Years experience')).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
   });

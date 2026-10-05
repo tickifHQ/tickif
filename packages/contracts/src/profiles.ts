@@ -267,7 +267,7 @@ const profileBaseSchema = z.object({
   bio: z.string().nullable(),
   logoImageId: z.string().nullable(),
   status: z.string(),
-  yearsExperience: z.number(),
+  yearsExperience: z.number().int().min(0).nullable(),
   projectCount: z.number(),
   shareCount: z.number(),
   avgRating: z.string(),
@@ -282,6 +282,7 @@ const profileBaseSchema = z.object({
   firmType: z.string().nullable(),
   foundedYear: z.number().nullable(),
   staffCount: z.number().nullable(),
+  officeCount: z.number().int().min(0).nullable().optional(),
   testimonialBannerEnabled: z.boolean(),
   footprint: z.array(footprintEntrySchema),
   /**
@@ -426,6 +427,7 @@ export const updateProfileSchema = z
       .optional()
       .nullable(),
     staffCount: profileStaffCountSchema.optional().nullable(),
+    officeCount: z.number().int().min(0).max(10000).nullable().optional(),
     testimonialBannerEnabled: z.boolean().optional(),
     address: z.string().trim().max(300, 'Use 300 characters or fewer.').optional().nullable(),
     cityIds: z
@@ -921,7 +923,8 @@ export const publicPortfolioStatsSchema = z
       })
       .nullable(),
     projectCount: z.number().int(),
-    yearsExperience: z.number().int(),
+    yearsExperience: z.number().int().min(0).nullable(),
+    officeCount: z.number().int().min(0).nullable().optional(),
     cityPresenceCount: z.number().int().nonnegative(),
     /**
      * Label of the lowest budget band across published projects (taxonomy

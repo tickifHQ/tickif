@@ -1,5 +1,10 @@
 import type { DesignerSearchDocument, ProjectSearchDocument } from '@repo/search';
-import { rankingTier, type PlanTier, type SubscriptionState } from '@repo/contracts';
+import {
+  resolveProfileExperience,
+  rankingTier,
+  type PlanTier,
+  type SubscriptionState,
+} from '@repo/contracts';
 
 export type SearchImageDerivative = {
   variant: string;
@@ -66,6 +71,7 @@ export type DesignerSearchSource = {
     tagline: string | null;
     entityType: 'individual' | 'company';
     yearsExperience: number;
+    foundedYear?: number | null;
     projectCount: number;
     avgRating: string;
     paidUntil?: number;
@@ -178,7 +184,8 @@ export function mapDesignerSearchDocument(source: DesignerSearchSource): Designe
     localitySlugs: slugs('locality'),
     scopeSlugs: slugs('scope'),
     themeSlugs: slugs('theme'),
-    yearsExperience: source.profile.yearsExperience,
+    yearsExperience: resolveProfileExperience(source.profile) ?? 0,
+    foundedYear: source.profile.foundedYear ?? null,
     projectCount: source.profile.projectCount,
     avgRating: Number(source.profile.avgRating),
     paidUntil: Number(source.profile.paidUntil ?? 0),

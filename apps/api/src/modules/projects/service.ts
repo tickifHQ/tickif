@@ -1,3 +1,4 @@
+import { resolveProfileExperience } from '@repo/contracts';
 import type {
   AssignProjectResponsibleMemberInput,
   CreateProjectInput,
@@ -1443,7 +1444,7 @@ async function buildPublicProjectDetail(
       bio: designer.bio,
       firmType: designer.firmType,
       foundedYear: designer.foundedYear,
-      yearsExperience: designer.yearsExperience,
+      yearsExperience: resolveProfileExperience(designer),
       projectCount,
       footprintCities,
     },
