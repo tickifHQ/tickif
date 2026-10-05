@@ -30,7 +30,7 @@
     "@repo/search": "workspace:*",
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.5",
     "drizzle-orm": "catalog:",
     "ioredis": "catalog:",
     "pg": "catalog:",

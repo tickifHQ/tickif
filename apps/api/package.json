@@ -35,7 +35,7 @@
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
     "bullmq": "catalog:",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.5",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "ioredis": "catalog:",
