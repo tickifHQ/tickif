@@ -1,6 +1,5 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import 'shadcn/tailwind.css';
 
 /* Consuming apps resolve this package through node_modules, which Tailwind's
  * auto content detection skips — without this, utilities used only inside
