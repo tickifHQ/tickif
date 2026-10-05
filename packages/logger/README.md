@@ -50,6 +50,10 @@ It cannot recognize every secret embedded in arbitrary prose; callsites must avo
 constructing sensitive messages. Identifier fields containing contact data must be
 hashed at their application boundary. Envelope identity and trace fields are reserved.
 Oversized records discard attributes and shorten messages, marking `truncated`.
+Recognized database query wrappers and SQLSTATE-bearing errors export a stable
+database category and safe SQLSTATE, rather than SQL, parameter/detail text, or
+copied outer-error messages. Their stacks retain only call frames after the entire
+original message header; nested causes and aggregate errors use the same policy.
 
 Logging failures never throw into business operations. Server flush defaults to a
 1-second deadline; apps should call it inside their existing shutdown budget.

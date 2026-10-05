@@ -83,21 +83,83 @@ function visit(value: unknown, depth: number, budget: Budget): JsonValue | undef
   return output;
 }
 
+function ownData(value: object, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function errorName(error: Error): string {
+  // Built-in error names live on prototypes; read data descriptors only.
+  let current: object | null = error;
+  for (let i = 0; current && i < 5; i++, current = Object.getPrototypeOf(current)) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, 'name');
+    if (descriptor) return 'value' in descriptor && typeof descriptor.value === 'string'
+      ? sanitizeText(descriptor.value, 80) : 'Error';
+  }
+  return 'Error';
+}
+
+type DatabaseFailure = 'query' | 'database' | 'wrapped';
+
+function databaseFailure(error: Error): DatabaseFailure | undefined {
+  const seen = new WeakSet<object>();
+  let remaining = 32;
+  function inspect(current: Error, depth: number): DatabaseFailure | undefined {
+    if (--remaining < 0 || depth > LOG_LIMITS.depth || seen.has(current)) return;
+    seen.add(current);
+    const message = ownData(current, 'message');
+    // Drizzle embeds parameters into message/stack as well as query/params fields.
+    if ((typeof ownData(current, 'query') === 'string' && Array.isArray(ownData(current, 'params')))
+      || (typeof message === 'string' && /^Failed query:[\s\S]*\nparams:/.test(message))) return 'query';
+    const code = ownData(current, 'code');
+    if (typeof code === 'string' && /^[A-Z\d]{5}$/.test(code)) return 'database';
+    const cause = ownData(current, 'cause');
+    if (cause instanceof Error && inspect(cause, depth + 1)) return 'wrapped';
+    const errors = ownData(current, 'errors');
+    if (Array.isArray(errors)) {
+      for (let i = 0; i < Math.min(errors.length, LOG_LIMITS.arrayLength); i++) {
+        const item = ownData(errors, String(i));
+        if (item instanceof Error && inspect(item, depth + 1)) return 'wrapped';
+      }
+    }
+  }
+  return inspect(error, 0);
+}
+
+function databaseStack(error: Error, stack: string): string | undefined {
+  const message = ownData(error, 'message');
+  const prefix = `${errorName(error)}: `;
+  // Remove the complete original header before selecting frames. Parameter values
+  // can contain newlines and fake "at ..." lines, so filtering the full stack leaks.
+  if (typeof message !== 'string' || message.length > 16_384 || !stack.startsWith(prefix)
+    || !stack.startsWith(message, prefix.length)) return;
+  const frames = stack.slice(prefix.length + message.length, prefix.length + message.length + LOG_LIMITS.stackLength)
+    .split('\n').filter((line) => /^\s+at\s+/.test(line)).slice(0, 20).join('\n');
+  return frames ? sanitizeText(frames, LOG_LIMITS.stackLength) : undefined;
+}
+
 function serializeError(error: Error, depth: number, budget: Budget): Record<string, JsonValue> {
-  const result: Record<string, JsonValue> = {};
-  // Do not copy enumerable provider/database metadata or invoke user getters.
-  for (const key of ['name', 'message', 'stack', 'cause', 'errors'] as const) {
-    const descriptor = Object.getOwnPropertyDescriptor(error, key);
-    if (!descriptor || !('value' in descriptor)) continue;
-    const value: unknown = descriptor.value;
+  const database = databaseFailure(error);
+  const result: Record<string, JsonValue> = {
+    name: database === 'query' ? 'DatabaseQueryError' : database === 'database' ? 'DatabaseError' : errorName(error),
+  };
+  if (database) {
+    result.message = database === 'query' ? 'Database query failed' : 'Database operation failed';
+    const code = ownData(error, 'code');
+    if (typeof code === 'string' && /^[A-Z\d]{5}$/.test(code)) result.database_code = code;
+  }
+  // Never copy enumerable provider/database metadata or invoke user getters.
+  for (const key of ['message', 'stack', 'cause', 'errors'] as const) {
+    const value = ownData(error, key);
+    if (key === 'message' && database) continue;
     if (key === 'stack' && typeof value === 'string') {
-      result.stack = sanitizeText(value, LOG_LIMITS.stackLength);
+      const stack = database ? databaseStack(error, value) : sanitizeText(value, LOG_LIMITS.stackLength);
+      if (stack) result.stack = stack;
     } else {
       const normalized = visit(value, depth + 1, budget);
       if (normalized !== undefined) result[key] = normalized;
     }
   }
-  if (!result.name) result.name = error instanceof AggregateError ? 'AggregateError' : 'Error';
   return result;
 }
 

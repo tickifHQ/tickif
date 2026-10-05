@@ -72,6 +72,23 @@ describe('active context', () => {
     expect(JSON.stringify(queued)).not.toContain('private');
   });
 
+  it('does not export SQL parameters recorded through an actual exception span event', () => {
+    const query = 'insert into verification (value) values ($1)';
+    const cause = Object.assign(new Error('duplicate value PrivateCustomer'), { code: '23505', detail: 'PrivateCustomer' });
+    const error = Object.assign(new Error(`Failed query: ${query}\nparams: 123456`), { query, params: ['123456'], cause });
+    const tracer = trace.getTracer('tickif-test');
+    tracer.startActiveSpan('database.failure', (span) => {
+      span.recordException(error);
+      span.end();
+    });
+    const exported = exporter.getFinishedSpans().find((span) => span.name === 'database.failure');
+    expect(exported?.events[0]?.attributes).toEqual({ 'exception.type': 'Error' });
+    const encoded = JSON.stringify(exported);
+    expect(encoded).not.toContain('123456');
+    expect(encoded).not.toContain('PrivateCustomer');
+    expect(encoded).not.toContain('insert into verification');
+  });
+
   it('drops personal metric labels and rejects unknown queue values before aggregation', async () => {
     const counter = metrics.getMeter('tickif-test').createCounter('tickif.test.requests');
     counter.add(1, { queue: 'sms', 'job.type': 'send-sms', outcome: 'success', reason: 'stalled', phone: '9876543210' });

@@ -69,7 +69,7 @@ locals {
     health          = { title = "Private health probes (2xx)", metric = "httpcheck.status", filter = "http.status_class = '2xx'", group = "http.url", unit = "1" }
     queue           = { title = "Collector queued bytes", metric = "otelcol_exporter_queue_size", filter = "", group = "exporter", unit = "By" }
     api_requests    = { title = "API requests per second", metric = "http.server.requests", filter = "service.name = 'tickif-api'", group = "http.route", unit = "reqps", temporal = "rate", spatial = "sum" }
-    api_latency     = { title = "API request p95 seconds", metric = "http.server.request.duration.bucket", filter = "service.name = 'tickif-api'", group = "http.route", unit = "s", temporal = "rate", spatial = "p95" }
+    api_latency     = { title = "API request p95 seconds", metric = "http.server.request.duration", filter = "service.name = 'tickif-api'", group = "http.route", unit = "s", temporal = null, spatial = "p95" }
     worker_failures = { title = "Worker terminal failures per second", metric = "tickif.worker.job.transitions", filter = "outcome = 'terminal'", group = "queue", unit = "ops", temporal = "rate", spatial = "sum" }
     queue_waiting   = { title = "Waiting jobs (one designated exporter)", metric = "tickif.queue.jobs", filter = "state = 'waiting'", group = "queue", unit = "1" }
     queue_head_age  = { title = "Queue head creation age seconds", metric = "tickif.queue.next_waiting_job_age", filter = "", group = "queue", unit = "s" }

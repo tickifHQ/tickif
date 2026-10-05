@@ -25,6 +25,9 @@ storage_kib=$(df -Pk -- "$TELEMETRY_STORAGE_PATH" | awk 'NR==2 {print $2}')
 [[ "$storage_kib" =~ ^[0-9]+$ && "$storage_kib" -le 1048576 ]] || {
   echo 'Telemetry filesystem must be <=1 GiB to bound WAL/offset growth' >&2; exit 1;
 }
+[[ -d "$TELEMETRY_STORAGE_PATH/collector" && ! -L "$TELEMETRY_STORAGE_PATH/collector" ]] || {
+  echo 'Create the collector directory inside the mounted bounded telemetry filesystem first' >&2; exit 1;
+}
 for network in tickif_backend tickif_edge; do
   docker network inspect "$network" >/dev/null || { echo 'Deploy application infrastructure before observability' >&2; exit 1; }
 done
@@ -36,6 +39,10 @@ proxy_image=haproxy:3.2.12-alpine@sha256:15ef8657ec12e7b19d5b6b6b6fcf6839a0e3cda
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 printf '%s' synthetic-config-validation-key >"$scratch/key"
+# The pinned validator runs as UID 10001. The individual file bind bypasses
+# mktemp's 0700 directory, but still honors the file mode under operator umask 077.
+# This is a synthetic key only; real credentials stay in Swarm secrets.
+chmod 0644 "$scratch/key"
 # Validate without granting Docker/host access and without reading a real key.
 docker run --rm --network none \
   --env SIGNOZ_OTLP_ENDPOINT --env DEPLOYMENT_ENV=staging \

@@ -31,7 +31,12 @@ attribution and single-owner dependency scraping need a separate design.
    `TELEMETRY_STORAGE_PATH` (default `/var/lib/docker/tickif-telemetry`). Preserve
    it across app/collector releases. Use an operator-managed bounded filesystem,
    not an unlimited directory on the shared Docker data disk. Verify mount
-   persistence and free space. The collector stores file offsets and up to
+   persistence and free space. While that filesystem is mounted, create its
+   `collector` child with root ownership and mode `0700`. Keep the underlying
+   unmounted mountpoint empty: Swarm must reject an absent child bind source if
+   mounting fails at boot, rather than writing queues into shared Docker storage.
+   This avoids making all application Docker startup depend on telemetry storage.
+   The collector stores file offsets and up to
    128 MiB of serialized queued data per signal plus database overhead; the
    filesystem bound protects application storage even if compaction grows it.
    Storage and host/container log mounts grant sensitive read access to the
@@ -51,11 +56,13 @@ attribution and single-owner dependency scraping need a separate design.
    loading is verified against the pinned image; arbitrary `_FILE` variables are
    not presumed to work. Management API tokens are separate credentials.
 
-4. Run `bash infra/staging/scripts/deploy-observability.sh /opt/tickif/staging.env`
+4. Run `sudo bash infra/staging/scripts/deploy-observability.sh /opt/tickif/staging.env`
    from the reviewed release. It checks single-node topology, HTTPS origin,
    secret existence and bounded storage; validates config with a synthetic key;
    creates content-addressed Swarm configs; deploys `tickif-observability` without
-   stopping applications. Keep prior configs/secrets for rollback.
+   stopping applications. Root access is required to inspect the dedicated
+   filesystem under Docker's protected data directory. Keep prior configs/secrets
+   for rollback.
 5. Inspect `docker stack ps tickif-observability --no-trunc` and collector logs.
    Check private `/` health on collector port 13133 from an internal probe, and
    verify logs, infrastructure metrics and trace ingestion in SigNoz. Health is
@@ -70,6 +77,9 @@ attribution and single-owner dependency scraping need a separate design.
    using the separate management credential. Rules are disabled and destinations
    empty initially. Confirm workspace compatibility, query values/units, dashboard
    rendering, environment filters and existing channel names before enabling.
+   The combined module needs a workspace supporting dashboard v6 (SigNoz
+   > =0.135.0); rules alone require >=0.133.0. Terraform validation cannot prove
+   > management-token permissions or live query semantics.
 
 The independent observability stack survives app migration/restore maintenance
 and app `--prune`. Image retention excludes these infrastructure images. The

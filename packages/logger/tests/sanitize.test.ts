@@ -64,4 +64,56 @@ describe('shared sanitizer', () => {
     expect(sanitizeText('Call +919876543210 on 2026-10-05')).not.toContain('9876543210');
     expect(sanitizeText('2026-10-05T12:00:00.000Z extra +919876543210')).not.toContain('9876543210');
   });
+
+  it('removes database query/parameter text from wrappers, PostgreSQL causes and stacks', () => {
+    const cause = Object.assign(new Error('duplicate value AlicePrivate for account'), {
+      code: '23505', severity: 'ERROR', detail: 'Key (name)=(AlicePrivate) already exists',
+    });
+    Object.defineProperty(cause, 'stack', { value: `Error: ${cause.message}\n    at driver (/app/driver.ts:7:2)`, configurable: true });
+    // Matches DrizzleQueryError: SQL and bound parameters are embedded in its message.
+    const query = 'insert into verification (value) values ($1)';
+    const error = Object.assign(new Error(`Failed query: ${query}\nparams: 123456`), {
+      query, params: ['123456'], cause,
+    });
+    Object.defineProperty(error, 'stack', { value: `Error: Failed query: ${query}\nparams: 123456\n    at execute (/app/repository.ts:12:3)`, configurable: true });
+    const encoded = JSON.stringify(sanitizeLogFields({ err: error }));
+    expect(encoded).not.toContain('123456');
+    expect(encoded).not.toContain('AlicePrivate');
+    expect(encoded).not.toContain('insert into verification');
+    expect(encoded).toContain('DatabaseQueryError');
+    expect(encoded).toContain('DatabaseError');
+    expect(encoded).toContain('23505');
+    expect(encoded).toContain('at execute');
+    expect(encoded).toContain('at driver');
+  });
+
+  it('suppresses database text copied into outer and aggregate errors recursively', () => {
+    const database = Object.assign(new Error('database echoed PrivateCustomer'), { code: '42P01' });
+    const wrapper = new Error('operation failed PrivateCustomer', { cause: database });
+    const aggregate = new AggregateError([wrapper], 'batch failed PrivateCustomer');
+    const encoded = JSON.stringify(sanitizeLogFields({ err: aggregate }));
+    expect(encoded).not.toContain('PrivateCustomer');
+    expect(encoded).toContain('Database operation failed');
+  });
+
+  it('retains builtin error categories without invoking custom name or database getters', () => {
+    expect(sanitizeLogFields({ err: new TypeError('Invalid value') }).err).toMatchObject({ name: 'TypeError' });
+    let calls = 0;
+    const error = new Error('ordinary failure');
+    for (const key of ['name', 'query', 'params', 'code', 'cause']) {
+      Object.defineProperty(error, key, { get: () => { calls++; return 'private'; } });
+    }
+    sanitizeLogFields({ err: error });
+    expect(calls).toBe(0);
+  });
+
+  it('does not mistake parameter text with fake frame lines for database call frames', () => {
+    const message = 'Failed query: insert into verification values ($1)\nparams: \n    at PrivateCustomer (/private/value.ts:1:2)';
+    const error = Object.assign(new Error(message), { query: 'insert into verification values ($1)', params: ['PrivateCustomer'] });
+    Object.defineProperty(error, 'stack', { value: `Error: ${message}\n    at execute (/app/repository.ts:12:3)`, configurable: true });
+    const encoded = JSON.stringify(sanitizeLogFields({ err: error }));
+    expect(encoded).not.toContain('PrivateCustomer');
+    expect(encoded).not.toContain('/private/value.ts');
+    expect(encoded).toContain('at execute');
+  });
 });

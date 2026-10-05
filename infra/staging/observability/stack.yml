@@ -42,7 +42,11 @@ services:
     volumes:
       - /:/hostfs:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ${TELEMETRY_STORAGE_PATH:-/var/lib/docker/tickif-telemetry}:/var/lib/otelcol
+      # This child exists only on the mounted filesystem. If mounting fails at
+      # boot, Swarm rejects the absent bind source instead of writing unbounded data.
+      - type: bind
+        source: ${TELEMETRY_STORAGE_PATH:-/var/lib/docker/tickif-telemetry}/collector
+        target: /var/lib/otelcol
     networks:
       telemetry:
         aliases: [otel-collector]
