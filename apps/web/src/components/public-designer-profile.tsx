@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import type { ReactNode } from 'react';
 import {
   BadgeCheck,
@@ -113,27 +114,18 @@ function StudioMark({
   className,
   sizePx,
 }: SectionProps & { className: string; sizePx: number }) {
-  if (portfolio.logoUrl) {
-    return (
-      <Image
-        src={portfolio.logoUrl}
-        alt={`${portfolio.displayName} logo`}
-        width={sizePx}
-        height={sizePx}
-        // Presigned storage URL: the signature rotates hourly, so the optimizer
-        // could never reuse a cache entry. Matches the settings page.
-        unoptimized
-        className={`${className} shrink-0 rounded-full object-cover`}
-      />
-    );
-  }
   return (
-    <div
-      className={`${className} grid shrink-0 place-items-center rounded-full bg-foreground font-semibold text-background`}
-      aria-hidden="true"
-    >
-      {view.initials}
-    </div>
+    <DesignerLogoAvatar
+      logoUrl={portfolio.logoUrl}
+      alt={`${portfolio.displayName} logo`}
+      sizePx={sizePx}
+      className={`${className} font-semibold`}
+      fallback={
+        <span className="grid size-full place-items-center bg-foreground text-background">
+          {view.initials}
+        </span>
+      }
+    />
   );
 }
 

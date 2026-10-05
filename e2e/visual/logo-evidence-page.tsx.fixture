@@ -1,0 +1,28 @@
+'use client';
+
+import { useState } from 'react';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+
+function artwork(width: number, height: number, transparent = false) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${transparent ? '' : `<rect width="${width}" height="${height}" fill="#17463e"/>`}<rect x="3" y="3" width="${width - 6}" height="${height - 6}" fill="none" stroke="#cf865d" stroke-width="6"/><circle cx="${width / 2}" cy="${height / 2}" r="${Math.min(width, height) / 4}" fill="#cf865d"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+const broken = 'data:image/png;base64,bm90LWFuLWltYWdl';
+const examples = [
+  { name: 'Saved square crop', logoUrl: artwork(160, 160) },
+  { name: 'Legacy wide logo', logoUrl: artwork(240, 80) },
+  { name: 'Legacy tall logo', logoUrl: artwork(80, 240) },
+  { name: 'Transparent logo', logoUrl: artwork(240, 80, true) },
+  { name: 'Missing logo', logoUrl: null },
+  { name: 'Broken logo', logoUrl: broken },
+];
+const sizes = [{ name: 'Discovery / workspace', value: 40, className: 'size-10' }, { name: 'Project / editor', value: 68, className: 'size-17' }, { name: 'Portfolio hero', value: 128, className: 'size-32' }];
+
+export default function LogoEvidence() {
+  const [replacement, setReplacement] = useState(false);
+  return <main className="mx-auto max-w-5xl space-y-6 p-5 sm:p-8">
+    <header className="space-y-2"><h1 className="text-2xl font-semibold">Studio logo display</h1><p className="text-sm text-muted-foreground">Production component and theme. Synthetic artwork, representative display sizes.</p></header>
+    <div className="grid gap-4 sm:grid-cols-2">{examples.map((example) => <section key={example.name} aria-label={example.name} className="rounded-xl border bg-card p-4"><h2 className="mb-4 text-sm font-semibold">{example.name}</h2><div className="flex items-center justify-between gap-3">{sizes.map((size) => <div key={size.name} className="flex flex-col items-center gap-3"><DesignerLogoAvatar logoUrl={example.logoUrl} alt={`${example.name} ${size.value}`} sizePx={size.value} className={size.className} fallback={<span className="text-sm font-medium">ST</span>} /><p className="max-w-24 text-center text-xs text-muted-foreground">{size.name}<br/>{size.value}px</p></div>)}</div></section>)}</div>
+    <section aria-label="Replace broken logo" className="flex items-center gap-4 rounded-xl border bg-card p-4"><DesignerLogoAvatar logoUrl={replacement ? artwork(240, 80) : broken} alt="Replacement logo" sizePx={68} className="size-17" fallback={<span>ST</span>} /><button type="button" className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" onClick={() => setReplacement(!replacement)}>{replacement ? 'Use broken logo' : 'Replace broken logo'}</button><p className="text-sm text-muted-foreground">{replacement ? 'Replacement loaded' : 'Initials fallback'}</p></section>
+  </main>;
+}
