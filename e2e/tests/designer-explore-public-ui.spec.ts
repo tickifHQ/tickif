@@ -72,9 +72,12 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await expect(support).toHaveAttribute('rel', 'noopener noreferrer');
     await explore.click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Inspire from real homes/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Explore', exact: true })).toBeInViewport();
-    await page.screenshot({ path: test.info().outputPath('homepage-desktop.png'), fullPage: false });
+    await page.screenshot({
+      path: test.info().outputPath('homepage-desktop.png'),
+      fullPage: false,
+    });
     await page.getByRole('link', { name: 'Browse professionals', exact: true }).click();
     await expect(page).toHaveURL('/designers');
 
@@ -113,7 +116,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await expect(mobileSupport).toHaveAttribute('rel', 'noopener noreferrer');
     await mobileExplore.click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Inspire from real homes/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Explore', exact: true })).toBeInViewport();
     await page.screenshot({ path: test.info().outputPath('homepage-mobile.png'), fullPage: false });
     await page.getByRole('link', { name: 'Browse professionals', exact: true }).click();
@@ -194,7 +197,7 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
       await expect(page.getByRole('link', { name: 'Explore Tickif' })).toBeVisible();
       await page.getByRole('link', { name: 'Explore Tickif' }).click();
       await expect(page).toHaveURL('/');
-      await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Inspire from real homes/i })).toBeVisible();
 
       await page.goto('/designer/dashboard');
       const brand = page.getByRole('link', { name: 'Tickif', exact: true });
@@ -210,7 +213,7 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
         await expect(drawer.getByRole('link', { name: 'Explore Tickif' })).toBeVisible();
         await drawer.getByRole('link', { name: 'Explore Tickif' }).click();
         await expect(page).toHaveURL('/');
-        await expect(page.getByRole('heading', { name: /Where great spaces/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Inspire from real homes/i })).toBeVisible();
 
         await page.goto('/designer/dashboard');
         await openMobileNavigation(page);
