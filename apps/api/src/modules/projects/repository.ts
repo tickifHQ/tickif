@@ -176,7 +176,7 @@ export type ProjectListItemRecord = Pick<
   | 'updatedAt'
   | 'pendingChanges'
   | 'liveStatus'
->;
+> & { publicAvailable?: boolean };
 export type ProjectCoverImageRecord = Pick<ProjectImageRecord, 'id' | 'derivatives' | 'status'>;
 export type ProjectStatusCountRecord = {
   status: ProjectStatus;
@@ -520,6 +520,7 @@ export const projectsRepository = {
     const [items, [count]] = await Promise.all([
       db
         .select({
+          publicAvailable: sql<boolean>`${schema.project.status} = 'published' and ${schema.designerProfile.status} = 'active'`,
           id: schema.project.id,
           slug: schema.project.slug,
           title: schema.project.title,

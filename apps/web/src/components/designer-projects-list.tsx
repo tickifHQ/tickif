@@ -358,6 +358,8 @@ export function DesignerProjectsList({
                       projectId={project.id}
                       projectTitle={project.title}
                       projectStatus={project.status}
+                      liveStatus={project.liveStatus}
+                      publicAvailable={project.publicAvailable}
                       archiveReason={project.archiveReason}
                       canArchive={canArchiveProjects}
                       canDelete={canDeleteProjects}
