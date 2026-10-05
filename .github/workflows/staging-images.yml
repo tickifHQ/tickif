@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'infra/staging/**'
+      - 'infra/local/**'
+      - 'docker-compose.yml'
       - 'apps/api/src/modules/health/**'
       - 'apps/web/app/health/**'
       - '**/Dockerfile'
@@ -70,6 +72,7 @@ jobs:
           bash infra/staging/scripts/test-restore-gate.sh
           bash infra/staging/scripts/test-observability.sh
           bash infra/staging/scripts/test-observability-preflight.sh
+          bash infra/local/observability/test-collector.sh
       - name: Build all release images without runtime secrets
         env:
           REGISTRY: localhost:5000/tickif
@@ -77,11 +80,13 @@ jobs:
         run: |
           printf '%s\n' 'BUILD_CONTEXT_SECRET=synthetic-must-not-enter-images' > .env.production
           printf '%s\n' 'BUILD_CONTEXT_SECRET=synthetic-nested-secret' > apps/web/.env.local
+          mkdir -p .secrets
+          printf '%s\n' 'synthetic-ingestion-must-not-enter-images' > .secrets/signoz_ingestion_key
           bash infra/staging/scripts/build.sh
           revision=$(git rev-parse HEAD)
           for service in api worker web operations; do
             docker run --rm --entrypoint sh "localhost:5000/tickif/$service:$revision" \
-              -c 'test ! -e /app/.env.production && test ! -e /app/apps/web/.env.local'
+              -c 'test ! -e /app/.env.production && test ! -e /app/apps/web/.env.local && test ! -e /app/.secrets/signoz_ingestion_key'
           done
           docker run --rm --entrypoint bash "localhost:5000/tickif/operations:$revision" -ec '
             pnpm --filter @repo/worker exec tsx --version

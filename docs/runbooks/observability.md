@@ -5,6 +5,18 @@ private OpenTelemetry Collector. Browser logs pass through the validated API
 relay. Application logs have one export path: stdout → Docker `json-file` →
 collector. Application SDKs export traces/metrics only.
 
+## Local development
+
+Use the optional [local collector](../../infra/local/observability/README.md) with
+the same workspace ingestion key stored in the ignored
+`.secrets/signoz_ingestion_key` file. Local application traces and metrics carry
+`deployment.environment.name=development`; staging carries `staging`. Filter by
+that attribute in SigNoz. Local logs remain in the development terminal.
+
+`SIGNOZ_INGESTION_KEY_SECRET` is a secret object name, never the credential value:
+local Compose defaults to `tickif_local_signoz_ingestion_key`, while staging uses
+`tickif_staging_signoz_ingestion_key_v1`. The same credential can back both names.
+
 ## Provisioning and rollout
 
 Current staging supports exactly one Linux Swarm manager. Do not deploy this

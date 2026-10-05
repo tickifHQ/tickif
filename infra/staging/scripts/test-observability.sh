@@ -51,7 +51,7 @@ docker run --rm --network none \
     fs.chmodSync("/storage", 0o700);
   '
 docker run --rm --network none \
-  --env SIGNOZ_OTLP_ENDPOINT=https://ingest.in.signoz.cloud:443 \
+  --env SIGNOZ_OTLP_ENDPOINT=https://ingest.in2.signoz.cloud:443 \
   --env DEPLOYMENT_ENV=staging --env TELEMETRY_HOST_NAME=fixture --env TELEMETRY_HOST_ID=fixture \
   --mount "type=bind,source=$repository/infra/staging/observability/collector.yml,target=/etc/config.yml,readonly" \
   --mount "type=bind,source=$scratch/key,target=/run/secrets/signoz_ingestion_key,readonly" \
