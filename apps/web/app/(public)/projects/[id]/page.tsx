@@ -1,61 +1,29 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { cache } from 'react';
-import {
-  publicProjectPageResponseSchema,
-  type PublicProjectPageResponse,
-  type PublicProjectUnavailableResponse,
-} from '@repo/contracts';
+import type { PublicProjectPageResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { PublicProjectOverview } from '@/components/public-project-overview';
-import { api } from '@/lib/api';
-import { env } from '@/env';
+import { fetchPublicProject, isUnavailableProject } from '@/lib/public-project-api';
+import { publicMetadata, publicUrl } from '@/lib/social-metadata';
 
 type ProjectDetailPageProps = { params: Promise<{ id: string }> };
 
-async function fetchProject(id: string): Promise<PublicProjectPageResponse | null> {
-  const response = await api.api.projects.public[':id'].$get({
-    param: { id },
-  });
-
-  if ([400, 404, 410, 422].includes(response.status)) return null;
-  if (!response.ok) {
-    throw new Error(`Could not load project ${id}.`);
-  }
-
-  const payload = await response.json();
-  const parsed = publicProjectPageResponseSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new Error(`Invalid project response for ${id}.`);
-  }
-
-  return parsed.data;
-}
-
-const getProject = cache(fetchProject);
-
 function canonicalProjectUrl(projectId: string): string {
-  return new URL(`/projects/${projectId}`, env.NEXT_PUBLIC_WEB_URL).toString();
+  return publicUrl(`/projects/${projectId}`);
 }
 
 async function resolveProject(id: string): Promise<PublicProjectPageResponse> {
-  const project = await getProject(id);
+  const project = await fetchPublicProject(id);
   if (!project) notFound();
   return project;
-}
-
-function isUnavailable(
-  project: PublicProjectPageResponse,
-): project is PublicProjectUnavailableResponse {
-  return 'availability' in project && project.availability === 'unavailable';
 }
 
 export async function generateMetadata({ params }: ProjectDetailPageProps): Promise<Metadata> {
   const { id } = await params;
   const project = await resolveProject(id);
   const canonicalUrl = canonicalProjectUrl(project.id);
-  if (isUnavailable(project)) {
+  if (isUnavailableProject(project)) {
     return {
       title: `${project.title} is unavailable | Tickif`,
       description: `This project from ${project.designer.displayName} is currently unavailable.`,
@@ -66,17 +34,13 @@ export async function generateMetadata({ params }: ProjectDetailPageProps): Prom
   const description =
     project.description ?? `Explore ${project.title} by ${project.designer.displayName} on Tickif.`;
 
-  return {
-    title: `${project.title} | Tickif`,
+  return publicMetadata({
+    title: project.title,
     description,
-    alternates: { canonical: canonicalUrl },
-    openGraph: {
-      type: 'article',
-      title: project.title,
-      description,
-      url: canonicalUrl,
-    },
-  };
+    path: `/projects/${project.id}`,
+    imagePath: `/projects/${project.id}/social-card`,
+    type: 'article',
+  });
 }
 
 export default async function ProjectDetailPage({ params }: ProjectDetailPageProps) {
@@ -84,7 +48,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   const project = await resolveProject(id);
   const canonicalUrl = canonicalProjectUrl(project.id);
 
-  if (isUnavailable(project)) {
+  if (isUnavailableProject(project)) {
     const profileHref = project.designer.slug ? `/d/${project.designer.slug}` : '/';
     return (
       <section className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-6 py-20 text-center">

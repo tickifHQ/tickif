@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import type { EnquiryResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -215,22 +216,18 @@ export function EnquiryDialog({
             Send Enquiry
           </p>
           <div className="mt-3 flex items-center gap-3">
-            {context.designerLogoUrl ? (
-              <img
-                src={context.designerLogoUrl}
-                alt=""
-                className="size-10 shrink-0 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                {context.designerName
-                  .split(' ')
-                  .map((w) => w[0])
-                  .join('')
-                  .slice(0, 2)
-                  .toUpperCase()}
-              </div>
-            )}
+            <DesignerLogoAvatar
+              logoUrl={context.designerLogoUrl}
+              alt={`${context.designerName} logo`}
+              sizePx={40}
+              className="size-10 bg-primary/10 text-sm font-bold text-primary"
+              fallback={context.designerName
+                .split(/\s+/)
+                .map((word) => word[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()}
+            />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-foreground">{context.designerName}</p>
               {context.designerLocation && (

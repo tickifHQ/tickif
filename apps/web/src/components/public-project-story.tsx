@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import type {
   PublicProjectDetailResponse,
   PublicProjectGalleryImage,
@@ -186,14 +187,13 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
     <Card className="mx-auto w-full max-w-72 -rotate-2 overflow-hidden shadow-sm" radius="lg">
       <div className="p-5">
         <div className="flex items-start gap-3">
-          <Avatar className="size-17 rounded-xl border-2 border-background shadow-md">
-            {designer.logoUrl ? (
-              <AvatarImage src={designer.logoUrl} alt={`${designer.displayName} logo`} />
-            ) : null}
-            <AvatarFallback className="rounded-xl">
-              {initials(designer.displayName) || 'T'}
-            </AvatarFallback>
-          </Avatar>
+          <DesignerLogoAvatar
+            logoUrl={designer.logoUrl}
+            alt={`${designer.displayName} logo`}
+            sizePx={68}
+            className="size-17 border-2 border-background shadow-md"
+            fallback={initials(designer.displayName) || 'T'}
+          />
           <div className="min-w-0 pt-0.5">
             <p className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
               {designer.firmType ??

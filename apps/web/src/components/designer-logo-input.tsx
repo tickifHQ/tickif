@@ -9,7 +9,6 @@ import {
   type DragEvent,
   type Ref,
 } from 'react';
-import Image from 'next/image';
 import { ImagePlus, Loader2, Pencil, Upload, X } from 'lucide-react';
 import type { LogoCropArea, UploadLogoResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
@@ -24,6 +23,7 @@ import {
 import { Label } from '@repo/ui/components/label';
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { cn } from '@repo/ui/lib/utils';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { LogoCropDialog } from '@/components/logo-crop-dialog';
 import { cropImageToFile } from '@/lib/crop-image';
 import { uploadLogo } from '@/lib/portfolio-api';
@@ -203,12 +203,12 @@ export function DesignerLogoInput({
             aria-label={value.logoUrl ? 'Edit logo' : 'Upload logo'}
           >
             {value.logoUrl ? (
-              <Image
-                src={value.logoUrl}
+              <DesignerLogoAvatar
+                logoUrl={value.logoUrl}
                 alt={imageAlt ?? `${displayName || 'Studio'} logo`}
-                fill
-                unoptimized
-                className="object-cover"
+                sizePx={64}
+                className="size-full"
+                fallback={displayName.slice(0, 2).toUpperCase() || 'ST'}
               />
             ) : isUploading ? (
               <Loader2 className="size-6 animate-spin" aria-hidden />
@@ -292,12 +292,12 @@ export function DesignerLogoInput({
               className="relative aspect-square w-full max-w-48 overflow-hidden rounded-full border border-border bg-muted"
             >
               {value.logoUrl ? (
-                <Image
-                  src={value.logoUrl}
+                <DesignerLogoAvatar
+                  logoUrl={value.logoUrl}
                   alt={`${displayName || 'Studio'} logo preview`}
-                  fill
-                  unoptimized
-                  className="object-cover"
+                  sizePx={192}
+                  className="size-full"
+                  fallback={displayName.slice(0, 2).toUpperCase() || 'ST'}
                 />
               ) : null}
             </div>

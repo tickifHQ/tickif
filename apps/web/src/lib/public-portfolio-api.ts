@@ -15,12 +15,13 @@ import { api } from '@/lib/api';
  * missing portfolio as an error. Other failures throw, so a broken API surfaces
  * as a 500 rather than silently rendering an empty page.
  */
-export async function fetchPublicPortfolio(
-  slug: string,
-): Promise<PublicPortfolioResponse | null> {
-  const response = await api.api.portfolios[':slug'].$get({ param: { slug } });
+export async function fetchPublicPortfolio(slug: string): Promise<PublicPortfolioResponse | null> {
+  const response = await api.api.portfolios[':slug'].$get(
+    { param: { slug } },
+    { init: { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } },
+  );
 
-  if (response.status === 404) return null;
+  if ([400, 404, 422].includes(response.status)) return null;
   if (!response.ok) {
     throw new Error(`Could not load the portfolio at /d/${slug} (HTTP ${response.status}).`);
   }
