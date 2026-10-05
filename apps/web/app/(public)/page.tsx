@@ -9,6 +9,7 @@ import {
   platformRoleSchema,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
+import { getServerLogger } from '@/lib/logger.server';
 import { HomeHero, type HomeShortcut } from '@/components/home-hero';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { TrustStrip } from '@/components/trust-strip';
@@ -80,7 +81,7 @@ async function fetchFeedSafely(
   try {
     return await fetchHomeFeedPage(request, page, options);
   } catch (error) {
-    console.error('[HomePage] feed fetch failed', error);
+    getServerLogger().error({ event: 'web.feed.failed', error, component: 'HomePage' }, 'Home feed fetch failed');
     return emptyHomeFeedPage(page);
   }
 }

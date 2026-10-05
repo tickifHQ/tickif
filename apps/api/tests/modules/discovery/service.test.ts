@@ -1,3 +1,4 @@
+import { log } from '../../../src/lib/logger.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiscoveryFeedQuery } from '@repo/contracts';
 
@@ -89,7 +90,7 @@ const postgresRow = {
 describe('discoveryService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
     searchConfig.TYPESENSE_SEARCH_CONFIGURED = true;
   });
 
@@ -211,7 +212,7 @@ describe('discoveryService', () => {
       hasMore: false,
       relaxedFilters: [],
     });
-    const logged = vi.mocked(console.log).mock.calls.map((call) => JSON.parse(call[0] as string));
+    const logged = vi.mocked(log.info).mock.calls.map((call) => (call[0] as Record<string, unknown>));
     expect(logged).toContainEqual(
       expect.objectContaining({ type: 'discovery.fallback', reason: 'recent_in_city' }),
     );
@@ -296,7 +297,7 @@ describe('discoveryService', () => {
     const result = await discoveryService.getFeed(query);
 
     expect(result.source).toBe('db');
-    const logged = vi.mocked(console.log).mock.calls.map((call) => JSON.parse(call[0] as string));
+    const logged = vi.mocked(log.info).mock.calls.map((call) => (call[0] as Record<string, unknown>));
     expect(logged).toContainEqual(
       expect.objectContaining({ type: 'discovery.fallback', reason: 'Connection refused' }),
     );
@@ -308,7 +309,7 @@ describe('discoveryService', () => {
 
     await discoveryService.getFeed(query);
 
-    const logged = vi.mocked(console.log).mock.calls.map((call) => JSON.parse(call[0] as string));
+    const logged = vi.mocked(log.info).mock.calls.map((call) => (call[0] as Record<string, unknown>));
     expect(logged).toContainEqual(expect.objectContaining({ reason: 'unknown' }));
   });
 });
@@ -316,7 +317,7 @@ describe('discoveryService', () => {
 describe('facet distribution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
     vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({ ...emptyVocabulary });
     vi.mocked(discoveryRepository.countFeedFacets).mockResolvedValue({});
   });
@@ -391,7 +392,7 @@ describe('facet distribution', () => {
 
 describe('logFallbackEvent', () => {
   it('never leaks logging failures into the request', () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {
+    vi.spyOn(log, 'info').mockImplementation(() => {
       throw new Error('logger unavailable');
     });
     expect(() => logFallbackEvent('unconfigured', { sort: 'recent' })).not.toThrow();

@@ -21,6 +21,7 @@ import { profilesRepository, type DesignerProfileRecord } from './repository.js'
 import { orgsService } from '../orgs/service.js';
 import { googleReviewsRepository } from './google-repository.js';
 import { readState } from './google-mapper.js';
+import { log } from '../../lib/logger.js';
 
 /**
  * Portfolio business logic (E-222).
@@ -63,12 +64,11 @@ type AuditEvent = {
 };
 
 /** Fire-and-forget audit log — never throws to caller. */
-// TODO: replace console.info with a real audit sink (structured log/event bus)
 function emitAuditEvent(event: AuditEvent): void {
   try {
-    console.info(JSON.stringify(event));
+    log.info({ ...event, event: event.action, auditTimestamp: event.timestamp });
   } catch (err) {
-    console.error('[audit] Failed to emit audit event:', err);
+    log.error({ event: 'audit.emit.failed', err });
   }
 }
 
@@ -686,7 +686,7 @@ export const portfolioService = {
       try {
         await deleteObject(previousKey);
       } catch (err) {
-        console.error('[commitHeroCoverUpload] Failed to delete previous cover:', err);
+        log.error({ event: 'portfolio.hero_cover.cleanup.failed', err });
       }
     }
 
@@ -792,7 +792,7 @@ export const portfolioService = {
       try {
         await deleteObject(previousKey);
       } catch (err) {
-        console.error('[commitLogoUpload] Failed to delete previous logo:', err);
+        log.error({ event: 'portfolio.logo.cleanup.failed', err });
       }
     }
     if (
@@ -805,7 +805,7 @@ export const portfolioService = {
       try {
         await deleteObject(previousSourceKey);
       } catch (err) {
-        console.error('[commitLogoUpload] Failed to delete previous logo source:', err);
+        log.error({ event: 'portfolio.logo_source.cleanup.failed', err });
       }
     }
 

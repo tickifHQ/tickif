@@ -34,6 +34,17 @@ require_secrets \
 python3 "$SCRIPT_DIR/storage.py" prepare \
   "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$OPERATIONS_IMAGE"
 
+# These checks remain before the failure trap and intentional maintenance window.
+if [[ "${TELEMETRY_QUEUE_METRICS_ENABLED:-false}" == true && "${DESIRED_WORKER_REPLICAS:-1}" != 1 ]]; then
+  echo 'Queue gauges require exactly one designated worker exporter' >&2; exit 1
+fi
+if [[ "${TELEMETRY_ENABLED:-false}" == true ]]; then
+  docker service inspect "${OBSERVABILITY_STACK_NAME:-tickif-observability}_otel-collector" >/dev/null || {
+    echo 'Deploy and verify the separate observability stack before enabling telemetry' >&2; exit 1;
+  }
+fi
+ensure_telemetry_network
+
 render_dir="$(mktemp -d)"
 finish() {
   code=$?

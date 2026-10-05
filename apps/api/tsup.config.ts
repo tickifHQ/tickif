@@ -7,7 +7,7 @@ import { defineConfig } from 'tsup';
 // compiled in. Runtime npm deps used transitively (better-auth, drizzle-orm,
 // pg, dotenv) are declared as direct deps of this app so they resolve here.
 export default defineConfig({
-  entry: ['src/server.ts'],
+  entry: ['src/server.ts', 'src/telemetry.ts'],
   format: ['esm'],
   platform: 'node',
   target: 'node22',

@@ -1,6 +1,8 @@
 'use client';
 import { Button } from '@repo/ui/components/button';
-export function ConsultationsError({ reset }: { reset: () => void }) {
+import { useReportBoundaryError } from '@/lib/use-report-boundary-error';
+export function ConsultationsError({ error, reset }: { error?: Error; reset: () => void }) {
+  useReportBoundaryError(error, 'consultations.boundary');
   return (
     <div className="flex flex-col items-start gap-4 p-8">
       <h1 className="text-xl font-medium">Could not load consultations</h1>

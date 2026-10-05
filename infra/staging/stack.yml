@@ -3,6 +3,7 @@ x-logging: &default-logging
   options:
     max-size: '10m'
     max-file: '5'
+    labels: 'tickif.telemetry.service'
 
 x-stateless-update: &stateless-update
   parallelism: 1
@@ -88,6 +89,8 @@ services:
           memory: 128M
 
   traefik:
+    labels:
+      tickif.telemetry.service: tickif-traefik
     image: traefik:v3.7.1@sha256:6b9cbca6fac42ab0075f5437d8dc1685cfd188626d8d515839ea94f8b6271c42
     command: ['--configFile=/etc/traefik/static.yml']
     configs:
@@ -153,14 +156,23 @@ services:
           memory: 512M
 
   web:
+    labels:
+      tickif.telemetry.service: tickif-web
     image: ${WEB_IMAGE}
     environment:
       NODE_ENV: production
       CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
       NEXT_PUBLIC_API_URL: https://${STAGING_HOST}
       NEXT_PUBLIC_WEB_URL: https://${STAGING_HOST}
+      DEPLOYMENT_ENV: staging
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${GITHUB_SHA:-unknown}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
     networks:
       - edge
+      - telemetry
     read_only: true
     volumes:
       - type: tmpfs
@@ -217,9 +229,17 @@ services:
           memory: 768M
 
   api:
+    labels:
+      tickif.telemetry.service: tickif-api
     image: ${API_IMAGE}
     environment: &app-environment
       NODE_ENV: production
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      TELEMETRY_BROWSER_INGEST_ENABLED: ${TELEMETRY_BROWSER_INGEST_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${GITHUB_SHA:-unknown}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
       CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
       PORT: '3001'
       POSTGRES_HOST: postgres
@@ -279,6 +299,7 @@ services:
     networks:
       - edge
       - backend
+      - telemetry
     read_only: true
     volumes:
       - type: tmpfs
@@ -329,15 +350,19 @@ services:
           memory: 768M
 
   worker:
+    labels:
+      tickif.telemetry.service: tickif-worker
     image: ${WORKER_IMAGE}
     environment:
       <<: *app-environment
       PORT: '3001'
       MEDIA_WORKER_CONCURRENCY: '2'
       SEARCH_WORKER_CONCURRENCY: '4'
+      TELEMETRY_QUEUE_METRICS_ENABLED: ${TELEMETRY_QUEUE_METRICS_ENABLED:-false}
     secrets: *app-secrets
     networks:
       - backend
+      - telemetry
     read_only: true
     volumes:
       - type: tmpfs
@@ -510,6 +535,9 @@ services:
           memory: 2G
 
 networks:
+  telemetry:
+    external: true
+    name: tickif_telemetry
   edge:
     name: tickif_edge
     driver: overlay

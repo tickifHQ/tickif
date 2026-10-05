@@ -7,10 +7,34 @@ on:
       - 'apps/web/app/health/**'
       - '**/Dockerfile'
       - '.dockerignore'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'apps/api/package.json'
+      - 'apps/api/tsup.config.ts'
+      - 'apps/worker/package.json'
+      - 'apps/worker/tsup.config.ts'
+      - 'apps/web/package.json'
       - 'apps/web/next.config.ts'
       - 'apps/worker/src/staging*/**'
       - 'apps/worker/src/staging-prepare.ts'
       - 'packages/config/**'
+      - 'packages/logger/**'
+      - 'packages/telemetry/**'
+      - 'packages/contracts/src/telemetry.ts'
+      - 'apps/api/src/telemetry.ts'
+      - 'apps/api/src/lib/request-telemetry.ts'
+      - 'apps/api/src/modules/telemetry/**'
+      - 'apps/api/tests/scripts/telemetry-artifact-smoke.mjs'
+      - 'apps/worker/src/observability/**'
+      - 'apps/worker/src/index.ts'
+      - 'apps/worker/src/runtime.ts'
+      - 'apps/worker/src/telemetry.ts'
+      - 'apps/worker/scripts/telemetry-smoke.mjs'
+      - 'packages/queue/**'
+      - 'apps/web/instrumentation*'
+      - 'apps/web/src/env.instrumentation.ts'
+      - 'apps/web/src/lib/logger*'
+      - 'infra/observability/**'
       - '.github/workflows/staging-images.yml'
 concurrency:
   group: staging-images-${{ github.ref }}
@@ -18,6 +42,20 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  signoz-definitions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.14.6'
+          terraform_wrapper: false
+      - name: Validate SigNoz definitions without workspace credentials
+        run: |
+          terraform -chdir=infra/observability/signoz init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/observability/signoz fmt -check
+          terraform -chdir=infra/observability/signoz validate
   images-and-swarm:
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -30,6 +68,8 @@ jobs:
           python3 infra/staging/scripts/test-storage.py
           bash infra/staging/scripts/test-storage-migration.sh
           bash infra/staging/scripts/test-restore-gate.sh
+          bash infra/staging/scripts/test-observability.sh
+          bash infra/staging/scripts/test-observability-preflight.sh
       - name: Build all release images without runtime secrets
         env:
           REGISTRY: localhost:5000/tickif

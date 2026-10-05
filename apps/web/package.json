@@ -13,11 +13,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@opentelemetry/api": "catalog:",
     "@dicebear/core": "catalog:",
     "@dicebear/styles": "catalog:",
     "@repo/auth": "workspace:*",
     "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
+    "@repo/logger": "workspace:*",
+    "@repo/telemetry": "workspace:*",
     "@repo/ui": "workspace:*",
     "@t3-oss/env-nextjs": "catalog:",
     "better-auth": "catalog:",
@@ -33,6 +36,7 @@
     "react-is": "catalog:",
     "react-markdown": "^10.1.0",
     "recharts": "catalog:",
+    "server-only": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

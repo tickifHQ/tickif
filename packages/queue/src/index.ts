@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { Queue, type ConnectionOptions, type JobsOptions } from 'bullmq';
 import { config } from '@repo/config';
+import { createBullMQTelemetry } from '@repo/telemetry/node';
+
+const telemetry = createBullMQTelemetry('tickif-queue');
 
 /**
  * Shared BullMQ connection options. Pass options, not a constructed ioredis
@@ -66,10 +69,7 @@ export type BookingNotificationSweepJob = {
 
 /** Includes the legacy OTP shape so jobs queued before this release still drain safely. */
 export type SmsQueueJob =
-  | SmsJob
-  | OtpSmsQueueJob
-  | BookingRequestedSmsJob
-  | BookingNotificationSweepJob;
+  SmsJob | OtpSmsQueueJob | BookingRequestedSmsJob | BookingNotificationSweepJob;
 
 /** Refresh one designer's cached Google reviews. */
 export type GoogleReviewsRefreshJob = {
@@ -162,6 +162,7 @@ function getSmsQueue(): Queue<SmsQueueJob> {
   smsQueue ??= new Queue<SmsQueueJob>(QUEUES.sms, {
     connection,
     defaultJobOptions,
+    telemetry,
   });
   return smsQueue;
 }
@@ -170,6 +171,7 @@ function getMediaQueue(): Queue<MediaProcessJob> {
   mediaQueue ??= new Queue<MediaProcessJob>(QUEUES.media, {
     connection,
     defaultJobOptions,
+    telemetry,
   });
   return mediaQueue;
 }
@@ -209,7 +211,7 @@ function bookingNotificationJobId(job: BookingRequestedSmsJob): string {
 function getGoogleReviewsQueue(): Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> {
   googleReviewsQueue ??= new Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob>(
     QUEUES.googleReviews,
-    { connection, defaultJobOptions },
+    { connection, defaultJobOptions, telemetry },
   );
   return googleReviewsQueue;
 }
@@ -218,6 +220,7 @@ function getSearchIndexQueue(): Queue<SearchIndexJob> {
   searchIndexQueue ??= new Queue<SearchIndexJob>(QUEUES.searchIndex, {
     connection,
     defaultJobOptions,
+    telemetry,
   });
   return searchIndexQueue;
 }
@@ -226,6 +229,7 @@ function getVerificationEmailQueue(): Queue<VerificationEmailQueueJob> {
   verificationEmailQueue ??= new Queue<VerificationEmailQueueJob>(QUEUES.verificationEmail, {
     connection,
     defaultJobOptions,
+    telemetry,
   });
   return verificationEmailQueue;
 }
@@ -234,6 +238,7 @@ function getBillingLifecycleQueue(): Queue<BillingLifecycleSweepJob> {
   billingLifecycleQueue ??= new Queue<BillingLifecycleSweepJob>(QUEUES.billingLifecycle, {
     connection,
     defaultJobOptions,
+    telemetry,
   });
   return billingLifecycleQueue;
 }
@@ -256,7 +261,7 @@ export async function scheduleGoogleReviewsSweep(everyMs: number): Promise<void>
   await getGoogleReviewsQueue().upsertJobScheduler(
     GOOGLE_REVIEWS_SWEEP_SCHEDULER,
     { every: everyMs },
-    { name: JOBS.sweepGoogleReviews, data: {} },
+    { name: JOBS.sweepGoogleReviews, data: {}, opts: { telemetry: { omitContext: true } } },
   );
 }
 
@@ -292,6 +297,7 @@ export async function scheduleBookingNotificationSweep(everyMs: number): Promise
     {
       name: JOBS.sweepBookingNotifications,
       data: { kind: 'booking-notification-sweep' },
+      opts: { telemetry: { omitContext: true } },
     },
   );
 }
@@ -344,6 +350,7 @@ export async function scheduleVerificationNotificationSweep(everyMs: number): Pr
     {
       name: JOBS.sweepVerificationNotifications,
       data: { kind: 'verification-notification-sweep' },
+      opts: { telemetry: { omitContext: true } },
     },
   );
 }
@@ -355,6 +362,7 @@ export async function scheduleBillingLifecycleSweep(everyMs: number): Promise<vo
     {
       name: JOBS.sweepBillingLifecycle,
       data: { kind: 'billing-lifecycle-sweep' },
+      opts: { telemetry: { omitContext: true } },
     },
   );
 }

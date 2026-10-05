@@ -2,6 +2,17 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "globalDependencies": [".env"],
+  "globalPassThroughEnv": [
+    "LOG_LEVEL",
+    "TELEMETRY_ENABLED",
+    "OTEL_SERVICE_NAME",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_TRACES_SAMPLER_ARG",
+    "APP_VERSION",
+    "TELEMETRY_BROWSER_INGEST_ENABLED",
+    "TELEMETRY_BROWSER_ALLOWED_ORIGINS",
+    "TELEMETRY_QUEUE_METRICS_ENABLED"
+  ],
   "globalEnv": [
     "NODE_ENV",
     "DEPLOYMENT_ENV",
@@ -30,6 +41,8 @@
     "API_URL",
     "NEXT_PUBLIC_API_URL",
     "NEXT_PUBLIC_WEB_URL",
+    "NEXT_PUBLIC_TELEMETRY_ENABLED",
+    "NEXT_PUBLIC_APP_VERSION",
     "NEXT_PUBLIC_SCROLL_GATE_LIMIT",
     "NOVU_BOOKING_WORKFLOW_ID",
     "NOVU_OTP_WORKFLOW_ID",

@@ -29,6 +29,18 @@ require_variables() {
   done
 }
 
+ensure_telemetry_network() {
+  if docker network inspect tickif_telemetry >/dev/null 2>&1; then
+    local network
+    network=$(docker network inspect tickif_telemetry --format '{{.Driver}}|{{.Scope}}|{{json .Options}}')
+    [[ "$network" == overlay\|swarm\|* && "$network" == *'"encrypted"'* ]] || {
+      echo 'tickif_telemetry must be a Swarm encrypted overlay; refusing to reuse another network' >&2; return 1;
+    }
+  else
+    docker network create --driver overlay --opt encrypted tickif_telemetry >/dev/null
+  fi
+}
+
 assert_immutable_image() {
   local image="$1"
   if [[ "$image" == *":latest" || "$image" != *@sha256:* && ! "$image" =~ :[0-9a-f]{40,64}$ ]]; then

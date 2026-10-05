@@ -23,6 +23,7 @@ import { sendEmail } from '@repo/auth/email';
 import { renderTickifEmail } from '@repo/auth/email-templates';
 import type { TickifEmail } from '@repo/auth/email-templates';
 import { config } from '@repo/config';
+import { log } from '../../lib/logger.js';
 import { AppError } from '../../lib/errors.js';
 import {
   orgsRepository,
@@ -84,7 +85,7 @@ async function sendOwnershipEmailBestEffort(
   try {
     await sendEmail({ ...message, ...(await renderTickifEmail(template, config.PUBLIC_WEB_URL)) });
   } catch {
-    console.error('[organizations] Ownership transfer email delivery failed');
+    log.error({ event: 'organization.ownership_transfer.email.failed' });
   }
 }
 
