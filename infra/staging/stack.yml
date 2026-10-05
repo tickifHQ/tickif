@@ -159,6 +159,8 @@ services:
       CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
       NEXT_PUBLIC_API_URL: https://${STAGING_HOST}
       NEXT_PUBLIC_WEB_URL: https://${STAGING_HOST}
+      # Only the origin is needed; social cards use public-API signed media URLs.
+      R2_ENDPOINT: ${R2_ENDPOINT}
     networks:
       - edge
     read_only: true

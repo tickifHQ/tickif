@@ -482,6 +482,6 @@ describe('HomePage', () => {
       searchParams: Promise.resolve({ q: 'warm kitchen', page: '3', ignored: 'value' }),
     });
 
-    expect(metadata.alternates?.canonical).toBe('/?q=warm+kitchen&page=3');
+    expect(metadata.alternates?.canonical).toBe('http://localhost:3000/?q=warm+kitchen&page=3');
   });
 });

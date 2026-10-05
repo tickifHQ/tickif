@@ -1,40 +1,17 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import {
-  publicImageDetailResponseSchema,
-  similarProjectsResponseSchema,
-  type FeedProject,
-  type PublicImageDetailResponse,
-} from '@repo/contracts';
+import { similarProjectsResponseSchema, type FeedProject } from '@repo/contracts';
 import { ImageDetailView } from '@/components/image-detail-view';
-import { api } from '@/lib/api';
 import { getServerSession } from '@/lib/auth-guard';
 import { env } from '@/env';
-
-async function fetchImageDetail(imageId: string): Promise<PublicImageDetailResponse | null> {
-  const response = await api.api.projects.images[':imageId'].$get({
-    param: { imageId },
-  });
-
-  if (response.status === 404) return null;
-  if (!response.ok) {
-    throw new Error(`Could not load image detail for ${imageId}.`);
-  }
-
-  const payload = await response.json();
-  const parsed = publicImageDetailResponseSchema.safeParse(payload);
-  if (!parsed.success) {
-    throw new Error(`Invalid image detail response for ${imageId}.`);
-  }
-
-  return parsed.data;
-}
+import { fetchPublicImage } from '@/lib/public-project-api';
+import { publicMetadata } from '@/lib/social-metadata';
 
 async function fetchSimilarProjects(projectId: string): Promise<FeedProject[]> {
   try {
-    const response = await fetch(
-      `${env.NEXT_PUBLIC_API_URL}/api/discovery/similar/${projectId}`,
-      { cache: 'no-store' },
-    );
+    const response = await fetch(`${env.NEXT_PUBLIC_API_URL}/api/discovery/similar/${projectId}`, {
+      cache: 'no-store',
+    });
     if (!response.ok) return [];
     const payload = await response.json();
     const parsed = similarProjectsResponseSchema.safeParse(payload);
@@ -44,12 +21,31 @@ async function fetchSimilarProjects(projectId: string): Promise<FeedProject[]> {
   }
 }
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const detail = await fetchPublicImage(id);
+  if (!detail) notFound();
+  const title = detail.activeImage.roomName
+    ? `${detail.activeImage.roomName} — ${detail.project.title}`
+    : detail.project.title;
+  return publicMetadata({
+    title,
+    description:
+      detail.project.description ??
+      `Explore ${detail.project.title} by ${detail.designer.displayName} on Tickif.`,
+    path: `/image/${detail.activeImageId}`,
+    imagePath: `/image/${detail.activeImageId}/social-card`,
+    type: 'article',
+  });
+}
+
 export default async function ImageDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [imageDetail, session] = await Promise.all([
-    fetchImageDetail(id),
-    getServerSession(),
-  ]);
+  const [imageDetail, session] = await Promise.all([fetchPublicImage(id), getServerSession()]);
 
   if (!imageDetail) {
     notFound();
