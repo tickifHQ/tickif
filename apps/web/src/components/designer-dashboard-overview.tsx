@@ -315,7 +315,7 @@ export function DesignerDashboardOverview({
   logoUrl,
   portfolioUrl,
   portfolioPubliclyVisible = false,
-  yearsExperience = 0,
+  yearsExperience = null,
   projectCount = 0,
   dashboard,
   completion,
@@ -343,7 +343,7 @@ export function DesignerDashboardOverview({
    * authoritative denormalized counters read from the `designer_profile` row
    * (via the already-fetched CurrentProfile) — never recomputed here.
    */
-  yearsExperience?: number;
+  yearsExperience?: number | null;
   projectCount?: number;
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
@@ -503,7 +503,7 @@ export function DesignerDashboardOverview({
               <dl className="grid grid-cols-2 divide-x divide-border rounded-lg border border-border bg-background/60 px-2 py-2.5">
                 <div>
                   <dd className="text-lg font-semibold tabular-nums text-foreground">
-                    {yearsExperience}
+                    {yearsExperience ?? '—'}
                   </dd>
                   <dt className="mt-1 text-[11px] text-muted-foreground">
                     {yearsExperience === 1 ? 'Year experience' : 'Years experience'}
