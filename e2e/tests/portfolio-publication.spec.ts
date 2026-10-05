@@ -312,7 +312,11 @@ test.describe('E-278 portfolio publication readiness', () => {
   test('a published portfolio exposes the canonical URL everywhere and resolves publicly (state F + regression G)', async ({
     browser,
   }, testInfo) => {
-    const context = await browser.newContext({ baseURL: webUrl });
+    const context = await browser.newContext({
+      baseURL: webUrl,
+      viewport: { width: 1440, height: 1000 },
+      recordVideo: { dir: testInfo.outputPath('portfolio-preview-videos') },
+    });
     const storageKeys: string[] = [];
     try {
       // Complete + active + public link on -> publicly visible.
@@ -350,11 +354,45 @@ test.describe('E-278 portfolio publication readiness', () => {
       const page = await context.newPage();
 
       // Portfolio settings: Open full points at the canonical saved URL.
+      const editorErrors: string[] = [];
+      page.on('pageerror', (error) => editorErrors.push(error.message));
       await page.goto('/designer/portfolio');
       const openFull = page.getByRole('link', { name: 'Open full' });
       await expect(openFull).toBeVisible();
       await expect(openFull).toHaveAttribute('href', canonicalUrl);
       await expect(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
+
+      const editorAction = page.getByRole('link', { name: 'View portfolio', exact: true });
+      await expect(editorAction).toBeInViewport();
+      await expect(editorAction).toHaveAttribute('href', canonicalUrl);
+      await expect(page).toHaveTitle(/Tickif/);
+      const slugInput = page.getByPlaceholder('your-studio');
+      await slugInput.fill('unsaved-preview-studio');
+      for (const viewport of [
+        { width: 1440, height: 1000, name: 'desktop' },
+        { width: 390, height: 844, name: 'mobile' },
+      ]) {
+        await page.setViewportSize(viewport);
+        await expect(editorAction).toBeInViewport();
+        await expect
+          .poll(() =>
+            page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          )
+          .toBe(true);
+        await page.screenshot({
+          path: testInfo.outputPath(`portfolio-editor-preview-${viewport.name}.png`),
+          animations: 'disabled',
+        });
+        const popupPromise = page.waitForEvent('popup');
+        await editorAction.click();
+        const popup = await popupPromise;
+        await expect(popup).toHaveURL(canonicalUrl);
+        await expect(popup.getByRole('heading', { level: 1 })).toBeVisible();
+        await popup.close();
+        await expect(slugInput).toHaveValue('unsaved-preview-studio');
+      }
+      expect(editorErrors).toEqual([]);
+      await page.setViewportSize({ width: 1440, height: 1000 });
 
       // Dashboard: the share card shows and copies the same canonical URL.
       await page.goto('/designer/dashboard');
@@ -377,7 +415,10 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(viewPortfolio).toHaveAttribute('rel', 'noopener noreferrer');
       // Proof stats use profile counters, independently of the dashboard project total.
       await expect(
-        shareCard.getByText('Years experience', { exact: true }).locator('..').getByRole('definition'),
+        shareCard
+          .getByText('Years experience', { exact: true })
+          .locator('..')
+          .getByRole('definition'),
       ).toHaveText('7');
       await expect(
         shareCard.getByText('Projects', { exact: true }).locator('..').getByRole('definition'),
@@ -425,7 +466,9 @@ test.describe('E-278 portfolio publication readiness', () => {
           .toBeGreaterThan(0);
       }
       await expect(viewPortfolio).toBeInViewport();
-      await expect(shareCard.getByRole('button', { name: 'Copy link', exact: true })).toBeInViewport();
+      await expect(
+        shareCard.getByRole('button', { name: 'Copy link', exact: true }),
+      ).toBeInViewport();
       await page.screenshot({
         path: testInfo.outputPath('dashboard-share-card-mobile.png'),
         animations: 'disabled',
@@ -656,7 +699,8 @@ test.describe('E-278 portfolio publication readiness', () => {
       const portfolioCover = page.getByAltText(`${seed.organization.name} portfolio cover`);
       await expect(portfolioCover).toBeVisible();
       await expect(portfolioCover).toHaveAttribute('loading', 'eager');
-      await expect(page.getByText('Years experience')).toBeVisible();
+      // This studio has no founding year or legacy experience, so omit the unknown value.
+      await expect(page.getByText('Years experience')).toHaveCount(0);
       await expect(page.getByText('Projects', { exact: true })).toBeVisible();
       await expect(page.getByText('Cities present')).toBeVisible();
       await expect(

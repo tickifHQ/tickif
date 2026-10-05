@@ -32,6 +32,8 @@ export const JOBS = {
   indexDesigner: 'index-designer',
   deleteDesigner: 'delete-designer',
   reindexAll: 'reindex-all',
+  sweepDesignerExperience: 'sweep-designer-experience',
+  refreshDesignerExperience: 'refresh-designer-experience',
   sendVerificationEmail: 'send-verification-email',
   sweepVerificationNotifications: 'sweep-verification-notifications',
   sweepBillingLifecycle: 'sweep-billing-lifecycle',
@@ -111,12 +113,17 @@ export type SearchReindexAllJob = {
   requestedAtEpoch: number;
 };
 
+export type DesignerExperienceRefreshJob = { year: number };
+export type DesignerExperienceSweepJob = Record<string, never>;
+
 export type SearchIndexJob =
   | SearchIndexProjectJob
   | SearchDeleteProjectJob
   | SearchIndexDesignerJob
   | SearchDeleteDesignerJob
-  | SearchReindexAllJob;
+  | SearchReindexAllJob
+  | DesignerExperienceRefreshJob
+  | DesignerExperienceSweepJob;
 
 export type VerificationEmailJob = {
   kind: 'verification-email';
@@ -139,6 +146,7 @@ export const GOOGLE_REVIEWS_SWEEP_SCHEDULER = 'google-reviews-sweep';
 export const BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER = 'booking-notifications-sweep';
 export const VERIFICATION_NOTIFICATIONS_SWEEP_SCHEDULER = 'verification-notifications-sweep';
 export const BILLING_LIFECYCLE_SWEEP_SCHEDULER = 'billing-lifecycle-sweep';
+export const DESIGNER_EXPERIENCE_SWEEP_SCHEDULER = 'designer-experience-sweep';
 
 export const defaultJobOptions = {
   attempts: 3,
@@ -325,6 +333,30 @@ export async function enqueueSearchReindexAll(job: SearchReindexAllJob): Promise
     jobId: `${JOBS.reindexAll}-${job.requestedAtEpoch}`,
     deduplication: { id: JOBS.reindexAll },
   });
+}
+
+/** A successful annual job is the durable marker; daily sweeps retry terminal failures. */
+export async function enqueueDesignerExperienceRefresh(year: number): Promise<void> {
+  await getSearchIndexQueue().add(
+    JOBS.refreshDesignerExperience,
+    { year },
+    {
+      jobId: `designer-experience-${year}`,
+      removeOnComplete: { age: 400 * 24 * 3600 },
+      removeOnFail: true,
+    },
+  );
+}
+
+export async function scheduleDesignerExperienceRefresh(): Promise<void> {
+  const queue = getSearchIndexQueue();
+  await queue.upsertJobScheduler(
+    DESIGNER_EXPERIENCE_SWEEP_SCHEDULER,
+    { pattern: '0 0 * * *', tz: 'UTC' },
+    { name: JOBS.sweepDesignerExperience, data: {} },
+  );
+  // Catch up after a deploy or downtime without waiting for the next midnight.
+  await queue.add(JOBS.sweepDesignerExperience, {}, { jobId: 'designer-experience-startup' });
 }
 
 export async function enqueueVerificationEmail(job: VerificationEmailJob): Promise<void> {

@@ -63,6 +63,7 @@ type FormState = {
   firmType: string;
   foundedYear: string;
   staffCount: string;
+  officeCount: string;
   cityIds: string[];
   customCities: string[];
   scopeIds: string[];
@@ -126,6 +127,7 @@ function profileToForm(profile: ProfileOwnerResponse): FormState {
     firmType: profile.firmType ?? '',
     foundedYear: profile.foundedYear?.toString() ?? '',
     staffCount: profile.staffCount?.toString() ?? '',
+    officeCount: profile.officeCount?.toString() ?? '',
     cityIds: profile.footprint
       .filter((term) => term.kind === PROFILE_TAXONOMY_KIND.CITY)
       .map((term) => term.id),
@@ -165,6 +167,7 @@ function formsEqual(left: FormState, right: FormState): boolean {
       left.staffCount === right.staffCount);
 
   return (
+    left.officeCount === right.officeCount &&
     left.displayName === right.displayName &&
     left.bio === right.bio &&
     left.entityType === right.entityType &&
@@ -195,6 +198,8 @@ function formToInput(
 ): { input: UpdateProfileInput; errors: ValidationErrors } {
   const input: UpdateProfileInput = {};
   const errors: ValidationErrors = {};
+  if (form.officeCount !== saved.officeCount)
+    input.officeCount = form.officeCount.trim() ? Number(form.officeCount) : null;
 
   if (form.displayName !== saved.displayName) input.displayName = form.displayName.trim();
   if (form.bio !== saved.bio) input.bio = nullable(form.bio);
@@ -813,6 +818,28 @@ export function DesignerProfileEditor({
           <CardTitle>Footprint</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-5">
+          <Field
+            htmlFor="profile-office-count"
+            label="Number of offices"
+            error={validationErrors.officeCount}
+          >
+            {(aria) => (
+              <Input
+                id="profile-office-count"
+                type="number"
+                min={0}
+                max={10000}
+                step={1}
+                value={form.officeCount}
+                onChange={(event) => updateField('officeCount', event.target.value)}
+                placeholder="Not provided"
+                {...aria}
+              />
+            )}
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            Physical offices for this studio profile, separate from the cities you serve.
+          </p>
           <TaxonomyMultiSelect
             id="profile-cities"
             label="Cities"
