@@ -2,12 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { getBlogPosts } from '@/lib/blog';
+import { BLOG_SOCIAL_COPY, publicMetadata } from '@/lib/social-metadata';
 
-export const metadata: Metadata = {
-  title: 'Journal | Tickif',
-  description: 'Ideas and practical guides for planning a space with a designer.',
-  alternates: { canonical: '/blog' },
-};
+export const metadata: Metadata = publicMetadata({
+  ...BLOG_SOCIAL_COPY,
+  path: '/blog',
+  imagePath: '/blog/social-card',
+});
 
 export default async function BlogIndexPage() {
   const posts = await getBlogPosts();

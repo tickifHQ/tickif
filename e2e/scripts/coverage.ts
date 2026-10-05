@@ -241,6 +241,10 @@ const requiredEntries: [file: string, title: string][] = [
     'uploading the final required cover publishes the portfolio and renders responsively',
   ],
   [
+    'social-metadata.spec.ts',
+    'anonymous social cards cover public routes and disappear immediately when unpublished',
+  ],
+  [
     'visitor-role-boundaries.spec.ts',
     'visitor settings and designer role boundaries are enforced in the UI and API',
   ],
