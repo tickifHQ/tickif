@@ -39,6 +39,8 @@ export function PublicSocialCard({
           justifyContent: 'space-between',
           padding: image ? '48px' : '64px 72px',
           width: image ? 700 : 1200,
+          flexShrink: 0,
+          minWidth: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -46,16 +48,26 @@ export function PublicSocialCard({
           <span style={{ fontSize: 28 }}>Tickif</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', color: '#a7f3d0', fontSize: 21, marginBottom: 18 }}>
+          <div
+            style={{
+              display: 'block',
+              color: '#a7f3d0',
+              fontSize: 21,
+              marginBottom: 18,
+              wordBreak: 'break-word',
+              lineClamp: 1,
+            }}
+          >
             {eyebrow.slice(0, 90)}
           </div>
           <div
             style={{
-              display: 'flex',
+              display: 'block',
               fontSize: heading.length > 55 ? 48 : 60,
               lineHeight: 1.08,
               fontWeight: 800,
-              overflowWrap: 'anywhere',
+              wordBreak: 'break-word',
+              lineClamp: 3,
             }}
           >
             {heading}
@@ -63,11 +75,13 @@ export function PublicSocialCard({
           {summary ? (
             <div
               style={{
-                display: 'flex',
+                display: 'block',
                 fontSize: 24,
                 lineHeight: 1.35,
                 marginTop: 24,
                 color: '#d1fae5',
+                wordBreak: 'break-word',
+                lineClamp: 2,
               }}
             >
               {summary}
@@ -90,10 +104,26 @@ export function PublicSocialCard({
               alt="Studio logo"
               width={56}
               height={56}
-              style={{ objectFit: 'contain', background: '#ffffff', borderRadius: 12 }}
+              style={{
+                objectFit: 'contain',
+                background: '#ffffff',
+                borderRadius: 12,
+                flexShrink: 0,
+              }}
             />
           ) : null}
-          {studio ? studio.slice(0, 72) : 'Architecture · Construction · Interior'}
+          <span
+            style={{
+              display: 'block',
+              flex: 1,
+              minWidth: 0,
+              lineHeight: 1.2,
+              wordBreak: 'break-word',
+              lineClamp: 2,
+            }}
+          >
+            {studio ? studio.slice(0, 72) : 'Architecture · Construction · Interior'}
+          </span>
         </div>
       </div>
       {image ? (
@@ -102,7 +132,7 @@ export function PublicSocialCard({
           alt="Published project"
           width={500}
           height={630}
-          style={{ objectFit: 'cover' }}
+          style={{ objectFit: 'cover', flexShrink: 0 }}
         />
       ) : null}
     </div>

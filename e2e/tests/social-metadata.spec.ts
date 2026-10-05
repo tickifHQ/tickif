@@ -150,6 +150,18 @@ test('anonymous social cards cover public routes and disappear immediately when 
     await expect(page.locator('img')).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('long-unicode-project-title.png') });
 
+    await db
+      .update(schema.project)
+      .set({ title: 'W'.repeat(160) })
+      .where(eq(schema.project.id, project.id));
+    await db
+      .update(schema.designerProfile)
+      .set({ displayName: 'W'.repeat(72) })
+      .where(eq(schema.designerProfile.id, profile.id));
+    await page.goto(`/projects/${project.id}/social-card`);
+    await expect(page.locator('img')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('unbroken-text-social-card.png') });
+
     await deleteObject(coverKey);
     const fallback = await request.get(`/projects/${project.id}/social-card`);
     expect(fallback.status()).toBe(200);
