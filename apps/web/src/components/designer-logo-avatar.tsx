@@ -25,6 +25,7 @@ export function DesignerLogoAvatar({
   return (
     <span
       data-testid={testId}
+      aria-hidden={alt === '' ? true : undefined}
       className={cn(
         'relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-muted',
         className,

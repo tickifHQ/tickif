@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { DesignerLogoAvatar } from '../../src/components/designer-logo-avatar';
 
 describe('DesignerLogoAvatar', () => {
+  it.each([null, '/broken.png'])('keeps decorative fallback initials out of link names (%s)', (logoUrl) => {
+    render(
+      <a href="/d/studio-one">
+        <DesignerLogoAvatar logoUrl={logoUrl} alt="" sizePx={40} fallback="ST" />
+        Studio One
+      </a>,
+    );
+    if (logoUrl) fireEvent.error(screen.getByAltText(''));
+    expect(screen.getByRole('link')).toHaveAccessibleName('Studio One');
+    expect(screen.getByText('ST')).toBeVisible();
+  });
+
   it('preserves logo proportions inside the same stable circular frame', () => {
     render(
       <DesignerLogoAvatar
