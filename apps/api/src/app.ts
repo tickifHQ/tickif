@@ -66,7 +66,7 @@ base.onError(onError);
 base.use('*', requestTelemetry);
 base.use('*', async (c, next) => {
   const middleware = c.req.path === '/api/telemetry/logs' ? telemetryCors : applicationCors;
-  await middleware(c, next);
+  return middleware(c, next);
 });
 // Diagnostics/docs never need session resolution. Keeping health probes outside
 // this middleware ensures /livez cannot acquire a hidden Postgres dependency.

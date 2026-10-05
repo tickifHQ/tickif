@@ -39,9 +39,11 @@ describe('telemetry app composition', () => {
     config.TELEMETRY_BROWSER_ALLOWED_ORIGINS = ['https://telemetry-only.example'];
     const headers = { Origin: 'https://telemetry-only.example', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' };
     const relay = await app.request('/api/telemetry/logs', { method: 'OPTIONS', headers });
+    expect(relay.status).toBe(204);
     expect(relay.headers.get('access-control-allow-origin')).toBe('https://telemetry-only.example');
     expect(relay.headers.get('access-control-allow-credentials')).toBeNull();
     const ordinary = await app.request('/api/projects', { method: 'OPTIONS', headers });
+    expect(ordinary.status).toBe(204);
     expect(ordinary.headers.get('access-control-allow-origin')).toBeNull();
   });
 });
