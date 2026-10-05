@@ -23,6 +23,10 @@ import {
 import { mapDesignerSearchDocument, mapProjectSearchDocument } from '../search/mapper.js';
 import { rebuildSearchCollections } from '../search/rebuild.js';
 import {
+  refreshDesignerExperience,
+  sweepDesignerExperience,
+} from './designer-experience-refresh.js';
+import {
   markSearchProjectionEventDispatched,
   withSearchProjectionEntityLock,
 } from '../search/outbox-repository.js';
@@ -161,6 +165,20 @@ export async function reconcileDesigner(
 
 export async function processSearchIndex(job: Job<SearchIndexJob>): Promise<unknown> {
   switch (job.name) {
+    case JOBS.sweepDesignerExperience:
+      return sweepDesignerExperience();
+    case JOBS.refreshDesignerExperience: {
+      const data: unknown = job.data;
+      if (
+        !isRecord(data) ||
+        typeof data.year !== 'number' ||
+        !Number.isInteger(data.year) ||
+        data.year < 1900
+      ) {
+        throw new Error('Invalid designer experience refresh payload');
+      }
+      return refreshDesignerExperience();
+    }
     case JOBS.indexProject:
     case JOBS.deleteProject: {
       const data = projectJob(job.data);

@@ -49,6 +49,7 @@ type ProfileUpdateData = Partial<{
   firmType: string | null;
   foundedYear: number | null;
   staffCount: number | null;
+  officeCount: number | null;
   testimonialBannerEnabled: boolean;
   customCities: string[];
 }>;
