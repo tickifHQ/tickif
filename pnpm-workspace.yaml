@@ -65,7 +65,7 @@ catalog:
   react-email: ^6.9.3
 
   # Data layer
-  drizzle-orm: ^0.45.2
+  drizzle-orm: ^0.45.3
   drizzle-kit: ^0.31.11
   pg: ^8.22.0
   '@types/pg': ^8.11.10
