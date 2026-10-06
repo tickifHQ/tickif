@@ -565,8 +565,8 @@ describe('DesignerOnboarding', () => {
         onSubmitOnboarding={submit}
       />,
     );
-    expect(screen.getByRole('textbox', { name: 'Founded', exact: true })).toHaveValue('1995');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue', exact: true }));
+    expect(screen.getByRole('textbox', { name: 'Founded' })).toHaveValue('1995');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(submit).toHaveBeenCalledWith(expect.objectContaining({ foundedYear: 1995 }));
   });
 
@@ -592,7 +592,7 @@ describe('DesignerOnboarding', () => {
       fireEvent.change(screen.getByLabelText('Founded', { exact: true }), {
         target: { value: year },
       });
-      await userEvent.click(screen.getByRole('button', { name: 'Continue', exact: true }));
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByLabelText('Founded', { exact: true })).toHaveAttribute(
         'aria-invalid',
         'true',
@@ -615,7 +615,7 @@ describe('DesignerOnboarding', () => {
       />,
     );
     fireEvent.change(screen.getByLabelText('Founded', { exact: true }), { target: { value: '' } });
-    await userEvent.click(screen.getByRole('button', { name: 'Continue', exact: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(submit).toHaveBeenCalled();
     expect(submit.mock.calls[0]?.[0]).not.toHaveProperty('foundedYear');
   });
@@ -653,7 +653,7 @@ describe('DesignerOnboarding', () => {
       />,
     );
     expect(screen.getByLabelText('Founded', { exact: true })).toHaveValue('');
-    await userEvent.click(screen.getByRole('button', { name: 'Continue', exact: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(submit).toHaveBeenCalled();
     expect(submit.mock.calls[0]?.[0]).not.toHaveProperty('foundedYear');
   });
