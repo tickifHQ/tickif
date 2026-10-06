@@ -24,6 +24,10 @@ const requiredEntries: [file: string, title: string][] = [
     `company team-size ranges resume and persist through profile editing at ${width}px`,
   ]),
   [
+    'profile-completion-stepper.spec.ts',
+    'profile completion steps guide designers to missing fields on desktop and mobile',
+  ],
+  [
     'social-links.spec.ts',
     'social profile confirmations match saved public links on desktop and mobile',
   ],

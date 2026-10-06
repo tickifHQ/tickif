@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -505,7 +505,7 @@ describe('DesignerProfileEditor', () => {
       fireEvent.click(screen.getByRole('link', { name: 'Write your bio' }));
 
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-      expect(screen.getByLabelText(/bio/i)).toHaveFocus();
+      expect(screen.getByRole('textbox', { name: 'Bio' })).toHaveFocus();
     } finally {
       // @ts-expect-error jsdom has no scrollIntoView; restore the missing builtin.
       delete window.HTMLElement.prototype.scrollIntoView;
@@ -524,6 +524,48 @@ describe('DesignerProfileEditor', () => {
 
     expect(screen.getByText('1 item remaining')).toBeInTheDocument();
     expect(screen.getByText('Publish a project')).toBeInTheDocument();
+  });
+
+  it('shows completed milestones before the actionable next step', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 50, missing: ['logo', 'location', 'scope'] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    const steps = within(
+      screen.getByRole('list', { name: 'Profile completion steps' }),
+    ).getAllByRole('listitem');
+    expect(steps).toHaveLength(6);
+    expect(steps.slice(0, 3).every((step) => step.textContent?.includes('Complete'))).toBe(true);
+    expect(within(steps[3]!).getByRole('link', { name: 'Upload your logo' })).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+    expect(within(steps[4]!).getByRole('link', { name: 'Add your location' })).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByRole('progressbar', { name: 'Profile completion' })).toHaveAttribute(
+      'aria-valuenow',
+      '50',
+    );
+  });
+
+  it('keeps completed profiles free of next-step actions', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 100, missing: [] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(screen.getByText('Your profile is complete')).toBeInTheDocument();
+    const steps = screen.getByRole('list', { name: 'Profile completion steps' });
+    expect(within(steps).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(steps).getAllByText('Complete')).toHaveLength(6);
   });
 
   it('saves validated profile and footprint changes, then refreshes completion', async () => {

@@ -135,7 +135,11 @@ describe('DesignerProjectModeration', () => {
     );
 
     expect(screen.getByText('This project was rejected')).toBeInTheDocument();
-    expect(screen.getByText(MODERATION_REASON_OPTIONS.find((option) => option.value === 'project-ownership')!.label)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        MODERATION_REASON_OPTIONS.find((option) => option.value === 'project-ownership')!.label,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /view moderation history/i })).toBeInTheDocument();
   });
 
@@ -287,7 +291,10 @@ describe('DesignerProjectModeration', () => {
       expect(await screen.findByText(/could not load moderation history/i)).toBeInTheDocument();
 
       // Retry succeeds using the default (beforeEach) mock.
-      await user.click(screen.getByRole('button', { name: /try again/i }));
+      const retry = screen.getByRole('button', { name: /try again/i });
+      await waitFor(() => expect(retry).toBeEnabled());
+      await user.click(retry);
+      await waitFor(() => expect(mock.historyGet).toHaveBeenCalledTimes(2));
       expect(await screen.findByText('Request Changes')).toBeInTheDocument();
     });
   });
