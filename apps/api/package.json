@@ -52,7 +52,7 @@
     "better-auth": "catalog:",
     "bullmq": "catalog:",
     "bullmq-otel": "catalog:",
-    "dotenv": "^16.4.7",
+    "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "ioredis": "catalog:",
