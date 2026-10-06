@@ -1,3 +1,4 @@
+import { log } from '../../../src/lib/logger.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { config } from '@repo/config';
 import type { Derivative, DiscoveryFeedResponse } from '@repo/contracts';
@@ -370,17 +371,17 @@ describe('Property 2: Pagination Limit Enforcement', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Property 3: Sort Order Correctness', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     config.TYPESENSE_SEARCH_CONFIGURED = false;
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    consoleLogSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   describe('recent sort orders by publishedAt descending', () => {
@@ -537,17 +538,17 @@ describe('Property 3: Sort Order Correctness', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Property 4: Filter AND/OR Semantics', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     config.TYPESENSE_SEARCH_CONFIGURED = true;
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    consoleLogSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   describe('OR logic within single facet (multiple values)', () => {
@@ -686,16 +687,16 @@ describe('Property 4: Filter AND/OR Semantics', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Property 5: Response Contract Identity', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    consoleLogSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   describe('response structure from Typesense path', () => {
@@ -926,16 +927,16 @@ describe('Property 5: Response Contract Identity', () => {
 
 describe('Property 8: Cache Header Consistency', () => {
   const EXPECTED_CACHE_CONTROL = 'public, max-age=30, stale-while-revalidate=120';
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    consoleLogSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   describe('cache header present on 200 responses from Typesense path', () => {

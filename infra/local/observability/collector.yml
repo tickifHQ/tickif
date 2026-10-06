@@ -1,0 +1,51 @@
+# Local pnpm processes send traces and metrics over loopback OTLP/HTTP.
+# There is no Docker socket, host filesystem scrape, or stdout duplication.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        max_request_body_size: 4194304
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  resource/environment:
+    attributes:
+      - { key: deployment.environment.name, value: development, action: upsert }
+      - { key: service.namespace, value: tickif, action: upsert }
+  batch:
+    timeout: 5s
+    send_batch_size: 128
+    send_batch_max_size: 256
+
+exporters:
+  otlphttp/signoz:
+    endpoint: ${env:SIGNOZ_OTLP_ENDPOINT}
+    headers:
+      signoz-ingestion-key: '${file:/run/secrets/signoz_ingestion_key}'
+    compression: gzip
+    timeout: 10s
+    sending_queue:
+      enabled: true
+      sizer: bytes
+      queue_size: 8388608 # 8 MiB in memory per signal; local restarts discard it.
+      num_consumers: 1
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 2m
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/environment, batch]
+      exporters: [otlphttp/signoz]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/environment, batch]
+      exporters: [otlphttp/signoz]

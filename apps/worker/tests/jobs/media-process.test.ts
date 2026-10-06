@@ -46,6 +46,7 @@ vi.mock('../../src/media/repository.js', () => ({
 }));
 
 import { processMedia } from '../../src/jobs/media-process.js';
+import { logger } from '../../src/observability/logger.js';
 import { getObject, putObject, deleteObject, ObjectTooLargeError } from '@repo/storage';
 import { config } from '@repo/config';
 import * as repo from '../../src/media/repository.js';
@@ -168,11 +169,17 @@ describe('processMedia', () => {
       derivatives: revisionedDerivatives,
     });
     getObjectMock.mockResolvedValue(jpeg);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     try {
       expect(await processMedia(job('img-1', 'reprocess'))).toEqual({ ok: true, derivatives: 10 });
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('WATERMARK_REVISION'));
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'media.reprocess_revision_unchanged',
+          watermark_revision: 'wm-v4',
+        }),
+        expect.any(String),
+      );
       // Same keys ⇒ in-place overwrites: nothing is stale and nothing may be deleted.
       expect(deleteObjectMock).not.toHaveBeenCalled();
     } finally {

@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import { config } from '@repo/config';
+import { log } from './logger.js';
 
 /**
  * Shared Redis client for API-layer caching (E-119 entitlements).
@@ -29,7 +30,7 @@ function getClient(): Redis | null {
     });
 
     client.on('error', (err) => {
-      console.error('[redis-cache] connection error:', err.message);
+      log.error({ event: 'cache.redis.connection.failed', err });
       connectionFailed = true;
       client?.disconnect();
       client = null;

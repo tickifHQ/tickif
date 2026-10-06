@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useReportBoundaryError } from '@/lib/use-report-boundary-error';
 
 /** Root error boundary. Must be a Client Component per the App Router contract. */
 export default function Error({
@@ -10,10 +10,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    // Surface the error for observability wiring in a later epic.
-    console.error(error);
-  }, [error]);
+  useReportBoundaryError(error, 'root.boundary');
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-4 text-center">

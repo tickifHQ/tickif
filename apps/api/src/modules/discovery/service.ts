@@ -18,6 +18,7 @@ import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
 import type { DiscoveryFeedFilters } from './constants.js';
 import { denseFacetDistribution } from './facets.js';
 import { FALLBACK_DROP_ORDER } from '../search/constants.js';
+import { log } from '../../lib/logger.js';
 
 /**
  * Discovery feed service — the ORCHESTRATION layer.
@@ -99,15 +100,14 @@ function firstValue(value: string | string[] | undefined): string | undefined {
  */
 export function logFallbackEvent(reason: string, context: { sort: string }): void {
   try {
-    console.log(
-      JSON.stringify({
-        type: 'discovery.fallback',
-        reason,
-        endpoint: 'GET /api/discovery/feed',
-        sort: context.sort,
-        timestamp: new Date().toISOString(),
-      }),
-    );
+    log.info({
+      event: 'discovery.fallback',
+      type: 'discovery.fallback',
+      reason,
+      endpoint: 'GET /api/discovery/feed',
+      sort: context.sort,
+      timestamp: new Date().toISOString(),
+    });
   } catch {
     // Fire-and-forget: never throw to callers
   }

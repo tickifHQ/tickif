@@ -20,7 +20,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           maxWorkers: 2,
-          env: { ...testEnv(), CONSULTATIONS_ENABLED: 'true' },
+          env: { ...testEnv(), CONSULTATIONS_ENABLED: 'true', TELEMETRY_ENABLED: 'false', TELEMETRY_BROWSER_INGEST_ENABLED: 'false', LOG_LEVEL: 'silent' },
           globals: true,
           environment: 'node',
           include: ['tests/**/*.test.ts'],
@@ -45,6 +45,9 @@ export default defineConfig({
           env: {
             ...integrationEnv(),
             CONSULTATIONS_ENABLED: 'true',
+            TELEMETRY_ENABLED: 'false',
+            TELEMETRY_BROWSER_INGEST_ENABLED: 'false',
+            LOG_LEVEL: 'silent',
             GOOGLE_CLIENT_ID: 'test-google-client-id',
             GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
             BETTER_AUTH_URL: 'http://localhost:3000',

@@ -1,3 +1,4 @@
+import { log } from '../../../src/lib/logger.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PortfolioRecord } from '../../../src/modules/profiles/portfolio-repository.js';
 import type { DesignerProfileRecord } from '../../../src/modules/profiles/repository.js';
@@ -926,15 +927,15 @@ describe('portfolioService.deleteLogo', () => {
 
 describe('audit event emission', () => {
   it('emits audit event after updatePortfolio', async () => {
-    const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
 
     await portfolioService.updatePortfolio({ tagline: 'Hello' }, caller);
 
-    expect(consoleSpy).toHaveBeenCalled();
-    const emitted = JSON.parse(consoleSpy.mock.calls[0]![0] as string);
+    expect(logSpy).toHaveBeenCalled();
+    const emitted = logSpy.mock.calls[0]![0];
     expect(emitted).toMatchObject({
       userId: 'user-1',
       activeOrgId: 'org-1',
@@ -943,15 +944,15 @@ describe('audit event emission', () => {
       changedFields: ['tagline'],
     });
     expect(emitted.timestamp).toBeDefined();
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('mutation still succeeds even when audit emission throws', async () => {
-    const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {
+    const logSpy = vi.spyOn(log, 'info').mockImplementation(() => {
       throw new Error('logging broken');
     });
     // Suppress console.error noise from the catch block
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(log, 'error').mockImplementation(() => {});
 
     setupResolveProfile();
     setupGetPortfolio();
@@ -962,20 +963,20 @@ describe('audit event emission', () => {
     expect(result).toBeDefined();
     expect(result.id).toBe('portfolio-1');
 
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('does not emit an audit event for an empty patch', async () => {
-    const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
     setupResolveProfile();
     setupGetPortfolio();
 
     const result = await portfolioService.updatePortfolio({}, caller);
 
     expect(result.id).toBe('portfolio-1');
-    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
     expect(portfolioRepository.upsertInTx).not.toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
 

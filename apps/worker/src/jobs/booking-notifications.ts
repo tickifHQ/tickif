@@ -1,4 +1,5 @@
 import { enqueueBookingNotification } from '@repo/queue';
+import { logger } from '../observability/logger.js';
 import {
   findPendingBookingNotifications,
   markBookingNotificationEnqueued,
@@ -36,9 +37,14 @@ export async function processBookingNotificationSweep(): Promise<BookingNotifica
       enqueued += 1;
     } catch (error) {
       failed += 1;
-      console.error(
-        `[worker] booking-notification ${notification.id} (booking ${notification.bookingId}) enqueue failed:`,
-        error,
+      logger.error(
+        {
+          event: 'booking_notification.enqueue_failed',
+          outbox_id: notification.id,
+          booking_id: notification.bookingId,
+          err: error,
+        },
+        'Booking notification enqueue failed',
       );
     }
   }

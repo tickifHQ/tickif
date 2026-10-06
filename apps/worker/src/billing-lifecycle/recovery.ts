@@ -100,8 +100,12 @@ export async function processBillingRecoverySweep(now: Date) {
     } catch {
       failed += 1;
       // Do not include provider payloads or credentials in worker logs.
-      console.error(`[worker] recovery reconciliation failed for intent ${candidate.id}`);
+      logger.error(
+        { event: 'billing.recovery_reconciliation_failed', recovery_intent_id: candidate.id },
+        'Billing recovery reconciliation failed',
+      );
     }
   }
   return { reconciled, failed };
 }
+import { logger } from '../observability/logger.js';

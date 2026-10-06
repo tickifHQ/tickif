@@ -1,7 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
 import { auth } from '@repo/auth';
 import { config, isProduction } from '@repo/config';
 import { onError } from './lib/errors.js';
@@ -37,11 +36,21 @@ import {
 } from './modules/organization-retention/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { adminActivityRoutes } from './modules/admin-activity/routes.js';
+import { requestTelemetry, type RequestTelemetryVariables } from './lib/request-telemetry.js';
+import { telemetryRoutes } from './modules/telemetry/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
   ? config.TRUSTED_ORIGINS
   : [config.NEXT_PUBLIC_API_URL, 'http://localhost:3000', ...config.TRUSTED_ORIGINS];
+const applicationCors = cors({ origin: corsOrigins, credentials: true });
+const telemetryCors = cors({
+  origin: (origin) => config.TELEMETRY_BROWSER_ALLOWED_ORIGINS.includes(origin) ? origin : undefined,
+  credentials: false,
+  allowMethods: ['POST'],
+  allowHeaders: ['Content-Type'],
+  exposeHeaders: ['X-Request-Id', 'Retry-After'],
+});
 
 /**
  * App composition — the modular monolith.
@@ -50,12 +59,15 @@ const corsOrigins = isProduction
  * each domain module is mounted under /api. New modules (designers, media,
  * leads, search, billing, ...) plug in with a single `.route()` call.
  */
-const base = new OpenAPIHono<{ Variables: AuthVariables }>({ defaultHook: validationHook });
+const base = new OpenAPIHono<{ Variables: AuthVariables & RequestTelemetryVariables }>({ defaultHook: validationHook });
 
 base.onError(onError);
 
-base.use('*', logger());
-base.use('*', cors({ origin: corsOrigins, credentials: true }));
+base.use('*', requestTelemetry);
+base.use('*', async (c, next) => {
+  const middleware = c.req.path === '/api/telemetry/logs' ? telemetryCors : applicationCors;
+  return middleware(c, next);
+});
 // Diagnostics/docs never need session resolution. Keeping health probes outside
 // this middleware ensures /livez cannot acquire a hidden Postgres dependency.
 base.use('/api/*', withSession);
@@ -80,6 +92,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  .route('/api/telemetry', telemetryRoutes)
   .route('/api/admin/activity', adminActivityRoutes)
   .route('/api/admin/organizations', adminOrganizationRetentionRoutes)
   .route('/', healthRoutes)

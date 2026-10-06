@@ -148,7 +148,10 @@ async function cleanupCandidate(kind: SearchCollectionKind, collectionName: stri
     await deleteSearchCollection(kind, collectionName);
   } catch (error) {
     if (error instanceof Errors.ObjectNotFound) return;
-    console.error(`[worker] failed to clean up search collection ${collectionName}:`, error);
+    logger.error(
+      { event: 'search.collection_cleanup_failed', collection: collectionName, err: error },
+      'Search collection cleanup failed',
+    );
   }
 }
 
@@ -207,7 +210,10 @@ export async function rebuildSearchCollections(
   } catch (error) {
     if (projectAliasSwapped) {
       await swapSearchCollectionAlias('projects', previous.projects).catch((rollbackError) =>
-        console.error('[worker] failed to roll back projects search alias:', rollbackError),
+        logger.error(
+          { event: 'search.alias_rollback_failed', err: rollbackError },
+          'Search alias rollback failed',
+        ),
       );
     }
     await Promise.all([
@@ -217,3 +223,4 @@ export async function rebuildSearchCollections(
     throw error;
   }
 }
+import { logger } from '../observability/logger.js';

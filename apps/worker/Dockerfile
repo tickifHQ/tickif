@@ -36,4 +36,4 @@ ENV NODE_ENV=production \
 EXPOSE 3002
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3002/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
-CMD ["node", "apps/worker/dist/index.js"]
+CMD ["node", "--experimental-loader=./apps/worker/node_modules/@opentelemetry/instrumentation/hook.mjs", "apps/worker/dist/index.js"]

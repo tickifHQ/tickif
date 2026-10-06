@@ -1,4 +1,5 @@
 import type { Config } from '@repo/config';
+import { getTelemetryConfig } from '@repo/config/telemetry';
 
 const NOVU_TIMEOUT_MS = 10_000;
 
@@ -15,6 +16,7 @@ export type SmsSender = {
 /** Dev/local only: logs the code instead of sending. Never selected in production. */
 export class ConsoleSmsSender implements SmsSender {
   async send(phoneNumber: string, code: string): Promise<void> {
+    assertLocalConsoleDelivery();
     console.log(`[sms] OTP for ${phoneNumber}: ${code}`);
   }
 
@@ -23,9 +25,8 @@ export class ConsoleSmsSender implements SmsSender {
     bookingId: string,
     requesterName: string,
   ): Promise<void> {
-    console.log(
-      `[sms] Booking ${bookingId} requested for ${phoneNumber} by ${requesterName}`,
-    );
+    assertLocalConsoleDelivery();
+    console.log(`[sms] Booking ${bookingId} requested for ${phoneNumber} by ${requesterName}`);
   }
 }
 
@@ -37,6 +38,13 @@ export class MissingSmsSender implements SmsSender {
 
   async sendBookingRequested(): Promise<void> {
     throw new Error('SMS provider is not configured (missing credentials in production)');
+  }
+}
+
+function assertLocalConsoleDelivery(): void {
+  const settings = getTelemetryConfig();
+  if (settings.NODE_ENV === 'production' || settings.TELEMETRY_ENABLED) {
+    throw new Error('Console SMS delivery requires a local environment with telemetry disabled');
   }
 }
 
@@ -60,10 +68,15 @@ export class NovuSmsSender implements SmsSender {
     if (!this.bookingWorkflowId) {
       throw new Error('Novu booking SMS workflow is not configured');
     }
-    await this.triggerWorkflow(phoneNumber, this.bookingWorkflowId, {
-      bookingId,
-      requesterName,
-    }, `booking-requested:${bookingId}`);
+    await this.triggerWorkflow(
+      phoneNumber,
+      this.bookingWorkflowId,
+      {
+        bookingId,
+        requesterName,
+      },
+      `booking-requested:${bookingId}`,
+    );
   }
 
   private async triggerWorkflow(
@@ -97,14 +110,17 @@ export class NovuSmsSender implements SmsSender {
         signal: AbortSignal.timeout(NOVU_TIMEOUT_MS),
       });
     } catch (err) {
-      throw new Error(`Novu SMS trigger failed: ${(err as Error).message}`);
+      // Provider/network errors may embed credentials, phone numbers or request bodies.
+      throw new Error(
+        err instanceof Error && err.name === 'TimeoutError'
+          ? 'Novu SMS trigger timed out'
+          : 'Novu SMS trigger failed',
+      );
     }
 
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(
-        `Novu SMS trigger failed with status ${response.status}: ${text.slice(0, 200)}`,
-      );
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error(`Novu SMS trigger failed with status ${response.status}`);
     }
 
     let result: unknown;
@@ -119,11 +135,7 @@ export class NovuSmsSender implements SmsSender {
       (result as Record<string, unknown>).acknowledged !== true ||
       (result as Record<string, unknown>).status !== 'processed'
     ) {
-      const status =
-        result && typeof result === 'object'
-          ? String((result as Record<string, unknown>).status ?? 'unknown')
-          : 'unknown';
-      throw new Error(`Novu SMS trigger was not processed: ${status}`);
+      throw new Error('Novu SMS trigger was not processed');
     }
   }
 }

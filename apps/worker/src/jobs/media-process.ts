@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import { config } from '@repo/config';
+import { logger } from '../observability/logger.js';
 import type { ImageFailureReason } from '@repo/contracts';
 import {
   getObject,
@@ -50,7 +51,10 @@ async function failPermanently(
 ): Promise<void> {
   await markFailed(imageId, reason);
   await deleteObject(originalKey).catch((err) =>
-    console.error(`[worker] media ${imageId}: original cleanup failed`, err),
+    logger.error(
+      { event: 'media.original_cleanup_failed', image_id: imageId, err },
+      'Media original cleanup failed',
+    ),
   );
 }
 
@@ -132,10 +136,13 @@ async function processMediaWithLease(
     if (derivatives.every((derivative) => storedKeys.has(derivative.key))) {
       // Same WATERMARK_REVISION ⇒ same keys: uploads overwrote in place, but immutable
       // CDN caches keep serving the old bytes. Bump WATERMARK_REVISION to take effect.
-      console.warn(
-        `[worker] media ${imageId}: reprocess regenerated the same derivative keys ` +
-          `(WATERMARK_REVISION ${config.WATERMARK_REVISION} unchanged); immutable CDN caches ` +
-          'will keep serving old content until the revision is bumped',
+      logger.warn(
+        {
+          event: 'media.reprocess_revision_unchanged',
+          image_id: imageId,
+          watermark_revision: config.WATERMARK_REVISION,
+        },
+        'Media reprocess reused the derivative revision; bump the revision to refresh immutable CDN content',
       );
     }
     const refreshed = await refreshReadyDerivatives(imageId, {
@@ -153,7 +160,10 @@ async function processMediaWithLease(
       await Promise.all(
         orphanKeys.map((key) =>
           deleteObject(key).catch((error: unknown) =>
-            console.error(`[worker] media ${imageId}: orphaned derivative cleanup failed`, error),
+            logger.error(
+              { event: 'media.orphan_cleanup_failed', image_id: imageId, err: error },
+              'Orphaned derivative cleanup failed',
+            ),
           ),
         ),
       );
@@ -167,7 +177,10 @@ async function processMediaWithLease(
     await Promise.all(
       staleKeys.map((key) =>
         deleteObject(key).catch((error: unknown) =>
-          console.error(`[worker] media ${imageId}: stale derivative cleanup failed`, error),
+          logger.error(
+            { event: 'media.stale_derivative_cleanup_failed', image_id: imageId, err: error },
+            'Stale derivative cleanup failed',
+          ),
         ),
       ),
     );
@@ -183,8 +196,14 @@ async function processMediaWithLease(
   }
   if (duplicate) {
     // 'flag': keep the image for human moderation rather than reject it.
-    console.warn(
-      `[worker] media ${imageId} flagged as near-duplicate of ${duplicate.imageId} (distance ${duplicate.distance})`,
+    logger.warn(
+      {
+        event: 'media.near_duplicate',
+        image_id: imageId,
+        duplicate_image_id: duplicate.imageId,
+        distance: duplicate.distance,
+      },
+      'Media flagged as a near duplicate',
     );
   }
 
