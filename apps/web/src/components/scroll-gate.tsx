@@ -391,7 +391,7 @@ export function ScrollGate() {
           pointerEvents: interactive ? 'auto' : 'none',
         }}
       />
-      <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4 sm:p-8">
+      <div className="absolute inset-0 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
         <div
           ref={panelRef}
           role="dialog"
@@ -399,7 +399,7 @@ export function ScrollGate() {
           aria-modal={interactive}
           inert={!interactive}
           tabIndex={-1}
-          className="w-full max-w-3xl will-change-transform"
+          className="my-auto w-full max-w-3xl will-change-transform"
           style={{
             pointerEvents: interactive ? 'auto' : 'none',
             transform: `translate3d(0, ${panelOffset}px, 0)`,
