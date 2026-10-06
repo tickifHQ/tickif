@@ -221,6 +221,10 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   // E-278: designer onboarding completion + portfolio publication readiness.
   [
+    'founding-year.spec.ts',
+    'older founding year resumes in onboarding and persists through profile editing',
+  ],
+  [
     'designer-onboarding.spec.ts',
     'company designer completes onboarding and can proceed to portfolio settings',
   ],
