@@ -580,10 +580,11 @@ test.describe('E-278 portfolio publication readiness', () => {
   test('uploading the final required cover publishes the portfolio and renders responsively', async ({
     browser,
   }, testInfo) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     const context = await browser.newContext({
       baseURL: webUrl,
       permissions: ['clipboard-read', 'clipboard-write'],
+      recordVideo: { dir: testInfo.outputPath('cover-video'), size: { width: 1440, height: 1000 } },
     });
     try {
       const seed = await seedDesigner('cover-upload', {
@@ -622,6 +623,18 @@ test.describe('E-278 portfolio publication readiness', () => {
 
       await page.goto('/designer/portfolio');
       await expect(page.getByRole('button', { name: 'Upload portfolio cover' })).toBeVisible();
+      const coverFile = resolve(
+        import.meta.dirname,
+        '../../apps/web/public/images/home-hero/neutral-living-room.jpg',
+      );
+      await page.getByLabel('Portfolio cover file').setInputFiles(coverFile);
+      const cropDialog = page.getByRole('dialog', { name: 'Adjust portfolio cover' });
+      await expect(
+        cropDialog.getByRole('button', { name: 'Save cover', exact: true }),
+      ).toBeEnabled();
+      await page.screenshot({ path: testInfo.outputPath('cover-crop-desktop.png') });
+      await cropDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Upload portfolio cover' })).toBeVisible();
       await page
         .getByLabel('Portfolio cover file')
         .setInputFiles(
@@ -630,8 +643,61 @@ test.describe('E-278 portfolio publication readiness', () => {
             '../../apps/web/public/images/home-hero/neutral-living-room.jpg',
           ),
         );
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(cropDialog).toBeVisible();
+      await cropDialog.getByRole('slider', { name: 'Cover zoom' }).focus();
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowRight');
+      await page.screenshot({ path: testInfo.outputPath('cover-crop-mobile.png') });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await cropDialog.getByRole('button', { name: 'Save cover', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Replace portfolio cover' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Open full' })).toBeVisible();
+
+      const savedCover = await page
+        .getByAltText('Portfolio cover', { exact: true })
+        .getAttribute('src');
+      await page.getByLabel('Portfolio cover file').setInputFiles(coverFile);
+      await expect(cropDialog).toBeVisible();
+      await cropDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(page.getByAltText('Portfolio cover', { exact: true })).toHaveAttribute(
+        'src',
+        savedCover!,
+      );
+      await page.getByLabel('Portfolio cover file').setInputFiles(coverFile);
+      await cropDialog.getByRole('slider', { name: 'Cover zoom' }).focus();
+      await page.keyboard.press('End');
+      await page.route('**/api/profiles/me/portfolio/cover/upload', (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Cover storage unavailable' } }),
+        }),
+      );
+      await cropDialog.getByRole('button', { name: 'Save cover', exact: true }).click();
+      await expect(cropDialog.getByRole('alert')).toContainText('Cover storage unavailable');
+      await expect(page.getByAltText('Portfolio cover', { exact: true })).toHaveAttribute(
+        'src',
+        savedCover!,
+      );
+      await page.screenshot({ path: testInfo.outputPath('cover-retry-mobile.png') });
+      await page.unroute('**/api/profiles/me/portfolio/cover/upload');
+      await cropDialog.getByRole('button', { name: 'Save cover', exact: true }).click();
+      await expect(cropDialog).toHaveCount(0);
+      await page.reload();
+      const persistedCover = page.getByAltText('Portfolio cover', { exact: true });
+      await expect(persistedCover).toBeVisible();
+      await expect
+        .poll(() => persistedCover.evaluate((image: HTMLImageElement) => image.naturalWidth))
+        .toBeGreaterThan(0);
+      const dimensions = await persistedCover.evaluate((image: HTMLImageElement) => ({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      }));
+      expect(dimensions.width).toBeLessThanOrEqual(1920);
+      expect(dimensions.width / dimensions.height).toBeCloseTo(16 / 9, 2);
 
       for (const surface of [
         {

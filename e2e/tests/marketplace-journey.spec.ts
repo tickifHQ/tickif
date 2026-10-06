@@ -234,6 +234,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await designer
       .getByLabel('Portfolio cover file')
       .setInputFiles(resolve('../apps/web/public/images/home-hero/neutral-living-room.jpg'));
+    await designer.getByRole('button', { name: 'Save cover', exact: true }).click();
     expect((await coverCommit).ok()).toBeTruthy();
     await expect(
       designer.getByRole('img', { name: `Journey Studio ${suffix} logo` }),

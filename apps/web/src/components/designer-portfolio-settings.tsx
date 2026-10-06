@@ -49,6 +49,8 @@ import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
+import { PortfolioCoverCropDialog } from '@/components/portfolio-cover-crop-dialog';
+import { cropPortfolioCoverToFile } from '@/lib/crop-image';
 import { ExperienceCentersEditor } from '@/components/experience-centers-editor';
 import {
   GoogleBrandIcon,
@@ -289,6 +291,12 @@ export function DesignerPortfolioSettings() {
   const [isUploadingHeroCover, startHeroCoverUploadTransition] = useTransition();
   const [heroCoverError, setHeroCoverError] = useState<string | null>(null);
   const heroCoverInputRef = useRef<HTMLInputElement>(null);
+  const [heroCoverSource, setHeroCoverSource] = useState<string | null>(null);
+  useEffect(() => {
+    return () => {
+      if (heroCoverSource) URL.revokeObjectURL(heroCoverSource);
+    };
+  }, [heroCoverSource]);
   const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
   // Google reviews connection (fetched separately from portfolio settings)
@@ -653,11 +661,26 @@ export function DesignerPortfolioSettings() {
     const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = '';
+    setHeroCoverError(null);
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(file.type)) {
+      setHeroCoverError('Choose a JPEG, PNG, WebP, or AVIF image.');
+      return;
+    }
+    if (file.size <= 0 || file.size > 10_000_000) {
+      setHeroCoverError('Choose an image up to 10 MB.');
+      return;
+    }
+    setHeroCoverSource(URL.createObjectURL(file));
+  }
 
+  function saveHeroCoverCrop(pixels: Parameters<typeof cropPortfolioCoverToFile>[1]) {
+    if (!heroCoverSource) return;
     startHeroCoverUploadTransition(async () => {
       setHeroCoverError(null);
       try {
+        const file = await cropPortfolioCoverToFile(heroCoverSource, pixels);
         const result = await uploadPortfolioCover(file);
+        setHeroCoverSource(null);
         try {
           setPortfolio(await fetchPortfolio());
         } catch {
@@ -1756,6 +1779,21 @@ export function DesignerPortfolioSettings() {
           Save changes
         </Button>
       </div>
+
+      <PortfolioCoverCropDialog
+        open={heroCoverSource !== null}
+        imageSource={heroCoverSource}
+        isSaving={isUploadingHeroCover}
+        error={heroCoverError}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHeroCoverSource(null);
+            setHeroCoverError(null);
+          }
+        }}
+        onChooseAnother={handleHeroCoverUploadClick}
+        onSave={saveHeroCoverCrop}
+      />
 
       {/* Hidden file input for portfolio cover upload */}
       <input
