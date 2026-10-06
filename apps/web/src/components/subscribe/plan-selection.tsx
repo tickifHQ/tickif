@@ -3,6 +3,7 @@
 import type { PlanTier, SubscriptionState } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Separator } from '@repo/ui/components/separator';
+import { TipCallout } from '@repo/ui/components/tip-callout';
 import {
   Table,
   TableHeader,
@@ -17,6 +18,8 @@ import { PLANS, PLAN_FEATURE_GROUPS, isDowngrade } from '@/lib/plan-config';
 import { PlanCard } from './plan-card';
 
 interface PlanSelectionProps {
+  headingLevel?: 1 | 2;
+  description?: string;
   currentTier: PlanTier;
   lifecycleState: SubscriptionState;
   selectedTier?: PlanTier | null;
@@ -45,12 +48,15 @@ function FeatureValue({ value }: { value: string | boolean }) {
 }
 
 export function PlanSelection({
+  headingLevel = 2,
+  description = 'Compare plans for your design business.',
   currentTier,
   lifecycleState,
   selectedTier,
   actions,
   onSelectPlan,
 }: PlanSelectionProps) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   const hiddenReasons = [
     ...new Set(
       PLANS.flatMap((plan) => {
@@ -72,12 +78,18 @@ export function PlanSelection({
         : undefined;
 
   return (
-    <section className="flex min-w-0 flex-col gap-6" aria-label="Choose your plan">
+    <section className="flex min-w-0 flex-col gap-5" aria-label="Choose your plan">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Choose your plan</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Compare plans for your design business.
-        </p>
+        <Heading
+          className={
+            headingLevel === 1
+              ? 'text-2xl font-semibold tracking-tight text-foreground'
+              : 'text-lg font-semibold text-foreground'
+          }
+        >
+          Choose your plan
+        </Heading>
+        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       </div>
       {lifecycleReason || lifecycleState === 'downgraded' ? (
         <Alert>
@@ -87,7 +99,8 @@ export function PlanSelection({
           </AlertDescription>
         </Alert>
       ) : null}
-      <div className="grid divide-y divide-border border-y border-border md:grid-cols-3 md:divide-x md:divide-y-0">
+      <div className="grid gap-3 md:grid-cols-4 md:gap-0 md:border-y md:border-border">
+        <div className="hidden md:row-span-2 md:block" aria-hidden="true" />
         {PLANS.map((plan) => {
           const action = actions?.[plan.tier];
           const label =
@@ -119,14 +132,16 @@ export function PlanSelection({
       ) : null}
       <div className="hidden md:block">
         <Table aria-label="Compare plan features" className="table-fixed">
-          <TableCaption>
+          <TableCaption className="mt-5 text-xs">
             Monthly organization plans. Display prices are not a payment quote.
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col">Features</TableHead>
+              <TableHead scope="col" className="w-1/4 px-0">
+                Features
+              </TableHead>
               {PLANS.map((plan) => (
-                <TableHead key={plan.tier} scope="col">
+                <TableHead key={plan.tier} scope="col" className="w-1/4 px-5">
                   {plan.label}
                 </TableHead>
               ))}
@@ -135,15 +150,24 @@ export function PlanSelection({
           {PLAN_FEATURE_GROUPS.map((group) => (
             <TableBody key={group.label}>
               <TableRow>
-                <TableHead scope="rowgroup" colSpan={4} className="pt-8 pb-3">
+                <TableHead
+                  scope="rowgroup"
+                  colSpan={4}
+                  className="px-0 pt-7 pb-3 font-semibold text-foreground"
+                >
                   {group.label}
                 </TableHead>
               </TableRow>
               {group.features.map((feature) => (
                 <TableRow key={feature.label}>
-                  <TableHead scope="row">{feature.label}</TableHead>
+                  <TableHead
+                    scope="row"
+                    className="px-0 py-3 pr-5 font-normal leading-5 whitespace-normal"
+                  >
+                    {feature.label}
+                  </TableHead>
                   {PLANS.map((plan) => (
-                    <TableCell key={plan.tier}>
+                    <TableCell key={plan.tier} className="px-5 py-3 leading-5">
                       <FeatureValue value={feature.values[plan.tier]} />
                     </TableCell>
                   ))}
@@ -176,10 +200,10 @@ export function PlanSelection({
           </section>
         ))}
       </section>
-      <p className="text-sm text-muted-foreground">
+      <TipCallout label="Note" align="start" role="note" aria-label="Plan purchase notes">
         Purchasing a plan does not grant verification. Verified badges remain subject to
         verification approval. Final charges and change timing are shown separately during review.
-      </p>
+      </TipCallout>
     </section>
   );
 }

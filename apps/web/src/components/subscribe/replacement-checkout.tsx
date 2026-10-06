@@ -11,9 +11,11 @@ import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 export function ReplacementCheckout({
   onChange,
   onProviderOpen,
+  onCheckoutResult,
 }: {
   onChange: () => void;
   onProviderOpen: (open: boolean) => void;
+  onCheckoutResult?: (outcome: 'complete' | 'closed') => void;
 }) {
   const [checkout, setCheckout] =
     useState<ReturnType<typeof billingReplacementCheckoutSchema.parse>>(null);
@@ -59,6 +61,8 @@ export function ReplacementCheckout({
     if (!checkout?.razorpaySubscriptionId) return;
     setBusy(true);
     onProviderOpen(true);
+    let dismissed = false;
+    let paymentReturned = false;
     try {
       if (!checkout.mandateAuthorized)
         await new Promise<void>((resolve, reject) => {
@@ -67,8 +71,12 @@ export function ReplacementCheckout({
             subscriptionId: checkout.razorpaySubscriptionId!,
             targetTier: checkout.targetTier,
             prefill: { name: null, email: null, contact: null },
-            onDismiss: () => reject(new Error('Checkout closed. You can resume this plan change.')),
+            onDismiss: () => {
+              dismissed = true;
+              reject(new Error('Checkout closed. You can resume this plan change.'));
+            },
             onSuccess: (payment) => {
+              paymentReturned = true;
               void verify({
                 operationId: checkout.operationId,
                 kind: 'subscription',
@@ -87,13 +95,16 @@ export function ReplacementCheckout({
             orderId: next.razorpayOrderId!,
             amount: next.amount,
             currency: next.currency,
-            onDismiss: () =>
+            onDismiss: () => {
+              dismissed = true;
               reject(
                 new Error(
                   'Payment closed. Your upgrade is pending; resume before the quote expires.',
                 ),
-              ),
+              );
+            },
             onSuccess: (payment) => {
+              paymentReturned = true;
               void verify({
                 operationId: next.operationId,
                 kind: 'order',
@@ -106,11 +117,13 @@ export function ReplacementCheckout({
         });
       }
       await refresh();
+      onCheckoutResult?.('complete');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Checkout is pending.');
+      onCheckoutResult?.(dismissed || !paymentReturned ? 'closed' : 'complete');
     } finally {
       setBusy(false);
-      onProviderOpen(false);
+      if (!onCheckoutResult) onProviderOpen(false);
     }
   }
   return (

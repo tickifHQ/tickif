@@ -122,7 +122,7 @@ describe('SubscribePage support recovery', () => {
     mocks.paymentMethod.mockResolvedValue(new Response(null, { status: 409 }));
     render(<SubscribePage />);
 
-    await screen.findByText('Payment Issue');
+    await screen.findByText(/Your last payment failed/);
     await user.click(screen.getByRole('button', { name: 'Update Payment Method' }));
 
     const supportLink = await screen.findByRole('link', { name: /contact support/i });
@@ -301,6 +301,18 @@ describe('SubscribePage visible comparison and retained selection', () => {
     const first = render(<SubscribePage userId="user-a" organizationId="org-a" />);
     for (const name of ['Hobby', 'Professional+', 'Corporate'])
       expect(await screen.findByRole('heading', { name, level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Choose your plan', level: 1 })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByText('Compare plans and manage your subscription')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Plans' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Active', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to billing' })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+    expect(screen.getByRole('table', { name: 'Compare plan features' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upgrade Plan' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Upgrade to Corporate' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
     await user.click(screen.getByRole('button', { name: 'Close billing' }));
@@ -309,7 +321,7 @@ describe('SubscribePage visible comparison and retained selection', () => {
     await user.click(await screen.findByRole('button', { name: 'Continue Corporate' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
     second.rerender(<SubscribePage userId="user-a" organizationId="org-b" />);
-    await screen.findByRole('heading', { name: 'Subscription' });
+    await screen.findByRole('heading', { name: 'Choose your plan', level: 1 });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue Corporate' })).not.toBeInTheDocument();
     await waitFor(() =>

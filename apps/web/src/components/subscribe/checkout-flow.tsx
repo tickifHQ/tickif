@@ -1,6 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
+import { Loader2, ShieldCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Button } from '@repo/ui/components/button';
 import type {
@@ -38,6 +41,7 @@ interface CheckoutFlowProps {
   onTargetChange?: (tier: PlanTier | null) => void;
   scopeKey?: string;
   onSubscriptionChange?: () => void | Promise<void>;
+  onCheckoutResult?: (outcome: 'complete' | 'closed') => void;
 }
 
 type Step =
@@ -78,7 +82,9 @@ function ScopedCheckoutFlow({
   initialTargetTier = null,
   onTargetChange,
   onSubscriptionChange,
+  onCheckoutResult,
 }: CheckoutFlowProps) {
+  const router = useRouter();
   const [target, setTarget] = useState<PlanTier | null>(initialTargetTier);
   const [step, setStep] = useState<Step>('select');
   const [preview, setPreview] = useState<BillingChangePreview | null>(null);
@@ -86,7 +92,6 @@ function ScopedCheckoutFlow({
   const [message, setMessage] = useState('');
   const [effectiveAt, setEffectiveAt] = useState<string | null>(null);
   const [providerOpen, setProviderOpen] = useState(false);
-  const [checkoutDismissed, setCheckoutDismissed] = useState(false);
   const operationId = useRef<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(true);
@@ -205,7 +210,6 @@ function ScopedCheckoutFlow({
     setStep('loading');
     setPreview(null);
     setRecovery(null);
-    setCheckoutDismissed(false);
     setMessage('');
     operationId.current = null;
     try {
@@ -258,6 +262,18 @@ function ScopedCheckoutFlow({
   function choose(tier: PlanTier) {
     onTargetChange?.(tier);
     void review(tier);
+  }
+  function finishCheckout(outcome: 'complete' | 'closed') {
+    if (!mounted.current || !target) return;
+    // Keep the loading screen until navigation completes. The result page reads
+    // authoritative billing state; a provider callback alone never grants access.
+    onOpenChange(false);
+    if (onCheckoutResult) {
+      externalCheckout.current = false;
+      setProviderOpen(false);
+      onCheckoutResult(outcome);
+    }
+    router.replace(`/designer/plan-billing/subscribe/${outcome}?plan=${target}`);
   }
   async function failResponse(response: { json: () => Promise<unknown> }) {
     const data = await response.json().catch(() => null);
@@ -355,18 +371,10 @@ function ScopedCheckoutFlow({
           prefill: data.prefill,
           onDismiss: () => {
             if (!mounted.current) return;
-            externalCheckout.current = false;
-            setProviderOpen(false);
-            setCheckoutDismissed(true);
-            setMessage(`Checkout closed. ${PLAN_MAP[target].label} is still selected.`);
-            setStep('error');
-            previousInput.current = { open: true, target: initialTargetTier };
-            onOpenChange(true);
+            finishCheckout('closed');
           },
           onSuccess: async (payment) => {
             if (!mounted.current) return;
-            setProviderOpen(false);
-            onOpenChange(true);
             setStep('pending');
             try {
               const response = await api.api.billing['verify-payment'].$post({
@@ -388,7 +396,7 @@ function ScopedCheckoutFlow({
                 setStep('pending');
               }
             } finally {
-              externalCheckout.current = false;
+              finishCheckout('complete');
             }
           },
         });
@@ -449,217 +457,248 @@ function ScopedCheckoutFlow({
           ? `Upgrade to ${label}`
           : `Downgrade to ${label}`;
   return (
-    <Dialog
-      open={open}
-      modal={!providerOpen}
-      onOpenChange={(value) => {
-        if (!blocking && !providerOpen) onOpenChange(value);
-      }}
-    >
-      <DialogContent
-        className={step === 'select' ? 'sm:max-w-5xl' : 'sm:max-w-lg'}
-        showCloseButton={!blocking}
-        onInteractOutside={blocking ? (event) => event.preventDefault() : undefined}
-        onEscapeKeyDown={blocking ? (event) => event.preventDefault() : undefined}
-      >
-        <DialogTitle className="sr-only">Plan subscription</DialogTitle>
-        {!isValidTier(currentTier) ? (
-          <p>
-            Unable to load plan information. Please{' '}
-            <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-              contact support
-            </a>
-            .
-          </p>
-        ) : (
-          <>
-            {step === 'select' && (
-              <PlanSelection
-                currentTier={currentTier}
-                lifecycleState={lifecycleState}
-                selectedTier={target}
-                onSelectPlan={choose}
-              />
-            )}
-            {(step === 'loading' || step === 'processing') && (
-              <p role="status">
-                {step === 'loading' ? 'Checking your plan…' : 'Updating your billing…'}
+    <>
+      {providerOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background px-6"
+            role="status"
+            aria-label="Secure checkout"
+            aria-live="polite"
+          >
+            <div className="flex max-w-sm flex-col items-center text-center">
+              <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Loader2
+                  className="size-7 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {step === 'pending' ? 'Confirming your payment' : 'Opening secure checkout'}
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {step === 'pending'
+                  ? 'Please wait while we check your payment details.'
+                  : 'Complete your payment in Razorpay. You’ll return here when checkout finishes.'}
               </p>
-            )}
-            {step === 'review' && preview && (
-              <div className="flex flex-col gap-4">
-                <h2 className="text-xl font-semibold">{title}</h2>
-                <p className="text-sm text-muted-foreground">
-                  Selected plan: {label}. Current plan: {PLAN_MAP[preview.currentTier].label}.
+              <p className="mt-8 inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <ShieldCheck className="size-4" aria-hidden="true" /> Secure payments by Razorpay
+              </p>
+            </div>
+          </div>,
+          document.body,
+        )}
+      <Dialog
+        open={open}
+        modal={!providerOpen}
+        onOpenChange={(value) => {
+          if (!blocking && !providerOpen) onOpenChange(value);
+        }}
+      >
+        <DialogContent
+          className={`${step === 'select' ? 'sm:max-w-5xl' : 'sm:max-w-lg'} ${providerOpen ? 'invisible pointer-events-none' : ''}`}
+          showCloseButton={!blocking}
+          onInteractOutside={blocking ? (event) => event.preventDefault() : undefined}
+          onEscapeKeyDown={blocking ? (event) => event.preventDefault() : undefined}
+        >
+          <DialogTitle className="sr-only">Plan subscription</DialogTitle>
+          {!isValidTier(currentTier) ? (
+            <p>
+              Unable to load plan information. Please{' '}
+              <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+                contact support
+              </a>
+              .
+            </p>
+          ) : (
+            <>
+              {step === 'select' && (
+                <PlanSelection
+                  currentTier={currentTier}
+                  lifecycleState={lifecycleState}
+                  selectedTier={target}
+                  onSelectPlan={choose}
+                />
+              )}
+              {(step === 'loading' || step === 'processing') && (
+                <p role="status">
+                  {step === 'loading' ? 'Checking your plan…' : 'Updating your billing…'}
                 </p>
-                <dl className="grid grid-cols-2 gap-3 text-sm">
-                  <dt>Effective date</dt>
-                  <dd>
-                    {preview.timing === 'now' ? 'Once confirmed' : dateLabel(preview.effectiveAt)}
-                  </dd>
-                  <dt>Next renewal</dt>
-                  <dd>{dateLabel(preview.nextRenewalAt)}</dd>
-                  <dt>Monthly price</dt>
-                  <dd>{money(preview.recurringAmount, preview.currency)}</dd>
-                  <dt>
-                    {preview.adjustmentDirection === 'refund' ? 'Refund' : 'Additional charge'}
-                  </dt>
-                  <dd>
-                    {money(preview.adjustmentAmount, preview.currency)}
-                    {preview.amountCertainty === 'estimated' ? ' (estimate)' : ''}
-                  </dd>
-                </dl>
-                {preview.action === 'change_plan' && (
+              )}
+              {step === 'review' && preview && (
+                <div className="flex flex-col gap-4">
+                  <h2 className="text-xl font-semibold">{title}</h2>
                   <p className="text-sm text-muted-foreground">
-                    Authorize future renewals in checkout. Any upgrade adjustment shown above is a
-                    separate payment. Downgrades retain your current plan until the renewal date.
-                    Your bank may show a refundable mandate authorization charge.
+                    Selected plan: {label}. Current plan: {PLAN_MAP[preview.currentTier].label}.
                   </p>
-                )}
-                {preview.action === 'subscribe' && (
-                  <p className="text-sm text-muted-foreground">
-                    Review the final recurring amount and payment authorization in Razorpay
-                    Checkout. Monthly display pricing is not today’s charge.
-                  </p>
-                )}
-                {replacingSavedPlan && recovery && (
-                  <p className="text-sm">
-                    This replaces your saved {PLAN_MAP[recovery.targetTier].label} plan with {label}
-                    . No payment is made yet.
-                  </p>
-                )}
-                {(preview.reason ||
-                  preview.action === 'recover' ||
-                  preview.action === 'blocked') && (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    {reasonLabel(preview.reason)} Next eligible date:{' '}
-                    {dateLabel(preview.nextEligibleAt)}.
-                  </p>
-                )}
-                {preview.action === 'recover' && preview.reason !== 'cancellation_scheduled' && (
-                  <p className="text-sm">
-                    Confirming schedules cancellation of your current paid subscription at the end
-                    of its billing period and saves {label} for a future checkout. Your current
-                    access continues until your subscription ends. No replacement subscription is
-                    purchased now.
-                  </p>
-                )}
-                {recovery && preview.action === 'recover' && (
-                  <p className="text-sm">
-                    Previously selected: {PLAN_MAP[recovery.targetTier].label}. This will be
-                    replaced with {label}.
-                  </p>
-                )}
-                {preview.confirmationAllowed && (
-                  <Button onClick={() => void confirm()}>
-                    {replacingSavedPlan
-                      ? `Choose ${label}`
-                      : preview.action === 'subscribe'
-                        ? 'Continue to payment'
-                        : preview.action === 'cancel'
-                          ? 'Schedule cancellation'
-                          : preview.action === 'recover'
-                            ? preview.reason === 'cancellation_scheduled'
-                              ? 'Save plan'
-                              : 'Cancel & save plan'
-                            : 'Confirm plan change'}
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
+                    <dt>Effective date</dt>
+                    <dd>
+                      {preview.timing === 'now' ? 'Once confirmed' : dateLabel(preview.effectiveAt)}
+                    </dd>
+                    <dt>Next renewal</dt>
+                    <dd>{dateLabel(preview.nextRenewalAt)}</dd>
+                    <dt>Monthly price</dt>
+                    <dd>{money(preview.recurringAmount, preview.currency)}</dd>
+                    <dt>
+                      {preview.adjustmentDirection === 'refund' ? 'Refund' : 'Additional charge'}
+                    </dt>
+                    <dd>
+                      {money(preview.adjustmentAmount, preview.currency)}
+                      {preview.amountCertainty === 'estimated' ? ' (estimate)' : ''}
+                    </dd>
+                  </dl>
+                  {preview.action === 'change_plan' && (
+                    <p className="text-sm text-muted-foreground">
+                      Authorize future renewals in checkout. Any upgrade adjustment shown above is a
+                      separate payment. Downgrades retain your current plan until the renewal date.
+                      Your bank may show a refundable mandate authorization charge.
+                    </p>
+                  )}
+                  {preview.action === 'subscribe' && (
+                    <p className="text-sm text-muted-foreground">
+                      Review the final recurring amount and payment authorization in Razorpay
+                      Checkout. Monthly display pricing is not today’s charge.
+                    </p>
+                  )}
+                  {replacingSavedPlan && recovery && (
+                    <p className="text-sm">
+                      This replaces your saved {PLAN_MAP[recovery.targetTier].label} plan with{' '}
+                      {label}. No payment is made yet.
+                    </p>
+                  )}
+                  {(preview.reason ||
+                    preview.action === 'recover' ||
+                    preview.action === 'blocked') && (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      {reasonLabel(preview.reason)} Next eligible date:{' '}
+                      {dateLabel(preview.nextEligibleAt)}.
+                    </p>
+                  )}
+                  {preview.action === 'recover' && preview.reason !== 'cancellation_scheduled' && (
+                    <p className="text-sm">
+                      Confirming schedules cancellation of your current paid subscription at the end
+                      of its billing period and saves {label} for a future checkout. Your current
+                      access continues until your subscription ends. No replacement subscription is
+                      purchased now.
+                    </p>
+                  )}
+                  {recovery && preview.action === 'recover' && (
+                    <p className="text-sm">
+                      Previously selected: {PLAN_MAP[recovery.targetTier].label}. This will be
+                      replaced with {label}.
+                    </p>
+                  )}
+                  {preview.confirmationAllowed && (
+                    <Button onClick={() => void confirm()}>
+                      {replacingSavedPlan
+                        ? `Choose ${label}`
+                        : preview.action === 'subscribe'
+                          ? 'Continue to payment'
+                          : preview.action === 'cancel'
+                            ? 'Schedule cancellation'
+                            : preview.action === 'recover'
+                              ? preview.reason === 'cancellation_scheduled'
+                                ? 'Save plan'
+                                : 'Cancel & save plan'
+                              : 'Confirm plan change'}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (preview.confirmationAllowed) setStep('select');
+                      else onOpenChange(false);
+                    }}
+                  >
+                    {preview.confirmationAllowed ? 'Choose another plan' : 'Close'}
                   </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (preview.confirmationAllowed) setStep('select');
-                    else onOpenChange(false);
+                </div>
+              )}
+              {step === 'replacement' && (
+                <ReplacementCheckout
+                  onProviderOpen={setProviderOpen}
+                  onCheckoutResult={finishCheckout}
+                  onChange={() => {
+                    void syncStatus();
                   }}
-                >
-                  {preview.confirmationAllowed ? 'Choose another plan' : 'Close'}
-                </Button>
-              </div>
-            )}
-            {step === 'replacement' && (
-              <ReplacementCheckout
-                onProviderOpen={setProviderOpen}
-                onChange={() => {
-                  void syncStatus();
-                }}
-              />
-            )}
-            {step === 'recovery' && (
-              <div className="flex flex-col gap-4" role="status">
-                <h2 className="text-lg font-semibold">Plan saved</h2>
-                <p>
-                  {recovery?.status === 'waiting_for_expiry'
-                    ? recovery.eligibleAt
-                      ? `${PLAN_MAP[preview?.currentTier ?? currentTier].label} stays active until ${dateLabel(recovery.eligibleAt)}. You can purchase ${label} after it ends.`
-                      : `You can purchase ${label} after your current subscription ends. Its end date is not yet confirmed.`
-                    : recovery?.status === 'eligible'
-                      ? 'The previous subscription has ended. Review your selected plan to continue checkout.'
-                      : recovery?.status === 'checkout_pending'
-                        ? 'Your checkout is being confirmed. Please wait before making another purchase.'
-                        : recovery?.status === 'dismissed' || recovery?.status === 'superseded'
-                          ? 'This saved selection is no longer active. Close this dialog to review your available plans.'
-                          : 'Your cancellation is being confirmed. You can purchase your saved plan after your current subscription ends.'}
-                </p>
-                {message && <p>{message}</p>}
-                {recovery?.status === 'eligible' && !message && target && (
-                  <Button onClick={() => void review(target)}>Review {label}</Button>
-                )}
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Done
-                </Button>
-              </div>
-            )}
-            {step === 'error' && (
-              <div className="flex flex-col gap-4">
-                <p role="alert">{message}</p>
-                {target && (
-                  <Button onClick={() => void review(target)}>
-                    {checkoutDismissed ? 'Continue checkout' : `Retry ${label}`}
+                />
+              )}
+              {step === 'recovery' && (
+                <div className="flex flex-col gap-4" role="status">
+                  <h2 className="text-lg font-semibold">Plan saved</h2>
+                  <p>
+                    {recovery?.status === 'waiting_for_expiry'
+                      ? recovery.eligibleAt
+                        ? `${PLAN_MAP[preview?.currentTier ?? currentTier].label} stays active until ${dateLabel(recovery.eligibleAt)}. You can purchase ${label} after it ends.`
+                        : `You can purchase ${label} after your current subscription ends. Its end date is not yet confirmed.`
+                      : recovery?.status === 'eligible'
+                        ? 'The previous subscription has ended. Review your selected plan to continue checkout.'
+                        : recovery?.status === 'checkout_pending'
+                          ? 'Your checkout is being confirmed. Please wait before making another purchase.'
+                          : recovery?.status === 'dismissed' || recovery?.status === 'superseded'
+                            ? 'This saved selection is no longer active. Close this dialog to review your available plans.'
+                            : 'Your cancellation is being confirmed. You can purchase your saved plan after your current subscription ends.'}
+                  </p>
+                  {message && <p>{message}</p>}
+                  {recovery?.status === 'eligible' && !message && target && (
+                    <Button onClick={() => void review(target)}>Review {label}</Button>
+                  )}
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Done
                   </Button>
-                )}
-                {operationId.current ? (
+                </div>
+              )}
+              {step === 'error' && (
+                <div className="flex flex-col gap-4">
+                  <p role="alert">{message}</p>
+                  {target && (
+                    <Button onClick={() => void review(target)}>{`Retry ${label}`}</Button>
+                  )}
+                  {operationId.current ? (
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                      Close
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => setStep('select')}>
+                      Choose another plan
+                    </Button>
+                  )}
+                </div>
+              )}
+              {step === 'pending' && (
+                <div className="flex flex-col gap-4" role="status">
+                  <h2 className="text-lg font-semibold">Confirmation pending</h2>
+                  <p>
+                    {label} remains selected.{' '}
+                    {message ||
+                      'This change is still being confirmed. Your access will update once confirmed.'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    We’ll keep checking automatically. You can close this dialog while confirmation
+                    is pending.
+                  </p>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Close
                   </Button>
-                ) : (
-                  <Button variant="outline" onClick={() => setStep('select')}>
-                    Choose another plan
-                  </Button>
-                )}
-              </div>
-            )}
-            {step === 'pending' && (
-              <div className="flex flex-col gap-4" role="status">
-                <h2 className="text-lg font-semibold">Confirmation pending</h2>
-                <p>
-                  {label} remains selected.{' '}
-                  {message ||
-                    'This change is still being confirmed. Your access will update once confirmed.'}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  We’ll keep checking automatically. You can close this dialog while confirmation is
-                  pending.
-                </p>
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Close
-                </Button>
-              </div>
-            )}
-            {(step === 'scheduled' || step === 'activated') && target && (
-              <SuccessStep
-                targetTier={target}
-                kind={step === 'activated' ? 'activated' : 'downgrade'}
-                effectiveAt={effectiveAt}
-                onDone={() => {
-                  onOpenChange(false);
-                  onSubscriptionChange?.();
-                }}
-              />
-            )}
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+                </div>
+              )}
+              {(step === 'scheduled' || step === 'activated') && target && (
+                <SuccessStep
+                  targetTier={target}
+                  kind={step === 'activated' ? 'activated' : 'downgrade'}
+                  effectiveAt={effectiveAt}
+                  onDone={() => {
+                    onOpenChange(false);
+                    onSubscriptionChange?.();
+                  }}
+                />
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

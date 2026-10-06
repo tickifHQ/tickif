@@ -35,6 +35,18 @@ beforeEach(() => {
   mocks.verify.mockResolvedValue({ ok: true });
 });
 describe('replacement checkout', () => {
+  it('returns to the closed page when an upgrade adjustment is dismissed', async () => {
+    const result = vi.fn();
+    mocks.order.mockImplementation(async (options: Parameters<typeof openRazorpayOrder>[0]) =>
+      options.onDismiss(),
+    );
+    render(
+      <ReplacementCheckout onChange={vi.fn()} onProviderOpen={vi.fn()} onCheckoutResult={result} />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue plan change' }));
+    await waitFor(() => expect(result).toHaveBeenCalledWith('closed'));
+    expect(mocks.verify).not.toHaveBeenCalled();
+  });
   it('verifies both checkout callbacks before reporting a confirmed upgrade', async () => {
     let next = { ...checkout, mandateAuthorized: false };
     const changed = vi.fn();
