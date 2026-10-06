@@ -43,6 +43,9 @@
   --popover-foreground: oklch(0.21 0.006 286);
   --primary: oklch(0.616 0.116 170);
   --primary-foreground: oklch(0.985 0 0);
+  /* Custom portfolio colours use the stronger of these two contrast pairs. */
+  --portfolio-accent-on-light: #000000;
+  --portfolio-accent-on-dark: #ffffff;
   --secondary: oklch(0.967 0.001 286);
   --secondary-foreground: oklch(0.21 0.006 286);
   --muted: oklch(0.967 0.001 286);

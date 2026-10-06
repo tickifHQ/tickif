@@ -214,6 +214,61 @@ describe('DesignerPortfolioSettings', () => {
     vi.useRealTimers();
   });
 
+  describe('custom accent colours', () => {
+    it('keeps custom preview local, saves an applied valid colour and restores it after reload', async () => {
+      const user = userEvent.setup();
+      const view = render(<DesignerPortfolioSettings />);
+      await screen.findByLabelText('Custom accent hex');
+      await user.clear(screen.getByLabelText('Custom accent hex'));
+      await user.type(screen.getByLabelText('Custom accent hex'), '#123abc');
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+      expect(mock.updatePortfolio).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'Use colour' }));
+      mock.updatePortfolio.mockResolvedValue({ ...basePortfolio, accentColor: '#123ABC' });
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() =>
+        expect(mock.updatePortfolio).toHaveBeenCalledWith({ accentColor: '#123ABC' }),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled(),
+      );
+      view.unmount();
+      mock.fetchPortfolio.mockResolvedValue({ ...basePortfolio, accentColor: '#123ABC' });
+      await renderSettings();
+      expect(screen.getByLabelText('Custom accent hex')).toHaveValue('#123ABC');
+    });
+
+    it('discards an applied custom value and its unfinished draft without saving', async () => {
+      const user = userEvent.setup();
+      await renderSettings();
+      fireEvent.change(screen.getByLabelText('Custom accent hex'), {
+        target: { value: '#111111' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Use colour' }));
+      fireEvent.change(screen.getByLabelText('Custom accent hex'), {
+        target: { value: '#222222' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+      expect(screen.getByLabelText('Custom accent hex')).toHaveValue('#FF8F73');
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+      expect(mock.updatePortfolio).not.toHaveBeenCalled();
+    });
+
+    it('also clears an unfinished colour preview when another field is discarded', async () => {
+      const user = userEvent.setup();
+      await renderSettings();
+      fireEvent.change(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER), {
+        target: { value: 'Unsaved tagline' },
+      });
+      fireEvent.change(screen.getByLabelText('Custom accent hex'), {
+        target: { value: '#ABCDEF' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+      expect(screen.getByLabelText('Custom accent hex')).toHaveValue('#FF8F73');
+      expect(mock.updatePortfolio).not.toHaveBeenCalled();
+    });
+  });
+
   describe('prominent portfolio action', () => {
     it('opens the saved portfolio in a new tab while preserving unsaved edits', async () => {
       const slugInput = await renderSettings();
