@@ -655,7 +655,9 @@ test.describe('E-278 portfolio publication readiness', () => {
       ).toBe(true);
       await cropDialog.getByRole('button', { name: 'Save cover', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Replace portfolio cover' })).toBeVisible();
+      await page.setViewportSize({ width: 1440, height: 1000 });
       await expect(page.getByRole('link', { name: 'Open full' })).toBeVisible();
+      await page.setViewportSize({ width: 390, height: 844 });
 
       const savedCover = await page
         .getByAltText('Portfolio cover', { exact: true })
