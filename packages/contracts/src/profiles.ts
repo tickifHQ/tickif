@@ -1,7 +1,13 @@
 import { z } from 'zod';
+import { socialProfileValueSchema } from './social-links';
+
 import { designerProjectsResponseSchema } from './projects';
 import { taxonomyKindSchema } from './taxonomy';
 import { verificationEffectiveStatusSchema } from './verifications';
+
+const instagramHandleSchema = socialProfileValueSchema('instagram');
+const linkedinHandleSchema = socialProfileValueSchema('linkedin');
+const youtubeHandleSchema = socialProfileValueSchema('youtube');
 
 export const designerEntityType = z
   .enum(['individual', 'company'])
@@ -93,9 +99,9 @@ export const onboardDesignerSchema = z
     phone: z.string().trim().min(7).max(20).optional(),
     websiteUrl: z.string().url().max(200).optional(),
     googleBusinessUrl: z.string().url().max(200).optional(),
-    instagramHandle: z.string().trim().max(60).optional(),
-    linkedinHandle: z.string().trim().max(60).optional(),
-    youtubeHandle: z.string().trim().max(60).optional(),
+    instagramHandle: instagramHandleSchema.optional(),
+    linkedinHandle: linkedinHandleSchema.optional(),
+    youtubeHandle: youtubeHandleSchema.optional(),
     firmType: z.string().trim().max(60).optional(),
     foundedYear: z.number().int().min(1900).max(2100).optional(),
     staffCount: profileStaffCountSchema.optional(),
@@ -392,9 +398,9 @@ const sharedProfileFields = {
     .max(200, 'Use 200 characters or fewer.')
     .nullable()
     .optional(),
-  instagramHandle: z.string().trim().max(60, 'Use 60 characters or fewer.').nullable().optional(),
-  linkedinHandle: z.string().trim().max(60, 'Use 60 characters or fewer.').nullable().optional(),
-  youtubeHandle: z.string().trim().max(60, 'Use 60 characters or fewer.').nullable().optional(),
+  instagramHandle: instagramHandleSchema.nullable().optional(),
+  linkedinHandle: linkedinHandleSchema.nullable().optional(),
+  youtubeHandle: youtubeHandleSchema.nullable().optional(),
 };
 
 /**

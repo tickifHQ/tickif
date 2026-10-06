@@ -30,7 +30,7 @@ overrides:
   ip-address: 10.3.1
   # Typesense HTTP client: patch Axios HTTP/2, ReDoS, and prototype gadgets.
   'axios@>=1.0.0 <1.20.0': 1.20.0
-  # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
+  # sharp (GHSA-wq5f-xc86-pv6w): patch every copy, incl. next's bundled sharp.
   sharp: ^0.35.5
   # postcss sourceMappingURL file disclosure (GHSA-6g55-p6wh-862q <=8.5.11,
   # GHSA-r28c-9q8g-f849 <=8.5.17): patch every copy, via next and via tsup.

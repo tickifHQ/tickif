@@ -1143,6 +1143,24 @@ describe('DesignerPortfolioSettings', () => {
     expect(slugInput).toBeInTheDocument();
   });
 
+  it('confirms social URLs in portfolio settings and prevents saving an invalid destination', async () => {
+    await renderSettings();
+    fireEvent.click(screen.getByRole('heading', { name: 'Social links' }).closest('button')!);
+    const instagram = await screen.findByRole('textbox', { name: 'Instagram' });
+    fireEvent.change(instagram, { target: { value: '@social-studio' } });
+    expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
+      'href',
+      'https://www.instagram.com/social-studio',
+    );
+    fireEvent.change(instagram, { target: { value: 'javascript:alert(1)' } });
+    expect(instagram).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByRole('link', { name: /Open Instagram profile/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(mock.updatePortfolio).not.toHaveBeenCalled();
+    fireEvent.change(instagram, { target: { value: '' } });
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+  });
+
   it('opens every initially collapsed portfolio section with one click', async () => {
     await renderSettings();
     const sections = [
