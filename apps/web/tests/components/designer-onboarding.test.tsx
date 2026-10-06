@@ -127,9 +127,9 @@ describe('DesignerOnboarding', () => {
       );
 
       await user.click(screen.getByLabelText(/^Team size/));
-      expect(screen.getByRole('menuitem', { name: '26-50', exact: true })).toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: '50+', exact: true })).not.toBeInTheDocument();
-      await user.click(screen.getByRole('menuitem', { name: teamSize, exact: true }));
+      expect(screen.getByRole('menuitem', { name: '26-50' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: '50+' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('menuitem', { name: teamSize }));
       expect(screen.getByLabelText(/^Team size/)).toHaveTextContent(teamSize);
       await waitFor(
         () =>
@@ -138,7 +138,7 @@ describe('DesignerOnboarding', () => {
           ),
         { timeout: 4000 },
       );
-      await user.click(screen.getByRole('button', { name: 'Continue', exact: true }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       await waitFor(() =>
         expect(submit).toHaveBeenCalledWith(
           expect.objectContaining({ entityType: 'company', staffCount }),
@@ -174,10 +174,10 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByLabelText(/^Team size/)).toHaveTextContent(teamSize);
     if (teamSize === '50+') {
       await user.click(screen.getByLabelText(/^Team size/));
-      expect(screen.getByRole('menuitem', { name: '50+', exact: true })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: '50+' })).toBeInTheDocument();
       await user.keyboard('{Escape}');
     }
-    await user.click(screen.getByRole('button', { name: 'Continue', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() =>
       expect(submit).toHaveBeenCalledWith(expect.objectContaining({ staffCount })),
     );
