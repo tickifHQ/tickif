@@ -377,7 +377,7 @@ importers:
         specifier: 'catalog:'
         version: 1.3.1
       dotenv:
-        specifier: ^18.0.5
+        specifier: 'catalog:'
         version: 18.0.5
       drizzle-orm:
         specifier: 'catalog:'
@@ -667,7 +667,7 @@ importers:
         specifier: 'catalog:'
         version: 1.3.1
       dotenv:
-        specifier: ^18.0.5
+        specifier: 'catalog:'
         version: 18.0.5
       drizzle-orm:
         specifier: 'catalog:'
@@ -877,7 +877,7 @@ importers:
   packages/config:
     dependencies:
       dotenv:
-        specifier: ^18.0.5
+        specifier: 'catalog:'
         version: 18.0.5
       zod:
         specifier: 'catalog:'
@@ -960,10 +960,7 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.0
-      dotenv:
-      specifier: ^18.0.5
-      version: 18.0.5
-    drizzle-kit:
+      drizzle-kit:
         specifier: 'catalog:'
         version: 0.31.11
       eslint:
@@ -1339,7 +1336,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(vitest@4.1.11)
       dotenv:
-        specifier: ^18.0.5
+        specifier: 'catalog:'
         version: 18.0.5
       vitest:
         specifier: 'catalog:'
@@ -4000,10 +3997,7 @@ packages:
       '@tanstack/react-start': ^1.0.0
       '@tanstack/solid-start': ^1.0.0
       better-sqlite3: ^12.0.0
-      dotenv:
-      specifier: ^18.0.5
-      version: 18.0.5
-    drizzle-kit: '>=0.31.4 || >=1.0.0-beta.1'
+      drizzle-kit: '>=0.31.4 || >=1.0.0-beta.1'
       drizzle-orm: ^0.45.2 || >=1.0.0-rc.1 <2.0.0
       mongodb: ^6.0.0 || ^7.0.0
       mysql2: ^3.0.0
@@ -4029,10 +4023,7 @@ packages:
         optional: true
       better-sqlite3:
         optional: true
-      dotenv:
-      specifier: ^18.0.5
-      version: 18.0.5
-    drizzle-kit:
+      drizzle-kit:
         optional: true
       drizzle-orm:
         optional: true
@@ -8952,10 +8943,7 @@ snapshots:
     optionalDependencies:
       '@prisma/client': 5.22.0
       better-sqlite3: 12.10.0
-      dotenv:
-      specifier: ^18.0.5
-      version: 18.0.5
-    drizzle-kit: 0.31.11
+      drizzle-kit: 0.31.11
       drizzle-orm: 0.45.3(@opentelemetry/api@1.9.1)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.22.0)
       next: 16.3.7(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(@types/node@26.6.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       pg: 8.22.0
