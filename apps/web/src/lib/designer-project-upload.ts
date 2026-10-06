@@ -15,7 +15,6 @@ type DefaultRoomRefreshDraft = {
   id?: string;
   roomSlug: string;
   title: string;
-  description: string;
   designStyle: string;
   materialFinish: string;
   tags: string[];
@@ -353,7 +352,6 @@ export function shouldRefreshPristineDefaultRooms(
   const roomsArePristine = currentRooms.every(
     (room) =>
       !room.id &&
-      room.description.length === 0 &&
       room.designStyle.length === 0 &&
       room.materialFinish.length === 0 &&
       room.tags.length === 0 &&

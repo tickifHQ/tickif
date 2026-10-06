@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'project-feedback.spec.ts',
+    'project budget choices persist and room descriptions are absent from the editor',
+  ],
+  [
     'portfolio-details.spec.ts',
     'portfolio details persist from editor to public studio on desktop and mobile',
   ],

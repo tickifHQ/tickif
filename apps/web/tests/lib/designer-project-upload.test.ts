@@ -36,7 +36,6 @@ function room(
   return {
     roomSlug: 'modular-kitchen',
     title: 'Kitchen',
-    description: '',
     designStyle: '',
     materialFinish: '',
     tags: [],

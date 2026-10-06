@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  legacyProjectBudgetBands,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
   projectCompletenessResponseSchema,
@@ -135,7 +136,6 @@ type RoomDraft = {
   roomSlug: string;
   roomTypeId?: string;
   title: string;
-  description: string;
   expanded: boolean;
   designStyle: string;
   materialFinish: string;
@@ -483,7 +483,6 @@ function makeRoomDraft(seed: { roomSlug: string; title: string }, index: number)
     clientId: `room-${index}-${seed.roomSlug}`,
     roomSlug: seed.roomSlug,
     title: seed.title,
-    description: '',
     expanded: index === 0,
     designStyle: '',
     materialFinish: '',
@@ -676,7 +675,6 @@ function attachExistingProjectRoomsToDrafts(
       ...room,
       id: match.id,
       roomTypeId: match.roomTypeId,
-      description: room.description || match.description || '',
     };
   });
 }
@@ -1158,7 +1156,6 @@ type RoomCardProps = {
   finishOptions: Array<{ value: string; label: string }>;
   onToggle: () => void;
   onDelete: () => void;
-  onDescriptionChange: (value: string) => void;
   onDesignStyleChange: (value: string) => void;
   onMaterialFinishChange: (value: string) => void;
   onTagInputChange: (value: string) => void;
@@ -1181,7 +1178,6 @@ function RoomCard({
   finishOptions,
   onToggle,
   onDelete,
-  onDescriptionChange,
   onDesignStyleChange,
   onMaterialFinishChange,
   onTagInputChange,
@@ -1258,16 +1254,6 @@ function RoomCard({
         >
           <Divider />
           <div className="space-y-4 px-5 py-4">
-            <div className="space-y-1.5">
-              <Label className={cn(typography.label, 'text-foreground')}>About this room</Label>
-              <Textarea
-                value={room.description}
-                onChange={(event) => onDescriptionChange(event.target.value)}
-                placeholder="Optional"
-                className={cn('min-h-24 resize-y', typography.control)}
-              />
-            </div>
-
             <label
               onDragOver={(event) => {
                 event.preventDefault();
@@ -1631,8 +1617,15 @@ export function DesignerProjectUpload({
     [scopeTerms],
   );
   const budgetOptions = useMemo(
-    () => budgetBandTerms.map((term) => ({ value: term.slug, label: term.label })),
-    [budgetBandTerms],
+    () => {
+      const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
+      const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
+      if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
+        options.push({ value: savedRange.slug, label: savedRange.label });
+      }
+      return options;
+    },
+    [budgetBandTerms, budgetBandSlug],
   );
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),
@@ -2024,7 +2017,6 @@ export function DesignerProjectUpload({
                     roomSlug: roomSlugFromRoom(room, roomTerms),
                     roomTypeId: room.roomTypeId,
                     title: roomTitleFromRoom(room, roomTerms),
-                    description: room.description ?? '',
                     expanded: index === 0,
                     designStyle: canonicalTaxonomySlug(
                       firstAttributeLabel(room.metadata, 'theme') ||
@@ -2617,7 +2609,6 @@ export function DesignerProjectUpload({
     const roomPayload: CreateProjectRoomInput | UpdateProjectRoomInput = {
       roomTypeId,
       name: room.title,
-      description: room.description.trim() || undefined,
       sortOrder,
       metadata: mapRoomMetadata(room),
     };
@@ -3821,9 +3812,6 @@ export function DesignerProjectUpload({
                     setError('');
                     setPendingDeletion({ kind: 'room', room });
                   }}
-                  onDescriptionChange={(value) =>
-                    updateRoom(room.clientId, (current) => ({ ...current, description: value }))
-                  }
                   onDesignStyleChange={(value) =>
                     updateRoom(room.clientId, (current) => ({ ...current, designStyle: value }))
                   }

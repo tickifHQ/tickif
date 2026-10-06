@@ -294,6 +294,36 @@ describe('DesignerProjectUpload', () => {
     );
   });
 
+  it('omits the room description field when editing a project', async () => {
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    expect(screen.queryByText('About this room')).not.toBeInTheDocument();
+  });
+
+  it('preserves a saved legacy budget and leaves stored room descriptions untouched on save', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    project.budgetBandSlug = 'moderate';
+    project.rooms[0]!.description = 'Existing room description';
+    mock.projectGet.mockImplementation(async () => Response.json(project));
+    mock.projectPatch.mockImplementation(async () => Response.json(project));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    const user = userEvent.setup();
+    const { container } = render(<DesignerProjectUpload initialProjectId={project.id} />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    expect(selectWithOption(container, '₹5L - ₹15L')).toHaveValue('moderate');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(mock.roomPatch).toHaveBeenCalled());
+    expect(mock.projectPatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ budgetBandSlug: 'moderate' }),
+      }),
+    );
+    expect(mock.roomPatch.mock.calls[0]![0].json).not.toHaveProperty('description');
+  });
+
   function selectWithOption(container: HTMLElement, optionLabel: string) {
     const select = Array.from(container.querySelectorAll('select')).find((candidate) =>
       Array.from(candidate.options).some((option) => option.textContent === optionLabel),
