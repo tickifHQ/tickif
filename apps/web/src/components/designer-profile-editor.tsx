@@ -29,6 +29,10 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
+import {
+  SocialProfileConfirmation,
+  socialProfileError,
+} from '@/components/social-profile-confirmation';
 import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
 import {
   PhoneNumberInput,
@@ -708,45 +712,90 @@ export function DesignerProfileEditor({
             <Field
               htmlFor="profile-instagram"
               label="Instagram"
-              error={validationErrors.instagramHandle}
+              error={
+                socialProfileError('instagram', form.instagramHandle) ??
+                validationErrors.instagramHandle
+              }
             >
               {(aria) => (
-                <Input
-                  id="profile-instagram"
-                  value={form.instagramHandle}
-                  onChange={(event) => updateField('instagramHandle', event.target.value)}
-                  placeholder="@yourstudio"
-                  maxLength={60}
-                  {...aria}
-                />
+                <>
+                  <Input
+                    id="profile-instagram"
+                    value={form.instagramHandle}
+                    onChange={(event) => updateField('instagramHandle', event.target.value)}
+                    placeholder="@yourstudio"
+                    maxLength={60}
+                    {...aria}
+                    aria-describedby={[aria['aria-describedby'], 'profile-instagram-confirmation']
+                      .filter(Boolean)
+                      .join(' ')}
+                  />
+                  <SocialProfileConfirmation
+                    id="profile-instagram-confirmation"
+                    platform="instagram"
+                    value={form.instagramHandle}
+                    showError={false}
+                  />
+                </>
               )}
             </Field>
             <Field
               htmlFor="profile-linkedin"
               label="LinkedIn"
-              error={validationErrors.linkedinHandle}
+              error={
+                socialProfileError('linkedin', form.linkedinHandle) ??
+                validationErrors.linkedinHandle
+              }
             >
               {(aria) => (
-                <Input
-                  id="profile-linkedin"
-                  value={form.linkedinHandle}
-                  onChange={(event) => updateField('linkedinHandle', event.target.value)}
-                  placeholder="/company/yourstudio"
-                  maxLength={60}
-                  {...aria}
-                />
+                <>
+                  <Input
+                    id="profile-linkedin"
+                    value={form.linkedinHandle}
+                    onChange={(event) => updateField('linkedinHandle', event.target.value)}
+                    placeholder="/company/yourstudio"
+                    maxLength={60}
+                    {...aria}
+                    aria-describedby={[aria['aria-describedby'], 'profile-linkedin-confirmation']
+                      .filter(Boolean)
+                      .join(' ')}
+                  />
+                  <SocialProfileConfirmation
+                    id="profile-linkedin-confirmation"
+                    platform="linkedin"
+                    value={form.linkedinHandle}
+                    showError={false}
+                  />
+                </>
               )}
             </Field>
-            <Field htmlFor="profile-youtube" label="YouTube" error={validationErrors.youtubeHandle}>
+            <Field
+              htmlFor="profile-youtube"
+              label="YouTube"
+              error={
+                socialProfileError('youtube', form.youtubeHandle) ?? validationErrors.youtubeHandle
+              }
+            >
               {(aria) => (
-                <Input
-                  id="profile-youtube"
-                  value={form.youtubeHandle}
-                  onChange={(event) => updateField('youtubeHandle', event.target.value)}
-                  placeholder="@yourstudio"
-                  maxLength={60}
-                  {...aria}
-                />
+                <>
+                  <Input
+                    id="profile-youtube"
+                    value={form.youtubeHandle}
+                    onChange={(event) => updateField('youtubeHandle', event.target.value)}
+                    placeholder="@yourstudio"
+                    maxLength={60}
+                    {...aria}
+                    aria-describedby={[aria['aria-describedby'], 'profile-youtube-confirmation']
+                      .filter(Boolean)
+                      .join(' ')}
+                  />
+                  <SocialProfileConfirmation
+                    id="profile-youtube-confirmation"
+                    platform="youtube"
+                    value={form.youtubeHandle}
+                    showError={false}
+                  />
+                </>
               )}
             </Field>
           </div>

@@ -151,6 +151,50 @@ describe('DesignerProfileEditor', () => {
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile());
   });
 
+  it('confirms live social destinations and blocks invalid input before saving', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(
+      screen.getByRole('link', { name: 'Open Instagram profile (opens in a new tab)' }),
+    ).toHaveAttribute('href', 'https://www.instagram.com/mahistudio');
+    fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Instagram'), {
+      target: { value: 'javascript:alert(1)' },
+    });
+    expect(screen.queryByRole('link', { name: /Open Instagram profile/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Instagram')).toHaveAttribute('aria-invalid', 'true');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Instagram'), {
+      target: { value: 'https://instagram.com/new-studio' },
+    });
+    expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
+      'href',
+      'https://instagram.com/new-studio',
+    );
+    mock.updateDesignerProfile.mockResolvedValue(
+      ownerProfile({ instagramHandle: 'https://instagram.com/new-studio' }),
+    );
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        instagramHandle: 'https://instagram.com/new-studio',
+      }),
+    );
+    expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
+      'href',
+      'https://instagram.com/new-studio',
+    );
+  });
+
   it('saves physical office count independently of the service cities', async () => {
     const user = userEvent.setup();
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ officeCount: 2 }));

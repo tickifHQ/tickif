@@ -47,6 +47,10 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import {
+  SocialProfileConfirmation,
+  socialProfileError,
+} from '@/components/social-profile-confirmation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
 import { ExperienceCentersEditor } from '@/components/experience-centers-editor';
@@ -561,6 +565,10 @@ export function DesignerPortfolioSettings() {
       setSaveError('Saved mandatory Hero fields cannot be empty. Enter a replacement value.');
       return;
     }
+    if (hasSocialLinkErrors) {
+      setSaveError('Fix or clear the invalid social profile link before saving.');
+      return;
+    }
     const patch = computeChangedFields(form, savedForm);
     // E-278: the logo commits through its own endpoint, so a logo-only change
     // has no field patch. Reconcile the logo baseline (clearing the dirty
@@ -708,6 +716,10 @@ export function DesignerPortfolioSettings() {
 
   const requiredHeroErrors = getClearedSavedHeroFields(form, savedForm);
   const hasRequiredHeroErrors = Object.values(requiredHeroErrors).some(Boolean);
+  const hasSocialLinkErrors = (['instagram', 'linkedin', 'youtube'] as const).some((platform) => {
+    const field = `${platform}Handle` as const;
+    return form[field] !== savedForm?.[field] && !!socialProfileError(platform, form[field]);
+  });
 
   const initials = form.displayName
     ? form.displayName
@@ -1485,37 +1497,78 @@ export function DesignerPortfolioSettings() {
                       <Label className="text-sm font-medium text-muted-foreground">
                         Social links
                       </Label>
-                      <div className={socialInputWrapperClassName}>
-                        <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                          <InstagramBrandIcon className="size-4" />
-                        </span>
-                        <Input
+                      <div className="space-y-2">
+                        <div className={socialInputWrapperClassName}>
+                          <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
+                            <InstagramBrandIcon className="size-4" />
+                          </span>
+                          <Input
+                            aria-label="Instagram"
+                            maxLength={60}
+                            aria-invalid={
+                              socialProfileError('instagram', form.instagramHandle)
+                                ? true
+                                : undefined
+                            }
+                            aria-describedby="portfolio-instagram-confirmation"
+                            value={form.instagramHandle}
+                            onChange={(e) => updateField('instagramHandle', e.target.value)}
+                            placeholder="Instagram handle"
+                            className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                          />
+                        </div>
+                        <SocialProfileConfirmation
+                          id="portfolio-instagram-confirmation"
+                          platform="instagram"
                           value={form.instagramHandle}
-                          onChange={(e) => updateField('instagramHandle', e.target.value)}
-                          placeholder="Instagram handle"
-                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
-                      <div className={socialInputWrapperClassName}>
-                        <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                          <LinkedInBrandIcon className="size-4" />
-                        </span>
-                        <Input
+                      <div className="space-y-2">
+                        <div className={socialInputWrapperClassName}>
+                          <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
+                            <LinkedInBrandIcon className="size-4" />
+                          </span>
+                          <Input
+                            aria-label="LinkedIn"
+                            maxLength={60}
+                            aria-invalid={
+                              socialProfileError('linkedin', form.linkedinHandle) ? true : undefined
+                            }
+                            aria-describedby="portfolio-linkedin-confirmation"
+                            value={form.linkedinHandle}
+                            onChange={(e) => updateField('linkedinHandle', e.target.value)}
+                            placeholder="Linkedin handle..."
+                            className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                          />
+                        </div>
+                        <SocialProfileConfirmation
+                          id="portfolio-linkedin-confirmation"
+                          platform="linkedin"
                           value={form.linkedinHandle}
-                          onChange={(e) => updateField('linkedinHandle', e.target.value)}
-                          placeholder="Linkedin handle..."
-                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
-                      <div className={socialInputWrapperClassName}>
-                        <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                          <YouTubeBrandIcon className="size-4" />
-                        </span>
-                        <Input
+                      <div className="space-y-2">
+                        <div className={socialInputWrapperClassName}>
+                          <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
+                            <YouTubeBrandIcon className="size-4" />
+                          </span>
+                          <Input
+                            aria-label="YouTube"
+                            maxLength={60}
+                            aria-invalid={
+                              socialProfileError('youtube', form.youtubeHandle) ? true : undefined
+                            }
+                            aria-describedby="portfolio-youtube-confirmation"
+                            value={form.youtubeHandle}
+                            onChange={(e) => updateField('youtubeHandle', e.target.value)}
+                            placeholder="YouTube handle..."
+                            className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                          />
+                        </div>
+                        <SocialProfileConfirmation
+                          id="portfolio-youtube-confirmation"
+                          platform="youtube"
                           value={form.youtubeHandle}
-                          onChange={(e) => updateField('youtubeHandle', e.target.value)}
-                          placeholder="YouTube handle..."
-                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
                     </div>
@@ -1750,7 +1803,7 @@ export function DesignerPortfolioSettings() {
         <Button
           className="gap-1.5"
           onClick={handleSave}
-          disabled={!isDirty || isSaving || hasRequiredHeroErrors}
+          disabled={!isDirty || isSaving || hasRequiredHeroErrors || hasSocialLinkErrors}
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
           Save changes

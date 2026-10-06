@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'social-links.spec.ts',
+    'social profile confirmations match saved public links on desktop and mobile',
+  ],
+  [
     'portfolio-details.spec.ts',
     'portfolio details persist from editor to public studio on desktop and mobile',
   ],
