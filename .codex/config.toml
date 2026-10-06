@@ -1,0 +1,3 @@
+# ReUI MCP for this repository. Authenticate with `codex mcp login reui`.
+[mcp_servers.reui]
+url = "https://mcp.reui.io"
