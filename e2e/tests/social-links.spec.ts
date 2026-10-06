@@ -117,6 +117,28 @@ test('social profile confirmations match saved public links on desktop and mobil
       path: testInfo.outputPath('social-profile-desktop.png'),
       animations: 'disabled',
     });
+    await page.goto('/designer/portfolio');
+    await page.getByRole('heading', { name: 'Social links', exact: true }).click();
+    for (const [platform, href] of Object.entries(destinations)) {
+      await expect(
+        page.getByRole('link', { name: `Open ${platform} profile (opens in a new tab)` }),
+      ).toHaveAttribute('href', href);
+    }
+    await page.getByRole('textbox', { name: 'Instagram', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: testInfo.outputPath('social-portfolio-settings-desktop.png'),
+      animations: 'disabled',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('textbox', { name: 'Instagram', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: testInfo.outputPath('social-portfolio-settings-mobile.png'),
+      animations: 'disabled',
+    });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.setViewportSize({ width: 1440, height: 1000 });
     const persisted = await context.request.get(`${apiUrl}/api/portfolios/${slug}`);
     expect(persisted.status()).toBe(200);
     expect(await persisted.json()).toMatchObject({
