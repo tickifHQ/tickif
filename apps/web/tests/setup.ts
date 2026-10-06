@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+
+// Next replaces this boundary marker during compilation; Vitest does not.
+vi.mock('server-only', () => ({}));
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();

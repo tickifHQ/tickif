@@ -3,11 +3,12 @@ import { defineConfig } from 'tsup';
 // Inline workspace (@repo/*) packages; keep npm deps (bullmq, dotenv) external
 // so they resolve from node_modules at runtime. See apps/api/tsup.config.ts.
 export default defineConfig({
-  entry: ['src/index.ts', 'src/identify-image.ts'],
+  entry: ['src/index.ts', 'src/telemetry.ts', 'src/identify-image.ts'],
   format: ['esm'],
   platform: 'node',
   target: 'node22',
   bundle: true,
+  splitting: true,
   noExternal: [/^@repo\//],
   clean: true,
   sourcemap: true,

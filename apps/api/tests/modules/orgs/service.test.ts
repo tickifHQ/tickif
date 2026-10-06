@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { log } from '../../../src/lib/logger.js';
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
@@ -612,7 +613,7 @@ describe('orgsService', () => {
       });
       if (failure === 'rendering') mocks.renderFailures = ['ownership-requested'];
       else mocks.sendEmail.mockRejectedValue(new Error('provider unavailable'));
-      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const errorLog = vi.spyOn(log, 'error').mockImplementation(() => undefined);
 
       await expect(
         orgsService.createOwnershipTransfer({
@@ -623,7 +624,7 @@ describe('orgsService', () => {
         }),
       ).resolves.toMatchObject({ id: request.id, status: 'pending' });
       expect(errorLog).toHaveBeenCalledWith(
-        '[organizations] Ownership transfer email delivery failed',
+        { event: 'organization.ownership_transfer.email.failed' },
       );
       errorLog.mockRestore();
     },
@@ -676,7 +677,7 @@ describe('orgsService', () => {
             : failure === 'new-render'
               ? ['ownership-new']
               : ['ownership-previous', 'ownership-new'];
-      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const errorLog = vi.spyOn(log, 'error').mockImplementation(() => undefined);
 
       await expect(
         orgsService.resolveOwnershipTransfer({

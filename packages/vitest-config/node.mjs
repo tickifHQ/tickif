@@ -38,6 +38,10 @@ export function nodePreset(overrides = {}) {
 export function testEnv() {
   return {
     NODE_ENV: 'test',
+    // Local env files must never cause test runners to export real telemetry.
+    TELEMETRY_ENABLED: 'false',
+    TELEMETRY_BROWSER_INGEST_ENABLED: 'false',
+    TELEMETRY_QUEUE_METRICS_ENABLED: 'false',
     BETTER_AUTH_SECRET: 'tickif-test-only-auth-secret-0000000000000000',
     BETTER_AUTH_URL: 'http://localhost:3000',
     // dotenv preserves existing values, including empty strings. Clear both

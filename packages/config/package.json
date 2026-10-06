@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./framework-runtime": {
+      "types": "./src/framework-runtime.ts",
+      "default": "./src/framework-runtime.ts"
+    },
+    "./telemetry": {
+      "types": "./src/telemetry.ts",
+      "default": "./src/telemetry.ts"
+    },
     "./features": {
       "types": "./src/features.ts",
       "default": "./src/features.ts"

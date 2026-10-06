@@ -30,5 +30,6 @@ export * from './health';
 export * from './admin-activity';
 export * from './blog';
 export * from './billing-selection';
+export * from './telemetry';
 
 export { resolveProfileExperience } from './profile-experience';

@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   outputFileTracingIncludes: { '/blog/**': ['./content/blog/**/*.md'] },
   // Transpile workspace packages consumed directly as TS source.
-  transpilePackages: ['@repo/contracts', '@repo/ui'],
+  transpilePackages: ['@repo/contracts', '@repo/ui', '@repo/logger', '@repo/config', '@repo/telemetry'],
   images: {
     formats: ['image/avif', 'image/webp'],
   },

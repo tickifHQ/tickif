@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useReportBoundaryError } from '@/lib/use-report-boundary-error';
 import './globals.css';
 
 /** Last-resort boundary for failures in the root layout or root error boundary. */
@@ -11,10 +11,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    // Keep the same observability fallback as the segment-level error boundary.
-    console.error(error);
-  }, [error]);
+  useReportBoundaryError(error, 'global.boundary');
 
   return (
     <html lang="en">

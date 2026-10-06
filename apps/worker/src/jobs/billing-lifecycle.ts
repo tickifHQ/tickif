@@ -1,4 +1,5 @@
 import { config } from '@repo/config';
+import { logger } from '../observability/logger.js';
 import { sweepOrgExpirations } from '@repo/db';
 import {
   findGraceExpired,
@@ -31,6 +32,8 @@ export type BillingLifecycleSweepResult = {
   organizationRetentionFailures: number;
   recoveryReconciled: number;
   recoveryFailures: number;
+  replacementFailures: number;
+  refundFailures: number;
 };
 
 /**
@@ -59,12 +62,18 @@ export async function processBillingLifecycleSweep(
   let graceFailures = 0;
   let downgradeFailures = 0;
   let orgExpiryFailures = 0;
+  let replacementFailures = 0;
+  let refundFailures = 0;
 
   for (const candidate of await replacementRepository.candidates()) {
     try {
       await reconcileReplacement(candidate.organizationId, now);
     } catch {
-      console.error('[worker] replacement billing reconciliation failed');
+      replacementFailures += 1;
+      logger.error(
+        { event: 'billing.replacement_reconciliation_failed' },
+        'Replacement billing reconciliation failed',
+      );
     } finally {
       // Rotate pending and failing rows too, so one batch cannot starve later schedules.
       await replacementRepository.update(candidate.id, {});
@@ -76,7 +85,11 @@ export async function processBillingLifecycleSweep(
     try {
       await refundAbandonedReplacement(candidate);
     } catch {
-      console.error('[worker] abandoned plan-change payment reconciliation failed');
+      refundFailures += 1;
+      logger.error(
+        { event: 'billing.abandoned_payment_reconciliation_failed' },
+        'Abandoned plan-change payment reconciliation failed',
+      );
     } finally {
       await replacementRepository.update(candidate.id, {});
     }
@@ -94,7 +107,10 @@ export async function processBillingLifecycleSweep(
       }
     } catch (error) {
       graceFailures += 1;
-      console.error(`[worker] grace→locked failed for subscription ${candidate.id}:`, error);
+      logger.error(
+        { event: 'billing.grace_to_locked_failed', subscription_id: candidate.id, err: error },
+        'Billing grace to locked transition failed',
+      );
     }
   }
 
@@ -108,7 +124,10 @@ export async function processBillingLifecycleSweep(
       }
     } catch (error) {
       downgradeFailures += 1;
-      console.error(`[worker] locked→downgraded failed for subscription ${candidate.id}:`, error);
+      logger.error(
+        { event: 'billing.locked_to_downgraded_failed', subscription_id: candidate.id, err: error },
+        'Billing locked to downgraded transition failed',
+      );
     }
   }
 
@@ -124,7 +143,10 @@ export async function processBillingLifecycleSweep(
     transfersExpired = expired.transfers;
   } catch (error) {
     orgExpiryFailures += 1;
-    console.error('[worker] org-expiration sweep failed:', error);
+    logger.error(
+      { event: 'organization.expiration_sweep_failed', err: error },
+      'Organization expiration sweep failed',
+    );
   }
 
   let retention = { archived: 0, purged: 0, failed: 0 };
@@ -132,7 +154,10 @@ export async function processBillingLifecycleSweep(
     retention = await processOrganizationRetentionSweep(now);
   } catch (error) {
     retention.failed += 1;
-    console.error('[worker] organization-retention sweep failed:', error);
+    logger.error(
+      { event: 'organization.retention_sweep_failed', err: error },
+      'Organization retention sweep failed',
+    );
   }
 
   let recovery = { reconciled: 0, failed: 0 };
@@ -140,7 +165,7 @@ export async function processBillingLifecycleSweep(
     recovery = await processBillingRecoverySweep(now);
   } catch {
     recovery.failed += 1;
-    console.error('[worker] billing recovery sweep failed');
+    logger.error({ event: 'billing.recovery_sweep_failed' }, 'Billing recovery sweep failed');
   }
 
   return {
@@ -156,5 +181,7 @@ export async function processBillingLifecycleSweep(
     organizationRetentionFailures: retention.failed,
     recoveryReconciled: recovery.reconciled,
     recoveryFailures: recovery.failed,
+    replacementFailures,
+    refundFailures,
   };
 }
