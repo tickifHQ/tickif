@@ -96,7 +96,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     await expect(preview).toHaveCSS('--primary', '#123ABC');
     await expect(save).toBeDisabled();
     await preview.scrollIntoViewIfNeeded();
-    await page.screenshot({
+    await preview.locator('..').screenshot({
       path: testInfo.outputPath('custom-accent-preview-desktop.png'),
       animations: 'disabled',
     });
@@ -113,6 +113,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     await expect(page.locator('main')).toHaveCSS('--primary', '#123ABC');
     await page.screenshot({
       path: testInfo.outputPath('custom-accent-public-desktop.png'),
+      fullPage: true,
       animations: 'disabled',
     });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -127,7 +128,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    await page.screenshot({
+    await preview.locator('..').screenshot({
       path: testInfo.outputPath('custom-accent-preview-mobile.png'),
       animations: 'disabled',
     });
@@ -140,6 +141,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     await expect(page.locator('main')).toHaveCSS('--primary', '#123ABC');
     await page.screenshot({
       path: testInfo.outputPath('custom-accent-public-mobile.png'),
+      fullPage: true,
       animations: 'disabled',
     });
     for (const [hex, foreground] of [
