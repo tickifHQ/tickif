@@ -220,6 +220,15 @@ Desired replicas use `DESIRED_API_REPLICAS`, `DESIRED_WEB_REPLICAS`, and `DESIRE
 
 ## Routing, health, and inspection
 
+### SigNoz observability
+
+Follow [the observability runbook](./observability.md) to provision the separate
+`tickif-observability` collector stack. Application telemetry defaults off;
+the app release creates a private encrypted `tickif_telemetry` overlay but never
+deploys/stops the collector. The mounted ingestion key belongs exclusively to
+the collector. Finite app/probe maintenance suppression is required during the
+intentional release/restore window; keep host/disk/collector alerts active.
+
 Traefik 3.7 uses the Swarm provider through a private, manager-pinned,
 least-privilege socket proxy. Traefik never mounts `docker.sock`. Discovery is
 opt-in (`exposedByDefault=false`), the dashboard/API are disabled, and its ping

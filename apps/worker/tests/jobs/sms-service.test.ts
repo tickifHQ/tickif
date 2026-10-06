@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SmsService } from '../../src/jobs/sms-service.js';
 import {
   ConsoleSmsSender,
@@ -18,6 +18,37 @@ const novuSuccess = () =>
     }),
     { status: 201 },
   );
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+describe('local console delivery privacy', () => {
+  it('keeps local OTP output available with telemetry disabled', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await new ConsoleSmsSender().send('919876543210', '123456');
+      expect(output).toHaveBeenCalledWith('[sms] OTP for 919876543210: 123456');
+    } finally {
+      output.mockRestore();
+    }
+  });
+
+  it('refuses OTP console output when telemetry export is enabled', async () => {
+    vi.stubEnv('TELEMETRY_ENABLED', 'true');
+    vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://127.0.0.1:4318');
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await expect(new ConsoleSmsSender().send('919876543210', '123456')).rejects.toThrow(
+        'telemetry disabled',
+      );
+      expect(output).not.toHaveBeenCalled();
+    } finally {
+      output.mockRestore();
+    }
+  });
+});
 
 describe('SmsService', () => {
   it('sends the OTP through its injected sender', async () => {
@@ -72,9 +103,9 @@ describe('SmsService', () => {
 
 describe('selectSmsSender', () => {
   it('uses the console sender for provider=console in dev', () => {
-    expect(selectSmsSender({ provider: 'console', novuApiUrl, isProduction: false })).toBeInstanceOf(
-      ConsoleSmsSender,
-    );
+    expect(
+      selectSmsSender({ provider: 'console', novuApiUrl, isProduction: false }),
+    ).toBeInstanceOf(ConsoleSmsSender);
   });
 
   it('fails closed for provider=console in production', () => {
@@ -130,6 +161,20 @@ describe('selectSmsSender', () => {
 });
 
 describe('NovuSmsSender', () => {
+  it('does not copy provider response bodies or network diagnostics into thrown errors', async () => {
+    const sender = new NovuSmsSender('novu-secret', 'phone-otp', novuApiUrl);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('OTP=123456 phone=919876543210', { status: 403 })),
+    );
+    await expect(sender.send('919876543210', '123456')).rejects.toThrow(
+      /^Novu SMS trigger failed with status 403$/,
+    );
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ApiKey novu-secret OTP=123456')));
+    await expect(sender.send('919876543210', '123456')).rejects.toThrow(
+      /^Novu SMS trigger failed$/,
+    );
+  });
   it('triggers the configured Novu workflow with the subscriber phone and code payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue(novuSuccess());
     vi.stubGlobal('fetch', fetchMock);
@@ -175,12 +220,7 @@ describe('NovuSmsSender', () => {
     const fetchMock = vi.fn().mockResolvedValue(novuSuccess());
     vi.stubGlobal('fetch', fetchMock);
 
-    const sender = new NovuSmsSender(
-      'novu-secret',
-      'phone-otp',
-      novuApiUrl,
-      'booking-requested',
-    );
+    const sender = new NovuSmsSender('novu-secret', 'phone-otp', novuApiUrl, 'booking-requested');
     await sender.sendBookingRequested('919876543210', 'booking-123', 'Aarav Shah');
 
     const [url, init] = fetchMock.mock.calls[0]!;
@@ -219,7 +259,7 @@ describe('NovuSmsSender', () => {
     const sender = new NovuSmsSender('novu-secret', 'phone-otp', novuApiUrl);
 
     await expect(sender.send('919876543210', '123456')).rejects.toThrow(
-      'Novu SMS trigger was not processed: trigger_not_active',
+      'Novu SMS trigger was not processed',
     );
   });
 

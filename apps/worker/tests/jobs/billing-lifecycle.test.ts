@@ -110,6 +110,8 @@ describe('processBillingLifecycleSweep failure reporting', () => {
       organizationRetentionFailures: 1,
       recoveryReconciled: 0,
       recoveryFailures: 0,
+      replacementFailures: 0,
+      refundFailures: 0,
     });
     expect(repository.transitionGraceToLocked).toHaveBeenCalledTimes(2);
     expect(repository.transitionLockedToDowngraded).toHaveBeenCalledTimes(2);

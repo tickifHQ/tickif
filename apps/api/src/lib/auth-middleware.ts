@@ -47,6 +47,12 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  * callers. Each of those refreshes the session at most once per request.
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
+  // Anonymous error reporting must survive unavailable session/auth storage.
+  // Only the bounded telemetry sink bypasses session resolution.
+  if (c.req.path === '/api/telemetry/logs') {
+    await next();
+    return;
+  }
   const result = await getSession(c.req.raw.headers);
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);

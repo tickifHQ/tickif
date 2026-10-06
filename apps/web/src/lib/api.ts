@@ -1,6 +1,7 @@
 import { hc } from 'hono/client';
 import type { AppType } from '@repo/api';
 import { env } from '@/env';
+import { apiFetch } from '@/lib/api-fetch';
 
 /**
  * Type-safe API client. `AppType` is imported type-only from the Hono app, so
@@ -8,6 +9,5 @@ import { env } from '@/env';
  * the real route definitions at compile time (no codegen step).
  */
 export const api = hc<AppType>(env.NEXT_PUBLIC_API_URL, {
-  fetch: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
-    fetch(input, { ...init, credentials: 'include' }),
+  fetch: apiFetch,
 });

@@ -1,6 +1,7 @@
 import { config } from '@repo/config';
 import { fetchPlaceDetails, GooglePlacesError } from '@repo/google-places';
-import { enqueueGoogleReviewsRefresh } from '@repo/queue';
+import { enqueueGoogleReviewsRefresh, QUEUES, JOBS } from '@repo/queue';
+import { recordDomainRejection } from '../observability/processor.js';
 import {
   findDueForRefresh,
   getPlaceId,
@@ -32,6 +33,11 @@ export async function processGoogleReviewRefresh(profileId: string): Promise<voi
     if (err instanceof GooglePlacesError) {
       await persistError(profileId, err.message);
       if (err.code === 'network' || err.code === 'rate_limited') throw err;
+      recordDomainRejection(
+        QUEUES.googleReviews,
+        JOBS.refreshGoogleReviews,
+        'google_reviews_rejected',
+      );
       return;
     }
     throw err;

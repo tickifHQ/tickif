@@ -8,6 +8,7 @@ import {
   listPendingSearchProjectionEvents,
   type SearchProjectionOutboxRecord,
 } from './outbox-repository.js';
+import { logger } from '../observability/logger.js';
 
 const DISPATCH_BATCH_SIZE = 100;
 
@@ -65,7 +66,14 @@ export async function dispatchSearchProjectionOutbox(): Promise<{
       enqueued += 1;
     } catch (error) {
       failed += 1;
-      console.error(`[worker] search outbox ${event.sequence} dispatch failed:`, error);
+      logger.error(
+        {
+          event: 'search.outbox_dispatch_failed',
+          outbox_sequence: event.sequence.toString(),
+          err: error,
+        },
+        'Search outbox dispatch failed',
+      );
     }
   }
 

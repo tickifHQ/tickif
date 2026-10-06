@@ -1,3 +1,4 @@
+import { log } from '../../../src/lib/logger.js';
 /**
  * Integration tests for GET /api/discovery/feed endpoint (E-267).
  *
@@ -190,7 +191,7 @@ function makeTypesenseHit(
 function findFallbackLogCall(spy: ReturnType<typeof vi.spyOn>): unknown[] | undefined {
   return spy.mock.calls.find((call: unknown[]) => {
     try {
-      const parsed = JSON.parse(call[0] as string);
+      const parsed = (call[0] as Record<string, unknown>);
       return parsed.type === 'discovery.fallback';
     } catch {
       return false;
@@ -203,15 +204,15 @@ function findFallbackLogCall(spy: ReturnType<typeof vi.spyOn>): unknown[] | unde
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/discovery/feed - Integration Tests', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = vi.spyOn(log, 'info').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
+    logSpy.mockRestore();
     vi.unstubAllEnvs();
   });
 
@@ -546,11 +547,11 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
       await getFeed();
 
-      expect(consoleLogSpy).toHaveBeenCalled();
-      const logCall = findFallbackLogCall(consoleLogSpy);
+      expect(logSpy).toHaveBeenCalled();
+      const logCall = findFallbackLogCall(logSpy);
 
       expect(logCall).toBeDefined();
-      const logEvent = JSON.parse(logCall![0] as string);
+      const logEvent = (logCall![0] as Record<string, unknown>);
       expect(logEvent).toMatchObject({
         type: 'discovery.fallback',
         reason: 'Test error reason',
@@ -597,10 +598,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
       await getFeed();
 
-      const logCall = findFallbackLogCall(consoleLogSpy);
+      const logCall = findFallbackLogCall(logSpy);
 
       expect(logCall).toBeDefined();
-      const logEvent = JSON.parse(logCall![0] as string);
+      const logEvent = (logCall![0] as Record<string, unknown>);
       expect(logEvent.reason).toBe('unconfigured');
       // This should NOT be logged as an error - just informational
     });

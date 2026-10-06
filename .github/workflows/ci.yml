@@ -98,6 +98,11 @@ jobs:
       R2_SECRET_ACCESS_KEY: minioadmin
       R2_BUCKET: test-bucket
       TURBO_TELEMETRY_DISABLED: '1'
+      TELEMETRY_ENABLED: 'false'
+      TELEMETRY_BROWSER_INGEST_ENABLED: 'false'
+      TELEMETRY_QUEUE_METRICS_ENABLED: 'false'
+      NEXT_PUBLIC_TELEMETRY_ENABLED: 'false'
+      NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
 
     services:
       postgres:
@@ -208,6 +213,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify compiled API telemetry on Node 22
+        run: pnpm --filter @repo/api test:telemetry
+
+      - name: Verify compiled worker telemetry on Node 22
+        run: pnpm --filter @repo/worker telemetry:smoke
+
       # Migration gating (blueprint §9): migrate the empty `tickif` DB, then
       # regenerate SQL from the schema and fail if the committed migrations drift
       # from the schema.
@@ -278,6 +289,8 @@ jobs:
             NEXT_PUBLIC_API_URL=https://${{ vars.STAGING_HOST }}
             NEXT_PUBLIC_WEB_URL=https://${{ vars.STAGING_HOST }}
             NEXT_PUBLIC_SCROLL_GATE_LIMIT=${{ vars.STAGING_SCROLL_GATE_LIMIT || '5' }}
+            NEXT_PUBLIC_TELEMETRY_ENABLED=${{ vars.STAGING_TELEMETRY_ENABLED || 'false' }}
+            NEXT_PUBLIC_APP_VERSION=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
           provenance: mode=max

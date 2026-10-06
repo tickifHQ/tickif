@@ -3,6 +3,7 @@ import { sendEmail } from '@repo/auth/email';
 import { config } from '@repo/config';
 import { VERIFICATION_NOTIFICATION_EVENT } from '@repo/contracts';
 import { enqueueVerificationEmail } from '@repo/queue';
+import { logger } from '../observability/logger.js';
 import {
   findPendingVerificationNotifications,
   findVerificationNotification,
@@ -42,7 +43,14 @@ export async function processVerificationNotificationSweep(): Promise<{
       enqueued += 1;
     } catch (error) {
       failed += 1;
-      console.error(`[worker] verification notification ${notification.id} enqueue failed:`, error);
+      logger.error(
+        {
+          event: 'verification_notification.enqueue_failed',
+          outbox_id: notification.id,
+          err: error,
+        },
+        'Verification notification enqueue failed',
+      );
     }
   }
   return { enqueued, failed, exhausted };
