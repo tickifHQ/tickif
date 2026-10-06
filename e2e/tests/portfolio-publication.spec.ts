@@ -731,6 +731,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       }));
       expect(dimensions.width).toBeLessThanOrEqual(1920);
       expect(dimensions.width / dimensions.height).toBeCloseTo(16 / 9, 2);
+      await page.setViewportSize({ width: 1440, height: 1000 });
 
       for (const surface of [
         {
