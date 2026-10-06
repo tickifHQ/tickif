@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { PLATFORM_ROLE } from '@repo/contracts';
+import { ACCOUNT_STATUS, PLATFORM_ROLE, accountStatusSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { requireAuth, rolePassesCheck } from '@/lib/auth-guard';
@@ -22,7 +22,10 @@ export default async function DeferredDesignerOnboardingPage() {
       session.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
     );
   }
-  if (role !== PLATFORM_ROLE.VISITOR && role !== null) {
+  // Fresh signups retain the visitor role until designer setup completes.
+  // Established visitors must never be prompted to create a designer profile.
+  const status = accountStatusSchema.safeParse(session.user.status);
+  if (role !== PLATFORM_ROLE.VISITOR || !status.success || status.data !== ACCOUNT_STATUS.PENDING) {
     redirect('/unauthorized');
   }
 
