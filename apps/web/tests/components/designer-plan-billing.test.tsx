@@ -175,7 +175,9 @@ describe('DesignerPlanBilling', () => {
         billing={makeBilling({ tier: 'hobby', billing: null })}
       />,
     );
-    await screen.findByText('Checkout in progress');
+    await screen.findByText('Corporate checkout is awaiting completion.');
+    expect(screen.queryByText('Checkout in progress')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Billing status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /refresh|check status/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Continue checkout' }));
     const dialog = screen.getByRole('dialog');
@@ -197,10 +199,68 @@ describe('DesignerPlanBilling', () => {
     await act(async () => {
       finish?.(Response.json(snapshot()));
     });
-    await waitFor(() => expect(screen.queryByText('Checkout in progress')).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Corporate checkout is awaiting completion.'),
+      ).not.toBeInTheDocument(),
+    );
     expect(screen.getByRole('heading', { name: 'Corporate', level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Corporate is your current plan' })).toBeDisabled();
+    expect(screen.queryByRole('table', { name: 'Compare plan features' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBe(dialog);
+  });
+
+  it('links an authenticated checkout to its confirmation page within the current-plan card', async () => {
+    apiMocks.selection.mockResolvedValue(
+      Response.json({
+        organizationId: 'org',
+        currentTier: 'hobby',
+        sourceSubscriptionId: 'sub_pending',
+        providerState: 'known',
+        unfinishedCheckout: {
+          targetTier: 'professional_plus',
+          status: 'authenticated',
+          razorpaySubscriptionId: 'sub_pending',
+        },
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: [],
+      }),
+    );
+    render(<DesignerPlanBilling billing={makeBilling({ tier: 'hobby', billing: null })} />);
+    expect(await screen.findByRole('link', { name: 'View checkout status' })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing/subscribe/complete?plan=professional_plus',
+    );
+    expect(screen.queryByRole('button', { name: 'Continue checkout' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Billing status' })).not.toBeInTheDocument();
+  });
+
+  it('resumes the unpaid replacement order from the current-plan card', async () => {
+    apiMocks.selection.mockResolvedValue(
+      Response.json({
+        organizationId: 'org',
+        currentTier: 'professional_plus',
+        sourceSubscriptionId: 'sub_source',
+        providerState: 'known',
+        unfinishedCheckout: null,
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: [
+          {
+            targetTier: 'corporate',
+            action: 'change_plan',
+            reason: 'replacement_pending',
+            effectiveAt: '2026-11-06T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    render(<DesignerPlanBilling billing={makeBilling()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue checkout' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
+    expect(screen.getByText('Corporate checkout is awaiting completion.')).toBeInTheDocument();
   });
 
   describe('active state', () => {
@@ -286,14 +346,17 @@ describe('DesignerPlanBilling', () => {
       expect(screen.getByText('Billing Summary')).toBeInTheDocument();
     });
 
-    it('opens the subscribe dialog from the visible Corporate action', async () => {
-      const user = userEvent.setup();
+    it('links Manage Subscription to the dedicated pricing page without duplicating comparison', async () => {
       render(<DesignerPlanBilling billing={makeBilling({ tier: 'hobby', billing: null })} />);
-      await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Upgrade to Corporate' })).toBeEnabled(),
+      expect(await screen.findByRole('link', { name: 'Manage Subscription' })).toHaveAttribute(
+        'href',
+        '/designer/plan-billing/subscribe',
       );
-      await user.click(screen.getByRole('button', { name: 'Upgrade to Corporate' }));
-      expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
+      expect(screen.queryByRole('region', { name: 'Choose your plan' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('table', { name: 'Compare plan features' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 

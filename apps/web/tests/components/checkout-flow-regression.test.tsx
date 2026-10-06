@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { openRazorpayCheckout } from '../../src/lib/razorpay-checkout';
 import {
   resolveEntitlements,
   type BillingChangePreview,
@@ -13,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   change: vi.fn(),
   cancel: vi.fn(),
   checkout: vi.fn(),
+  replace: vi.fn(),
+  verify: vi.fn(),
   getRecovery: vi.fn(),
   saveRecovery: vi.fn(),
   refresh: vi.fn(),
@@ -23,6 +26,7 @@ const mocks = vi.hoisted(() => ({
       (refresh: () => Promise<void>, options: { enabled?: boolean; urgent?: boolean }) => void
     >(),
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace }) }));
 vi.mock('@/components/subscribe/use-billing-auto-refresh', () => ({
   useBillingAutoRefresh: mocks.autoSync,
 }));
@@ -32,6 +36,7 @@ vi.mock('@/lib/api', () => ({
       billing: {
         'change-preview': { $post: mocks.preview },
         subscribe: { $post: mocks.subscribe },
+        'verify-payment': { $post: mocks.verify },
         'change-plan': { $post: mocks.change },
         cancel: { $post: mocks.cancel },
         recovery: { $get: mocks.getRecovery, $post: mocks.saveRecovery },
@@ -394,20 +399,52 @@ describe('billing preview checkout regressions', () => {
     );
     render(<CheckoutFlow {...base} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
-    expect(await screen.findByRole('button', { name: 'Continue checkout' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Choose another plan' })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith(
+        '/designer/plan-billing/subscribe/closed?plan=corporate',
+      ),
+    );
     expect(mocks.subscribe).toHaveBeenCalledWith({
       json: expect.objectContaining({ targetTier: 'corporate', previewToken: 'signed-preview' }),
     });
     expect(mocks.cancel).not.toHaveBeenCalled();
-    expect(mocks.autoSync.mock.lastCall?.[1].enabled).toBe(true);
-    mocks.subscription.mockResolvedValue(Response.json(currentSubscription('corporate')));
-    mocks.context.mockResolvedValue(Response.json(context('corporate')));
-    await act(async () => {
-      await mocks.autoSync.mock.lastCall?.[0]();
-    });
-    expect(await screen.findByRole('heading', { name: 'Plan activated' })).toBeInTheDocument();
     expect(mocks.preview).toHaveBeenCalledTimes(1);
+    expect(mocks.subscribe).toHaveBeenCalledTimes(1);
+  });
+  it('shows a blocking loader during checkout and routes to confirmation even if verification is delayed', async () => {
+    mocks.subscribe.mockResolvedValue(
+      Response.json({
+        razorpayKeyId: 'test',
+        razorpaySubscriptionId: 'sub_corporate',
+        shortUrl: null,
+        prefill: { name: null, email: null, contact: null },
+        operationId: 'b8f77fda-7c77-4f7e-94ec-6efc8f6dc143',
+        outcome: 'processing',
+        targetTier: 'corporate',
+        effectiveAt: null,
+      }),
+    );
+    mocks.checkout.mockResolvedValue(undefined);
+    mocks.verify.mockResolvedValue(new Response(null, { status: 503 }));
+    render(<CheckoutFlow {...base} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
+    expect(await screen.findByRole('status', { name: 'Secure checkout' })).toHaveTextContent(
+      'Complete your payment in Razorpay',
+    );
+    expect(mocks.replace).not.toHaveBeenCalled();
+    const options = mocks.checkout.mock.lastCall?.[0] as Parameters<typeof openRazorpayCheckout>[0];
+    await act(async () => {
+      await options.onSuccess({
+        razorpay_subscription_id: 'sub_corporate',
+        razorpay_payment_id: 'pay_test',
+        razorpay_signature: 'signature',
+      });
+    });
+    expect(mocks.verify).toHaveBeenCalledTimes(1);
+    expect(mocks.replace).toHaveBeenCalledWith(
+      '/designer/plan-billing/subscribe/complete?plan=corporate',
+    );
+    expect(screen.queryByRole('heading', { name: 'Plan activated' })).not.toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
   });
   it('ignores a stale preview completing after organization change', async () => {

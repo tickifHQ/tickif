@@ -142,7 +142,7 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
     });
     await page.goto('/designer/plan-billing');
     await expect(page.getByRole('heading', { name: 'Plan & Billing' })).toBeVisible();
-    await expect(page.getByText(providerId, { exact: true })).toBeVisible();
+    await expect(page.getByText(providerId, { exact: true })).toHaveCount(0);
     await expect(page.getByText(`pay_smoke_${org.id}`, { exact: true })).toBeVisible();
     await expect(page.getByText('₹7,999.00', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Update Payment Method', exact: true }).first().click();
@@ -152,18 +152,7 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
     await page.screenshot({ path: testInfo.outputPath('billing-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     const copyButton = page.getByRole('button', { name: 'Copy subscription ID', exact: true });
-    await expect
-      .poll(() =>
-        copyButton.evaluate((element) => {
-          const bounds = element.getBoundingClientRect();
-          return (
-            bounds.left >= 0 &&
-            bounds.right <= window.innerWidth &&
-            element.scrollWidth <= element.clientWidth
-          );
-        }),
-      )
-      .toBe(true);
+    await expect(copyButton).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('billing-mobile.png'), fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -188,7 +177,7 @@ for (const [tier, label] of [
   ['professional_plus', 'Professional+'],
   ['corporate', 'Corporate'],
 ] as const) {
-  test(`${label} owner can compare all plans on both billing pages at desktop and mobile widths`, async ({
+  test(`${label} owner opens comparison from billing or directly at desktop and mobile widths`, async ({
     page,
     context,
   }, testInfo) => {
@@ -199,6 +188,35 @@ for (const [tier, label] of [
     try {
       for (const path of ['/designer/plan-billing', '/designer/plan-billing/subscribe']) {
         await page.goto(path);
+        if (path === '/designer/plan-billing') {
+          await expect(
+            page.getByRole('link', { name: 'Manage Subscription', exact: true }),
+          ).toBeVisible();
+          for (const width of [1280, 390]) {
+            await page.setViewportSize({ width, height: 844 });
+            const includes = page.getByRole('heading', { name: 'Your Plan Includes', exact: true });
+            const history = page.getByText('Payment history', { exact: true });
+            await expect(includes).toBeVisible();
+            await expect(history).toBeVisible();
+            const includesTop = await includes.evaluate(
+              (element) => element.getBoundingClientRect().top,
+            );
+            const historyTop = await history.evaluate(
+              (element) => element.getBoundingClientRect().top,
+            );
+            expect(includesTop).toBeLessThan(historyTop);
+            await page.screenshot({
+              path: testInfo.outputPath(`${tier}-overview-${width}.png`),
+              fullPage: true,
+            });
+          }
+          await expect(
+            page.getByRole('region', { name: 'Choose your plan', exact: true }),
+          ).toHaveCount(0);
+          await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
+          await expect(page).toHaveURL(/\/designer\/plan-billing\/subscribe$/);
+          await expect(page.getByRole('dialog')).not.toBeVisible();
+        }
         for (const width of [1280, 390]) {
           await page.setViewportSize({ width, height: 900 });
           await expect(
@@ -284,12 +302,14 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
   });
   try {
     await page.goto('/designer/plan-billing');
+    await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
     const upgrade = page.getByRole('button', { name: 'Upgrade to Corporate', exact: true });
     await expect(upgrade).toBeEnabled();
     await upgrade.focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    await expect(page).toHaveURL(/\/subscribe\/closed\?plan=corporate$/);
     await expect(
       page.getByRole('button', { name: 'Continue checkout', exact: true }),
     ).toBeVisible();
@@ -300,9 +320,10 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await page.reload();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     expect(targets).toEqual(['corporate']);
-    await expect(page.getByText('Selected plan', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Checkout closed', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    await expect(page.getByRole('status', { name: 'Secure checkout' })).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Continue checkout', exact: true }),
     ).toBeVisible();
@@ -322,10 +343,13 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
       notes: { organizationId: owner.org.id, tier: 'corporate' },
     });
     await expect.poll(async () => (await owner.subscription())?.planTier).toBe('corporate');
-    await expect(page.getByRole('heading', { name: 'Plan activated', exact: true })).toBeVisible({
-      timeout: 15_000,
-    });
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Payment confirmed', exact: true })).toBeVisible(
+      {
+        timeout: 15_000,
+      },
+    );
+    await page.getByRole('link', { name: 'Go to billing', exact: true }).click();
+    await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Corporate is your current plan', exact: true }),
     ).toBeVisible();
@@ -357,6 +381,7 @@ test('paid recovery preserves the accepted downgrade across session loss and can
   });
   try {
     await page.goto('/designer/plan-billing');
+    await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
     await page.getByRole('button', { name: 'Switch to Hobby', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Schedule cancellation', exact: true }),
@@ -459,10 +484,13 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       notes: { organizationId: owner.org.id, tier: 'professional_plus' },
     });
     await expect.poll(async () => (await owner.subscription())?.planTier).toBe('professional_plus');
-    await expect(page.getByRole('heading', { name: 'Plan activated', exact: true })).toBeVisible({
-      timeout: 15_000,
-    });
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Payment confirmed', exact: true })).toBeVisible(
+      {
+        timeout: 15_000,
+      },
+    );
+    await page.getByRole('link', { name: 'Go to billing', exact: true }).click();
+    await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Professional+ is your current plan', exact: true }),
     ).toBeVisible();

@@ -223,7 +223,9 @@ vi.mock('@repo/ui/components/dialog', () => ({
   DialogTitle: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 vi.mock('@/lib/api', () => ({ api: {} }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('lucide-react', () => ({
+  Lightbulb: () => <span data-testid="icon-lightbulb" />,
   Check: () => <span data-testid="icon-check" />,
   Crown: () => <span data-testid="icon-crown" />,
   Building2: () => <span data-testid="icon-building" />,
@@ -231,6 +233,7 @@ vi.mock('lucide-react', () => ({
   ArrowRight: () => <span data-testid="icon-arrow" />,
   ChevronLeft: () => <span data-testid="icon-chevron" />,
   Shield: () => <span data-testid="icon-shield" />,
+  ShieldCheck: () => <span data-testid="icon-shieldcheck" />,
   X: () => <span data-testid="icon-x" />,
   Info: () => <span data-testid="icon-info" />,
   Loader2: () => <span data-testid="icon-loader" />,

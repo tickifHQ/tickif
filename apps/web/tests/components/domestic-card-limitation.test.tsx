@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 import type { BillingChangePreview, BillingRecovery } from '@repo/contracts';
 
 const mocks = vi.hoisted(() => ({

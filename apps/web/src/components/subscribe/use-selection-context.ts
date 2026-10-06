@@ -9,6 +9,25 @@ import {
 import { api } from '@/lib/api';
 import { reasonLabel } from './billing-reason';
 
+/** The provider-backed action also identifies replacement checkouts awaiting adjustment payment. */
+export function getResumableCheckoutTier(context: BillingSelectionContext | null): PlanTier | null {
+  if (context?.providerState !== 'known') return null;
+  if (context.unfinishedCheckout?.status === 'created' && !context.pendingOperation)
+    return context.unfinishedCheckout.targetTier;
+  if (
+    context.pendingOperation?.reason === 'replacement_checkout_pending' &&
+    context.pendingOperation.status === 'checkout'
+  )
+    return context.pendingOperation.targetTier;
+  if (context.pendingOperation || context.unfinishedCheckout || context.scheduledChange)
+    return null;
+  return (
+    context.actions.find(
+      (action) => action.action === 'change_plan' && action.reason === 'replacement_pending',
+    )?.targetTier ?? null
+  );
+}
+
 function pricingRestriction(context: BillingSelectionContext | null): string | undefined {
   if (!context) return undefined;
   if (context.pendingOperation)

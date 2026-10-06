@@ -1,4 +1,4 @@
-import '../lib/environment';
+import { webUrl } from '../lib/environment';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { billingMutationRequestSchema, type PlanTier } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
@@ -93,6 +93,13 @@ for (const entry of entryPoints) {
         await installCheckoutDismissal(page);
         try {
           await page.goto(entry.path);
+          if (entry.label === 'overview') {
+            await expect(
+              page.getByRole('region', { name: 'Choose your plan', exact: true }),
+            ).toHaveCount(0);
+            await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
+            await expect(page).toHaveURL(/\/designer\/plan-billing\/subscribe$/);
+          }
           await expect(
             page.getByRole('button', {
               name: `${current.label} is your current plan`,
@@ -143,6 +150,9 @@ for (const entry of entryPoints) {
 
           if (current.tier === 'hobby') {
             await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+            await expect(page).toHaveURL(
+              `${webUrl}/designer/plan-billing/subscribe/closed?plan=${target.tier}`,
+            );
             await expect(
               page.getByRole('button', { name: 'Continue checkout', exact: true }),
             ).toBeVisible();
@@ -186,10 +196,16 @@ for (const entry of entryPoints) {
           }
           if (target.tier !== 'hobby') {
             await expect(
-              page.getByRole('heading', { name: 'Plan activated', exact: true }),
+              page.getByRole('heading', {
+                name: current.tier === 'hobby' ? 'Payment confirmed' : 'Plan activated',
+                exact: true,
+              }),
             ).toBeVisible({ timeout: 15_000 });
             expect(mutations).toHaveLength(1);
-            await page.getByRole('button', { name: 'Done', exact: true }).click();
+            if (current.tier === 'hobby') {
+              await page.getByRole('link', { name: 'Go to billing', exact: true }).click();
+              await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
+            } else await page.getByRole('button', { name: 'Done', exact: true }).click();
           }
           await expect(
             page.getByRole('button', { name: `${target.label} is your current plan`, exact: true }),

@@ -4,7 +4,7 @@ import { getCurrentOrgCapabilities, hasBillingAccess } from '@/lib/current-org-r
 import { BillingAccessDenied } from '@/components/billing-access-denied';
 
 export const metadata = {
-  title: 'Subscribe · Tickif',
+  title: 'Plans · Tickif',
 };
 
 /**

@@ -33,12 +33,15 @@ for (const scenario of [
       const headers = { origin: webUrl };
       try {
         const initialLabel = scenario.source === 'corporate' ? 'Corporate' : 'Professional+';
-        await page.goto('/designer/plan-billing');
+        await page.goto('/designer/plan-billing/subscribe');
         await page
           .getByRole('region', { name: 'Choose your plan', exact: true })
           .getByRole('button', { name: `Upgrade to ${initialLabel}`, exact: true })
           .click();
         await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+        await expect(page).toHaveURL(
+          `${webUrl}/designer/plan-billing/subscribe/closed?plan=${scenario.source}`,
+        );
         await expect(
           page.getByRole('button', { name: 'Continue checkout', exact: true }),
         ).toBeVisible();
@@ -52,9 +55,9 @@ for (const scenario of [
         await deliverSubscriptionEvent(context, 'subscription.activated', owner.provider);
         await expect.poll(async () => (await owner.subscription())?.planTier).toBe(scenario.source);
         await expect(
-          page.getByRole('heading', { name: 'Plan activated', exact: true }),
+          page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
         ).toBeVisible();
-        await page.getByRole('button', { name: 'Done', exact: true }).click();
+        await page.getByRole('link', { name: 'Go to billing', exact: true }).click();
         if (cancelled) {
           const response = await context.request.post(`${apiUrl}/api/billing/change-preview`, {
             headers,
@@ -75,7 +78,7 @@ for (const scenario of [
           ).toBeTruthy();
         }
         const before = await providerMutationCount(context, '/subscriptions');
-        await page.goto('/designer/plan-billing');
+        await page.goto('/designer/plan-billing/subscribe');
         await page
           .getByRole('region', { name: 'Choose your plan', exact: true })
           .getByRole('button', { name: scenario.label, exact: true })
