@@ -159,6 +159,18 @@ test('social profile confirmations match saved public links on desktop and mobil
     // Center the complete field group so the sticky save footer cannot obscure
     // a lower confirmation in either evidence viewport.
     const centerSocialFields = async () => {
+      const expandedSocialContent = page
+        .locator('[data-slot="animated-collapsible-content"]')
+        .filter({ has: page.getByRole('textbox', { name: 'Instagram', exact: true }) });
+      await expect(expandedSocialContent).toHaveClass(/grid-rows-\[1fr\]/);
+      // Wait for the opening layout transition before measuring or centering.
+      // Screenshot animation disabling must not expand the panel afterwards.
+      await expandedSocialContent.evaluate(async (content) => {
+        const finiteAnimations = content
+          .getAnimations()
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity);
+        await Promise.all(finiteAnimations.map((animation) => animation.finished));
+      });
       await page.getByRole('textbox', { name: 'Instagram', exact: true }).evaluate((input) => {
         input.closest('[data-slot="portfolio-section-content"]')?.scrollIntoView({
           block: 'center',
