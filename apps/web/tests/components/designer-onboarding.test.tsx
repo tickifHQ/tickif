@@ -268,7 +268,7 @@ describe('DesignerOnboarding', () => {
       target: { value: 'Mahi Interiors' },
     });
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(screen.getAllByText('Optional. Leave blank to hide this link.')).toHaveLength(3);
+    expect(screen.queryByText('Optional. Leave blank to hide this link.')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('LinkedIn'), {
       target: { value: '/company/mahi-studio' },
     });

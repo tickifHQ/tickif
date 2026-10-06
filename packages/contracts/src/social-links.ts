@@ -9,6 +9,18 @@ function normalizeHttpUrl(value: string): string | null {
 
 export type SocialPlatform = 'instagram' | 'linkedin' | 'youtube';
 
+const socialPlatformUrlSchemas = {
+  instagram: z.url({ protocol: /^https?$/, hostname: /^(?:[a-z0-9-]+\.)*instagram\.com$/i }),
+  linkedin: z.url({ protocol: /^https?$/, hostname: /^(?:[a-z0-9-]+\.)*linkedin\.com$/i }),
+  youtube: z.url({ protocol: /^https?$/, hostname: /^(?:[a-z0-9-]+\.)*youtube\.com$/i }),
+} satisfies Record<SocialPlatform, z.ZodURL>;
+
+const socialPlatformUrlMessages = {
+  instagram: 'Enter an Instagram profile URL, or use your Instagram handle.',
+  linkedin: 'Enter a LinkedIn profile URL, or use your LinkedIn handle.',
+  youtube: 'Enter a YouTube profile URL, or use your YouTube handle.',
+} satisfies Record<SocialPlatform, string>;
+
 /**
  * Turn the free-form social value stored on a profile into a safe external URL.
  *
@@ -59,7 +71,7 @@ export function socialProfileHref(platform: SocialPlatform, handle: string): str
   return normalizeHttpUrl(`https://www.youtube.com/${channelPath}`);
 }
 
-/** Shared input validation; drafts deliberately retain partially typed values. */
+/** New edits must match their platform; drafts retain partially typed values. */
 export function socialProfileValueSchema(platform: SocialPlatform) {
   return z
     .string()
@@ -69,5 +81,12 @@ export function socialProfileValueSchema(platform: SocialPlatform) {
       (value) => !value || socialProfileHref(platform, value) !== null,
       'Enter a valid handle, profile path or full HTTP(S) profile URL.',
     )
+    .refine((value) => {
+      if (!/^https?:\/\//i.test(value)) return true;
+      const href = socialProfileHref(platform, value);
+      // The preceding refinement reports malformed or unsafe destinations.
+      if (!href) return true;
+      return socialPlatformUrlSchemas[platform].safeParse(href).success;
+    }, socialPlatformUrlMessages[platform])
     .meta({ id: `${platform}ProfileValue` });
 }

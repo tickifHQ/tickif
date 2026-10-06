@@ -50,6 +50,26 @@ test('social profile confirmations match saved public links on desktop and mobil
       LinkedIn: 'https://www.linkedin.com/company/social-studio',
       YouTube: 'https://www.youtube.com/@social-studio',
     };
+    const expectInlineAction = async (platform: string) => {
+      const input = page.getByRole('textbox', { name: platform, exact: true });
+      const action = page.getByRole('link', {
+        name: `Open ${platform} profile (opens in a new tab)`,
+      });
+      await expect(action).toBeVisible();
+      const inputBounds = await input.boundingBox();
+      const actionBounds = await action.boundingBox();
+      expect(inputBounds).not.toBeNull();
+      expect(actionBounds).not.toBeNull();
+      if (!inputBounds || !actionBounds) throw new Error('Social input geometry is unavailable');
+      expect(actionBounds.x).toBeGreaterThan(inputBounds.x + inputBounds.width / 2);
+      expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(
+        inputBounds.x + inputBounds.width,
+      );
+      expect(actionBounds.y).toBeGreaterThanOrEqual(inputBounds.y);
+      expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(
+        inputBounds.y + inputBounds.height,
+      );
+    };
     for (const [platform, href] of Object.entries(destinations)) {
       const link = page.getByRole('link', {
         name: `Open ${platform} profile (opens in a new tab)`,
@@ -57,7 +77,23 @@ test('social profile confirmations match saved public links on desktop and mobil
       await expect(link).toHaveAttribute('href', href);
       await expect(link).toHaveAttribute('target', '_blank');
       await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      await expectInlineAction(platform);
     }
+    await expect(
+      page.getByText('Optional. This link will appear on your public portfolio.', { exact: true }),
+    ).toHaveCount(0);
+    // A safe URL for a different platform is still invalid for this field.
+    await page.getByLabel('LinkedIn', { exact: true }).fill('https://instagram.com/social.studio');
+    const linkedInError = page.getByRole('button', { name: 'LinkedIn link error', exact: true });
+    await expect(linkedInError).toBeVisible();
+    await linkedInError.hover();
+    await expect(page.getByRole('tooltip')).toContainText('Enter a LinkedIn profile URL');
+    await linkedInError.focus();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('tooltip')).toContainText('Enter a LinkedIn profile URL');
+    await page.getByLabel('LinkedIn', { exact: true }).fill('/company/social-studio');
     await page.screenshot({
       path: testInfo.outputPath('social-onboarding-desktop.png'),
       animations: 'disabled',
@@ -71,10 +107,16 @@ test('social profile confirmations match saved public links on desktop and mobil
     await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
     await expect(page.getByRole('link', { name: /Open YouTube profile/ })).toHaveCount(0);
     await page.getByLabel('YouTube', { exact: true }).scrollIntoViewIfNeeded();
+    await page.getByRole('button', { name: 'YouTube link error', exact: true }).click();
+    await expect(page.getByRole('tooltip')).toContainText('Enter a valid handle');
     await page.screenshot({
       path: testInfo.outputPath('social-invalid-mobile.png'),
       animations: 'disabled',
     });
+    await page.getByLabel('YouTube', { exact: true }).fill('@social-studio');
+    await page.getByLabel('YouTube', { exact: true }).fill('');
+    await expect(page.getByRole('link', { name: /Open YouTube profile/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'YouTube link error', exact: true })).toHaveCount(0);
     await page.getByLabel('YouTube', { exact: true }).fill('@social-studio');
     await page.screenshot({
       path: testInfo.outputPath('social-onboarding-mobile.png'),
@@ -130,6 +172,7 @@ test('social profile confirmations match saved public links on desktop and mobil
       await expect(
         page.getByRole('link', { name: `Open ${platform} profile (opens in a new tab)` }),
       ).toHaveAttribute('href', href);
+      await expectInlineAction(platform);
     }
     await page
       .getByLabel('Instagram', { exact: true })
@@ -199,12 +242,14 @@ test('social profile confirmations match saved public links on desktop and mobil
       }
     };
     await centerSocialFields();
+    for (const platform of Object.keys(destinations)) await expectInlineAction(platform);
     await page.screenshot({
       path: testInfo.outputPath('social-portfolio-settings-desktop.png'),
       animations: 'disabled',
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await centerSocialFields();
+    for (const platform of Object.keys(destinations)) await expectInlineAction(platform);
     await page.screenshot({
       path: testInfo.outputPath('social-portfolio-settings-mobile.png'),
       animations: 'disabled',

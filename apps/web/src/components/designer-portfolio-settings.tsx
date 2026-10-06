@@ -48,7 +48,7 @@ import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
 import {
-  SocialProfileConfirmation,
+  SocialProfileInput,
   socialProfileError,
 } from '@/components/social-profile-confirmation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
@@ -129,9 +129,6 @@ const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
   tagline: 'a tagline',
   bio: 'a bio',
 };
-
-const socialInputWrapperClassName =
-  'flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2';
 
 type TestimonialProjectOption = {
   label: string;
@@ -1497,80 +1494,33 @@ export function DesignerPortfolioSettings() {
                       <Label className="text-sm font-medium text-muted-foreground">
                         Social links
                       </Label>
-                      <div className="space-y-2">
-                        <div className={socialInputWrapperClassName}>
-                          <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                            <InstagramBrandIcon className="size-4" />
-                          </span>
-                          <Input
-                            aria-label="Instagram"
-                            maxLength={60}
-                            aria-invalid={
-                              socialProfileError('instagram', form.instagramHandle)
-                                ? true
-                                : undefined
-                            }
-                            aria-describedby="portfolio-instagram-confirmation"
-                            value={form.instagramHandle}
-                            onChange={(e) => updateField('instagramHandle', e.target.value)}
-                            placeholder="Instagram handle"
-                            className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                          />
-                        </div>
-                        <SocialProfileConfirmation
-                          id="portfolio-instagram-confirmation"
-                          platform="instagram"
-                          value={form.instagramHandle}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <div className={socialInputWrapperClassName}>
-                          <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                            <LinkedInBrandIcon className="size-4" />
-                          </span>
-                          <Input
-                            aria-label="LinkedIn"
-                            maxLength={60}
-                            aria-invalid={
-                              socialProfileError('linkedin', form.linkedinHandle) ? true : undefined
-                            }
-                            aria-describedby="portfolio-linkedin-confirmation"
-                            value={form.linkedinHandle}
-                            onChange={(e) => updateField('linkedinHandle', e.target.value)}
-                            placeholder="Linkedin handle..."
-                            className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                          />
-                        </div>
-                        <SocialProfileConfirmation
-                          id="portfolio-linkedin-confirmation"
-                          platform="linkedin"
-                          value={form.linkedinHandle}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <div className={socialInputWrapperClassName}>
-                          <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                            <YouTubeBrandIcon className="size-4" />
-                          </span>
-                          <Input
-                            aria-label="YouTube"
-                            maxLength={60}
-                            aria-invalid={
-                              socialProfileError('youtube', form.youtubeHandle) ? true : undefined
-                            }
-                            aria-describedby="portfolio-youtube-confirmation"
-                            value={form.youtubeHandle}
-                            onChange={(e) => updateField('youtubeHandle', e.target.value)}
-                            placeholder="YouTube handle..."
-                            className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                          />
-                        </div>
-                        <SocialProfileConfirmation
-                          id="portfolio-youtube-confirmation"
-                          platform="youtube"
-                          value={form.youtubeHandle}
-                        />
-                      </div>
+                      <SocialProfileInput
+                        id="portfolio-instagram"
+                        platform="instagram"
+                        value={form.instagramHandle}
+                        onValueChange={(value) => updateField('instagramHandle', value)}
+                        placeholder="Instagram handle"
+                        startAdornment={<InstagramBrandIcon className="size-4" />}
+                        className="shadow-sm"
+                      />
+                      <SocialProfileInput
+                        id="portfolio-linkedin"
+                        platform="linkedin"
+                        value={form.linkedinHandle}
+                        onValueChange={(value) => updateField('linkedinHandle', value)}
+                        placeholder="LinkedIn handle"
+                        startAdornment={<LinkedInBrandIcon className="size-4" />}
+                        className="shadow-sm"
+                      />
+                      <SocialProfileInput
+                        id="portfolio-youtube"
+                        platform="youtube"
+                        value={form.youtubeHandle}
+                        onValueChange={(value) => updateField('youtubeHandle', value)}
+                        placeholder="YouTube handle"
+                        startAdornment={<YouTubeBrandIcon className="size-4" />}
+                        className="shadow-sm"
+                      />
                     </div>
                   </div>
                 </div>

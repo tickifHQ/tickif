@@ -44,7 +44,7 @@ import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indic
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
 import {
-  SocialProfileConfirmation,
+  SocialProfileInput,
   socialProfileError,
 } from '@/components/social-profile-confirmation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
@@ -1291,30 +1291,17 @@ function SocialInput({
   placeholder: string;
   onChange: (value: string) => void;
 }) {
-  const error = socialProfileError(platform, value);
   return (
-    <div className="grid gap-2">
-      <div className="flex h-8 overflow-hidden rounded-md border bg-background shadow-xs transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-        <label
-          htmlFor={id}
-          className="flex w-11 shrink-0 items-center justify-center border-r bg-muted/30 text-muted-foreground"
-        >
-          <Icon className="size-4" aria-hidden="true" />
-          <span className="sr-only">{label}</span>
-        </label>
-        <Input
-          id={id}
-          maxLength={60}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={`${id}-confirmation`}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          className="h-full border-0 bg-transparent px-3 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-        />
-      </div>
-      <SocialProfileConfirmation id={`${id}-confirmation`} platform={platform} value={value} />
-    </div>
+    <SocialProfileInput
+      id={id}
+      platform={platform}
+      aria-label={label}
+      value={value}
+      onValueChange={onChange}
+      placeholder={placeholder}
+      startAdornment={<Icon className="size-4" />}
+      className="h-8 text-[13px]"
+    />
   );
 }
 
