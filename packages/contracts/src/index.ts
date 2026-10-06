@@ -34,4 +34,5 @@ export * from './telemetry';
 
 export { resolveProfileExperience } from './profile-experience';
 
+export * from './project-budgets';
 export * from './social-links';

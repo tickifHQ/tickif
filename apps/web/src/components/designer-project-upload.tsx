@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   Check,
   ChevronRight,
@@ -20,15 +19,14 @@ import {
   Loader2,
   MessageSquareText,
   Plus,
-  RefreshCw,
   Search,
   ShieldPlus,
-  Star,
   Trash2,
   X,
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  legacyProjectBudgetBands,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
   projectCompletenessResponseSchema,
@@ -37,10 +35,8 @@ import {
   projectImageSchema,
   projectRoomSchema,
   uploadUrlResponseSchema,
-  imageFailureReason,
   type AllowedImageContentType,
   type CreateProjectRoomInput,
-  type ImageFailureReason,
   type ModerationReasonCode,
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
@@ -76,6 +72,7 @@ import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { ApartmentNameCombobox } from '@/components/apartment-name-combobox';
+import { ProjectImageGrid } from '@/components/project-image-grid';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
@@ -90,7 +87,8 @@ import {
   shouldRefreshPristineDefaultRooms,
   validateSizeSqft,
   type BackendProjectSelection,
-  type ProjectImageMoveDirection,
+  type ProjectImagePreview,
+  isLocalPreviewImage,
 } from '@/lib/designer-project-upload';
 
 type ProjectTypeOption = {
@@ -135,7 +133,6 @@ type RoomDraft = {
   roomSlug: string;
   roomTypeId?: string;
   title: string;
-  description: string;
   expanded: boolean;
   designStyle: string;
   materialFinish: string;
@@ -144,26 +141,6 @@ type RoomDraft = {
   images: ProjectImagePreview[];
   uploading: boolean;
   uploadError: string;
-};
-
-type ProjectImagePreview = Pick<
-  ProjectImageDto,
-  'id' | 'status' | 'sortOrder' | 'width' | 'height' | 'failureReason'
-> & {
-  fileName: string;
-  previewUrl?: string;
-  viewerUrl?: string;
-  /**
-   * Original file for local previews only. Retained so a failed tile can
-   * retry the transfer without asking the user to re-select the photo.
-   * Dropped once the tile succeeds or is removed.
-   */
-  file?: File;
-  /**
-   * Client-side transfer failure message for local previews. Server-side
-   * processing failures arrive as `failureReason` instead.
-   */
-  transferError?: string;
 };
 
 type ViewerImage = {
@@ -483,7 +460,6 @@ function makeRoomDraft(seed: { roomSlug: string; title: string }, index: number)
     clientId: `room-${index}-${seed.roomSlug}`,
     roomSlug: seed.roomSlug,
     title: seed.title,
-    description: '',
     expanded: index === 0,
     designStyle: '',
     materialFinish: '',
@@ -565,10 +541,6 @@ function parseApiPayload<T>(
 
 function normalizeRoomSearchValue(value: string) {
   return value.trim().toLowerCase();
-}
-
-function isLocalPreviewImage(image: ProjectImagePreview) {
-  return image.id.startsWith('local-preview-');
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
@@ -676,7 +648,6 @@ function attachExistingProjectRoomsToDrafts(
       ...room,
       id: match.id,
       roomTypeId: match.roomTypeId,
-      description: room.description || match.description || '',
     };
   });
 }
@@ -699,30 +670,6 @@ function toProjectImagePreview(
     previewUrl: image.previewUrl ?? existing?.previewUrl,
     viewerUrl: image.viewerUrl ?? existing?.viewerUrl ?? image.previewUrl ?? existing?.previewUrl,
   };
-}
-
-/**
- * Human-readable explanation for each persisted processing failure code,
- * rendered on the failed tile next to its recovery action (E-284).
- */
-const IMAGE_FAILURE_MESSAGES: Record<ImageFailureReason, string> = {
-  too_large: 'This photo was too large to process.',
-  empty: 'This file was empty.',
-  corrupt: 'This file appears damaged and could not be read.',
-  unsupported_format: 'This file format is not supported.',
-  content_type_mismatch: 'The file contents do not match its declared type.',
-  dimensions_exceeded: 'This photo exceeds the maximum dimensions.',
-  decompression_bomb: 'This photo expands to an unsafe size.',
-  duplicate: 'This looks like a duplicate of another photo in this project.',
-  processing_failed: 'Processing failed before it could finish.',
-  upload_failed: 'The upload did not complete.',
-};
-
-function imageFailureMessage(reason: string | null | undefined): string | null {
-  if (!reason) return null;
-  const parsed = imageFailureReason.safeParse(reason);
-  if (!parsed.success) return 'Processing failed. Try uploading this photo again.';
-  return IMAGE_FAILURE_MESSAGES[parsed.data];
 }
 
 function mapRoomMetadata(room: RoomDraft) {
@@ -1158,7 +1105,6 @@ type RoomCardProps = {
   finishOptions: Array<{ value: string; label: string }>;
   onToggle: () => void;
   onDelete: () => void;
-  onDescriptionChange: (value: string) => void;
   onDesignStyleChange: (value: string) => void;
   onMaterialFinishChange: (value: string) => void;
   onTagInputChange: (value: string) => void;
@@ -1168,7 +1114,7 @@ type RoomCardProps = {
   onDropFiles: (files: File[]) => void;
   onSetCover: (imageId: string) => void;
   onOpenImage: (image: ProjectImagePreview, statusLabel: string) => void;
-  onMoveImage: (imageId: string, direction: ProjectImageMoveDirection) => void;
+  onMoveImage: (imageId: string, targetImageId: string) => Promise<void>;
   onRemoveImage: (imageId: string) => void;
   onRetryImage: (imageId: string) => void;
   coverImageId: string | null;
@@ -1181,7 +1127,6 @@ function RoomCard({
   finishOptions,
   onToggle,
   onDelete,
-  onDescriptionChange,
   onDesignStyleChange,
   onMaterialFinishChange,
   onTagInputChange,
@@ -1258,16 +1203,6 @@ function RoomCard({
         >
           <Divider />
           <div className="space-y-4 px-5 py-4">
-            <div className="space-y-1.5">
-              <Label className={cn(typography.label, 'text-foreground')}>About this room</Label>
-              <Textarea
-                value={room.description}
-                onChange={(event) => onDescriptionChange(event.target.value)}
-                placeholder="Optional"
-                className={cn('min-h-24 resize-y', typography.control)}
-              />
-            </div>
-
             <label
               onDragOver={(event) => {
                 event.preventDefault();
@@ -1318,161 +1253,17 @@ function RoomCard({
               </Alert>
             ) : null}
 
-            {room.images.length > 0 ? (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {room.images.map((image, index) => {
-                  const statusLabel =
-                    image.status === 'ready'
-                      ? 'Ready'
-                      : image.status === 'processing'
-                        ? 'Processing'
-                        : 'Failed';
-                  const canPersistImage = !isLocalPreviewImage(image);
-                  const isCover = coverImageId === image.id;
-                  const failureDetail =
-                    image.status === 'failed'
-                      ? (image.transferError ??
-                        imageFailureMessage(image.failureReason) ??
-                        'Processing failed. Try uploading this photo again.')
-                      : null;
-
-                  return (
-                    <div
-                      key={image.id}
-                      className={cn(
-                        'relative overflow-hidden rounded-xl border bg-muted/40',
-                        isCover ? 'border-primary ring-1 ring-primary/20' : 'border-border',
-                      )}
-                      title={`${image.fileName} · ${statusLabel}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onRemoveImage(image.id)}
-                        className="absolute top-1.5 right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-background hover:text-foreground"
-                        aria-label={`Remove ${image.fileName}`}
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                      <div className="flex gap-3 p-2">
-                        <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                          {image.previewUrl ? (
-                            <button
-                              type="button"
-                              onClick={() => onOpenImage(image, statusLabel)}
-                              className="block h-full w-full cursor-zoom-in"
-                              aria-label={`Open ${image.fileName}`}
-                            >
-                              <div
-                                role="img"
-                                aria-label={`${image.fileName} (${statusLabel})`}
-                                className="h-full w-full bg-cover bg-center"
-                                style={{ backgroundImage: `url(${image.previewUrl})` }}
-                              />
-                            </button>
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <ImagePlus className="size-4" aria-hidden="true" />
-                              <span className="sr-only">{`${image.fileName} (${statusLabel})`}</span>
-                            </div>
-                          )}
-                          {image.status === 'processing' ? (
-                            <span
-                              className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-primary/70"
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          {image.status === 'failed' ? (
-                            <span
-                              className="absolute inset-0 bg-destructive/20"
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className={cn(typography.bodyMedium, 'truncate text-foreground')}>
-                              {image.fileName}
-                            </span>
-                            {isCover ? (
-                              <Star className="size-3.5 shrink-0 fill-primary text-primary" />
-                            ) : null}
-                          </div>
-                          <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
-                            {statusLabel}
-                          </div>
-                          {failureDetail ? (
-                            <p
-                              className={cn(typography.bodySmall, 'mt-1 text-destructive')}
-                              role="status"
-                            >
-                              {failureDetail}
-                            </p>
-                          ) : null}
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <Button
-                              type="button"
-                              variant={isCover ? 'secondary' : 'outline'}
-                              size="sm"
-                              disabled={!canPersistImage}
-                              onClick={() => onSetCover(image.id)}
-                              className="h-7 px-2 text-[11px]"
-                            >
-                              <Star className="size-3" />
-                              {isCover ? 'Cover' : 'Set cover'}
-                            </Button>
-                            {image.status === 'failed' ? (
-                              image.file && !room.uploading ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => onRetryImage(image.id)}
-                                  className="h-7 px-2 text-[11px]"
-                                >
-                                  <RefreshCw className="size-3" />
-                                  Retry upload
-                                </Button>
-                              ) : (
-                                <p
-                                  className={cn(
-                                    typography.bodySmall,
-                                    'w-full text-muted-foreground',
-                                  )}
-                                >
-                                  Remove this photo and upload it again to recover.
-                                </p>
-                              )
-                            ) : null}
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              disabled={index === 0}
-                              onClick={() => onMoveImage(image.id, 'previous')}
-                              className="size-7"
-                              aria-label={`Move ${image.fileName} earlier`}
-                            >
-                              <ArrowLeft className="size-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              disabled={index === room.images.length - 1}
-                              onClick={() => onMoveImage(image.id, 'next')}
-                              className="size-7"
-                              aria-label={`Move ${image.fileName} later`}
-                            >
-                              <ArrowRight className="size-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
+            <ProjectImageGrid
+              images={room.images}
+              roomTitle={room.title}
+              coverImageId={coverImageId}
+              uploading={room.uploading}
+              onMove={onMoveImage}
+              onOpen={onOpenImage}
+              onSetCover={onSetCover}
+              onRemove={onRemoveImage}
+              onRetry={onRetryImage}
+            />
 
             <div className="grid gap-4 md:grid-cols-2">
               <FormSelect
@@ -1631,8 +1422,15 @@ export function DesignerProjectUpload({
     [scopeTerms],
   );
   const budgetOptions = useMemo(
-    () => budgetBandTerms.map((term) => ({ value: term.slug, label: term.label })),
-    [budgetBandTerms],
+    () => {
+      const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
+      const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
+      if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
+        options.push({ value: savedRange.slug, label: savedRange.label });
+      }
+      return options;
+    },
+    [budgetBandTerms, budgetBandSlug],
   );
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),
@@ -2024,7 +1822,6 @@ export function DesignerProjectUpload({
                     roomSlug: roomSlugFromRoom(room, roomTerms),
                     roomTypeId: room.roomTypeId,
                     title: roomTitleFromRoom(room, roomTerms),
-                    description: room.description ?? '',
                     expanded: index === 0,
                     designStyle: canonicalTaxonomySlug(
                       firstAttributeLabel(room.metadata, 'theme') ||
@@ -2320,26 +2117,25 @@ export function DesignerProjectUpload({
     setError('');
   }
 
-  async function handleMoveImage(
-    room: RoomDraft,
-    imageId: string,
-    direction: ProjectImageMoveDirection,
-  ) {
-    const nextImages = moveProjectImage(room.images, imageId, direction);
+  async function handleMoveImage(room: RoomDraft, imageId: string, targetImageId: string) {
+    const nextImages = moveProjectImage(room.images, imageId, targetImageId);
     if (nextImages === room.images) return;
 
     invalidateUploadStateRefresh();
     updateRoom(room.clientId, (current) => ({
       ...current,
-      images: moveProjectImage(current.images, imageId, direction),
+      images: moveProjectImage(current.images, imageId, targetImageId),
     }));
     setError('');
-    setNotice('Image order updated.');
+    setNotice('');
 
-    if (!projectId || !room.id) return;
+    if (!projectId || !room.id) {
+      setNotice('Image order updated.');
+      return;
+    }
 
     try {
-      await Promise.all(
+      const results = await Promise.allSettled(
         nextImages
           .filter((image) => !isLocalPreviewImage(image))
           .map((image, index) =>
@@ -2358,12 +2154,17 @@ export function DesignerProjectUpload({
               }),
           ),
       );
+      const failed = results.find((result) => result.status === 'rejected');
+      if (failed) throw failed.reason;
+      setNotice('Image order updated.');
     } catch (moveError) {
       setError(
         moveError instanceof Error ? moveError.message : 'Could not save the new image order.',
       );
       const imageListRefreshVersion = beginImageListRefresh();
-      void refreshProjectImages(projectId, imageListRefreshVersion);
+      await refreshProjectImages(projectId, imageListRefreshVersion).catch(() => {
+        setError('Could not save or refresh the photo order. Reload the page and try again.');
+      });
     }
   }
 
@@ -2617,7 +2418,6 @@ export function DesignerProjectUpload({
     const roomPayload: CreateProjectRoomInput | UpdateProjectRoomInput = {
       roomTypeId,
       name: room.title,
-      description: room.description.trim() || undefined,
       sortOrder,
       metadata: mapRoomMetadata(room),
     };
@@ -3821,9 +3621,6 @@ export function DesignerProjectUpload({
                     setError('');
                     setPendingDeletion({ kind: 'room', room });
                   }}
-                  onDescriptionChange={(value) =>
-                    updateRoom(room.clientId, (current) => ({ ...current, description: value }))
-                  }
                   onDesignStyleChange={(value) =>
                     updateRoom(room.clientId, (current) => ({ ...current, designStyle: value }))
                   }
@@ -3850,8 +3647,8 @@ export function DesignerProjectUpload({
                   onDropFiles={(files) => void handleUploadFiles(room, files)}
                   onSetCover={handleSetCover}
                   onOpenImage={openImageViewer}
-                  onMoveImage={(imageId, direction) =>
-                    void handleMoveImage(room, imageId, direction)
+                  onMoveImage={(imageId, targetImageId) =>
+                    handleMoveImage(room, imageId, targetImageId)
                   }
                   onRemoveImage={(imageId) => {
                     const image = room.images.find((candidate) => candidate.id === imageId);

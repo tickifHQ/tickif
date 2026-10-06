@@ -3,13 +3,14 @@
  *
  * Idempotent: upserts by (kind, slug) for non-locality, (parent_id, slug) for locality.
  * Updates: label, sortOrder, metadata on rerun.
- * Does NOT touch isActive (admin may have deactivated a term).
- * Removed terms stay in DB untouched (no automatic deactivation).
+ * Preserves admin deactivations.
+ * Retired budget bands are deactivated while preserving saved project references.
  *
  * Run: pnpm db:seed
  */
 
-import { db, schema, sql } from '../index.js';
+import { projectBudgetBands, legacyProjectBudgetBands } from '@repo/contracts';
+import { db, schema, sql, and, eq, inArray } from '../index.js';
 
 type TaxonomyKind = (typeof schema.taxonomyKindEnum.enumValues)[number];
 
@@ -244,14 +245,15 @@ const themes: TermSeed[] = [
 ];
 
 // ─── BUDGET BANDS ──────────────────────────────────────────────────────────────
-// NOTE: INR ranges are industry-standard tiers (Livspace/HomeLane ballpark).
-// Exact ranges pending product confirmation — structural correctness unaffected.
-const budgetBands: TermSeed[] = [
-  { kind: 'budget_band', slug: 'budget', label: 'Under ₹5L', sortOrder: 1, metadata: { min: 0, max: 500000 } },
-  { kind: 'budget_band', slug: 'moderate', label: '₹5L - ₹15L', sortOrder: 2, metadata: { min: 500001, max: 1500000 } },
-  { kind: 'budget_band', slug: 'upscale', label: '₹15L - ₹35L', sortOrder: 3, metadata: { min: 1500001, max: 3500000 } },
-  { kind: 'budget_band', slug: 'luxury', label: '₹35L+', sortOrder: 4, metadata: { min: 3500001, max: null } },
-];
+const budgetBands: TermSeed[] = [...projectBudgetBands, ...legacyProjectBudgetBands].map(
+  ({ slug, label, min, max }, index) => ({
+    kind: 'budget_band',
+    slug,
+    label,
+    sortOrder: index + 1,
+    metadata: { min, max },
+  }),
+);
 
 // ─── E-124: PER-ROOM ATTRIBUTE VOCABULARIES ────────────────────────────────────
 
@@ -420,7 +422,16 @@ export async function seedTaxonomy(): Promise<void> {
   console.log(`  ✓ ${themes.length} themes`);
 
   for (const term of budgetBands) await upsertTerm(term);
-  console.log(`  ✓ ${budgetBands.length} budget bands`);
+  await db
+    .update(schema.taxonomy)
+    .set({ isActive: false })
+    .where(
+      and(
+        eq(schema.taxonomy.kind, 'budget_band'),
+        inArray(schema.taxonomy.slug, legacyProjectBudgetBands.map((band) => band.slug)),
+      ),
+    );
+  console.log(`  ✓ ${projectBudgetBands.length} current budget bands`);
 
   // 4. E-124: Per-room attribute vocabularies
   for (const term of materials) await upsertTerm(term);

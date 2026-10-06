@@ -102,16 +102,16 @@ describe('Taxonomy seed (E-33)', () => {
           metadata: schema.taxonomy.metadata,
         })
         .from(schema.taxonomy)
-        .where(sql`${schema.taxonomy.kind} = 'budget_band'`);
+        .where(sql`${schema.taxonomy.kind} = 'budget_band' AND ${schema.taxonomy.isActive} = true`);
 
-      expect(bands).toHaveLength(4);
+      expect(bands).toHaveLength(8);
 
       for (const band of bands) {
         const meta = band.metadata as { min?: number; max?: number | null };
         expect(meta).toHaveProperty('min');
         expect(meta).toHaveProperty('max');
         expect(typeof meta.min).toBe('number');
-        // max can be null (luxury band has no ceiling)
+        // The highest budget band has no ceiling.
         expect(meta.max === null || typeof meta.max === 'number').toBe(true);
       }
     });
@@ -125,12 +125,55 @@ describe('Taxonomy seed (E-33)', () => {
           metadata: schema.taxonomy.metadata,
         })
         .from(schema.taxonomy)
-        .where(sql`${schema.taxonomy.kind} = 'budget_band'`)
+        .where(sql`${schema.taxonomy.kind} = 'budget_band' AND ${schema.taxonomy.isActive} = true`)
         .orderBy(schema.taxonomy.sortOrder);
 
       const slugs = bands.map((b) => b.slug);
-      expect(slugs).toEqual(['budget', 'moderate', 'upscale', 'luxury']);
+      expect(slugs).toEqual([
+        'budget',
+        '5l-10l',
+        '10l-20l',
+        '20l-30l',
+        '30l-40l',
+        '40l-50l',
+        '50l-1cr',
+        '1cr-plus',
+      ]);
     });
+  });
+
+  it('retires old budget choices without relabeling saved ranges on reseed', async () => {
+    await seedTaxonomy();
+    const original = await db
+      .select()
+      .from(schema.taxonomy)
+      .where(sql`${schema.taxonomy.kind} = 'budget_band' AND ${schema.taxonomy.slug} = 'moderate'`);
+    await seedTaxonomy();
+    const retired = await db
+      .select()
+      .from(schema.taxonomy)
+      .where(sql`${schema.taxonomy.id} = ${original[0]!.id}`);
+    expect(retired[0]).toMatchObject({
+      slug: 'moderate',
+      label: '₹5L - ₹15L',
+      isActive: false,
+      metadata: { min: 500001, max: 1500000 },
+    });
+    const active = await db
+      .select()
+      .from(schema.taxonomy)
+      .where(sql`${schema.taxonomy.kind} = 'budget_band' AND ${schema.taxonomy.isActive} = true`)
+      .orderBy(schema.taxonomy.sortOrder);
+    expect(active.map((band) => band.metadata)).toEqual([
+      { min: 0, max: 500000 },
+      { min: 500001, max: 1000000 },
+      { min: 1000001, max: 2000000 },
+      { min: 2000001, max: 3000000 },
+      { min: 3000001, max: 4000000 },
+      { min: 4000001, max: 5000000 },
+      { min: 5000001, max: 10000000 },
+      { min: 10000001, max: null },
+    ]);
   });
 
   describe('sort order', () => {

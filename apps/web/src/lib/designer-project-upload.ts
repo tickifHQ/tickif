@@ -1,5 +1,8 @@
 import {
   createProjectSchema,
+  imageFailureReason,
+  type ImageFailureReason,
+  type ProjectImageDto,
   type CreateProjectInput,
   type UpdateImageMetadataInput,
 } from '@repo/contracts';
@@ -9,13 +12,58 @@ export type BackendProjectSelection = {
   propertySubtypeSlug?: string;
 };
 
-export type ProjectImageMoveDirection = 'previous' | 'next';
+export type ProjectImagePreview = Pick<
+  ProjectImageDto,
+  'id' | 'status' | 'sortOrder' | 'width' | 'height' | 'failureReason'
+> & {
+  fileName: string;
+  previewUrl?: string;
+  viewerUrl?: string;
+  /**
+   * Original file for local previews only. Retained so a failed tile can
+   * retry the transfer without asking the user to re-select the photo.
+   * Dropped once the tile succeeds or is removed.
+   */
+  file?: File;
+  /**
+   * Client-side transfer failure message for local previews. Server-side
+   * processing failures arrive as `failureReason` instead.
+   */
+  transferError?: string;
+};
+
+export function isLocalPreviewImage(image: ProjectImagePreview) {
+  return image.id.startsWith('local-preview-');
+}
+
+/**
+ * Human-readable explanation for each persisted processing failure code,
+ * rendered on the failed tile next to its recovery action (E-284).
+ */
+const IMAGE_FAILURE_MESSAGES: Record<ImageFailureReason, string> = {
+  too_large: 'This photo was too large to process.',
+  empty: 'This file was empty.',
+  corrupt: 'This file appears damaged and could not be read.',
+  unsupported_format: 'This file format is not supported.',
+  content_type_mismatch: 'The file contents do not match its declared type.',
+  dimensions_exceeded: 'This photo exceeds the maximum dimensions.',
+  decompression_bomb: 'This photo expands to an unsafe size.',
+  duplicate: 'This looks like a duplicate of another photo in this project.',
+  processing_failed: 'Processing failed before it could finish.',
+  upload_failed: 'The upload did not complete.',
+};
+
+export function imageFailureMessage(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  const parsed = imageFailureReason.safeParse(reason);
+  if (!parsed.success) return 'Processing failed. Try uploading this photo again.';
+  return IMAGE_FAILURE_MESSAGES[parsed.data];
+}
 
 type DefaultRoomRefreshDraft = {
   id?: string;
   roomSlug: string;
   title: string;
-  description: string;
   designStyle: string;
   materialFinish: string;
   tags: string[];
@@ -328,13 +376,13 @@ export function buildImageMetadata(input: {
 export function moveProjectImage<T extends { id: string; sortOrder: number }>(
   images: T[],
   imageId: string,
-  direction: ProjectImageMoveDirection,
+  targetImageId: string,
 ): T[] {
   const currentIndex = images.findIndex((image) => image.id === imageId);
   if (currentIndex < 0) return images;
 
-  const targetIndex = direction === 'previous' ? currentIndex - 1 : currentIndex + 1;
-  if (targetIndex < 0 || targetIndex >= images.length) return images;
+  const targetIndex = images.findIndex((image) => image.id === targetImageId);
+  if (targetIndex < 0 || targetIndex === currentIndex) return images;
 
   const nextImages = [...images];
   const [movedImage] = nextImages.splice(currentIndex, 1);
@@ -353,7 +401,6 @@ export function shouldRefreshPristineDefaultRooms(
   const roomsArePristine = currentRooms.every(
     (room) =>
       !room.id &&
-      room.description.length === 0 &&
       room.designStyle.length === 0 &&
       room.materialFinish.length === 0 &&
       room.tags.length === 0 &&

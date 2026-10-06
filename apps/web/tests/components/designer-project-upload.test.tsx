@@ -294,6 +294,36 @@ describe('DesignerProjectUpload', () => {
     );
   });
 
+  it('omits the room description field when editing a project', async () => {
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    expect(screen.queryByText('About this room')).not.toBeInTheDocument();
+  });
+
+  it('preserves a saved legacy budget and leaves stored room descriptions untouched on save', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    project.budgetBandSlug = 'moderate';
+    project.rooms[0]!.description = 'Existing room description';
+    mock.projectGet.mockImplementation(async () => Response.json(project));
+    mock.projectPatch.mockImplementation(async () => Response.json(project));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    const user = userEvent.setup();
+    const { container } = render(<DesignerProjectUpload initialProjectId={project.id} />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    expect(selectWithOption(container, '₹5L - ₹15L')).toHaveValue('moderate');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(mock.roomPatch).toHaveBeenCalled());
+    expect(mock.projectPatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ budgetBandSlug: 'moderate' }),
+      }),
+    );
+    expect(mock.roomPatch.mock.calls[0]![0].json).not.toHaveProperty('description');
+  });
+
   function selectWithOption(container: HTMLElement, optionLabel: string) {
     const select = Array.from(container.querySelectorAll('select')).find((candidate) =>
       Array.from(candidate.options).some((option) => option.textContent === optionLabel),
@@ -1700,29 +1730,69 @@ describe('DesignerProjectUpload batch recovery', () => {
     expect(mock.linkImagePatch).toHaveBeenCalled();
   });
 
-  it('restores server image state after a failed reorder', async () => {
-    mockSuccessfulLookups();
-    const processingItem = {
-      ...readyItem,
-      id: 'c1111111-1111-4111-8111-111111111111',
-      status: 'processing',
-      sortOrder: 1,
-    };
-    mockImageList([readyItem, processingItem]);
-    mock.linkImagePatch.mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: { message: 'Reorder failed' } }),
-    });
-    render(<DesignerProjectUpload initialProjectId={projectId} />);
-    await screen.findByText('Processing');
+  it.each([true, false])(
+    'settles reorder writes before recovery, refresh succeeds: %s',
+    async (refreshSucceeds) => {
+      mockSuccessfulLookups();
+      const processingItem = {
+        ...readyItem,
+        id: 'c1111111-1111-4111-8111-111111111111',
+        status: 'processing',
+        sortOrder: 1,
+      };
+      mockImageList([readyItem, processingItem]);
+      let resolveWrite!: (response: Response) => void;
+      const pendingWrite = new Promise<Response>((resolve) => {
+        resolveWrite = resolve;
+      });
+      mock.linkImagePatch
+        .mockResolvedValueOnce(
+          Response.json({ error: { message: 'Reorder failed' } }, { status: 500 }),
+        )
+        .mockReturnValueOnce(pendingWrite);
+      render(<DesignerProjectUpload initialProjectId={projectId} />);
+      await screen.findByText('Processing');
 
-    // The worker finishes while the failed reorder triggers an image-only refresh.
-    mockImageList([readyItem, { ...processingItem, status: 'ready' }]);
-    await userEvent.setup().click(screen.getByRole('button', { name: /move image 2 earlier/i }));
+      // The worker finishes while the failed reorder triggers an image-only refresh.
+      mockImageList([readyItem, { ...processingItem, status: 'ready' }]);
+      if (!refreshSucceeds) {
+        mock.listImagesGet.mockResolvedValue(
+          Response.json({ error: { message: 'Offline' } }, { status: 503 }),
+        );
+      }
+      const rect = vi
+        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+        .mockImplementation(function (this: HTMLElement) {
+          const second = this.closest('li')?.getAttribute('aria-label') === 'Image 2';
+          return new DOMRect(second ? 320 : 0, 0, 300, 225);
+        });
+      const user = userEvent.setup();
+      screen.getByRole('button', { name: 'Open Image 2' }).focus();
+      await user.keyboard('[Space]');
+      await user.keyboard('[ArrowLeft]');
+      await user.keyboard('[Space]');
+      await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
+      rect.mockRestore();
+      expect(screen.getByText('Saving order…')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open Image 2' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      expect(screen.getByText('Processing')).toBeInTheDocument();
+      resolveWrite(Response.json({}));
 
-    await waitFor(() => expect(screen.queryByText('Processing')).not.toBeInTheDocument());
-    expect(screen.getAllByText('Ready')).toHaveLength(2);
-  });
+      if (refreshSucceeds) {
+        await waitFor(() => expect(screen.queryByText('Processing')).not.toBeInTheDocument());
+        expect(screen.getAllByText('Ready')).toHaveLength(2);
+        expect(screen.getByText('Reorder failed')).toBeInTheDocument();
+      } else {
+        await screen.findByText(
+          'Could not save or refresh the photo order. Reload the page and try again.',
+        );
+      }
+      await waitFor(() => expect(screen.queryByText('Saving order…')).not.toBeInTheDocument());
+    },
+  );
 
   it('shows the persisted processing reason on failed tiles with a recovery path', async () => {
     mockSuccessfulLookups();
