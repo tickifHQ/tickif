@@ -364,17 +364,31 @@ describe('designer project upload helpers', () => {
       { id: 'image-3', sortOrder: 2, label: 'C' },
     ];
 
-    expect(moveProjectImage(images, 'image-2', 'previous')).toEqual([
+    expect(moveProjectImage(images, 'image-2', 'image-1')).toEqual([
       { id: 'image-2', sortOrder: 0, label: 'B' },
       { id: 'image-1', sortOrder: 1, label: 'A' },
       { id: 'image-3', sortOrder: 2, label: 'C' },
     ]);
 
-    expect(moveProjectImage(images, 'image-2', 'next')).toEqual([
+    expect(moveProjectImage(images, 'image-2', 'image-3')).toEqual([
       { id: 'image-1', sortOrder: 0, label: 'A' },
       { id: 'image-3', sortOrder: 1, label: 'C' },
       { id: 'image-2', sortOrder: 2, label: 'B' },
     ]);
+  });
+
+  it('moves a photo across multiple positions without mutating the original list', () => {
+    const images = [
+      { id: 'first', sortOrder: 5 },
+      { id: 'second', sortOrder: 10 },
+      { id: 'third', sortOrder: 15 },
+    ];
+    expect(moveProjectImage(images, 'first', 'third')).toEqual([
+      { id: 'second', sortOrder: 0 },
+      { id: 'third', sortOrder: 1 },
+      { id: 'first', sortOrder: 2 },
+    ]);
+    expect(images[0]).toEqual({ id: 'first', sortOrder: 5 });
   });
 
   it('keeps image order unchanged for impossible moves', () => {
@@ -383,9 +397,9 @@ describe('designer project upload helpers', () => {
       { id: 'image-2', sortOrder: 1 },
     ];
 
-    expect(moveProjectImage(images, 'image-1', 'previous')).toBe(images);
-    expect(moveProjectImage(images, 'image-2', 'next')).toBe(images);
-    expect(moveProjectImage(images, 'missing', 'next')).toBe(images);
+    expect(moveProjectImage(images, 'image-1', 'image-1')).toBe(images);
+    expect(moveProjectImage(images, 'image-2', 'image-3')).toBe(images);
+    expect(moveProjectImage(images, 'missing', 'image-2')).toBe(images);
   });
 
   it('does not refresh default rooms after a manual room is added', () => {

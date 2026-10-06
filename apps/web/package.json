@@ -38,7 +38,10 @@
     "recharts": "catalog:",
     "server-only": "catalog:",
     "zod": "catalog:",
-    "sharp": "catalog:"
+    "sharp": "catalog:",
+    "@dnd-kit/core": "catalog:",
+    "@dnd-kit/sortable": "catalog:",
+    "@dnd-kit/utilities": "catalog:"
   },
   "devDependencies": {
     "@next/env": "^16.3.4",

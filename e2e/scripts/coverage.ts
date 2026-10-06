@@ -19,6 +19,8 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  ['project-photo-reorder.spec.ts', 'photo ordering persists with desktop mouse and keyboard'],
+  ['project-photo-reorder.spec.ts', 'photo ordering persists with phone touch'],
   [
     'project-feedback.spec.ts',
     'project budget choices persist and room descriptions are absent from the editor',
