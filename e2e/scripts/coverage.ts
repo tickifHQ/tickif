@@ -19,6 +19,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  ...[1440, 390].map((width): [string, string] => [
+    'team-size.spec.ts',
+    `company team-size ranges resume and persist through profile editing at ${width}px`,
+  ]),
   [
     'profile-completion-stepper.spec.ts',
     'profile completion steps guide designers to missing fields on desktop and mobile',
