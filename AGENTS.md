@@ -32,6 +32,20 @@ files you're editing. Prose explanations live in [`docs/`](./docs/README.md).
 
 Each rule file states its scope (and a glob) at the top — see [`rules/README.md`](./rules/README.md).
 
+## ReUI for Codex
+
+The repository includes the official ReUI skill at
+[`.agents/skills/reui/SKILL.md`](./.agents/skills/reui/SKILL.md) and a project-scoped
+MCP entry in [`.codex/config.toml`](./.codex/config.toml). For ReUI work, read the
+skill alongside the applicable rules above. Repository conventions take
+precedence: use `pnpm dlx shadcn@latest` for CLI commands and install UI items from
+`apps/web`, using its existing `components.json` aliases into `@repo/ui`.
+
+Run `codex mcp login reui` from the repository root to sign in, then restart Codex
+to load the MCP connection. Credentials stay outside the repository. See the
+[ReUI Codex guide](https://reui.io/docs/codex) for authentication and skill updates;
+keep updates scoped to this repo's `.agents/skills/reui` and `.codex/config.toml`.
+
 ## Project shape
 
 Modular-monolith API (Hono) + Next.js 16 web + BullMQ worker, in a pnpm + Turborepo
