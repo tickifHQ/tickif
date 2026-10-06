@@ -1,7 +1,10 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb, makeUser } from '@repo/db/testing';
+import { deleteObject, putObject } from '@repo/storage';
 import { onboardDesignerResponseSchema } from '@repo/contracts';
 import { signInPhone } from '../lib/auth';
 import { apiUrl } from '../lib/environment';
@@ -27,6 +30,8 @@ test('social profile confirmations match saved public links on desktop and mobil
     status: 'pending',
   });
   let orgId: string | undefined;
+  let logoKey: string | undefined;
+  let coverKey: string | undefined;
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   try {
@@ -88,11 +93,38 @@ test('social profile confirmations match saved public links on desktop and mobil
     const onboarded = onboardDesignerResponseSchema.parse(await (await submitted).json());
     orgId = onboarded.organization.id;
     const slug = `social-${suffix}`;
+    // Public portfolios require a complete hero. Prepare real synthetic assets,
+    // so the destination comparison exercises the existing publication gate.
+    logoKey = `originals/logos/${onboarded.profile.id}/logo.png`;
+    coverKey = `originals/portfolio-covers/${onboarded.profile.id}/cover.jpg`;
+    for (const asset of [
+      { key: logoKey, file: 'email/tickif-mark.png', contentType: 'image/png' },
+      { key: coverKey, file: 'home-hero/neutral-living-room.jpg', contentType: 'image/jpeg' },
+    ]) {
+      await putObject({
+        key: asset.key,
+        body: await readFile(
+          resolve(import.meta.dirname, '../../apps/web/public/images', asset.file),
+        ),
+        contentType: asset.contentType,
+      });
+    }
     await db
       .update(schema.designerProfile)
-      .set({ status: 'active' })
+      .set({
+        status: 'active',
+        logoImageId: logoKey,
+        bio: 'Thoughtful homes designed around everyday life.',
+      })
       .where(eq(schema.designerProfile.id, onboarded.profile.id));
-    await makePublicPortfolio({ profileId: onboarded.profile.id, portfolioSlug: slug });
+    const portfolio = await makePublicPortfolio({
+      profileId: onboarded.profile.id,
+      portfolioSlug: slug,
+    });
+    await db
+      .update(schema.designerPortfolio)
+      .set({ heroImageId: coverKey })
+      .where(eq(schema.designerPortfolio.id, portfolio.id));
     await page.goto('/designer/profile');
     for (const [platform, href] of Object.entries(destinations)) {
       await expect(
@@ -159,6 +191,8 @@ test('social profile confirmations match saved public links on desktop and mobil
     expect(errors).toEqual([]);
   } finally {
     await assertTestDb();
+    if (logoKey) await deleteObject(logoKey);
+    if (coverKey) await deleteObject(coverKey);
     if (orgId) await db.delete(schema.organization).where(eq(schema.organization.id, orgId));
     await db.delete(schema.user).where(eq(schema.user.id, user.id));
   }
