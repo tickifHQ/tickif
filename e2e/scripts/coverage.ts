@@ -19,6 +19,14 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  ...[1440, 390].map((width): [string, string] => [
+    'team-size.spec.ts',
+    `company team-size ranges resume and persist through profile editing at ${width}px`,
+  ]),
+  [
+    'portfolio-accent.spec.ts',
+    'custom portfolio accent previews validates saves reloads and discards on desktop and mobile',
+  ],
   [
     'portfolio-details.spec.ts',
     'portfolio details persist from editor to public studio on desktop and mobile',
