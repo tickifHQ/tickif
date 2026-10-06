@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+import { portfolioAccentStyle } from '@/lib/portfolio-accent';
 import type { ReactNode } from 'react';
 import {
   BadgeCheck,
@@ -375,7 +376,7 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
               Portfolio
             </p>
             <h2 className="mt-2 text-4xl tracking-tight">
-              Selected <span className="font-light text-primary italic">projects</span>.
+              Selected <span className="font-light text-foreground italic">projects</span>.
             </h2>
           </div>
           <div className="max-w-md lg:justify-self-end">
@@ -417,7 +418,7 @@ function StorySection({ portfolio, view }: SectionProps) {
       <div className="mx-auto max-w-6xl">
         <SectionEyebrow>Project narrative</SectionEyebrow>
         <h2 className="mt-2 text-4xl tracking-tight">
-          their <span className="font-light text-primary italic">words</span>.
+          their <span className="font-light text-foreground italic">words</span>.
         </h2>
 
         <div className="relative mt-7 border bg-muted/30 px-6 py-10 sm:px-12 lg:px-16">
@@ -440,7 +441,7 @@ function StorySection({ portfolio, view }: SectionProps) {
 
           <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
             <div className="lg:col-span-8">
-              <Quote className="size-10 rotate-180 fill-primary text-primary" />
+              <Quote className="size-10 rotate-180 fill-primary text-foreground" />
               <blockquote className="mt-5 max-w-2xl text-2xl leading-snug sm:text-3xl">
                 {testimonial.words}
               </blockquote>
@@ -552,7 +553,7 @@ function StorySection({ portfolio, view }: SectionProps) {
                     <TickifBrandIcon
                       role="img"
                       aria-label="Tickif"
-                      className="size-4 text-primary"
+                      className="size-4 text-foreground"
                     />
                   ) : (
                     <GoogleBrandIcon
@@ -620,7 +621,7 @@ function ReviewCard({ review }: { review: PublicPortfolioReview }) {
         {review.source === 'google' ? (
           <GoogleBrandIcon className="size-6" />
         ) : (
-          <TickifBrandIcon className="size-6 text-primary" />
+          <TickifBrandIcon className="size-6 text-foreground" />
         )}
       </div>
       {review.text ? (
@@ -656,7 +657,7 @@ function ReviewAggregateCard({
           {source === 'tickif' ? 'Tickif' : 'Google'}
         </p>
         {source === 'tickif' ? (
-          <TickifBrandIcon className="size-4 text-primary" />
+          <TickifBrandIcon className="size-4 text-surface-inverse-foreground" />
         ) : (
           <GoogleBrandIcon className="size-4" />
         )}
@@ -694,7 +695,7 @@ function ReviewsSection({ portfolio }: SectionProps) {
           className="mt-2 max-w-2xl text-4xl font-medium"
           aria-label="What it’s like to work with us."
         >
-          What it’s like to <span className="font-light text-primary italic">work with us</span>.
+          What it’s like to <span className="font-light text-foreground italic">work with us</span>.
         </h2>
         <div className="mt-9 flex flex-col gap-8 pb-20 md:flex-row">
           {reviewAggregates.length > 0 ? (
@@ -900,7 +901,7 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
                   className="h-full overflow-hidden border-surface-subtle-border bg-background p-0"
                 >
                   <div className="flex items-center gap-1.5 border-b border-surface-subtle-border px-3 py-2.5">
-                    <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                    <MapPin className="size-4 shrink-0 text-foreground" aria-hidden="true" />
                     <h3 className="min-w-0 break-words text-lg font-medium">{center.name}</h3>
                   </div>
                   <article className="min-w-0 p-3">
@@ -929,7 +930,7 @@ function ExperienceCentersSection({ portfolio }: SectionProps) {
                             className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
                             <Navigation
-                              className="size-4 shrink-0 text-primary"
+                              className="size-4 shrink-0 text-foreground"
                               aria-hidden="true"
                             />
                             Open in Maps
@@ -1108,7 +1109,7 @@ export function PublicDesignerProfile({
     <EnquiryAvailabilityProvider designerProfileId={portfolio.profileId}>
       <main
         className="min-h-screen overflow-x-hidden bg-background text-foreground"
-        style={{ '--primary': portfolio.accentColor } as React.CSSProperties}
+        style={portfolioAccentStyle(portfolio.accentColor)}
       >
         <TrustStrip items={profileTrustItems} />
         {portfolio.sections.hero ? <HeroSection {...props} /> : <StudioBar {...props} />}

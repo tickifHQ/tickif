@@ -25,6 +25,22 @@ const requiredEntries: [file: string, title: string][] = [
     'project-feedback.spec.ts',
     'project budget choices persist and room descriptions are absent from the editor',
   ],
+  ...[1440, 390].map((width): [string, string] => [
+    'team-size.spec.ts',
+    `company team-size ranges resume and persist through profile editing at ${width}px`,
+  ]),
+  [
+    'profile-completion-stepper.spec.ts',
+    'profile completion steps guide designers to missing fields on desktop and mobile',
+  ],
+  [
+    'social-links.spec.ts',
+    'social profile confirmations match saved public links on desktop and mobile',
+  ],
+  [
+    'portfolio-accent.spec.ts',
+    'custom portfolio accent previews validates saves reloads and discards on desktop and mobile',
+  ],
   [
     'portfolio-details.spec.ts',
     'portfolio details persist from editor to public studio on desktop and mobile',
@@ -226,6 +242,10 @@ const requiredEntries: [file: string, title: string][] = [
     'verification lifecycle: rejected documents are resubmitted, approved and renewed',
   ],
   // E-278: designer onboarding completion + portfolio publication readiness.
+  [
+    'founding-year.spec.ts',
+    'older founding year resumes in onboarding and persists through profile editing',
+  ],
   [
     'designer-onboarding.spec.ts',
     'company designer completes onboarding and can proceed to portfolio settings',

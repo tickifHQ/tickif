@@ -7,10 +7,12 @@ import { useRouter } from 'next/navigation';
 import { BriefcaseBusiness, ChevronRight, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
 import {
   PROFILE_FOOTPRINT_LIMITS,
+  PROFILE_FOUNDED_YEAR_MIN,
   designerEntityType,
   listTaxonomyResponseSchema,
   onboardDesignerSchema,
   onboardDesignerResponseSchema,
+  profileFoundedYearSchema,
   type OnboardDesignerInput,
   type OnboardDesignerResponse,
   type OnboardingDraftFields,
@@ -43,6 +45,10 @@ import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/pho
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
+import {
+  SocialProfileInput,
+  socialProfileError,
+} from '@/components/social-profile-confirmation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 type EntityType = OnboardDesignerInput['entityType'];
@@ -110,19 +116,7 @@ const firmTypeOptions = [
   'Studio',
 ] as const;
 
-const foundedOptions = [
-  '2026',
-  '2025',
-  '2024',
-  '2023',
-  '2022',
-  '2021',
-  '2020',
-  '2019',
-  '2018',
-] as const;
-
-const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '50+'] as const;
+const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '51-99', '100+'] as const;
 
 const emptyTaxonomyOptions: TaxonomyOptions = {
   scope: [],
@@ -178,6 +172,9 @@ function validateGoogleBusinessUrl(value: string) {
 
 function teamSizeToStaffCount(teamSize: string) {
   if (teamSize === 'Just me') return 1;
+  if (teamSize === '100+') return 100;
+  // Preserve the mapping of existing drafts; the legacy range does not reveal
+  // whether the studio belongs in 51-99 or 100+.
   if (teamSize === '50+') return 51;
   const upperBound = teamSize.split('-')[1];
   return upperBound ? Number.parseInt(upperBound, 10) : undefined;
@@ -244,6 +241,7 @@ export function DesignerOnboarding({
   const [selectedScopeIds, setSelectedScopeIds] = useState<string[]>(seedFields?.scopeIds ?? []);
   const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>(seedFields?.themeIds ?? []);
   const [foundedYear, setFoundedYear] = useState(seedFields?.foundedYear ?? '2021');
+  const [foundedYearError, setFoundedYearError] = useState('');
   const [teamSize, setTeamSize] = useState(seedFields?.teamSize ?? '2-10');
   const [foundedYearChanged, setFoundedYearChanged] = useState(
     () => seedFields?.foundedYear !== undefined && seedFields.foundedYear !== '2021',
@@ -285,7 +283,12 @@ export function DesignerOnboarding({
     step === 'details' ||
     (step === 'presence' && hasPresenceInput) ||
     (step === 'services' && hasServicesInput);
-  const hasValidOptionalInputs = !websiteUrlError && !googleBusinessUrlError;
+  const hasValidOptionalInputs =
+    !websiteUrlError &&
+    !googleBusinessUrlError &&
+    !socialProfileError('instagram', instagramHandle) &&
+    !socialProfileError('linkedin', linkedinHandle) &&
+    !socialProfileError('youtube', youtubeHandle);
   const canContinue =
     hasRequiredDetails && hasCurrentStepInput && hasValidOptionalInputs && !submitting;
   const canSkip = hasRequiredDetails && hasValidOptionalInputs && !submitting;
@@ -312,7 +315,8 @@ export function DesignerOnboarding({
       instagramHandle: optional(instagramHandle),
       linkedinHandle: optional(linkedinHandle),
       youtubeHandle: optional(youtubeHandle),
-      foundedYear: optional(foundedYear),
+      // Preserve an explicit blank across resume instead of restoring the default year.
+      foundedYear: foundedYear.trim(),
       teamSize: optional(teamSize),
       scopeIds: selectedScopeIds.length > 0 ? selectedScopeIds : undefined,
       themeIds: selectedThemeIds.length > 0 ? selectedThemeIds : undefined,
@@ -479,12 +483,25 @@ export function DesignerOnboarding({
       return;
     }
 
+    if (entityType === designerEntityType.enum.company && foundedYear.trim()) {
+      if (!/^\d{4}$/.test(foundedYear.trim())) {
+        setFoundedYearError('Enter a whole four-digit year.');
+        return;
+      }
+      const year = profileFoundedYearSchema.safeParse(Number(foundedYear));
+      if (!year.success) {
+        setFoundedYearError(year.error.issues[0]?.message ?? 'Enter a valid founding year.');
+        return;
+      }
+    }
+    setFoundedYearError('');
+
     setSubmitting(true);
     try {
       const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
       const normalizedWebsiteUrl = normalizeOptionalUrl(websiteUrl);
       const normalizedGoogleBusinessUrl = normalizeOptionalUrl(googleBusinessUrl);
-      const foundedYearValue = Number.parseInt(foundedYear, 10);
+      const foundedYearValue = foundedYear.trim() ? Number(foundedYear) : undefined;
       const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
         entityType,
@@ -510,7 +527,7 @@ export function DesignerOnboarding({
         ...(entityType === designerEntityType.enum.company && optionalTrimmed(firmType)
           ? { firmType: optionalTrimmed(firmType) }
           : {}),
-        ...(entityType === designerEntityType.enum.company && Number.isFinite(foundedYearValue)
+        ...(entityType === designerEntityType.enum.company && foundedYearValue !== undefined
           ? { foundedYear: foundedYearValue }
           : {}),
         ...(entityType === designerEntityType.enum.company && staffCount ? { staffCount } : {}),
@@ -721,6 +738,7 @@ export function DesignerOnboarding({
           <CompanyServicesFields
             formId={formId}
             foundedYear={foundedYear}
+            foundedYearError={foundedYearError}
             scopeOptions={taxonomyOptions.scope}
             selectedScopeIds={selectedScopeIds}
             selectedThemeIds={selectedThemeIds}
@@ -736,6 +754,7 @@ export function DesignerOnboarding({
             }}
             onFoundedYearChange={(value) => {
               setFoundedYear(value);
+              setFoundedYearError('');
               setFoundedYearChanged(true);
             }}
           />
@@ -1015,6 +1034,7 @@ function CompanyPresenceFields({
 function CompanyServicesFields({
   formId,
   foundedYear,
+  foundedYearError,
   onFoundedYearChange,
   onScopeIdsChange,
   onThemeIdsChange,
@@ -1029,6 +1049,7 @@ function CompanyServicesFields({
 }: {
   formId: string;
   foundedYear: string;
+  foundedYearError: string;
   scopeOptions: readonly TaxonomyTerm[];
   selectedScopeIds: string[];
   selectedThemeIds: string[];
@@ -1070,17 +1091,34 @@ function CompanyServicesFields({
       />
 
       <div className="grid grid-cols-2 gap-5">
-        <CompactSelect
-          id={`${formId}-founded`}
-          label="Founded"
-          options={foundedOptions}
-          value={foundedYear}
-          onValueChange={onFoundedYearChange}
-        />
+        <div className="grid gap-1">
+          <Label htmlFor={`${formId}-founded`} className="text-[13px] font-medium leading-relaxed">
+            Founded
+          </Label>
+          <Input
+            id={`${formId}-founded`}
+            value={foundedYear}
+            onChange={(event) => onFoundedYearChange(event.target.value)}
+            inputMode="numeric"
+            placeholder="e.g. 1995"
+            className="h-8 text-[13px] font-medium"
+            aria-invalid={!!foundedYearError}
+            aria-describedby={`${formId}-founded-hint${foundedYearError ? ` ${formId}-founded-error` : ''}`}
+          />
+          <p id={`${formId}-founded-hint`} className="text-xs text-muted-foreground">
+            {PROFILE_FOUNDED_YEAR_MIN}–{new Date().getUTCFullYear()}. Leave blank if unknown.
+          </p>
+          {foundedYearError ? (
+            <p id={`${formId}-founded-error`} className="text-xs text-destructive" role="alert">
+              {foundedYearError}
+            </p>
+          ) : null}
+        </div>
         <CompactSelect
           id={`${formId}-team-size`}
           label="Team size"
-          options={teamSizeOptions}
+          labelHint={teamSize === '50+' ? 'Previous selection' : undefined}
+          options={teamSize === '50+' ? [...teamSizeOptions, '50+'] : teamSizeOptions}
           value={teamSize}
           onValueChange={onTeamSizeChange}
         />
@@ -1234,6 +1272,7 @@ function PresenceFields({
         <div className="grid gap-3">
           <SocialInput
             id={`${formId}-instagram`}
+            platform="instagram"
             icon={InstagramBrandIcon}
             label="Instagram"
             value={instagramHandle}
@@ -1242,6 +1281,7 @@ function PresenceFields({
           />
           <SocialInput
             id={`${formId}-linkedin`}
+            platform="linkedin"
             icon={LinkedInBrandIcon}
             label="LinkedIn"
             value={linkedinHandle}
@@ -1250,6 +1290,7 @@ function PresenceFields({
           />
           <SocialInput
             id={`${formId}-youtube`}
+            platform="youtube"
             icon={YouTubeBrandIcon}
             label="YouTube"
             value={youtubeHandle}
@@ -1268,8 +1309,10 @@ function SocialInput({
   label,
   onChange,
   placeholder,
+  platform,
   value,
 }: {
+  platform: 'instagram' | 'linkedin' | 'youtube';
   icon: (props: { className?: string }) => ReactNode;
   id: string;
   label: string;
@@ -1278,22 +1321,16 @@ function SocialInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex h-8 overflow-hidden rounded-md border bg-background shadow-xs transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-      <label
-        htmlFor={id}
-        className="flex w-11 shrink-0 items-center justify-center border-r bg-muted/30 text-muted-foreground"
-        aria-label={label}
-      >
-        <Icon className="size-4" aria-hidden="true" />
-      </label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-full border-0 bg-transparent px-3 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-      />
-    </div>
+    <SocialProfileInput
+      id={id}
+      platform={platform}
+      aria-label={label}
+      value={value}
+      onValueChange={onChange}
+      placeholder={placeholder}
+      startAdornment={<Icon className="size-4" />}
+      className="h-8 text-[13px]"
+    />
   );
 }
 

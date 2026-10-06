@@ -44,6 +44,21 @@ const taxonomyFixtures = {
   ],
 };
 
+const companyOnboardingResult = {
+  created: true,
+  data: {
+    profile: {
+      id: '11111111-1111-4111-8111-111111111111',
+      orgId: 'org-1',
+      displayName: 'Large Studio',
+      entityType: 'company',
+      status: 'draft',
+      createdAt: '2026-02-01T00:00:00.000Z',
+    },
+    organization: { id: 'org-1', name: 'Large Studio', slug: 'large-studio' },
+  },
+};
+
 vi.mock('next/navigation', () => ({
   useRouter: () => mock.router,
 }));
@@ -86,6 +101,88 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('DesignerOnboarding', () => {
+  it.each([
+    ['51-99', 99],
+    ['100+', 100],
+  ])(
+    'offers %s without the overlapping legacy range and submits staff count %i',
+    async (teamSize, staffCount) => {
+      const user = userEvent.setup();
+      const submit = vi.fn().mockResolvedValue(companyOnboardingResult);
+      const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+      render(
+        <DesignerOnboarding
+          initialDraft={{
+            step: 'services',
+            updatedAt: '2026-02-01T00:00:00.000Z',
+            fields: {
+              entityType: 'company',
+              companyName: 'Large Studio',
+              userName: 'Large Studio',
+            },
+          }}
+          onSubmitOnboarding={submit}
+          onSaveDraft={onSaveDraft}
+        />,
+      );
+
+      await user.click(screen.getByLabelText(/^Team size/));
+      expect(screen.getByRole('menuitem', { name: '26-50' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: '50+' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('menuitem', { name: teamSize }));
+      expect(screen.getByLabelText(/^Team size/)).toHaveTextContent(teamSize);
+      await waitFor(
+        () =>
+          expect(onSaveDraft).toHaveBeenLastCalledWith(
+            expect.objectContaining({ fields: expect.objectContaining({ teamSize }) }),
+          ),
+        { timeout: 4000 },
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await waitFor(() =>
+        expect(submit).toHaveBeenCalledWith(
+          expect.objectContaining({ entityType: 'company', staffCount }),
+        ),
+      );
+    },
+  );
+
+  it.each([
+    ['50+', 51],
+    ['51-99', 99],
+    ['100+', 100],
+  ])('resumes saved %s without changing its staff-count mapping', async (teamSize, staffCount) => {
+    const user = userEvent.setup();
+    const submit = vi.fn().mockResolvedValue(companyOnboardingResult);
+    render(
+      <DesignerOnboarding
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: {
+            entityType: 'company',
+            companyName: 'Saved Studio',
+            userName: 'Saved Studio',
+            teamSize,
+          },
+        }}
+        onSubmitOnboarding={submit}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getByLabelText(/^Team size/)).toHaveTextContent(teamSize);
+    if (teamSize === '50+') {
+      await user.click(screen.getByLabelText(/^Team size/));
+      expect(screen.getByRole('menuitem', { name: '50+' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+    }
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith(expect.objectContaining({ staffCount })),
+    );
+  });
+
   beforeEach(() => {
     mock.router.push.mockClear();
     mock.signOut.mockClear();
@@ -258,6 +355,31 @@ describe('DesignerOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
     expect(screen.getByLabelText(/services offered/i)).toBeInTheDocument();
+  });
+
+  it('shows social destinations before continuing and requires invalid handles to be fixed or cleared', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+    fireEvent.change(screen.getByLabelText(/company name/i), {
+      target: { value: 'Mahi Interiors' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByText('Optional. Leave blank to hide this link.')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('LinkedIn'), {
+      target: { value: '/company/mahi-studio' },
+    });
+    expect(screen.getByRole('link', { name: /Open LinkedIn profile/ })).toHaveAttribute(
+      'href',
+      'https://www.linkedin.com/company/mahi-studio',
+    );
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('YouTube'), { target: { value: '@' } });
+    expect(screen.getByLabelText('YouTube')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('YouTube'), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
   it('keeps valid optional company presence values when they are provided', async () => {
@@ -550,6 +672,112 @@ describe('DesignerOnboarding', () => {
     // that owns the hero fields), not the separate profile editor.
     await user.click(screen.getByRole('button', { name: /complete your portfolio/i }));
     expect(mock.router.push).toHaveBeenCalledWith('/designer/portfolio');
+  });
+
+  it('restores an older founding year and submits it without truncation', async () => {
+    const submit = vi.fn();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Established Studio', foundedYear: '1995' },
+        }}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    expect(screen.getByRole('textbox', { name: 'Founded' })).toHaveValue('1995');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({ foundedYear: 1995 }));
+  });
+
+  it.each(['1899', '2100', '1995.5', 'year', '2e3'])(
+    'rejects invalid founding year %s before sending onboarding',
+    async (year) => {
+      const submit = vi.fn();
+      render(
+        <DesignerOnboarding
+          signedInAs="firm@test.com"
+          initialDraft={{
+            step: 'services',
+            updatedAt: '2026-02-01T00:00:00.000Z',
+            fields: {
+              entityType: 'company',
+              companyName: 'Established Studio',
+              foundedYear: '1995',
+            },
+          }}
+          onSubmitOnboarding={submit}
+        />,
+      );
+      fireEvent.change(screen.getByLabelText('Founded', { exact: true }), {
+        target: { value: year },
+      });
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(screen.getByLabelText('Founded', { exact: true })).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      );
+      expect(submit).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows the optional founding year to be cleared without sending a fabricated year', async () => {
+    const submit = vi.fn();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Established Studio', foundedYear: '1995' },
+        }}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Founded', { exact: true }), { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(submit).toHaveBeenCalled();
+    expect(submit.mock.calls[0]?.[0]).not.toHaveProperty('foundedYear');
+  });
+
+  it('autosaves an explicit blank founding year and preserves it when the draft resumes', async () => {
+    const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+    const view = render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Established Studio', foundedYear: '1995' },
+        }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Founded', { exact: true }), { target: { value: '' } });
+    await waitFor(
+      () =>
+        expect(onSaveDraft).toHaveBeenLastCalledWith(
+          expect.objectContaining({ fields: expect.objectContaining({ foundedYear: '' }) }),
+        ),
+      { timeout: 4000 },
+    );
+    const savedDraft = onSaveDraft.mock.calls.at(-1)?.[0];
+    view.unmount();
+    const submit = vi.fn();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{ ...savedDraft, updatedAt: '2026-02-01T00:00:00.000Z' }}
+        onSaveDraft={onSaveDraft}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    expect(screen.getByLabelText('Founded', { exact: true })).toHaveValue('');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(submit).toHaveBeenCalled();
+    expect(submit.mock.calls[0]?.[0]).not.toHaveProperty('foundedYear');
   });
 
   it('walks through the company flow, submits the supported payload, and shows completion', async () => {

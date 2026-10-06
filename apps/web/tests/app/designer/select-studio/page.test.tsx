@@ -117,7 +117,7 @@ describe('DesignerSelectStudioPage', () => {
     },
   );
 
-  it('redirects non-designers to designer onboarding', async () => {
+  it('denies visitors studio selection without prompting for designer onboarding', async () => {
     mock.getServerSession.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-06-30T00:00:00.000Z' },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor' },
@@ -127,7 +127,7 @@ describe('DesignerSelectStudioPage', () => {
     const { default: Page } =
       await import('../../../../app/(protected)/designer/select-studio/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding');
+    expect(mock.redirect).toHaveBeenCalledExactlyOnceWith('/unauthorized');
   });
 
   it('routes an admin without an active organization to the admin dashboard', async () => {

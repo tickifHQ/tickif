@@ -229,7 +229,8 @@ test('email OTP creates a real session through a local Resend delivery double', 
     await page.reload();
     await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
     await page.goto('/designer/dashboard');
-    await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
+    await expect(page).toHaveURL(/\/unauthorized$/);
+    await page.goto('/designer/onboarding/deferred');
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole('link', { name: 'Continue setup' })).toBeInViewport();
     expect(

@@ -47,8 +47,15 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import {
+  SocialProfileInput,
+  socialProfileError,
+} from '@/components/social-profile-confirmation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
+import { PortfolioCoverCropDialog } from '@/components/portfolio-cover-crop-dialog';
+import { cropPortfolioCoverToFile } from '@/lib/crop-image';
+import { PortfolioAccentColor } from '@/components/portfolio-accent-color';
 import { ExperienceCentersEditor } from '@/components/experience-centers-editor';
 import {
   GoogleBrandIcon,
@@ -125,9 +132,6 @@ const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
   tagline: 'a tagline',
   bio: 'a bio',
 };
-
-const socialInputWrapperClassName =
-  'flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2';
 
 type TestimonialProjectOption = {
   label: string;
@@ -278,6 +282,7 @@ export function DesignerPortfolioSettings() {
   const [isSaving, startSaveTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [accentResetVersion, setAccentResetVersion] = useState(0);
   const formRevisionRef = useRef(0);
 
   // Slug check
@@ -289,6 +294,12 @@ export function DesignerPortfolioSettings() {
   const [isUploadingHeroCover, startHeroCoverUploadTransition] = useTransition();
   const [heroCoverError, setHeroCoverError] = useState<string | null>(null);
   const heroCoverInputRef = useRef<HTMLInputElement>(null);
+  const [heroCoverSource, setHeroCoverSource] = useState<string | null>(null);
+  useEffect(() => {
+    return () => {
+      if (heroCoverSource) URL.revokeObjectURL(heroCoverSource);
+    };
+  }, [heroCoverSource]);
   const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
   // Google reviews connection (fetched separately from portfolio settings)
@@ -561,6 +572,10 @@ export function DesignerPortfolioSettings() {
       setSaveError('Saved mandatory Hero fields cannot be empty. Enter a replacement value.');
       return;
     }
+    if (hasSocialLinkErrors) {
+      setSaveError('Fix or clear the invalid social profile link before saving.');
+      return;
+    }
     const patch = computeChangedFields(form, savedForm);
     // E-278: the logo commits through its own endpoint, so a logo-only change
     // has no field patch. Reconcile the logo baseline (clearing the dirty
@@ -609,6 +624,7 @@ export function DesignerPortfolioSettings() {
   function handleDiscard() {
     if (savedForm) {
       setForm(savedForm);
+      setAccentResetVersion((version) => version + 1);
       // E-278: the logo is committed immediately by its own upload/delete
       // endpoints, so a logo change cannot be rolled back here. Reconcile the
       // baseline to the already-persisted logo instead of leaving a phantom
@@ -653,11 +669,26 @@ export function DesignerPortfolioSettings() {
     const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = '';
+    setHeroCoverError(null);
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(file.type)) {
+      setHeroCoverError('Choose a JPEG, PNG, WebP, or AVIF image.');
+      return;
+    }
+    if (file.size <= 0 || file.size > 10_000_000) {
+      setHeroCoverError('Choose an image up to 10 MB.');
+      return;
+    }
+    setHeroCoverSource(URL.createObjectURL(file));
+  }
 
+  function saveHeroCoverCrop(pixels: Parameters<typeof cropPortfolioCoverToFile>[1]) {
+    if (!heroCoverSource) return;
+    setHeroCoverError(null);
     startHeroCoverUploadTransition(async () => {
-      setHeroCoverError(null);
       try {
+        const file = await cropPortfolioCoverToFile(heroCoverSource, pixels);
         const result = await uploadPortfolioCover(file);
+        setHeroCoverSource(null);
         try {
           setPortfolio(await fetchPortfolio());
         } catch {
@@ -708,6 +739,10 @@ export function DesignerPortfolioSettings() {
 
   const requiredHeroErrors = getClearedSavedHeroFields(form, savedForm);
   const hasRequiredHeroErrors = Object.values(requiredHeroErrors).some(Boolean);
+  const hasSocialLinkErrors = (['instagram', 'linkedin', 'youtube'] as const).some((platform) => {
+    const field = `${platform}Handle` as const;
+    return form[field] !== savedForm?.[field] && !!socialProfileError(platform, form[field]);
+  });
 
   const initials = form.displayName
     ? form.displayName
@@ -950,8 +985,10 @@ export function DesignerPortfolioSettings() {
                     <Label className="text-sm font-medium mt-2 text-muted-foreground">
                       Accent colour
                     </Label>
-                    <AccentColorDropdown
+                    <PortfolioAccentColor
                       value={form.accentColor}
+                      disabled={isSaving}
+                      resetVersion={accentResetVersion}
                       onChange={(hex) => updateField('accentColor', hex)}
                     />
                   </div>
@@ -1485,39 +1522,33 @@ export function DesignerPortfolioSettings() {
                       <Label className="text-sm font-medium text-muted-foreground">
                         Social links
                       </Label>
-                      <div className={socialInputWrapperClassName}>
-                        <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                          <InstagramBrandIcon className="size-4" />
-                        </span>
-                        <Input
-                          value={form.instagramHandle}
-                          onChange={(e) => updateField('instagramHandle', e.target.value)}
-                          placeholder="Instagram handle"
-                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        />
-                      </div>
-                      <div className={socialInputWrapperClassName}>
-                        <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                          <LinkedInBrandIcon className="size-4" />
-                        </span>
-                        <Input
-                          value={form.linkedinHandle}
-                          onChange={(e) => updateField('linkedinHandle', e.target.value)}
-                          placeholder="Linkedin handle..."
-                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        />
-                      </div>
-                      <div className={socialInputWrapperClassName}>
-                        <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
-                          <YouTubeBrandIcon className="size-4" />
-                        </span>
-                        <Input
-                          value={form.youtubeHandle}
-                          onChange={(e) => updateField('youtubeHandle', e.target.value)}
-                          placeholder="YouTube handle..."
-                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        />
-                      </div>
+                      <SocialProfileInput
+                        id="portfolio-instagram"
+                        platform="instagram"
+                        value={form.instagramHandle}
+                        onValueChange={(value) => updateField('instagramHandle', value)}
+                        placeholder="Instagram handle"
+                        startAdornment={<InstagramBrandIcon className="size-4" />}
+                        className="shadow-sm"
+                      />
+                      <SocialProfileInput
+                        id="portfolio-linkedin"
+                        platform="linkedin"
+                        value={form.linkedinHandle}
+                        onValueChange={(value) => updateField('linkedinHandle', value)}
+                        placeholder="Linkedin handle..."
+                        startAdornment={<LinkedInBrandIcon className="size-4" />}
+                        className="shadow-sm"
+                      />
+                      <SocialProfileInput
+                        id="portfolio-youtube"
+                        platform="youtube"
+                        value={form.youtubeHandle}
+                        onValueChange={(value) => updateField('youtubeHandle', value)}
+                        placeholder="YouTube handle..."
+                        startAdornment={<YouTubeBrandIcon className="size-4" />}
+                        className="shadow-sm"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1750,12 +1781,27 @@ export function DesignerPortfolioSettings() {
         <Button
           className="gap-1.5"
           onClick={handleSave}
-          disabled={!isDirty || isSaving || hasRequiredHeroErrors}
+          disabled={!isDirty || isSaving || hasRequiredHeroErrors || hasSocialLinkErrors}
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
           Save changes
         </Button>
       </div>
+
+      <PortfolioCoverCropDialog
+        open={heroCoverSource !== null}
+        imageSource={heroCoverSource}
+        isSaving={isUploadingHeroCover}
+        error={heroCoverError}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHeroCoverSource(null);
+            setHeroCoverError(null);
+          }
+        }}
+        onChooseAnother={handleHeroCoverUploadClick}
+        onSave={saveHeroCoverCrop}
+      />
 
       {/* Hidden file input for portfolio cover upload */}
       <input
@@ -1771,70 +1817,6 @@ export function DesignerPortfolioSettings() {
 }
 
 /* ─── Sub-components ─────────────────────────────────────────────────────────── */
-
-const accentColors = [
-  { name: 'Coral red', hex: '#FF8F73' },
-  { name: 'Ocean blue', hex: '#4A90D9' },
-  { name: 'Forest green', hex: '#2D8659' },
-  { name: 'Sunset orange', hex: '#F5A623' },
-  { name: 'Lavender', hex: '#9B59B6' },
-  { name: 'Slate grey', hex: '#6B7B8D' },
-  { name: 'Mint', hex: '#50C9A8' },
-  { name: 'Rose pink', hex: '#E84393' },
-];
-
-function AccentColorDropdown({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (hex: string) => void;
-}) {
-  const selected = accentColors.find((c) => c.hex.toLowerCase() === value.toLowerCase()) ?? {
-    name: 'Custom',
-    hex: value || '#FF8F73',
-  };
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 shadow-md transition-colors hover:bg-accent/50">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="size-5 shrink-0 rounded-full border border-border"
-            style={{ backgroundColor: selected.hex }}
-          />
-          <span className="text-sm font-medium text-foreground">{selected.name}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{selected.hex}</span>
-          <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden />
-        </div>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={4}
-        className="w-[var(--radix-dropdown-menu-trigger-width)]"
-      >
-        {accentColors.map((color) => (
-          <DropdownMenuItem
-            key={color.hex}
-            onSelect={() => onChange(color.hex)}
-            className={`justify-between px-3 py-2 ${color.hex.toLowerCase() === value.toLowerCase() ? 'bg-accent/30' : ''}`}
-          >
-            <div className="flex items-center gap-2.5">
-              <span
-                className="size-5 shrink-0 rounded-full border border-border"
-                style={{ backgroundColor: color.hex }}
-              />
-              <span className="text-sm text-foreground">{color.name}</span>
-            </div>
-            <span className="text-xs text-muted-foreground">{color.hex}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 function ProjectDropdown({
   disabled,

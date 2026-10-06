@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -143,12 +143,179 @@ function ownerProfile(overrides: Partial<ProfileOwnerResponse> = {}): ProfileOwn
 }
 
 describe('DesignerProfileEditor', () => {
+  it('preserves a saved 100-person team and round trips a larger exact staff count', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ staffCount: 150 }));
+    const { unmount } = render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, staffCount: 100 }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(screen.getByLabelText('Staff count')).toHaveValue('100');
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    await user.clear(screen.getByLabelText('Staff count'));
+    await user.type(screen.getByLabelText('Staff count'), '150');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ staffCount: 150 }),
+    );
+    expect(screen.getByLabelText('Staff count')).toHaveValue('150');
+    unmount();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, staffCount: 150 }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(screen.getByLabelText('Staff count')).toHaveValue('150');
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+  });
+
   beforeEach(() => {
     mock.fetchProfileCompletion.mockReset();
     mock.refresh.mockReset();
     mock.updateDesignerProfile.mockReset();
     mock.fetchProfileCompletion.mockResolvedValue({ ...completion, score: 80 });
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile());
+  });
+
+  it.each(['individual', 'company'] as const)(
+    'preserves older founding years when saving a %s profile',
+    async (entityType) => {
+      mock.updateDesignerProfile.mockResolvedValue(
+        ownerProfile({
+          entityType,
+          foundedYear: entityType === 'company' ? 1985 : 1995,
+          bio: 'Updated biography',
+        }),
+      );
+      render(
+        <DesignerProfileEditor
+          initialCompletion={completion}
+          initialProfile={{ ...profile, entityType, foundedYear: 1995 }}
+          taxonomy={terms}
+          taxonomyError={null}
+        />,
+      );
+      if (entityType === 'company') {
+        const founded = screen.getByLabelText('Founded year');
+        expect(founded).toHaveValue('1995');
+        fireEvent.change(founded, { target: { value: '1985' } });
+      } else {
+        expect(screen.queryByLabelText('Founded year')).not.toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Bio'), { target: { value: 'Updated biography' } });
+      }
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      await waitFor(() =>
+        expect(mock.updateDesignerProfile).toHaveBeenCalledWith(
+          entityType === 'company' ? { foundedYear: 1985 } : { bio: 'Updated biography' },
+        ),
+      );
+      if (entityType === 'company')
+        expect(screen.getByLabelText('Founded year')).toHaveValue('1985');
+    },
+  );
+
+  it('rejects a future founding year before saving', async () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    const founded = screen.getByLabelText('Founded year');
+    fireEvent.change(founded, { target: { value: '2100' } });
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(founded).toHaveAttribute('aria-invalid', 'true');
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it.each(['1995.5', '1995abc', 'year', '2e3', '01995', '-1995'])(
+    'rejects malformed founding year %s without silently changing it',
+    async (year) => {
+      render(
+        <DesignerProfileEditor
+          initialCompletion={completion}
+          initialProfile={profile}
+          taxonomy={terms}
+          taxonomyError={null}
+        />,
+      );
+      const founded = screen.getByLabelText('Founded year');
+      fireEvent.change(founded, { target: { value: year } });
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(founded).toHaveValue(year);
+      expect(founded).toHaveAttribute('aria-invalid', 'true');
+      expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+    },
+  );
+
+  it('clears a founding year as unknown', async () => {
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ foundedYear: null }));
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Founded year'), { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ foundedYear: null }),
+    );
+  });
+
+  it('confirms live social destinations and blocks invalid input before saving', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(
+      screen.getByRole('link', { name: 'Open Instagram profile (opens in a new tab)' }),
+    ).toHaveAttribute('href', 'https://www.instagram.com/mahistudio');
+    fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Instagram'), {
+      target: { value: 'javascript:alert(1)' },
+    });
+    expect(screen.queryByRole('link', { name: /Open Instagram profile/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Instagram')).toHaveAttribute('aria-invalid', 'true');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Instagram'), {
+      target: { value: 'https://instagram.com/new-studio' },
+    });
+    expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
+      'href',
+      'https://instagram.com/new-studio',
+    );
+    mock.updateDesignerProfile.mockResolvedValue(
+      ownerProfile({ instagramHandle: 'https://instagram.com/new-studio' }),
+    );
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        instagramHandle: 'https://instagram.com/new-studio',
+      }),
+    );
+    expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
+      'href',
+      'https://instagram.com/new-studio',
+    );
   });
 
   it('saves physical office count independently of the service cities', async () => {
@@ -338,7 +505,7 @@ describe('DesignerProfileEditor', () => {
       fireEvent.click(screen.getByRole('link', { name: 'Write your bio' }));
 
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-      expect(screen.getByLabelText(/bio/i)).toHaveFocus();
+      expect(screen.getByRole('textbox', { name: 'Bio' })).toHaveFocus();
     } finally {
       // @ts-expect-error jsdom has no scrollIntoView; restore the missing builtin.
       delete window.HTMLElement.prototype.scrollIntoView;
@@ -357,6 +524,48 @@ describe('DesignerProfileEditor', () => {
 
     expect(screen.getByText('1 item remaining')).toBeInTheDocument();
     expect(screen.getByText('Publish a project')).toBeInTheDocument();
+  });
+
+  it('shows completed milestones before the actionable next step', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 50, missing: ['logo', 'location', 'scope'] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    const steps = within(
+      screen.getByRole('list', { name: 'Profile completion steps' }),
+    ).getAllByRole('listitem');
+    expect(steps).toHaveLength(6);
+    expect(steps.slice(0, 3).every((step) => step.textContent?.includes('Complete'))).toBe(true);
+    expect(within(steps[3]!).getByRole('link', { name: 'Upload your logo' })).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+    expect(within(steps[4]!).getByRole('link', { name: 'Add your location' })).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByRole('progressbar', { name: 'Profile completion' })).toHaveAttribute(
+      'aria-valuenow',
+      '50',
+    );
+  });
+
+  it('keeps completed profiles free of next-step actions', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 100, missing: [] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(screen.getByText('Your profile is complete')).toBeInTheDocument();
+    const steps = screen.getByRole('list', { name: 'Profile completion steps' });
+    expect(within(steps).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(steps).getAllByText('Complete')).toHaveLength(6);
   });
 
   it('saves validated profile and footprint changes, then refreshes completion', async () => {

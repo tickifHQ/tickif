@@ -29,7 +29,9 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
+import { SocialProfileInput } from '@/components/social-profile-confirmation';
 import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
+import { ProfileCompletionStepper } from '@/components/profile-completion-stepper';
 import {
   PhoneNumberInput,
   countries,
@@ -236,7 +238,11 @@ function formToInput(
   if (form.entityType === designerEntityType.enum.company) {
     if (form.firmType !== saved.firmType) input.firmType = nullable(form.firmType);
     if (form.foundedYear !== saved.foundedYear) {
-      input.foundedYear = nullableNumber(form.foundedYear);
+      const foundedYear = form.foundedYear.trim();
+      if (foundedYear && !/^\d{4}$/.test(foundedYear)) {
+        errors.foundedYear = 'Enter a whole four-digit year.';
+      }
+      input.foundedYear = foundedYear ? Number(foundedYear) : null;
     }
     if (form.staffCount !== saved.staffCount) input.staffCount = nullableNumber(form.staffCount);
   }
@@ -492,61 +498,11 @@ export function DesignerProfileEditor({
   return (
     <form className="grid gap-6" onSubmit={handleSubmit} noValidate>
       {completion ? (
-        <Card>
-          <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium">Profile completion</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {completion.missing.length > 0
-                  ? `${completion.missing.length} item${completion.missing.length === 1 ? '' : 's'} remaining`
-                  : 'Your profile is complete'}
-              </p>
-              {completion.missing.length > 0 ? (
-                <ul aria-label="Remaining profile requirements" className="mt-2 space-y-1">
-                  {completion.missing.map((requirement) => {
-                    const known = COMPLETION_REQUIREMENT_ACTIONS[requirement];
-                    const label = known?.label ?? requirement;
-                    const action = known?.action ?? 'Review this requirement';
-                    const href = known?.href ?? '/designer/profile';
-                    return (
-                      <li
-                        key={requirement}
-                        className="flex flex-wrap items-baseline gap-x-2 text-xs"
-                      >
-                        <span className="font-medium text-foreground">{label}</span>
-                        <Link
-                          href={href}
-                          onClick={(event) => scrollToRequirementField(event, href)}
-                          className="font-medium text-primary underline-offset-4 hover:underline"
-                        >
-                          {action}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </div>
-            <div className="flex min-w-48 items-center gap-3">
-              <div
-                className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-label="Profile completion"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={completion.score}
-              >
-                <div
-                  className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${completion.score}%` }}
-                />
-              </div>
-              <span className="text-sm font-semibold tabular-nums">
-                {completion.score}% complete
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        <ProfileCompletionStepper
+          completion={completion}
+          actions={COMPLETION_REQUIREMENT_ACTIONS}
+          onRequirementClick={scrollToRequirementField}
+        />
       ) : null}
 
       {completionError ? (
@@ -705,46 +661,41 @@ export function DesignerProfileEditor({
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field
-              htmlFor="profile-instagram"
-              label="Instagram"
-              error={validationErrors.instagramHandle}
-            >
+            <Field htmlFor="profile-instagram" label="Instagram">
               {(aria) => (
-                <Input
+                <SocialProfileInput
                   id="profile-instagram"
+                  platform="instagram"
                   value={form.instagramHandle}
-                  onChange={(event) => updateField('instagramHandle', event.target.value)}
+                  onValueChange={(value) => updateField('instagramHandle', value)}
                   placeholder="@yourstudio"
-                  maxLength={60}
+                  errorMessage={validationErrors.instagramHandle}
                   {...aria}
                 />
               )}
             </Field>
-            <Field
-              htmlFor="profile-linkedin"
-              label="LinkedIn"
-              error={validationErrors.linkedinHandle}
-            >
+            <Field htmlFor="profile-linkedin" label="LinkedIn">
               {(aria) => (
-                <Input
+                <SocialProfileInput
                   id="profile-linkedin"
+                  platform="linkedin"
                   value={form.linkedinHandle}
-                  onChange={(event) => updateField('linkedinHandle', event.target.value)}
+                  onValueChange={(value) => updateField('linkedinHandle', value)}
                   placeholder="/company/yourstudio"
-                  maxLength={60}
+                  errorMessage={validationErrors.linkedinHandle}
                   {...aria}
                 />
               )}
             </Field>
-            <Field htmlFor="profile-youtube" label="YouTube" error={validationErrors.youtubeHandle}>
+            <Field htmlFor="profile-youtube" label="YouTube">
               {(aria) => (
-                <Input
+                <SocialProfileInput
                   id="profile-youtube"
+                  platform="youtube"
                   value={form.youtubeHandle}
-                  onChange={(event) => updateField('youtubeHandle', event.target.value)}
+                  onValueChange={(value) => updateField('youtubeHandle', value)}
                   placeholder="@yourstudio"
-                  maxLength={60}
+                  errorMessage={validationErrors.youtubeHandle}
                   {...aria}
                 />
               )}
@@ -781,9 +732,7 @@ export function DesignerProfileEditor({
                 <Input
                   id="profile-founded-year"
                   value={form.foundedYear}
-                  onChange={(event) =>
-                    updateField('foundedYear', event.target.value.replace(/\D/g, '').slice(0, 4))
-                  }
+                  onChange={(event) => updateField('foundedYear', event.target.value)}
                   placeholder="2021"
                   inputMode="numeric"
                   {...aria}
