@@ -156,7 +156,7 @@ test('social profile confirmations match saved public links on desktop and mobil
         page.getByRole('link', { name: `Open ${platform} profile (opens in a new tab)` }),
       ).toHaveAttribute('href', href);
     }
-    await page.getByRole('textbox', { name: 'Instagram', exact: true }).scrollIntoViewIfNeeded();
+    await page.getByRole('textbox', { name: 'YouTube', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({
       path: testInfo.outputPath('social-portfolio-settings-desktop.png'),
       animations: 'disabled',
