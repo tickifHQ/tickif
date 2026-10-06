@@ -602,9 +602,15 @@ describe('DesignerPortfolioSettings', () => {
   });
 
   it('retains the crop for retry when uploading a replacement fails', async () => {
+    let resolveUpload!: (value: { heroCoverUrl: string }) => void;
     mock.uploadPortfolioCover
       .mockRejectedValueOnce(new Error('Storage unavailable'))
-      .mockResolvedValueOnce({ heroCoverUrl: 'https://cdn.tickif.test/replacement.webp' });
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ heroCoverUrl: string }>((resolve) => {
+            resolveUpload = resolve;
+          }),
+      );
     await renderSettings();
     const user = userEvent.setup();
     await user.upload(
@@ -619,6 +625,11 @@ describe('DesignerPortfolioSettings', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Save cover' }));
     await waitFor(() => expect(mock.uploadPortfolioCover).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Adjust portfolio cover' })).toBeVisible();
+    await act(async () => {
+      resolveUpload({ heroCoverUrl: 'https://cdn.tickif.test/replacement.webp' });
+    });
     await waitFor(() =>
       expect(
         screen.queryByRole('dialog', { name: 'Adjust portfolio cover' }),

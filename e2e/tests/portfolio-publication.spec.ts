@@ -699,6 +699,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       await cropDialog.getByRole('button', { name: 'Save cover', exact: true }).click();
       const cropSurface = cropDialog.getByTestId('cover-crop-surface');
       await expect(cropSurface).toHaveAttribute('inert', '');
+      await expect(cropDialog.getByRole('alert')).toHaveCount(0);
       const cropImage = cropDialog.getByAltText('Portfolio cover being adjusted');
       const lockedTransform = await cropImage.evaluate((image) => image.style.transform);
       const surfaceBox = await cropSurface.boundingBox();

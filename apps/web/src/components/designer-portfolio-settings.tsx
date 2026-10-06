@@ -675,8 +675,8 @@ export function DesignerPortfolioSettings() {
 
   function saveHeroCoverCrop(pixels: Parameters<typeof cropPortfolioCoverToFile>[1]) {
     if (!heroCoverSource) return;
+    setHeroCoverError(null);
     startHeroCoverUploadTransition(async () => {
-      setHeroCoverError(null);
       try {
         const file = await cropPortfolioCoverToFile(heroCoverSource, pixels);
         const result = await uploadPortfolioCover(file);
