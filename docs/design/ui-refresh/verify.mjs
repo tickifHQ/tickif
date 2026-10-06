@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +14,11 @@ for (const asset of manifest.staticAssets) {
   const contents = fs.readFileSync(filename);
   assert(contents.length > 0, `${asset.path} is empty`);
   assert.equal(contents.length, asset.bytes, `${asset.path} size differs from the manifest`);
+  assert.equal(
+    createHash('sha256').update(contents).digest('hex'),
+    asset.sha256,
+    `${asset.path} content differs from the Figma export`,
+  );
   if (asset.format === 'svg') {
     const root = contents.toString('utf8').match(/<svg\b[^>]*>/)?.[0];
     assert(root, `${asset.path} has no SVG root`);

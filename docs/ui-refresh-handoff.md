@@ -145,16 +145,20 @@ chain, update downstream bases, and keep the same single final merge policy.
 
 ### Stack tracking
 
-| Batch        | Actual branch                  | Base branch | PR URL  | Head SHA           | Review and CI status             |
-| ------------ | ------------------------------ | ----------- | ------- | ------------------ | -------------------------------- |
-| Foundations  | `codex/ui-refresh/foundations` | `main`      | Pending | Baseline SHA above | Phase 1 partial; Phase 2 pending |
-| Assets       | —                              | —           | —       | —                  | Not created                      |
-| Profile      | —                              | —           | —       | —                  | Not created                      |
-| Designer     | —                              | —           | —       | —                  | Not created                      |
-| Visitor      | —                              | —           | —       | —                  | Not created                      |
-| Admin        | —                              | —           | —       | —                  | Not created                      |
-| Verification | —                              | —           | —       | —                  | Not created                      |
-| Aggregate    | `codex/ui-refresh/integration` | `main`      | Pending | Baseline SHA above | Draft; only final merge target   |
+| Batch        | Actual branch                  | Base branch | PR URL                                              | Extraction SHA / current head                                                                                | Review and CI status                    |
+| ------------ | ------------------------------ | ----------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| Foundations  | `codex/ui-refresh/foundations` | `main`      | [#710](https://github.com/tickifHQ/tickif/pull/710) | `a1f3f972d836a281dca07ef7e262abe3f0dd415b`; [live head](https://github.com/tickifHQ/tickif/pull/710/commits) | Draft; Phase 1 partial; Phase 2 pending |
+| Assets       | —                              | —           | —                                                   | —                                                                                                            | Not created                             |
+| Profile      | —                              | —           | —                                                   | —                                                                                                            | Not created                             |
+| Designer     | —                              | —           | —                                                   | —                                                                                                            | Not created                             |
+| Visitor      | —                              | —           | —                                                   | —                                                                                                            | Not created                             |
+| Admin        | —                              | —           | —                                                   | —                                                                                                            | Not created                             |
+| Verification | —                              | —           | —                                                   | —                                                                                                            | Not created                             |
+| Aggregate    | `codex/ui-refresh/integration` | `main`      | [#711](https://github.com/tickifHQ/tickif/pull/711) | Same extraction SHA; [live head](https://github.com/tickifHQ/tickif/pull/711/commits)                        | Draft; only final merge target          |
+
+The extraction SHA identifies the substantive Phase 1 snapshot. Later handoff
+bookkeeping commits advance both branches; use each PR's live head for CI and
+merge verification. No phase has passed its completion gate yet.
 
 ## Phase 0 Review and fresh main baseline
 
@@ -455,14 +459,24 @@ scoped primary foreground, hover, and focus must remain contrast-safe.
 - Stock Typesense 30.2 exited with code 139 in this local Docker environment.
   A rerun uses the existing locally patched Typesense image in a dedicated
   task container on port 8111, with throwaway credentials and collection prefix.
-  Full-suite final result: pending.
+  Full-suite final result: passed, all 17 tasks (23m42s). API: 135 files / 1,943
+  tests passed, with one existing skipped file / four skipped tests. Worker:
+  44 files / 225 tests passed. Web: 175 files / 1,700 tests passed.
 - Playwright showcase baseline: input editing, Escape dismissal, light/dark
   switching passed; no browser errors and no horizontal overflow at 390px.
   Screenshots are under `docs/design/ui-refresh/baseline-*.png`.
-- Asset/JSON validation: 53 non-empty exports with valid dimensions, 46 unique
+- Asset/JSON validation: 53 non-empty exports with valid dimensions and SHA-256
+  integrity checks, 46 unique
   tokens, caller/route paths present, seven proposed contrast pairs pass.
 - Runtime components, badge contracts, awarding logic, and production assets
   have not changed. Phase 1 does not claim a redesigned showcase or page.
+
+The task's Redis and patched Typesense containers are stopped after verification.
+They can be restarted with `docker start tickif-ui-refresh-test-redis
+tickif-ui-refresh-test-typesense-local`. The two dedicated test databases remain
+available; use the recorded test database names, Redis port 6382/index 15,
+Typesense port 8111, and a task-specific collection prefix for future checks.
+The unrelated development services remain running.
 
 ## Resume checklist
 

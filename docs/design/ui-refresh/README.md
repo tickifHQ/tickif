@@ -41,7 +41,7 @@ reference code and remaining screenshots are cached locally under the ignored
 `.ui-refresh.local` directory; obtain fresh MCP context when that cache is absent.
 
 Run `node docs/design/ui-refresh/verify.mjs` from the repository root to check
-asset bytes/dimensions, token provenance, caller paths, and proposed contrast
+asset bytes/dimensions and SHA-256 hashes, token provenance, caller paths, and proposed contrast
 ratios without changing the artifacts. Rebuild the component inventory when
 source files change; this verifier does not discover new callers or routes.
 
