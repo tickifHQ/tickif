@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'profile-completion-stepper.spec.ts',
+    'profile completion steps guide designers to missing fields on desktop and mobile',
+  ],
+  [
     'portfolio-details.spec.ts',
     'portfolio details persist from editor to public studio on desktop and mobile',
   ],

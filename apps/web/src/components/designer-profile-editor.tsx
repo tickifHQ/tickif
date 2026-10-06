@@ -30,6 +30,7 @@ import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
 import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
+import { ProfileCompletionStepper } from '@/components/profile-completion-stepper';
 import {
   PhoneNumberInput,
   countries,
@@ -492,61 +493,11 @@ export function DesignerProfileEditor({
   return (
     <form className="grid gap-6" onSubmit={handleSubmit} noValidate>
       {completion ? (
-        <Card>
-          <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium">Profile completion</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {completion.missing.length > 0
-                  ? `${completion.missing.length} item${completion.missing.length === 1 ? '' : 's'} remaining`
-                  : 'Your profile is complete'}
-              </p>
-              {completion.missing.length > 0 ? (
-                <ul aria-label="Remaining profile requirements" className="mt-2 space-y-1">
-                  {completion.missing.map((requirement) => {
-                    const known = COMPLETION_REQUIREMENT_ACTIONS[requirement];
-                    const label = known?.label ?? requirement;
-                    const action = known?.action ?? 'Review this requirement';
-                    const href = known?.href ?? '/designer/profile';
-                    return (
-                      <li
-                        key={requirement}
-                        className="flex flex-wrap items-baseline gap-x-2 text-xs"
-                      >
-                        <span className="font-medium text-foreground">{label}</span>
-                        <Link
-                          href={href}
-                          onClick={(event) => scrollToRequirementField(event, href)}
-                          className="font-medium text-primary underline-offset-4 hover:underline"
-                        >
-                          {action}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </div>
-            <div className="flex min-w-48 items-center gap-3">
-              <div
-                className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-label="Profile completion"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={completion.score}
-              >
-                <div
-                  className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${completion.score}%` }}
-                />
-              </div>
-              <span className="text-sm font-semibold tabular-nums">
-                {completion.score}% complete
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        <ProfileCompletionStepper
+          completion={completion}
+          actions={COMPLETION_REQUIREMENT_ACTIONS}
+          onRequirementClick={scrollToRequirementField}
+        />
       ) : null}
 
       {completionError ? (
