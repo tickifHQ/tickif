@@ -2239,9 +2239,9 @@ export const projectsRepository = {
   },
 
   /**
-   * Lowest budget band across a designer's published projects, by taxonomy
-   * `sortOrder` (bands are ordered cheapest-first). Powers the "starting at"
-   * stat on the public portfolio. Null when no published project carries a band.
+   * Lowest budget band across a designer's published projects, by monetary
+   * lower bound, including retired ranges still saved on projects. Powers the
+   * "starting at" stat on the public portfolio. Null when no published project carries a band.
    */
   async findLowestBudgetBandLabel(designerId: string): Promise<string | null> {
     const [row] = await db
@@ -2252,11 +2252,13 @@ export const projectsRepository = {
         and(
           eq(schema.taxonomy.slug, schema.project.budgetBandSlug),
           eq(schema.taxonomy.kind, 'budget_band'),
-          eq(schema.taxonomy.isActive, true),
         ),
       )
       .where(and(eq(schema.project.designerId, designerId), eq(schema.project.status, 'published')))
-      .orderBy(schema.taxonomy.sortOrder)
+      .orderBy(
+        sql`(${schema.taxonomy.metadata}->>'min')::numeric ASC NULLS LAST`,
+        schema.taxonomy.sortOrder,
+      )
       .limit(1);
     return row?.label ?? null;
   },
