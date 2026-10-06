@@ -143,19 +143,19 @@ test('custom portfolio accent previews validates saves reloads and discards on d
       animations: 'disabled',
     });
     for (const [hex, foreground] of [
-      ['#FFFFFF', '#000000'],
-      ['#000000', '#ffffff'],
-    ]) {
+      ['#FFFFFF', 'rgb(0, 0, 0)'],
+      ['#000000', 'rgb(255, 255, 255)'],
+    ] as const) {
       await page.goto('/designer/portfolio');
       await page.evaluate(() => document.documentElement.classList.add('dark'));
-      await input.fill(hex!);
-      await expect(preview).toHaveCSS('--primary-foreground', foreground!);
+      await input.fill(hex);
+      await expect(preview.locator('span')).toHaveCSS('color', foreground);
       await page.getByRole('button', { name: 'Use colour' }).click();
       await save.click();
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
       await page.goto(`/d/${slug}`);
-      await expect(page.locator('main')).toHaveCSS('--primary', hex!);
-      await expect(page.locator('main')).toHaveCSS('--primary-foreground', foreground!);
+      await expect(page.locator('main')).toHaveCSS('--primary', hex);
+      await expect(page.locator('main .bg-primary').first()).toHaveCSS('color', foreground);
       const headingEmphasis = page.getByText('words', { exact: true });
       await expect(headingEmphasis).toBeVisible();
       expect(
