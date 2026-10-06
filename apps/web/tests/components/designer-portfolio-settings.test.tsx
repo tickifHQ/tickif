@@ -970,10 +970,8 @@ describe('DesignerPortfolioSettings', () => {
 
   it('confirms social URLs in portfolio settings and prevents saving an invalid destination', async () => {
     await renderSettings();
-    fireEvent.click(
-      screen.getByRole('heading', { name: 'Social links', exact: true }).closest('button')!,
-    );
-    const instagram = await screen.findByRole('textbox', { name: 'Instagram', exact: true });
+    fireEvent.click(screen.getByRole('heading', { name: 'Social links' }).closest('button')!);
+    const instagram = await screen.findByRole('textbox', { name: 'Instagram' });
     fireEvent.change(instagram, { target: { value: '@social-studio' } });
     expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
       'href',
