@@ -51,6 +51,7 @@ import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
 import { PortfolioCoverCropDialog } from '@/components/portfolio-cover-crop-dialog';
 import { cropPortfolioCoverToFile } from '@/lib/crop-image';
+import { PortfolioAccentColor } from '@/components/portfolio-accent-color';
 import { ExperienceCentersEditor } from '@/components/experience-centers-editor';
 import {
   GoogleBrandIcon,
@@ -280,6 +281,7 @@ export function DesignerPortfolioSettings() {
   const [isSaving, startSaveTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [accentResetVersion, setAccentResetVersion] = useState(0);
   const formRevisionRef = useRef(0);
 
   // Slug check
@@ -617,6 +619,7 @@ export function DesignerPortfolioSettings() {
   function handleDiscard() {
     if (savedForm) {
       setForm(savedForm);
+      setAccentResetVersion((version) => version + 1);
       // E-278: the logo is committed immediately by its own upload/delete
       // endpoints, so a logo change cannot be rolled back here. Reconcile the
       // baseline to the already-persisted logo instead of leaving a phantom
@@ -973,8 +976,10 @@ export function DesignerPortfolioSettings() {
                     <Label className="text-sm font-medium mt-2 text-muted-foreground">
                       Accent colour
                     </Label>
-                    <AccentColorDropdown
+                    <PortfolioAccentColor
                       value={form.accentColor}
+                      disabled={isSaving}
+                      resetVersion={accentResetVersion}
                       onChange={(hex) => updateField('accentColor', hex)}
                     />
                   </div>
@@ -1809,70 +1814,6 @@ export function DesignerPortfolioSettings() {
 }
 
 /* ─── Sub-components ─────────────────────────────────────────────────────────── */
-
-const accentColors = [
-  { name: 'Coral red', hex: '#FF8F73' },
-  { name: 'Ocean blue', hex: '#4A90D9' },
-  { name: 'Forest green', hex: '#2D8659' },
-  { name: 'Sunset orange', hex: '#F5A623' },
-  { name: 'Lavender', hex: '#9B59B6' },
-  { name: 'Slate grey', hex: '#6B7B8D' },
-  { name: 'Mint', hex: '#50C9A8' },
-  { name: 'Rose pink', hex: '#E84393' },
-];
-
-function AccentColorDropdown({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (hex: string) => void;
-}) {
-  const selected = accentColors.find((c) => c.hex.toLowerCase() === value.toLowerCase()) ?? {
-    name: 'Custom',
-    hex: value || '#FF8F73',
-  };
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 shadow-md transition-colors hover:bg-accent/50">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="size-5 shrink-0 rounded-full border border-border"
-            style={{ backgroundColor: selected.hex }}
-          />
-          <span className="text-sm font-medium text-foreground">{selected.name}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{selected.hex}</span>
-          <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden />
-        </div>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={4}
-        className="w-[var(--radix-dropdown-menu-trigger-width)]"
-      >
-        {accentColors.map((color) => (
-          <DropdownMenuItem
-            key={color.hex}
-            onSelect={() => onChange(color.hex)}
-            className={`justify-between px-3 py-2 ${color.hex.toLowerCase() === value.toLowerCase() ? 'bg-accent/30' : ''}`}
-          >
-            <div className="flex items-center gap-2.5">
-              <span
-                className="size-5 shrink-0 rounded-full border border-border"
-                style={{ backgroundColor: color.hex }}
-              />
-              <span className="text-sm text-foreground">{color.name}</span>
-            </div>
-            <span className="text-xs text-muted-foreground">{color.hex}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 function ProjectDropdown({
   disabled,
