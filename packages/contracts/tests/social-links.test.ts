@@ -28,6 +28,10 @@ describe('social profile confirmation', () => {
     'https://user:secret@instagram.com/studio',
     '//evil.test/@studio',
     'studio?redirect=evil',
+    'studio\u0000name',
+    'studio\u001fname',
+    'studio\u007fname',
+    'studio\\name',
   ])('rejects invalid value %s before onboarding or profile update', (value) => {
     expect(socialProfileHref('instagram', value)).toBeNull();
     expect(socialProfileValueSchema('instagram').safeParse(value).success).toBe(false);

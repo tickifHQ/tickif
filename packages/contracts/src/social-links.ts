@@ -18,7 +18,11 @@ export type SocialPlatform = 'instagram' | 'linkedin' | 'youtube';
  */
 export function socialProfileHref(platform: SocialPlatform, handle: string): string | null {
   const trimmed = handle.trim();
-  if (!trimmed || /[\u0000-\u001f\u007f\\]/.test(trimmed)) return null;
+  if (!trimmed || trimmed.includes('\\')) return null;
+  for (const character of trimmed) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return null;
+  }
 
   if (/^https?:\/\//i.test(trimmed)) {
     // Zod uses the web URL parser in both browser and server runtimes.
