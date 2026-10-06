@@ -1767,14 +1767,14 @@ describe('DesignerProjectUpload batch recovery', () => {
           return new DOMRect(second ? 320 : 0, 0, 300, 225);
         });
       const user = userEvent.setup();
-      screen.getByRole('button', { name: 'Reorder Image 2' }).focus();
+      screen.getByRole('button', { name: 'Open Image 2' }).focus();
       await user.keyboard('[Space]');
       await user.keyboard('[ArrowLeft]');
       await user.keyboard('[Space]');
       await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
       rect.mockRestore();
       expect(screen.getByText('Saving order…')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Reorder Image 2' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: 'Open Image 2' })).toHaveAttribute(
         'aria-disabled',
         'true',
       );

@@ -6,7 +6,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -18,7 +19,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, ImagePlus, Loader2, RefreshCw, Star, Trash2 } from 'lucide-react';
+import { ImagePlus, Loader2, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
 import {
@@ -52,8 +53,12 @@ export function ProjectImageGrid(props: ProjectImageGridProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: { start: ['Space'], end: ['Space'], cancel: ['Escape'] },
+    }),
   );
   const activeImage = images.find((image) => image.id === activeId);
   const disabled = saving || props.uploading;
@@ -71,7 +76,7 @@ export function ProjectImageGrid(props: ProjectImageGridProps) {
         container: announcementContainer,
         screenReaderInstructions: {
           draggable:
-            'To reorder a photo, press Space, use the arrow keys to move, then press Space to drop. Press Escape to cancel.',
+            'To reorder a photo, press Space, use the arrow keys to move, then press Space to drop. Press Escape to cancel. Press Enter to open the photo.',
         },
         announcements: {
           onDragStart: ({ active }) =>
@@ -100,7 +105,7 @@ export function ProjectImageGrid(props: ProjectImageGridProps) {
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <p>Drag the grip to reorder photos</p>
+          <p>Drag images to reorder photos</p>
           {saving ? (
             <span role="status" className="inline-flex items-center gap-1.5">
               <Loader2 className="size-3 animate-spin" />
@@ -210,10 +215,16 @@ function SortablePhoto({
         )}
       >
         <button
+          ref={setActivatorNodeRef}
           type="button"
-          className="absolute inset-0 size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring"
-          disabled={!image.previewUrl}
-          onClick={() => props.onOpen(image, statusLabel)}
+          className="absolute inset-0 size-full select-none cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring"
+          {...attributes}
+          {...listeners}
+          aria-disabled={disabled}
+          disabled={!image.previewUrl && !canReorder}
+          onClick={() => {
+            if (image.previewUrl && !disabled) props.onOpen(image, statusLabel);
+          }}
           aria-label={`Open ${image.fileName}`}
         >
           <PhotoPreview image={image} />
@@ -268,23 +279,6 @@ function SortablePhoto({
             title="Remove photo"
           >
             <Trash2 className="size-4" />
-          </Button>
-          <Button
-            ref={setActivatorNodeRef}
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              controlClass,
-              'touch-none cursor-grab active:cursor-grabbing aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
-            )}
-            {...attributes}
-            {...listeners}
-            disabled={!canReorder}
-            aria-label={`Reorder ${image.fileName}`}
-            title="Drag to reorder"
-          >
-            <GripVertical className="size-5" />
           </Button>
         </div>
         {image.status === 'processing' ? (

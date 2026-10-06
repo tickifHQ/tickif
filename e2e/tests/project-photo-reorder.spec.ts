@@ -9,11 +9,11 @@ import { moderationApiUrl, signInProjectAdmin } from '../lib/project-moderation-
 import { webUrl } from '../lib/environment';
 
 async function dragPhoto(page: Page, from: number, to: number, touch: boolean) {
-  const handles = page.getByRole('button', { name: /^Reorder Image/ });
-  await handles.nth(from).scrollIntoViewIfNeeded();
-  const start = await handles.nth(from).boundingBox();
-  const target = await handles.nth(to).boundingBox();
-  if (!start || !target) throw new Error('Photo drag controls are missing.');
+  const photoButtons = page.getByRole('button', { name: /^Open Image/ });
+  await photoButtons.nth(from).scrollIntoViewIfNeeded();
+  const start = await photoButtons.nth(from).boundingBox();
+  const target = await photoButtons.nth(to).boundingBox();
+  if (!start || !target) throw new Error('Photos to reorder are missing.');
   const x = start.x + start.width / 2;
   const y = start.y + start.height / 2;
   const endX = target.x + target.width / 2;
@@ -21,6 +21,7 @@ async function dragPhoto(page: Page, from: number, to: number, touch: boolean) {
   if (touch) {
     const session = await page.context().newCDPSession(page);
     await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    await page.waitForTimeout(300);
     for (let step = 1; step <= 20; step++) {
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
@@ -117,12 +118,12 @@ for (const phone of [false, true]) {
           .items.map((image) => image.id);
       };
       await page.goto(`/designer/projects/upload?projectId=${projectId}`);
-      await expect(
-        page.getByRole('button', { name: 'Reorder Image 1', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Open Image 1', exact: true })).toBeVisible();
       const grid = page.getByRole('list', { name: 'Living room photos' });
       await grid.scrollIntoViewIfNeeded();
       await expect(grid.getByRole('listitem')).toHaveCount(3);
+      await expect(page.getByText('Drag images to reorder photos', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^Reorder Image/ })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /Move Image .* earlier/ })).toHaveCount(0);
       if (phone) {
         const preview = grid.getByRole('button', { name: 'Open Image 1', exact: true });
@@ -166,7 +167,7 @@ for (const phone of [false, true]) {
         grid.getByRole('button', { name: `Image ${phone ? 2 : 3} is the cover` }),
       ).toBeVisible();
       if (!phone) {
-        const first = page.getByRole('button', { name: 'Reorder Image 1', exact: true });
+        const first = page.getByRole('button', { name: 'Open Image 1', exact: true });
         await first.focus();
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');
@@ -191,7 +192,12 @@ for (const phone of [false, true]) {
       );
       await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
       await expect(page.getByText('Draft saved.', { exact: true })).toBeVisible();
-      await grid.getByRole('button', { name: 'Open Image 1', exact: true }).click();
+      const photo = grid.getByRole('button', { name: 'Open Image 1', exact: true });
+      if (phone) await photo.tap();
+      else {
+        await photo.focus();
+        await page.keyboard.press('Enter');
+      }
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.getByRole('button', { name: 'Close image preview', exact: true }).click();
       await grid.getByRole('button', { name: 'Remove Image 1', exact: true }).click();
