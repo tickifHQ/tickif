@@ -158,13 +158,34 @@ test('social profile confirmations match saved public links on desktop and mobil
     }
     // Center the complete field group so the sticky save footer cannot obscure
     // a lower confirmation in either evidence viewport.
-    const centerSocialFields = () =>
-      page.getByRole('textbox', { name: 'YouTube', exact: true }).evaluate((input) => {
-        input.parentElement?.parentElement?.parentElement?.scrollIntoView({
+    const centerSocialFields = async () => {
+      await page.getByRole('textbox', { name: 'Instagram', exact: true }).evaluate((input) => {
+        input.closest('[data-slot="portfolio-section-content"]')?.scrollIntoView({
           block: 'center',
           behavior: 'instant',
         });
       });
+      for (const platform of Object.keys(destinations)) {
+        const action = page.getByRole('link', {
+          name: `Open ${platform} profile (opens in a new tab)`,
+        });
+        await expect
+          .poll(async () => {
+            const viewport = page.viewportSize();
+            const bounds = await action.boundingBox();
+            const footer = await page.getByTestId('portfolio-action-bar').boundingBox();
+            return Boolean(
+              viewport &&
+                bounds &&
+                bounds.x >= 0 &&
+                bounds.x + bounds.width <= viewport.width &&
+                bounds.y >= 64 &&
+                bounds.y + bounds.height <= Math.min(viewport.height, footer?.y ?? viewport.height),
+            );
+          })
+          .toBe(true);
+      }
+    };
     await centerSocialFields();
     await page.screenshot({
       path: testInfo.outputPath('social-portfolio-settings-desktop.png'),
