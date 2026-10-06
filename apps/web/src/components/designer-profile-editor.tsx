@@ -236,7 +236,11 @@ function formToInput(
   if (form.entityType === designerEntityType.enum.company) {
     if (form.firmType !== saved.firmType) input.firmType = nullable(form.firmType);
     if (form.foundedYear !== saved.foundedYear) {
-      input.foundedYear = nullableNumber(form.foundedYear);
+      const foundedYear = form.foundedYear.trim();
+      if (foundedYear && !/^\d{4}$/.test(foundedYear)) {
+        errors.foundedYear = 'Enter a whole four-digit year.';
+      }
+      input.foundedYear = foundedYear ? Number(foundedYear) : null;
     }
     if (form.staffCount !== saved.staffCount) input.staffCount = nullableNumber(form.staffCount);
   }
@@ -781,9 +785,7 @@ export function DesignerProfileEditor({
                 <Input
                   id="profile-founded-year"
                   value={form.foundedYear}
-                  onChange={(event) =>
-                    updateField('foundedYear', event.target.value.replace(/\D/g, '').slice(0, 4))
-                  }
+                  onChange={(event) => updateField('foundedYear', event.target.value)}
                   placeholder="2021"
                   inputMode="numeric"
                   {...aria}

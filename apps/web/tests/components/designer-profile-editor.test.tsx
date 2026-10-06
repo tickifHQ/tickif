@@ -204,6 +204,26 @@ describe('DesignerProfileEditor', () => {
     expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
   });
 
+  it.each(['1995.5', '1995abc', 'year', '2e3', '01995', '-1995'])(
+    'rejects malformed founding year %s without silently changing it',
+    async (year) => {
+      render(
+        <DesignerProfileEditor
+          initialCompletion={completion}
+          initialProfile={profile}
+          taxonomy={terms}
+          taxonomyError={null}
+        />,
+      );
+      const founded = screen.getByLabelText('Founded year');
+      fireEvent.change(founded, { target: { value: year } });
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(founded).toHaveValue(year);
+      expect(founded).toHaveAttribute('aria-invalid', 'true');
+      expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+    },
+  );
+
   it('clears a founding year as unknown', async () => {
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ foundedYear: null }));
     render(

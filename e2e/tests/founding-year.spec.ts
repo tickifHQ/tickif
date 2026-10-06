@@ -81,6 +81,13 @@ test('older founding year resumes in onboarding and persists through profile edi
     await expect(page.getByText(/your workspace is ready/i)).toBeVisible();
     await page.goto('/designer/profile');
     await expect(page.getByLabel('Founded year')).toHaveValue('1995');
+    await page.getByLabel('Founded year').fill('1995.5');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByLabel('Founded year')).toHaveValue('1995.5');
+    await expect(page.getByLabel('Founded year')).toHaveAttribute('aria-invalid', 'true');
+    expect(
+      (await (await context.request.get(`${apiUrl}/api/profiles/me`)).json()).foundedYear,
+    ).toBe(1995);
     await page.getByLabel('Founded year').fill('1985');
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
