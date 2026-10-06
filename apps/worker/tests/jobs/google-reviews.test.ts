@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as QueueModule from '@repo/queue';
 
 // --- Mocks (declared before importing the job module) ---
 
@@ -26,12 +27,14 @@ vi.mock('@repo/google-places', () => ({
   fetchPlaceDetails: places.fetchPlaceDetails,
   GooglePlacesError: FakeGooglePlacesError,
 }));
-vi.mock('@repo/queue', () => ({ enqueueGoogleReviewsRefresh: queue.enqueueGoogleReviewsRefresh }));
+vi.mock('@repo/queue', async (importOriginal) => ({
+  ...(await importOriginal<typeof QueueModule>()),
+  enqueueGoogleReviewsRefresh: queue.enqueueGoogleReviewsRefresh,
+}));
 vi.mock('../../src/google-reviews/repository.js', () => repo);
 
-const { processGoogleReviewRefresh, processGoogleReviewSweep } = await import(
-  '../../src/jobs/google-reviews.js'
-);
+const { processGoogleReviewRefresh, processGoogleReviewSweep } =
+  await import('../../src/jobs/google-reviews.js');
 
 const DETAILS = {
   placeId: 'ChIJabc',
@@ -77,7 +80,9 @@ describe('processGoogleReviewRefresh', () => {
     repo.getPlaceId.mockResolvedValue('ChIJabc');
     places.fetchPlaceDetails.mockRejectedValue(new FakeGooglePlacesError('network', 'timeout'));
 
-    await expect(processGoogleReviewRefresh('profile-1')).rejects.toMatchObject({ code: 'network' });
+    await expect(processGoogleReviewRefresh('profile-1')).rejects.toMatchObject({
+      code: 'network',
+    });
     expect(repo.persistError).toHaveBeenCalledWith('profile-1', 'timeout');
   });
 

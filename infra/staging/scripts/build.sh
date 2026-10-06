@@ -11,6 +11,8 @@ for service in api worker web operations; do
   docker build --pull --file "$dockerfile" \
     --build-arg "NEXT_PUBLIC_API_URL=https://$STAGING_DOMAIN" \
     --build-arg "NEXT_PUBLIC_WEB_URL=https://$STAGING_DOMAIN" \
+    --build-arg "NEXT_PUBLIC_TELEMETRY_ENABLED=${NEXT_PUBLIC_TELEMETRY_ENABLED:-false}" \
+    --build-arg "NEXT_PUBLIC_APP_VERSION=$revision" \
     --tag "$REGISTRY/$service:$revision" .
 done
 echo "Built $revision. Push these tags explicitly, then record registry digests in the release environment."

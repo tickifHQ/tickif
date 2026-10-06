@@ -29,6 +29,18 @@ require_variables() {
   done
 }
 
+ensure_telemetry_network() {
+  if docker network inspect tickif_telemetry >/dev/null 2>&1; then
+    local network
+    network=$(docker network inspect tickif_telemetry --format '{{.Driver}}|{{.Scope}}|{{json .Options}}')
+    [[ "$network" == overlay\|swarm\|* && "$network" == *'"encrypted"'* ]] || {
+      echo 'tickif_telemetry must be a Swarm encrypted overlay; refusing to reuse another network' >&2; return 1;
+    }
+  else
+    docker network create --driver overlay --opt encrypted tickif_telemetry >/dev/null
+  fi
+}
+
 assert_immutable_image() {
   local image="$1"
   if [[ "$image" == *":latest" || "$image" != *@sha256:* && ! "$image" =~ :[0-9a-f]{40,64}$ ]]; then
@@ -106,7 +118,18 @@ run_swarm_job() {
 }
 
 acquire_release_lock() {
-  exec 9>"${RELEASE_LOCK_FILE:-/var/lock/tickif-staging-release.lock}"
+  local lock_file="${RELEASE_LOCK_FILE:-/var/lock/tickif-staging-release.lock}"
+  if [[ ! -e "$lock_file" ]]; then
+    # O_EXCL via noclobber permits competing first-time releases to race safely.
+    # Never truncate/recreate an existing inode: all callers must share its lock.
+    (umask 022; set -o noclobber; : >"$lock_file") 2>/dev/null || true
+  fi
+  [[ -f "$lock_file" && ! -L "$lock_file" ]] || {
+    echo 'Release lock must be a readable regular file' >&2; return 1;
+  }
+  # Opening an existing user-owned file with O_CREAT in sticky /var/lock fails
+  # under Linux fs.protected_regular, even as root. flock works on a read-only FD.
+  exec 9<"$lock_file" || { echo 'Cannot open the shared release lock' >&2; return 1; }
   flock -n 9 || { echo 'Another release/restore is running' >&2; exit 1; }
 }
 

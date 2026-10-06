@@ -39,6 +39,7 @@ import {
   PROJECT_SORT_OPTIONS,
   DESIGNER_SORT_OPTIONS,
 } from './constants.js';
+import { log } from '../../lib/logger.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Structured Logging (Fire-and-Forget)
@@ -79,7 +80,8 @@ interface SearchZeroResultsEvent {
  */
 function logSearchQuery(event: SearchQueryEvent): void {
   try {
-    console.log(JSON.stringify(event));
+    const { q, filters, ...fields } = event;
+    log.info({ ...fields, event: event.type, queryLength: q.length, filterKeys: Object.keys(filters) });
   } catch {
     // Fire-and-forget: never throw to callers
   }
@@ -91,7 +93,8 @@ function logSearchQuery(event: SearchQueryEvent): void {
  */
 function logZeroResults(event: SearchZeroResultsEvent): void {
   try {
-    console.log(JSON.stringify(event));
+    const { q, filters, ...fields } = event;
+    log.info({ ...fields, event: event.type, queryLength: q.length, filterKeys: Object.keys(filters) });
   } catch {
     // Fire-and-forget: never throw to callers
   }
@@ -411,13 +414,12 @@ export async function searchDesigners(
   } catch {
     // Google data is optional card enrichment. Keep the primary Typesense results
     // available if its short-lived cache cannot be read.
-    console.warn(
-      JSON.stringify({
-        type: 'search.google_rating_enrichment_failed',
-        resultCount: result.hits.length,
-        timestamp: new Date().toISOString(),
-      }),
-    );
+    log.warn({
+      event: 'search.google_rating_enrichment_failed',
+      type: 'search.google_rating_enrichment_failed',
+      resultCount: result.hits.length,
+      timestamp: new Date().toISOString(),
+    });
   }
   const hits = await Promise.all(
     result.hits.map(async (document) => {

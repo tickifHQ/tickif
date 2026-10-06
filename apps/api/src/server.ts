@@ -6,6 +6,8 @@ import { app } from './app.js';
 import { closeRedisCache } from './lib/redis.js';
 import { beginDraining, closePostgres } from './modules/health/service.js';
 import { seedSystemAdmin } from './modules/system-admin/service.js';
+import { shutdownTelemetry } from '@repo/telemetry/node';
+import { log } from './lib/logger.js';
 
 // The API mints presigned upload URLs, so a prod boot must have R2 wired — fail fast here.
 if (isProduction) assertMediaStorageConfig();
@@ -20,15 +22,12 @@ if (isProduction) assertProductionSearchConfig();
 await seedSystemAdmin();
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
-  console.log(`[api] Tickif API listening on http://localhost:${info.port}`);
-  console.log(`[api] Scalar docs:    http://localhost:${info.port}/docs`);
-  console.log(`[api] OpenAPI spec:   http://localhost:${info.port}/openapi.json`);
+  log.info({ event: 'server.started', port: info.port });
 
   // Postgres is authoritative, so an unreachable Typesense or unapplied schema drift must
   // not prevent the API from serving traffic. Search reads degrade; nothing else does.
   void bootstrapSearch().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[api] Search bootstrap failed; search reads may be degraded: ${message}`);
+    log.error({ event: 'search.bootstrap.failed', err: error }, 'Search reads may be degraded');
   });
 });
 
@@ -38,10 +37,10 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   beginDraining();
-  console.log(`[api] ${signal} received, stopping traffic and draining...`);
+  log.info({ event: 'server.draining', signal });
 
   const forceExit = setTimeout(() => {
-    console.error('[api] graceful shutdown timed out');
+    log.error({ event: 'server.shutdown.timeout' });
     process.exit(1);
   }, 25_000);
   forceExit.unref();
@@ -52,11 +51,15 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
       server.close((error) => (error ? reject(error) : resolve()));
     });
     await Promise.all([closeRedisCache(), closePostgres()]);
-    console.log('[api] shutdown complete');
+    log.info({ event: 'server.shutdown.complete' });
   } catch (error) {
-    console.error('[api] error during shutdown:', error);
+    log.error({ event: 'server.shutdown.failed', err: error });
     exitCode = 1;
   } finally {
+    // Exporter shutdown consumes the same 25s application deadline, never extra time.
+    const flushed = await shutdownTelemetry(3_000);
+    if (!flushed) log.warn({ event: 'telemetry.shutdown.timeout' });
+    await log.flush();
     clearTimeout(forceExit);
     process.exit(exitCode);
   }

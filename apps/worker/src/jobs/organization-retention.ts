@@ -31,10 +31,7 @@ function errorCode(error: unknown): string {
   return 'UnknownError';
 }
 
-async function deleteStorageItems(
-  prepared: PreparedOrganizationPurge,
-  now: Date,
-): Promise<void> {
+async function deleteStorageItems(prepared: PreparedOrganizationPurge, now: Date): Promise<void> {
   for (const item of prepared.items) {
     try {
       const shared = await isStorageKeyReferencedOutsideOrganization(
@@ -111,7 +108,10 @@ export async function processOrganizationRetentionSweep(
     } catch (error) {
       failed += 1;
       await markProviderCleanupAttemptFailed(item, errorCode(error), now);
-      console.error('[worker] Razorpay subscription cleanup failed:', error);
+      logger.error(
+        { event: 'organization.provider_cleanup_failed', err: error },
+        'Organization provider cleanup failed',
+      );
     }
   }
 
@@ -121,7 +121,10 @@ export async function processOrganizationRetentionSweep(
       if (await archiveOrganization(candidate.organizationId, now)) archived += 1;
     } catch (error) {
       failed += 1;
-      console.error('[worker] organization archive transition failed:', error);
+      logger.error(
+        { event: 'organization.archive_failed', err: error },
+        'Organization archive transition failed',
+      );
     }
   }
 
@@ -131,9 +134,10 @@ export async function processOrganizationRetentionSweep(
       if (await purgeOrganization(candidate.organizationId, now)) purged += 1;
     } catch (error) {
       failed += 1;
-      console.error('[worker] organization purge failed:', error);
+      logger.error({ event: 'organization.purge_failed', err: error }, 'Organization purge failed');
     }
   }
 
   return { archived, purged, failed };
 }
+import { logger } from '../observability/logger.js';

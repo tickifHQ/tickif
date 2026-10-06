@@ -6,6 +6,7 @@
 **/*.pem
 **/*.key
 **/secrets/**
+**/.secrets/**
 deploy/*.env
 deploy/*.secret
 deploy/*.secrets
