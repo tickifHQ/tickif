@@ -179,8 +179,31 @@ describe('getServerSession', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
   });
 
-  it.each(['visitor', null])(
-    'gives an unfinished %s account a path to finish designer setup',
+  it.each([
+    ['visitor', 'active'],
+    ['visitor', 'pending'],
+    [null, 'pending'],
+  ])(
+    'denies designer workspace access to a %s/%s account without prompting for setup',
+    async (role, status) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+            user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role, status },
+          }),
+        }),
+      );
+
+      await expect(requireAuth({ requiredRole: 'designer' })).rejects.toThrow('NEXT_REDIRECT');
+      expect(mock.redirect).toHaveBeenCalledExactlyOnceWith('/unauthorized');
+    },
+  );
+
+  it.each(['visitor', 'designer', null, 'unknown'])(
+    'keeps %s accounts out of admin pages',
     async (role) => {
       vi.stubGlobal(
         'fetch',
@@ -193,26 +216,10 @@ describe('getServerSession', () => {
         }),
       );
 
-      await expect(requireAuth({ requiredRole: 'designer' })).rejects.toThrow('NEXT_REDIRECT');
-      expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding/deferred');
+      await expect(requireAuth({ requiredRole: 'admin' })).rejects.toThrow('NEXT_REDIRECT');
+      expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
     },
   );
-
-  it.each(['visitor', null, 'unknown'])('keeps %s accounts out of admin pages', async (role) => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
-          user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role },
-        }),
-      }),
-    );
-
-    await expect(requireAuth({ requiredRole: 'admin' })).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
-  });
 
   it('does not treat unknown roles as unfinished designer accounts', async () => {
     vi.stubGlobal(
