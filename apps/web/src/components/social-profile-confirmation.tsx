@@ -45,10 +45,10 @@ export function SocialProfileInput({
   const href = error ? null : socialProfileHref(platform, value);
   const errorId = `${id}-error`;
   const actionClassName =
-    'absolute inset-y-0 right-1 my-auto flex size-8 items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'absolute inset-y-0 right-1 my-auto flex size-8 items-center justify-center rounded-sm focus-visible:bg-muted focus-visible:outline-none';
 
   return (
-    <div className="relative min-w-0">
+    <div className="relative min-w-0 rounded-md transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
       <Input
         {...props}
         id={id}
@@ -60,7 +60,11 @@ export function SocialProfileInput({
         aria-describedby={
           [describedBy, error ? errorId : undefined].filter(Boolean).join(' ') || undefined
         }
-        className={cn('pr-10', startAdornment ? 'pl-12' : undefined, className)}
+        className={cn(
+          'pr-10 focus-visible:ring-0 focus-visible:ring-offset-0',
+          startAdornment ? 'pl-12' : undefined,
+          className,
+        )}
       />
       {startAdornment ? (
         <span

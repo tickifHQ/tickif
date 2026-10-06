@@ -1508,7 +1508,7 @@ export function DesignerPortfolioSettings() {
                         platform="linkedin"
                         value={form.linkedinHandle}
                         onValueChange={(value) => updateField('linkedinHandle', value)}
-                        placeholder="LinkedIn handle"
+                        placeholder="Linkedin handle..."
                         startAdornment={<LinkedInBrandIcon className="size-4" />}
                         className="shadow-sm"
                       />
@@ -1517,7 +1517,7 @@ export function DesignerPortfolioSettings() {
                         platform="youtube"
                         value={form.youtubeHandle}
                         onValueChange={(value) => updateField('youtubeHandle', value)}
-                        placeholder="YouTube handle"
+                        placeholder="YouTube handle..."
                         startAdornment={<YouTubeBrandIcon className="size-4" />}
                         className="shadow-sm"
                       />
