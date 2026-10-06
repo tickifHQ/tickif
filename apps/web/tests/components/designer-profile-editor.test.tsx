@@ -143,6 +143,39 @@ function ownerProfile(overrides: Partial<ProfileOwnerResponse> = {}): ProfileOwn
 }
 
 describe('DesignerProfileEditor', () => {
+  it('preserves a saved 100-person team and round trips a larger exact staff count', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ staffCount: 150 }));
+    const { unmount } = render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, staffCount: 100 }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(screen.getByLabelText('Staff count')).toHaveValue('100');
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    await user.clear(screen.getByLabelText('Staff count'));
+    await user.type(screen.getByLabelText('Staff count'), '150');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ staffCount: 150 }),
+    );
+    expect(screen.getByLabelText('Staff count')).toHaveValue('150');
+    unmount();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, staffCount: 150 }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    expect(screen.getByLabelText('Staff count')).toHaveValue('150');
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+  });
+
   beforeEach(() => {
     mock.fetchProfileCompletion.mockReset();
     mock.refresh.mockReset();

@@ -112,7 +112,7 @@ const firmTypeOptions = [
   'Studio',
 ] as const;
 
-const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '50+'] as const;
+const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '51-99', '100+'] as const;
 
 const emptyTaxonomyOptions: TaxonomyOptions = {
   scope: [],
@@ -168,6 +168,9 @@ function validateGoogleBusinessUrl(value: string) {
 
 function teamSizeToStaffCount(teamSize: string) {
   if (teamSize === 'Just me') return 1;
+  if (teamSize === '100+') return 100;
+  // Preserve the mapping of existing drafts; the legacy range does not reveal
+  // whether the studio belongs in 51-99 or 100+.
   if (teamSize === '50+') return 51;
   const upperBound = teamSize.split('-')[1];
   return upperBound ? Number.parseInt(upperBound, 10) : undefined;
@@ -1105,7 +1108,8 @@ function CompanyServicesFields({
         <CompactSelect
           id={`${formId}-team-size`}
           label="Team size"
-          options={teamSizeOptions}
+          labelHint={teamSize === '50+' ? 'Previous selection' : undefined}
+          options={teamSize === '50+' ? [...teamSizeOptions, '50+'] : teamSizeOptions}
           value={teamSize}
           onValueChange={onTeamSizeChange}
         />

@@ -58,6 +58,30 @@ vi.mock('@/lib/api', () => ({
  * the `<main>` element does not have inline style `--primary`; accent colour is ignored.
  */
 describe('PublicDesignerProfile — accent colour bug condition', () => {
+  it.each([
+    ['#FFFFFF', 'var(--portfolio-accent-on-light)'],
+    ['#000000', 'var(--portfolio-accent-on-dark)'],
+  ])('keeps buttons readable for custom accent %s', (accentColor, foreground) => {
+    const { container } = render(
+      <PublicDesignerProfile portfolio={makePublicPortfolio({ accentColor })} />,
+    );
+    expect(container.querySelector('main')!.style.getPropertyValue('--primary-foreground')).toBe(
+      foreground,
+    );
+    for (const emphasis of ['projects', 'words', 'work with us']) {
+      expect(screen.getByText(emphasis, { exact: true })).toHaveClass('text-foreground');
+    }
+  });
+
+  it('leaves theme tokens intact for an unsafe saved accent', () => {
+    const { container } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ accentColor: 'url(https://example.test)' })}
+      />,
+    );
+    expect(container.querySelector('main')!.style.getPropertyValue('--primary')).toBe('');
+  });
+
   it('applies portfolio.accentColor as --primary CSS variable on <main>', () => {
     const portfolio = makePublicPortfolio({ accentColor: '#4A90D9' });
 
@@ -229,7 +253,7 @@ describe('PublicDesignerProfile', () => {
       }),
     ).toBeInTheDocument();
     const tickifLogo = screen.getByRole('img', { name: 'Tickif' });
-    expect(tickifLogo).toHaveClass('size-4', 'text-primary');
+    expect(tickifLogo).toHaveClass('size-4', 'text-foreground');
     expect(screen.getByText('28 Projects').previousElementSibling).toHaveClass(
       'size-3',
       'shrink-0',

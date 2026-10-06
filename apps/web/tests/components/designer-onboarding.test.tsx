@@ -44,6 +44,21 @@ const taxonomyFixtures = {
   ],
 };
 
+const companyOnboardingResult = {
+  created: true,
+  data: {
+    profile: {
+      id: '11111111-1111-4111-8111-111111111111',
+      orgId: 'org-1',
+      displayName: 'Large Studio',
+      entityType: 'company',
+      status: 'draft',
+      createdAt: '2026-02-01T00:00:00.000Z',
+    },
+    organization: { id: 'org-1', name: 'Large Studio', slug: 'large-studio' },
+  },
+};
+
 vi.mock('next/navigation', () => ({
   useRouter: () => mock.router,
 }));
@@ -86,6 +101,88 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('DesignerOnboarding', () => {
+  it.each([
+    ['51-99', 99],
+    ['100+', 100],
+  ])(
+    'offers %s without the overlapping legacy range and submits staff count %i',
+    async (teamSize, staffCount) => {
+      const user = userEvent.setup();
+      const submit = vi.fn().mockResolvedValue(companyOnboardingResult);
+      const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+      render(
+        <DesignerOnboarding
+          initialDraft={{
+            step: 'services',
+            updatedAt: '2026-02-01T00:00:00.000Z',
+            fields: {
+              entityType: 'company',
+              companyName: 'Large Studio',
+              userName: 'Large Studio',
+            },
+          }}
+          onSubmitOnboarding={submit}
+          onSaveDraft={onSaveDraft}
+        />,
+      );
+
+      await user.click(screen.getByLabelText(/^Team size/));
+      expect(screen.getByRole('menuitem', { name: '26-50' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: '50+' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('menuitem', { name: teamSize }));
+      expect(screen.getByLabelText(/^Team size/)).toHaveTextContent(teamSize);
+      await waitFor(
+        () =>
+          expect(onSaveDraft).toHaveBeenLastCalledWith(
+            expect.objectContaining({ fields: expect.objectContaining({ teamSize }) }),
+          ),
+        { timeout: 4000 },
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await waitFor(() =>
+        expect(submit).toHaveBeenCalledWith(
+          expect.objectContaining({ entityType: 'company', staffCount }),
+        ),
+      );
+    },
+  );
+
+  it.each([
+    ['50+', 51],
+    ['51-99', 99],
+    ['100+', 100],
+  ])('resumes saved %s without changing its staff-count mapping', async (teamSize, staffCount) => {
+    const user = userEvent.setup();
+    const submit = vi.fn().mockResolvedValue(companyOnboardingResult);
+    render(
+      <DesignerOnboarding
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: {
+            entityType: 'company',
+            companyName: 'Saved Studio',
+            userName: 'Saved Studio',
+            teamSize,
+          },
+        }}
+        onSubmitOnboarding={submit}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getByLabelText(/^Team size/)).toHaveTextContent(teamSize);
+    if (teamSize === '50+') {
+      await user.click(screen.getByLabelText(/^Team size/));
+      expect(screen.getByRole('menuitem', { name: '50+' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+    }
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith(expect.objectContaining({ staffCount })),
+    );
+  });
+
   beforeEach(() => {
     mock.router.push.mockClear();
     mock.signOut.mockClear();
