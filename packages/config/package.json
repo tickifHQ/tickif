@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./framework-runtime": {
+      "types": "./src/framework-runtime.ts",
+      "default": "./src/framework-runtime.ts"
+    },
+    "./telemetry": {
+      "types": "./src/telemetry.ts",
+      "default": "./src/telemetry.ts"
+    },
     "./features": {
       "types": "./src/features.ts",
       "default": "./src/features.ts"
@@ -24,7 +32,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "dotenv": "^18.0.5",
+    "dotenv": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

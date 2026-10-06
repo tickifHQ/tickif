@@ -6,6 +6,7 @@ import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { requireActiveVisitor } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
+import { getServerLogger } from '@/lib/logger.server';
 import {
   FEED_FACET_DEFINITIONS,
   parseFeedPage,
@@ -66,7 +67,7 @@ async function fetchFeedSafely(request: HomeFeedRequest, page: number): Promise<
   try {
     return await fetchHomeFeedPage(request, page);
   } catch (error) {
-    console.error('[PersonalHomePage] feed fetch failed', error);
+    getServerLogger().error({ event: 'web.feed.failed', error, component: 'PersonalHomePage' }, 'Personal feed fetch failed');
     return emptyHomeFeedPage(page);
   }
 }

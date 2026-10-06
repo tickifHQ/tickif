@@ -35,10 +35,7 @@ describe('enqueueSms', () => {
 
     await enqueueSms({ phoneNumber: '+919876543210', code: '123456' });
 
-    expect(Queue).toHaveBeenCalledWith(
-      QUEUES.sms,
-      expect.objectContaining({ defaultJobOptions }),
-    );
+    expect(Queue).toHaveBeenCalledWith(QUEUES.sms, expect.objectContaining({ defaultJobOptions }));
     expect(addMock).toHaveBeenCalledWith(
       JOBS.sendSms,
       // phone is normalized to digits once, up front, before enqueue
@@ -99,11 +96,8 @@ describe('enqueueSms', () => {
   });
 
   it('registers one stable booking-notification outbox sweep', async () => {
-    const {
-      BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER,
-      JOBS,
-      scheduleBookingNotificationSweep,
-    } = await import('../src/index.js');
+    const { BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER, JOBS, scheduleBookingNotificationSweep } =
+      await import('../src/index.js');
 
     await scheduleBookingNotificationSweep(30_000);
 
@@ -113,6 +107,7 @@ describe('enqueueSms', () => {
       {
         name: JOBS.sweepBookingNotifications,
         data: { kind: 'booking-notification-sweep' },
+        opts: { telemetry: { omitContext: true } },
       },
     );
   });

@@ -22,13 +22,18 @@ describe('designer experience refresh queue', () => {
     expect(mocks.schedule).toHaveBeenCalledWith(
       'designer-experience-sweep',
       { pattern: '0 0 * * *', tz: 'UTC' },
-      { name: 'sweep-designer-experience', data: {} },
+      {
+        name: 'sweep-designer-experience',
+        data: {},
+        opts: { telemetry: { omitContext: true } },
+      },
     );
     expect(mocks.add).toHaveBeenCalledWith(
       'sweep-designer-experience',
       {},
       {
         jobId: 'designer-experience-startup',
+        telemetry: { omitContext: true },
       },
     );
   });

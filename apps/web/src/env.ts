@@ -22,6 +22,8 @@ export const env = createEnv({
     NEXT_PUBLIC_API_URL: z.url().default('http://localhost:8008'),
     // Public origin of the web app, used to build browser-visible links.
     NEXT_PUBLIC_WEB_URL: z.url().default('http://localhost:3000'),
+    NEXT_PUBLIC_TELEMETRY_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+    NEXT_PUBLIC_APP_VERSION: z.string().trim().min(1).max(120).default('development'),
     // Cumulative downward scroll-units (400px each) before anon users hit the
     // login wall on the public feed. 0 disables the gate entirely.
     // Strict digits-only shape: z.coerce would turn ' ' into 0 and silently
@@ -40,6 +42,8 @@ export const env = createEnv({
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_WEB_URL: process.env.NEXT_PUBLIC_WEB_URL,
+    NEXT_PUBLIC_TELEMETRY_ENABLED: process.env.NEXT_PUBLIC_TELEMETRY_ENABLED,
+    NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
     NEXT_PUBLIC_SCROLL_GATE_LIMIT: process.env.NEXT_PUBLIC_SCROLL_GATE_LIMIT,
   },
   emptyStringAsUndefined: true,

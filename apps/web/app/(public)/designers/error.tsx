@@ -3,8 +3,10 @@ import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
+import { useReportBoundaryError } from '@/lib/use-report-boundary-error';
 
-export default function DesignersError({ reset }: { reset: () => void }) {
+export default function DesignersError({ error, reset }: { error?: Error; reset: () => void }) {
+  useReportBoundaryError(error, 'designers.boundary');
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   return (

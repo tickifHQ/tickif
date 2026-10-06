@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
+import { getSession } from '@repo/auth';
 import type { AuthVariables, Ownership } from '../../src/lib/auth-middleware.js';
 import {
   requireRole,
@@ -8,6 +9,7 @@ import {
   requireOrganizationContext,
   requirePersonalContext,
   applyActiveContext,
+  withSession,
 } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
 
@@ -265,5 +267,21 @@ describe('RBAC guards (unit)', () => {
   it('ownership: a throwing resolver surfaces as 500, never a pass', async () => {
     const u = { id: 'u1', role: 'designer' };
     expect((await appWithUser(u).request('/owned-throws')).status).toBe(500);
+  });
+});
+
+describe('anonymous telemetry session boundary', () => {
+  beforeEach(() => vi.mocked(getSession).mockReset());
+
+  it('skips session storage only for the telemetry sink', async () => {
+    vi.mocked(getSession).mockRejectedValue(new Error('auth storage unavailable'));
+    const app = new Hono<{ Variables: AuthVariables }>().onError(onError).use('/api/*', withSession);
+    app.post('/api/telemetry/logs', (c) => c.json({ accepted: 0 }));
+    app.get('/api/telemetry/logs/extra', (c) => c.json({ ok: true }));
+    expect((await app.request('/api/telemetry/logs', { method: 'POST' })).status).toBe(200);
+    expect(getSession).not.toHaveBeenCalled();
+    vi.mocked(getSession).mockResolvedValue(null);
+    expect((await app.request('/api/telemetry/logs/extra')).status).toBe(200);
+    expect(getSession).toHaveBeenCalledOnce();
   });
 });

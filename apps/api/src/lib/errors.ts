@@ -2,6 +2,9 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { isProduction } from '@repo/config';
+import { sanitizeText } from '@repo/logger';
+import { SpanStatusCode, trace } from '@repo/telemetry/node';
+import { log } from './logger.js';
 
 /**
  * Domain-level error thrown by the service layer. Services stay framework-free
@@ -82,6 +85,9 @@ export function onError(err: Error, c: Context) {
   if (err instanceof HTTPException) {
     return c.json({ error: { code: 'http_error', message: err.message } }, err.status);
   }
-  console.error('[api] unhandled error:', err);
+  log.error({ event: 'http.request.error', err });
+  const span = trace.getActiveSpan();
+  span?.recordException({ name: sanitizeText(err.name), message: sanitizeText(err.message) });
+  span?.setStatus({ code: SpanStatusCode.ERROR });
   return c.json({ error: { code: 'internal_error', message: 'Internal server error' } }, 500);
 }
