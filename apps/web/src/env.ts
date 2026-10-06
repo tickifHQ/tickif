@@ -22,10 +22,14 @@ export const env = createEnv({
     NEXT_PUBLIC_API_URL: z.url().default('http://localhost:8008'),
     // Public origin of the web app, used to build browser-visible links.
     NEXT_PUBLIC_WEB_URL: z.url().default('http://localhost:3000'),
-    NEXT_PUBLIC_TELEMETRY_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+    NEXT_PUBLIC_TELEMETRY_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     NEXT_PUBLIC_APP_VERSION: z.string().trim().min(1).max(120).default('development'),
-    // Cumulative downward scroll-units (400px each) before anon users hit the
-    // login wall on the public feed. 0 disables the gate entirely.
+    // Public scroll gate switch. 0 disables it; any positive value enables the
+    // scroll-linked reveal near the page midpoint. The positive numeric shape is
+    // retained for compatibility with existing deployment configuration.
     // Strict digits-only shape: z.coerce would turn ' ' into 0 and silently
     // disable the gate.
     NEXT_PUBLIC_SCROLL_GATE_LIMIT: z
