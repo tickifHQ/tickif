@@ -28,6 +28,10 @@ const requiredEntries: [file: string, title: string][] = [
     'profile completion steps guide designers to missing fields on desktop and mobile',
   ],
   [
+    'social-links.spec.ts',
+    'social profile confirmations match saved public links on desktop and mobile',
+  ],
+  [
     'portfolio-accent.spec.ts',
     'custom portfolio accent previews validates saves reloads and discards on desktop and mobile',
   ],

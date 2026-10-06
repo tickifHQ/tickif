@@ -17,7 +17,7 @@ export default async function NewOrganizationPage() {
   }
 
   if (!rolePassesCheck(userRole, PLATFORM_ROLE.DESIGNER)) {
-    redirect('/designer/onboarding');
+    redirect('/unauthorized');
   }
 
   return (

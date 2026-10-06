@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@vitest/coverage-v8": "catalog:",
-    "dotenv": "^16.4.7",
+    "dotenv": "catalog:",
     "vitest": "catalog:"
   },
   "devDependencies": {

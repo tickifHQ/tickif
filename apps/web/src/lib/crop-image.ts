@@ -19,7 +19,7 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
     canvas.toBlob(
       (blob) => {
         if (blob) resolve(blob);
-        else reject(new Error('Could not prepare the cropped logo. Please try again.'));
+        else reject(new Error('Could not prepare the cropped image. Please try again.'));
       },
       LOGO_OUTPUT_TYPE,
       LOGO_OUTPUT_QUALITY,
@@ -27,11 +27,12 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-/** Render a validated square crop to a compact, upload-ready WebP file. */
+/** Render a validated crop to a compact, upload-ready WebP file (square for logos). */
 export async function cropImageToFile(
   imageSource: string,
   crop: Area,
   fileName = 'studio-logo.webp',
+  output?: { maxWidth: number; aspect: number },
 ): Promise<File> {
   if (
     ![crop.x, crop.y, crop.width, crop.height].every(Number.isFinite) ||
@@ -52,8 +53,10 @@ export async function cropImageToFile(
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = LOGO_OUTPUT_SIZE;
-  canvas.height = LOGO_OUTPUT_SIZE;
+  canvas.width = output
+    ? Math.max(1, Math.round(Math.min(sourceWidth, output.maxWidth)))
+    : LOGO_OUTPUT_SIZE;
+  canvas.height = output ? Math.max(1, Math.round(canvas.width / output.aspect)) : LOGO_OUTPUT_SIZE;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Image editing is not supported in this browser.');
 
@@ -67,13 +70,24 @@ export async function cropImageToFile(
     sourceHeight,
     0,
     0,
-    LOGO_OUTPUT_SIZE,
-    LOGO_OUTPUT_SIZE,
+    canvas.width,
+    canvas.height,
   );
 
   const blob = await canvasToBlob(canvas);
   return new File([blob], fileName.replace(/\.[^.]+$/, '.webp'), {
     type: LOGO_OUTPUT_TYPE,
     lastModified: Date.now(),
+  });
+}
+
+/** Crop a widescreen cover without enlarging its pixels or stretching its framing. */
+export function cropPortfolioCoverToFile(imageSource: string, crop: Area): Promise<File> {
+  if (Math.abs(crop.width - crop.height * (16 / 9)) > 2) {
+    return Promise.reject(new Error('Choose a widescreen cover crop before saving.'));
+  }
+  return cropImageToFile(imageSource, crop, 'portfolio-cover.webp', {
+    maxWidth: 1920,
+    aspect: 16 / 9,
   });
 }

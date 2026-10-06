@@ -218,13 +218,14 @@ superadmin or recovering a deployment with no accessible superadmin.
 ### Unfinished designer onboarding
 
 Fresh accounts keep their visitor role until validated onboarding creates the
-designer profile, organization and owner membership in one transaction. Choosing
-**Finish later** sends the user to `/designer/onboarding/deferred`, an
-authenticated page with **Continue setup** and **Explore projects** links.
-Opening a designer-only page before completion also redirects there. This does
-not provision placeholder workspaces or grant designer API access. Completed
-onboarding keeps its dashboard destination; admin and unknown-role restrictions
-are unchanged.
+designer profile, organization and owner membership in one transaction. Unfinished
+signups can resume at `/designer/onboarding/deferred`, an
+authenticated page with **Continue setup** and **Explore projects** links, available
+only to pending visitor accounts. Active visitors cannot open this recovery page.
+Designer workspace pages, including studio selection and organization creation,
+require the designer role; any other role is denied access instead of being sent
+to onboarding. Visitors and designers cannot enter admin pages, which require
+the admin or superadmin role. Completed onboarding keeps its dashboard destination.
 
 The web app authenticates against `/api/auth/*` using better-auth's client (or
 direct calls during early development). Authenticated API calls rely on the

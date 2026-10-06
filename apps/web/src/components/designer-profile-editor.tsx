@@ -29,6 +29,7 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
+import { SocialProfileInput } from '@/components/social-profile-confirmation';
 import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
 import { ProfileCompletionStepper } from '@/components/profile-completion-stepper';
 import {
@@ -656,46 +657,41 @@ export function DesignerProfileEditor({
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field
-              htmlFor="profile-instagram"
-              label="Instagram"
-              error={validationErrors.instagramHandle}
-            >
+            <Field htmlFor="profile-instagram" label="Instagram">
               {(aria) => (
-                <Input
+                <SocialProfileInput
                   id="profile-instagram"
+                  platform="instagram"
                   value={form.instagramHandle}
-                  onChange={(event) => updateField('instagramHandle', event.target.value)}
+                  onValueChange={(value) => updateField('instagramHandle', value)}
                   placeholder="@yourstudio"
-                  maxLength={60}
+                  errorMessage={validationErrors.instagramHandle}
                   {...aria}
                 />
               )}
             </Field>
-            <Field
-              htmlFor="profile-linkedin"
-              label="LinkedIn"
-              error={validationErrors.linkedinHandle}
-            >
+            <Field htmlFor="profile-linkedin" label="LinkedIn">
               {(aria) => (
-                <Input
+                <SocialProfileInput
                   id="profile-linkedin"
+                  platform="linkedin"
                   value={form.linkedinHandle}
-                  onChange={(event) => updateField('linkedinHandle', event.target.value)}
+                  onValueChange={(value) => updateField('linkedinHandle', value)}
                   placeholder="/company/yourstudio"
-                  maxLength={60}
+                  errorMessage={validationErrors.linkedinHandle}
                   {...aria}
                 />
               )}
             </Field>
-            <Field htmlFor="profile-youtube" label="YouTube" error={validationErrors.youtubeHandle}>
+            <Field htmlFor="profile-youtube" label="YouTube">
               {(aria) => (
-                <Input
+                <SocialProfileInput
                   id="profile-youtube"
+                  platform="youtube"
                   value={form.youtubeHandle}
-                  onChange={(event) => updateField('youtubeHandle', event.target.value)}
+                  onValueChange={(value) => updateField('youtubeHandle', value)}
                   placeholder="@yourstudio"
-                  maxLength={60}
+                  errorMessage={validationErrors.youtubeHandle}
                   {...aria}
                 />
               )}

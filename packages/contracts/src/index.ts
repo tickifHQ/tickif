@@ -33,3 +33,5 @@ export * from './billing-selection';
 export * from './telemetry';
 
 export { resolveProfileExperience } from './profile-experience';
+
+export * from './social-links';
