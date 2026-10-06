@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PortfolioCoverCropDialog } from '../../src/components/portfolio-cover-crop-dialog';
@@ -9,8 +9,16 @@ vi.mock('react-easy-crop', () => ({
     cropShape,
     initialCroppedAreaPercentages,
     onCropComplete,
+    crop,
+    zoom,
+    onCropChange,
+    onZoomChange,
   }: {
     aspect: number;
+    crop: { x: number; y: number };
+    zoom: number;
+    onCropChange: (crop: { x: number; y: number }) => void;
+    onZoomChange: (zoom: number) => void;
     cropShape: string;
     initialCroppedAreaPercentages?: { x: number; y: number; width: number; height: number };
     onCropComplete: (
@@ -24,12 +32,16 @@ vi.mock('react-easy-crop', () => ({
       data-aspect={aspect}
       data-crop-shape={cropShape}
       data-initial-crop={JSON.stringify(initialCroppedAreaPercentages ?? null)}
-      onClick={() =>
+      data-crop={JSON.stringify(crop)}
+      data-zoom={zoom}
+      onClick={() => {
+        onCropChange({ x: 80, y: 20 });
+        onZoomChange(2);
         onCropComplete(
           { x: 10, y: 10, width: 80, height: 45 },
           { x: 20, y: 20, width: 800, height: 450 },
-        )
-      }
+        );
+      }}
     >
       Prepare crop
     </button>
@@ -118,6 +130,11 @@ describe('PortfolioCoverCropDialog', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel', exact: true }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
     rerender(<PortfolioCoverCropDialog {...props} isSaving />);
+    const cropper = screen.getByTestId('cropper');
+    fireEvent.click(cropper);
+    expect(cropper).toHaveAttribute('data-crop', JSON.stringify({ x: 0, y: 0 }));
+    expect(cropper).toHaveAttribute('data-zoom', '1');
+    expect(screen.getByTestId('cover-crop-surface')).toHaveAttribute('inert');
     expect(screen.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Choose another' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save cover' })).toBeDisabled();

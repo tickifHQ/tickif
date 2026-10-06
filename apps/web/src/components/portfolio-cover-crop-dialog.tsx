@@ -45,9 +45,12 @@ export function PortfolioCoverCropDialog({
     setMediaError(null);
   }, [imageSource, open]);
 
-  const handleCropComplete = useCallback((_area: Area, pixels: Area) => {
-    setCroppedArea(pixels);
-  }, []);
+  const handleCropComplete = useCallback(
+    (_area: Area, pixels: Area) => {
+      if (!isSaving) setCroppedArea(pixels);
+    },
+    [isSaving],
+  );
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !isSaving && onOpenChange(nextOpen)}>
@@ -63,6 +66,8 @@ export function PortfolioCoverCropDialog({
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div
             data-testid="cover-crop-surface"
+            inert={isSaving}
+            aria-busy={isSaving}
             className="relative h-[min(42dvh,22rem)] min-h-56 overflow-hidden bg-muted"
           >
             {imageSource ? (
@@ -76,8 +81,12 @@ export function PortfolioCoverCropDialog({
                 cropShape="rect"
                 showGrid
                 objectFit="contain"
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
+                onCropChange={(nextCrop) => !isSaving && setCrop(nextCrop)}
+                onZoomChange={(nextZoom) => !isSaving && setZoom(nextZoom)}
+                zoomWithScroll={!isSaving}
+                onTouchRequest={() => !isSaving}
+                onWheelRequest={() => !isSaving}
+                cropperProps={{ tabIndex: isSaving ? -1 : 0, 'aria-disabled': isSaving }}
                 onCropComplete={handleCropComplete}
                 mediaProps={{
                   alt: 'Portfolio cover being adjusted',

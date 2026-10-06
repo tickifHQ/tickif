@@ -586,6 +586,7 @@ test.describe('E-278 portfolio publication readiness', () => {
       permissions: ['clipboard-read', 'clipboard-write'],
       recordVideo: { dir: testInfo.outputPath('cover-video'), size: { width: 1440, height: 1000 } },
     });
+    let releaseDelayedUpload: (() => void) | undefined;
     try {
       const seed = await seedDesigner('cover-upload', {
         status: 'draft',
@@ -684,8 +685,38 @@ test.describe('E-278 portfolio publication readiness', () => {
       );
       await page.screenshot({ path: testInfo.outputPath('cover-retry-mobile.png') });
       await page.unroute('**/api/profiles/me/portfolio/cover/upload');
+      let releaseUpload!: () => void;
+      const uploadHold = new Promise<void>((resolve) => {
+        releaseUpload = resolve;
+        releaseDelayedUpload = resolve;
+      });
+      await page.route('**/api/profiles/me/portfolio/cover/upload', async (route) => {
+        await uploadHold;
+        await route.continue();
+      });
       await cropDialog.getByRole('button', { name: 'Save cover', exact: true }).click();
+      const cropSurface = cropDialog.getByTestId('cover-crop-surface');
+      await expect(cropSurface).toHaveAttribute('inert', '');
+      const cropImage = cropDialog.getByAltText('Portfolio cover being adjusted');
+      const lockedTransform = await cropImage.evaluate((image) => image.style.transform);
+      const surfaceBox = await cropSurface.boundingBox();
+      expect(surfaceBox).not.toBeNull();
+      await page.mouse.move(surfaceBox!.x + 80, surfaceBox!.y + 80);
+      await page.mouse.down();
+      await page.mouse.move(surfaceBox!.x + 130, surfaceBox!.y + 110);
+      await page.mouse.up();
+      await page.mouse.wheel(0, -200);
+      await page.keyboard.press('ArrowRight');
+      await cropSurface
+        .locator('[aria-disabled="true"]')
+        .evaluate((element) =>
+          element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })),
+        );
+      expect(await cropImage.evaluate((image) => image.style.transform)).toBe(lockedTransform);
+      await page.screenshot({ path: testInfo.outputPath('cover-saving-mobile.png') });
+      releaseUpload();
       await expect(cropDialog).toHaveCount(0);
+      await page.unroute('**/api/profiles/me/portfolio/cover/upload');
       await page.reload();
       const persistedCover = page.getByAltText('Portfolio cover', { exact: true });
       await expect(persistedCover).toBeVisible();
@@ -786,6 +817,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
     } finally {
+      releaseDelayedUpload?.();
       await context.close();
     }
   });
