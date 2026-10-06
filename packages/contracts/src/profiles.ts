@@ -22,6 +22,20 @@ export const PROFILE_FOOTPRINT_LIMITS = {
 
 export const PROFILE_STAFF_COUNT_MAX = 100_000;
 
+export const PROFILE_FOUNDED_YEAR_MIN = 1900;
+
+/** Validate against the year at parse time so long-lived services handle UTC rollover. */
+export const profileFoundedYearSchema = z
+  .number()
+  .int('Enter a whole year.')
+  .min(PROFILE_FOUNDED_YEAR_MIN, `Enter a year from ${PROFILE_FOUNDED_YEAR_MIN} onward.`)
+  .max(2100, 'Enter a year no later than 2100.')
+  .refine(
+    (year) => year <= new Date().getUTCFullYear(),
+    'Enter the current year or an earlier year.',
+  )
+  .meta({ id: 'ProfileFoundedYear' });
+
 const profileStaffCountSchema = z
   .number()
   .int('Enter a whole number.')
@@ -103,7 +117,7 @@ export const onboardDesignerSchema = z
     linkedinHandle: linkedinHandleSchema.optional(),
     youtubeHandle: youtubeHandleSchema.optional(),
     firmType: z.string().trim().max(60).optional(),
-    foundedYear: z.number().int().min(1900).max(2100).optional(),
+    foundedYear: profileFoundedYearSchema.optional(),
     staffCount: profileStaffCountSchema.optional(),
     // Free-text address replaces cityIds in onboarding — city taxonomy linking via profile update.
     // Note: clients still sending cityIds will have it silently stripped (Zod default behavior).
@@ -425,13 +439,7 @@ export const updateProfileSchema = z
       .optional()
       .nullable(),
     firmType: z.string().trim().max(60, 'Use 60 characters or fewer.').optional().nullable(),
-    foundedYear: z
-      .number()
-      .int('Enter a whole year.')
-      .min(1900, 'Enter a year from 1900 onward.')
-      .max(2100, 'Enter a year no later than 2100.')
-      .optional()
-      .nullable(),
+    foundedYear: profileFoundedYearSchema.optional().nullable(),
     staffCount: profileStaffCountSchema.optional().nullable(),
     officeCount: z.number().int().min(0).max(10000).nullable().optional(),
     testimonialBannerEnabled: z.boolean().optional(),

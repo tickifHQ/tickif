@@ -674,6 +674,112 @@ describe('DesignerOnboarding', () => {
     expect(mock.router.push).toHaveBeenCalledWith('/designer/portfolio');
   });
 
+  it('restores an older founding year and submits it without truncation', async () => {
+    const submit = vi.fn();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Established Studio', foundedYear: '1995' },
+        }}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    expect(screen.getByRole('textbox', { name: 'Founded' })).toHaveValue('1995');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({ foundedYear: 1995 }));
+  });
+
+  it.each(['1899', '2100', '1995.5', 'year', '2e3'])(
+    'rejects invalid founding year %s before sending onboarding',
+    async (year) => {
+      const submit = vi.fn();
+      render(
+        <DesignerOnboarding
+          signedInAs="firm@test.com"
+          initialDraft={{
+            step: 'services',
+            updatedAt: '2026-02-01T00:00:00.000Z',
+            fields: {
+              entityType: 'company',
+              companyName: 'Established Studio',
+              foundedYear: '1995',
+            },
+          }}
+          onSubmitOnboarding={submit}
+        />,
+      );
+      fireEvent.change(screen.getByLabelText('Founded', { exact: true }), {
+        target: { value: year },
+      });
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(screen.getByLabelText('Founded', { exact: true })).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      );
+      expect(submit).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows the optional founding year to be cleared without sending a fabricated year', async () => {
+    const submit = vi.fn();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Established Studio', foundedYear: '1995' },
+        }}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Founded', { exact: true }), { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(submit).toHaveBeenCalled();
+    expect(submit.mock.calls[0]?.[0]).not.toHaveProperty('foundedYear');
+  });
+
+  it('autosaves an explicit blank founding year and preserves it when the draft resumes', async () => {
+    const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+    const view = render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Established Studio', foundedYear: '1995' },
+        }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Founded', { exact: true }), { target: { value: '' } });
+    await waitFor(
+      () =>
+        expect(onSaveDraft).toHaveBeenLastCalledWith(
+          expect.objectContaining({ fields: expect.objectContaining({ foundedYear: '' }) }),
+        ),
+      { timeout: 4000 },
+    );
+    const savedDraft = onSaveDraft.mock.calls.at(-1)?.[0];
+    view.unmount();
+    const submit = vi.fn();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{ ...savedDraft, updatedAt: '2026-02-01T00:00:00.000Z' }}
+        onSaveDraft={onSaveDraft}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    expect(screen.getByLabelText('Founded', { exact: true })).toHaveValue('');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(submit).toHaveBeenCalled();
+    expect(submit.mock.calls[0]?.[0]).not.toHaveProperty('foundedYear');
+  });
+
   it('walks through the company flow, submits the supported payload, and shows completion', async () => {
     const submit = vi.fn().mockResolvedValue({
       created: true,

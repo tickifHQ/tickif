@@ -7,10 +7,12 @@ import { useRouter } from 'next/navigation';
 import { BriefcaseBusiness, ChevronRight, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
 import {
   PROFILE_FOOTPRINT_LIMITS,
+  PROFILE_FOUNDED_YEAR_MIN,
   designerEntityType,
   listTaxonomyResponseSchema,
   onboardDesignerSchema,
   onboardDesignerResponseSchema,
+  profileFoundedYearSchema,
   type OnboardDesignerInput,
   type OnboardDesignerResponse,
   type OnboardingDraftFields,
@@ -112,18 +114,6 @@ const firmTypeOptions = [
   'Partnership',
   'Proprietorship',
   'Studio',
-] as const;
-
-const foundedOptions = [
-  '2026',
-  '2025',
-  '2024',
-  '2023',
-  '2022',
-  '2021',
-  '2020',
-  '2019',
-  '2018',
 ] as const;
 
 const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '51-99', '100+'] as const;
@@ -251,6 +241,7 @@ export function DesignerOnboarding({
   const [selectedScopeIds, setSelectedScopeIds] = useState<string[]>(seedFields?.scopeIds ?? []);
   const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>(seedFields?.themeIds ?? []);
   const [foundedYear, setFoundedYear] = useState(seedFields?.foundedYear ?? '2021');
+  const [foundedYearError, setFoundedYearError] = useState('');
   const [teamSize, setTeamSize] = useState(seedFields?.teamSize ?? '2-10');
   const [foundedYearChanged, setFoundedYearChanged] = useState(
     () => seedFields?.foundedYear !== undefined && seedFields.foundedYear !== '2021',
@@ -324,7 +315,8 @@ export function DesignerOnboarding({
       instagramHandle: optional(instagramHandle),
       linkedinHandle: optional(linkedinHandle),
       youtubeHandle: optional(youtubeHandle),
-      foundedYear: optional(foundedYear),
+      // Preserve an explicit blank across resume instead of restoring the default year.
+      foundedYear: foundedYear.trim(),
       teamSize: optional(teamSize),
       scopeIds: selectedScopeIds.length > 0 ? selectedScopeIds : undefined,
       themeIds: selectedThemeIds.length > 0 ? selectedThemeIds : undefined,
@@ -491,12 +483,25 @@ export function DesignerOnboarding({
       return;
     }
 
+    if (entityType === designerEntityType.enum.company && foundedYear.trim()) {
+      if (!/^\d{4}$/.test(foundedYear.trim())) {
+        setFoundedYearError('Enter a whole four-digit year.');
+        return;
+      }
+      const year = profileFoundedYearSchema.safeParse(Number(foundedYear));
+      if (!year.success) {
+        setFoundedYearError(year.error.issues[0]?.message ?? 'Enter a valid founding year.');
+        return;
+      }
+    }
+    setFoundedYearError('');
+
     setSubmitting(true);
     try {
       const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
       const normalizedWebsiteUrl = normalizeOptionalUrl(websiteUrl);
       const normalizedGoogleBusinessUrl = normalizeOptionalUrl(googleBusinessUrl);
-      const foundedYearValue = Number.parseInt(foundedYear, 10);
+      const foundedYearValue = foundedYear.trim() ? Number(foundedYear) : undefined;
       const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
         entityType,
@@ -522,7 +527,7 @@ export function DesignerOnboarding({
         ...(entityType === designerEntityType.enum.company && optionalTrimmed(firmType)
           ? { firmType: optionalTrimmed(firmType) }
           : {}),
-        ...(entityType === designerEntityType.enum.company && Number.isFinite(foundedYearValue)
+        ...(entityType === designerEntityType.enum.company && foundedYearValue !== undefined
           ? { foundedYear: foundedYearValue }
           : {}),
         ...(entityType === designerEntityType.enum.company && staffCount ? { staffCount } : {}),
@@ -733,6 +738,7 @@ export function DesignerOnboarding({
           <CompanyServicesFields
             formId={formId}
             foundedYear={foundedYear}
+            foundedYearError={foundedYearError}
             scopeOptions={taxonomyOptions.scope}
             selectedScopeIds={selectedScopeIds}
             selectedThemeIds={selectedThemeIds}
@@ -748,6 +754,7 @@ export function DesignerOnboarding({
             }}
             onFoundedYearChange={(value) => {
               setFoundedYear(value);
+              setFoundedYearError('');
               setFoundedYearChanged(true);
             }}
           />
@@ -1027,6 +1034,7 @@ function CompanyPresenceFields({
 function CompanyServicesFields({
   formId,
   foundedYear,
+  foundedYearError,
   onFoundedYearChange,
   onScopeIdsChange,
   onThemeIdsChange,
@@ -1041,6 +1049,7 @@ function CompanyServicesFields({
 }: {
   formId: string;
   foundedYear: string;
+  foundedYearError: string;
   scopeOptions: readonly TaxonomyTerm[];
   selectedScopeIds: string[];
   selectedThemeIds: string[];
@@ -1082,13 +1091,29 @@ function CompanyServicesFields({
       />
 
       <div className="grid grid-cols-2 gap-5">
-        <CompactSelect
-          id={`${formId}-founded`}
-          label="Founded"
-          options={foundedOptions}
-          value={foundedYear}
-          onValueChange={onFoundedYearChange}
-        />
+        <div className="grid gap-1">
+          <Label htmlFor={`${formId}-founded`} className="text-[13px] font-medium leading-relaxed">
+            Founded
+          </Label>
+          <Input
+            id={`${formId}-founded`}
+            value={foundedYear}
+            onChange={(event) => onFoundedYearChange(event.target.value)}
+            inputMode="numeric"
+            placeholder="e.g. 1995"
+            className="h-8 text-[13px] font-medium"
+            aria-invalid={!!foundedYearError}
+            aria-describedby={`${formId}-founded-hint${foundedYearError ? ` ${formId}-founded-error` : ''}`}
+          />
+          <p id={`${formId}-founded-hint`} className="text-xs text-muted-foreground">
+            {PROFILE_FOUNDED_YEAR_MIN}–{new Date().getUTCFullYear()}. Leave blank if unknown.
+          </p>
+          {foundedYearError ? (
+            <p id={`${formId}-founded-error`} className="text-xs text-destructive" role="alert">
+              {foundedYearError}
+            </p>
+          ) : null}
+        </div>
         <CompactSelect
           id={`${formId}-team-size`}
           label="Team size"

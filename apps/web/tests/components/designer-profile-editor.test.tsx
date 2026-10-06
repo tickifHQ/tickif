@@ -184,6 +184,96 @@ describe('DesignerProfileEditor', () => {
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile());
   });
 
+  it.each(['individual', 'company'] as const)(
+    'preserves older founding years when saving a %s profile',
+    async (entityType) => {
+      mock.updateDesignerProfile.mockResolvedValue(
+        ownerProfile({
+          entityType,
+          foundedYear: entityType === 'company' ? 1985 : 1995,
+          bio: 'Updated biography',
+        }),
+      );
+      render(
+        <DesignerProfileEditor
+          initialCompletion={completion}
+          initialProfile={{ ...profile, entityType, foundedYear: 1995 }}
+          taxonomy={terms}
+          taxonomyError={null}
+        />,
+      );
+      if (entityType === 'company') {
+        const founded = screen.getByLabelText('Founded year');
+        expect(founded).toHaveValue('1995');
+        fireEvent.change(founded, { target: { value: '1985' } });
+      } else {
+        expect(screen.queryByLabelText('Founded year')).not.toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Bio'), { target: { value: 'Updated biography' } });
+      }
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      await waitFor(() =>
+        expect(mock.updateDesignerProfile).toHaveBeenCalledWith(
+          entityType === 'company' ? { foundedYear: 1985 } : { bio: 'Updated biography' },
+        ),
+      );
+      if (entityType === 'company')
+        expect(screen.getByLabelText('Founded year')).toHaveValue('1985');
+    },
+  );
+
+  it('rejects a future founding year before saving', async () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    const founded = screen.getByLabelText('Founded year');
+    fireEvent.change(founded, { target: { value: '2100' } });
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(founded).toHaveAttribute('aria-invalid', 'true');
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it.each(['1995.5', '1995abc', 'year', '2e3', '01995', '-1995'])(
+    'rejects malformed founding year %s without silently changing it',
+    async (year) => {
+      render(
+        <DesignerProfileEditor
+          initialCompletion={completion}
+          initialProfile={profile}
+          taxonomy={terms}
+          taxonomyError={null}
+        />,
+      );
+      const founded = screen.getByLabelText('Founded year');
+      fireEvent.change(founded, { target: { value: year } });
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(founded).toHaveValue(year);
+      expect(founded).toHaveAttribute('aria-invalid', 'true');
+      expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+    },
+  );
+
+  it('clears a founding year as unknown', async () => {
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ foundedYear: null }));
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Founded year'), { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ foundedYear: null }),
+    );
+  });
+
   it('confirms live social destinations and blocks invalid input before saving', async () => {
     const user = userEvent.setup();
     render(
