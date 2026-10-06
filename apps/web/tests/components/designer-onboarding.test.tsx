@@ -357,6 +357,31 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByLabelText(/services offered/i)).toBeInTheDocument();
   });
 
+  it('shows social destinations before continuing and requires invalid handles to be fixed or cleared', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+    fireEvent.change(screen.getByLabelText(/company name/i), {
+      target: { value: 'Mahi Interiors' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByText('Optional. Leave blank to hide this link.')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('LinkedIn'), {
+      target: { value: '/company/mahi-studio' },
+    });
+    expect(screen.getByRole('link', { name: /Open LinkedIn profile/ })).toHaveAttribute(
+      'href',
+      'https://www.linkedin.com/company/mahi-studio',
+    );
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('YouTube'), { target: { value: '@' } });
+    expect(screen.getByLabelText('YouTube')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('YouTube'), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
   it('keeps valid optional company presence values when they are provided', async () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);

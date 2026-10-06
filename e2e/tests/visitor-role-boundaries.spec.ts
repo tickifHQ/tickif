@@ -8,6 +8,7 @@ import { apiUrl, webUrl } from '../lib/environment';
 test('visitor settings and designer role boundaries are enforced in the UI and API', async ({
   browser,
 }) => {
+  test.setTimeout(120_000);
   await assertTestDb();
   const suffix = randomUUID();
   const phone = (prefix: string) => `+91${prefix}${randomInt(10_000_000, 99_999_999)}`;
@@ -111,6 +112,37 @@ test('visitor settings and designer role boundaries are enforced in the UI and A
     ).toBeVisible();
     await visitorPage.goto('/designer/onboarding');
     await expect(visitorPage).toHaveURL(`${webUrl}/home/list-your-work`);
+    for (const path of [
+      '/designer/dashboard',
+      '/designer/projects',
+      '/designer/projects/upload',
+      '/designer/portfolio',
+      '/designer/manage-membership',
+      '/designer/select-studio',
+      '/designer/new-organization',
+      '/designer/onboarding/deferred',
+    ]) {
+      await visitorPage.goto(path);
+      await expect(visitorPage).toHaveURL(`${webUrl}/unauthorized`);
+      await expect(
+        visitorPage.getByRole('heading', { name: 'Finish setting up your designer workspace' }),
+      ).toHaveCount(0);
+    }
+
+    const designerPage = await contexts[1]!.newPage();
+    for (const page of [visitorPage, designerPage]) {
+      for (const path of [
+        '/dashboard',
+        '/moderation',
+        '/review-moderation',
+        '/verifications',
+        '/users',
+        '/admin/enquiries',
+      ]) {
+        await page.goto(path);
+        await expect(page).toHaveURL(`${webUrl}/unauthorized`);
+      }
+    }
     await visitorPage.goto('/home/settings');
     await expect(visitorPage.getByText('Not added')).toBeVisible();
 

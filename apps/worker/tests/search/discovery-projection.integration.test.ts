@@ -145,8 +145,8 @@ describe('discovery projection source', () => {
       .update(schema.subscription)
       .set({
         subscriptionState: 'locked',
-        lockedAt: new Date(),
-        graceStartedAt: new Date(),
+        lockedAt: new Date('2026-01-02T00:00:00.000Z'),
+        graceStartedAt: new Date('2026-01-01T00:00:00.000Z'),
         preLapseTier: 'corporate',
       })
       .where(eq(schema.subscription.organizationId, designer.orgId));

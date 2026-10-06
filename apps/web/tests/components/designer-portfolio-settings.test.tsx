@@ -20,6 +20,7 @@ const mock = vi.hoisted(() => ({
   disconnectGoogleReviews: vi.fn(),
   fetchPublishedProjects: vi.fn(),
   cropImageToFile: vi.fn(),
+  cropPortfolioCoverToFile: vi.fn(),
   router: { refresh: vi.fn() },
 }));
 
@@ -40,6 +41,30 @@ vi.mock('@/lib/portfolio-api', () => ({
 
 vi.mock('@/lib/crop-image', () => ({
   cropImageToFile: mock.cropImageToFile,
+  cropPortfolioCoverToFile: mock.cropPortfolioCoverToFile,
+}));
+
+vi.mock('@/components/portfolio-cover-crop-dialog', () => ({
+  PortfolioCoverCropDialog: ({
+    open,
+    onSave,
+    onOpenChange,
+    error,
+  }: {
+    open: boolean;
+    onSave: (pixels: { x: number; y: number; width: number; height: number }) => void;
+    onOpenChange: (open: boolean) => void;
+    error: string | null;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Adjust portfolio cover">
+        {error ? <p role="alert">{error}</p> : null}
+        <button onClick={() => onSave({ x: 20, y: 30, width: 800, height: 450 })}>
+          Save cover
+        </button>
+        <button onClick={() => onOpenChange(false)}>Cancel cover</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -206,6 +231,9 @@ describe('DesignerPortfolioSettings', () => {
     ]);
     mock.cropImageToFile.mockResolvedValue(
       new File(['cropped-logo'], 'studio-logo.webp', { type: 'image/webp' }),
+    );
+    mock.cropPortfolioCoverToFile.mockResolvedValue(
+      new File(['cropped-cover'], 'portfolio-cover.webp', { type: 'image/webp' }),
     );
     mock.router.refresh.mockReset();
   });
@@ -595,11 +623,103 @@ describe('DesignerPortfolioSettings', () => {
     const file = new File(['cover'], 'cover.jpg', { type: 'image/jpeg' });
     await userEvent.setup().upload(screen.getByLabelText('Portfolio cover file'), file);
 
-    await waitFor(() => expect(mock.uploadPortfolioCover).toHaveBeenCalledWith(file));
+    expect(mock.uploadPortfolioCover).not.toHaveBeenCalled();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save cover' }));
+    await waitFor(() =>
+      expect(mock.uploadPortfolioCover).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'portfolio-cover.webp', type: 'image/webp' }),
+      ),
+    );
     const portfolioCover = await screen.findByAltText('Portfolio cover');
     expect(portfolioCover).toHaveAttribute('src', 'https://cdn.tickif.test/portfolio-cover.jpg');
     expect(portfolioCover).toHaveAttribute('loading', 'eager');
     expect(screen.getByAltText('Portfolio cover preview')).toHaveAttribute('loading', 'eager');
+  });
+
+  it('cancels a replacement cover without uploading or changing the saved image', async () => {
+    await renderSettings();
+    await userEvent
+      .setup()
+      .upload(
+        screen.getByLabelText('Portfolio cover file'),
+        new File(['replacement'], 'replacement.jpg', { type: 'image/jpeg' }),
+      );
+    expect(await screen.findByRole('dialog', { name: 'Adjust portfolio cover' })).toBeVisible();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel cover' }));
+    expect(mock.uploadPortfolioCover).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: 'Adjust portfolio cover' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByAltText('Portfolio cover')).toHaveAttribute(
+      'src',
+      basePortfolio.heroCoverUrl,
+    );
+  });
+
+  it('retains the crop for retry when uploading a replacement fails', async () => {
+    let resolveUpload!: (value: { heroCoverUrl: string }) => void;
+    mock.uploadPortfolioCover
+      .mockRejectedValueOnce(new Error('Storage unavailable'))
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ heroCoverUrl: string }>((resolve) => {
+            resolveUpload = resolve;
+          }),
+      );
+    await renderSettings();
+    const user = userEvent.setup();
+    await user.upload(
+      screen.getByLabelText('Portfolio cover file'),
+      new File(['replacement'], 'replacement.jpg', { type: 'image/jpeg' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save cover' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Storage unavailable');
+    expect(screen.getByAltText('Portfolio cover')).toHaveAttribute(
+      'src',
+      basePortfolio.heroCoverUrl,
+    );
+    await user.click(screen.getByRole('button', { name: 'Save cover' }));
+    await waitFor(() => expect(mock.uploadPortfolioCover).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Adjust portfolio cover' })).toBeVisible();
+    await act(async () => {
+      resolveUpload({ heroCoverUrl: 'https://cdn.tickif.test/replacement.webp' });
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Adjust portfolio cover' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('keeps unreadable crop errors in the dialog without submitting an upload', async () => {
+    mock.cropPortfolioCoverToFile.mockRejectedValueOnce(new Error('Could not read this image.'));
+    await renderSettings();
+    const user = userEvent.setup();
+    await user.upload(
+      screen.getByLabelText('Portfolio cover file'),
+      new File(['bad-image'], 'broken.jpg', { type: 'image/jpeg' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save cover' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not read this image.');
+    expect(mock.uploadPortfolioCover).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported and oversized sources before opening the cover editor', async () => {
+    await renderSettings();
+    const input = screen.getByLabelText('Portfolio cover file');
+    fireEvent.change(input, {
+      target: { files: [new File(['svg'], 'cover.svg', { type: 'image/svg+xml' })] },
+    });
+    expect(screen.getByText('Choose a JPEG, PNG, WebP, or AVIF image.')).toBeInTheDocument();
+    const file = new File(['cover'], 'huge.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(file, 'size', { value: 10_000_001 });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(screen.getByText('Choose an image up to 10 MB.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: 'Adjust portfolio cover' }),
+    ).not.toBeInTheDocument();
+    expect(mock.uploadPortfolioCover).not.toHaveBeenCalled();
   });
 
   it('moves keyboard focus to the missing Hero control', async () => {
@@ -1021,6 +1141,24 @@ describe('DesignerPortfolioSettings', () => {
     });
 
     expect(slugInput).toBeInTheDocument();
+  });
+
+  it('confirms social URLs in portfolio settings and prevents saving an invalid destination', async () => {
+    await renderSettings();
+    fireEvent.click(screen.getByRole('heading', { name: 'Social links' }).closest('button')!);
+    const instagram = await screen.findByRole('textbox', { name: 'Instagram' });
+    fireEvent.change(instagram, { target: { value: '@social-studio' } });
+    expect(screen.getByRole('link', { name: /Open Instagram profile/ })).toHaveAttribute(
+      'href',
+      'https://www.instagram.com/social-studio',
+    );
+    fireEvent.change(instagram, { target: { value: 'javascript:alert(1)' } });
+    expect(instagram).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByRole('link', { name: /Open Instagram profile/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(mock.updatePortfolio).not.toHaveBeenCalled();
+    fireEvent.change(instagram, { target: { value: '' } });
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
   });
 
   it('opens every initially collapsed portfolio section with one click', async () => {

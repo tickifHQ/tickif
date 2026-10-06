@@ -24,6 +24,10 @@ const requiredEntries: [file: string, title: string][] = [
     `company team-size ranges resume and persist through profile editing at ${width}px`,
   ]),
   [
+    'social-links.spec.ts',
+    'social profile confirmations match saved public links on desktop and mobile',
+  ],
+  [
     'portfolio-accent.spec.ts',
     'custom portfolio accent previews validates saves reloads and discards on desktop and mobile',
   ],

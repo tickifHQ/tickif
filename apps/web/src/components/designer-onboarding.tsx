@@ -45,6 +45,10 @@ import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/pho
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
+import {
+  SocialProfileInput,
+  socialProfileError,
+} from '@/components/social-profile-confirmation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 type EntityType = OnboardDesignerInput['entityType'];
@@ -279,7 +283,12 @@ export function DesignerOnboarding({
     step === 'details' ||
     (step === 'presence' && hasPresenceInput) ||
     (step === 'services' && hasServicesInput);
-  const hasValidOptionalInputs = !websiteUrlError && !googleBusinessUrlError;
+  const hasValidOptionalInputs =
+    !websiteUrlError &&
+    !googleBusinessUrlError &&
+    !socialProfileError('instagram', instagramHandle) &&
+    !socialProfileError('linkedin', linkedinHandle) &&
+    !socialProfileError('youtube', youtubeHandle);
   const canContinue =
     hasRequiredDetails && hasCurrentStepInput && hasValidOptionalInputs && !submitting;
   const canSkip = hasRequiredDetails && hasValidOptionalInputs && !submitting;
@@ -1263,6 +1272,7 @@ function PresenceFields({
         <div className="grid gap-3">
           <SocialInput
             id={`${formId}-instagram`}
+            platform="instagram"
             icon={InstagramBrandIcon}
             label="Instagram"
             value={instagramHandle}
@@ -1271,6 +1281,7 @@ function PresenceFields({
           />
           <SocialInput
             id={`${formId}-linkedin`}
+            platform="linkedin"
             icon={LinkedInBrandIcon}
             label="LinkedIn"
             value={linkedinHandle}
@@ -1279,6 +1290,7 @@ function PresenceFields({
           />
           <SocialInput
             id={`${formId}-youtube`}
+            platform="youtube"
             icon={YouTubeBrandIcon}
             label="YouTube"
             value={youtubeHandle}
@@ -1297,8 +1309,10 @@ function SocialInput({
   label,
   onChange,
   placeholder,
+  platform,
   value,
 }: {
+  platform: 'instagram' | 'linkedin' | 'youtube';
   icon: (props: { className?: string }) => ReactNode;
   id: string;
   label: string;
@@ -1307,22 +1321,16 @@ function SocialInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex h-8 overflow-hidden rounded-md border bg-background shadow-xs transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-      <label
-        htmlFor={id}
-        className="flex w-11 shrink-0 items-center justify-center border-r bg-muted/30 text-muted-foreground"
-        aria-label={label}
-      >
-        <Icon className="size-4" aria-hidden="true" />
-      </label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-full border-0 bg-transparent px-3 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-      />
-    </div>
+    <SocialProfileInput
+      id={id}
+      platform={platform}
+      aria-label={label}
+      value={value}
+      onValueChange={onChange}
+      placeholder={placeholder}
+      startAdornment={<Icon className="size-4" />}
+      className="h-8 text-[13px]"
+    />
   );
 }
 

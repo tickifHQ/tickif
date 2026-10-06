@@ -1,0 +1,13 @@
+'use client';
+
+import { ScrollGate } from '@/components/scroll-gate';
+
+export default function ScrollGateEvidence() {
+  return (
+    <main className="min-h-[3600px] p-4">
+      <h1>Scroll gate evidence</h1>
+      <button type="button">Background action</button>
+      <ScrollGate />
+    </main>
+  );
+}

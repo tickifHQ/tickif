@@ -24,7 +24,7 @@ export default async function DesignerSelectStudioPage() {
   }
 
   if (!rolePassesCheck(userRole, PLATFORM_ROLE.DESIGNER)) {
-    redirect('/designer/onboarding');
+    redirect('/unauthorized');
   }
 
   // Profile-backed pages need a branch as well as an organization. Keep the

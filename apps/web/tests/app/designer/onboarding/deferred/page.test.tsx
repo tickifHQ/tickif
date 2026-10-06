@@ -18,26 +18,42 @@ vi.mock('@/lib/auth-guard', async (importOriginal) => ({
 describe('Deferred designer onboarding', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(['visitor', null])(
-    'offers %s accounts clear paths to resume setup or discover projects',
-    async (role) => {
-      mock.requireAuth.mockResolvedValue({ user: { role }, session: {} });
-      const { default: Page } =
-        await import('../../../../../app/(protected)/designer/onboarding/deferred/page');
-      render(await Page());
+  it('offers pending signups clear paths to resume setup or discover projects', async () => {
+    mock.requireAuth.mockResolvedValue({
+      user: { role: 'visitor', status: 'pending' },
+      session: {},
+    });
+    const { default: Page } =
+      await import('../../../../../app/(protected)/designer/onboarding/deferred/page');
+    render(await Page());
 
-      expect(mock.requireAuth).toHaveBeenCalledWith();
-      expect(
-        screen.getByRole('heading', { name: 'Finish setting up your designer workspace' }),
-      ).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Continue setup' })).toHaveAttribute(
-        'href',
-        '/designer/onboarding',
-      );
-      expect(screen.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/');
-      expect(mock.redirect).not.toHaveBeenCalled();
-    },
-  );
+    expect(mock.requireAuth).toHaveBeenCalledWith();
+    expect(
+      screen.getByRole('heading', { name: 'Finish setting up your designer workspace' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Continue setup' })).toHaveAttribute(
+      'href',
+      '/designer/onboarding',
+    );
+    expect(screen.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/');
+    expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['visitor', 'active'],
+    ['visitor', 'suspended'],
+    ['visitor', 'deleted'],
+    ['visitor', undefined],
+    ['visitor', 'unknown'],
+    [null, 'pending'],
+  ])('denies the designer setup prompt to a %s/%s account', async (role, status) => {
+    mock.requireAuth.mockResolvedValue({ user: { role, status }, session: {} });
+    const { default: Page } =
+      await import('../../../../../app/(protected)/designer/onboarding/deferred/page');
+
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledExactlyOnceWith('/unauthorized');
+  });
 
   it.each([
     ['designer', 'org-1', '/designer/dashboard'],
