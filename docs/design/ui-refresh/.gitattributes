@@ -1,0 +1,2 @@
+# Preserve exported SVG bytes across Windows and Linux checkouts.
+assets/*.svg -text

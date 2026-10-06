@@ -2,7 +2,10 @@
 
 Tickif design system: themeable tokens + shadcn-style components (Tailwind v4, Radix).
 
-Figma reference: [tickif- DS](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=14339-7048). Current token values are placeholders pending sync with the Figma file.
+Current refresh reference: [designer portfolio](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-4108&m=dev).
+The [Phase 1 specification](../../docs/design/ui-refresh/README.md) records
+extracted tokens, component callers, local artwork, and inferred control states.
+Runtime tokens remain the existing values until Phase 2 applies that specification.
 
 ## Token architecture
 
@@ -39,11 +42,16 @@ The app loads fonts (e.g. `next/font`) and exposes them as `--font-sans-base`, `
 
 ## Syncing from Figma
 
-When the Figma DS stabilizes, update only `themes/tickif.css` (colors, radius) and the font loaders in `apps/web/app/layout.tsx`. Token names are the stable contract — components shouldn't need changes.
+Follow the [phased handoff](../../docs/ui-refresh-handoff.md). Theme values live
+in `themes/tickif.css`, Tailwind bridges in `globals.css`, and font loaders in
+`apps/web/app/layout.tsx`. The refresh also requires shared component variants,
+sizes, and states; theme changes alone cannot reproduce the new compositions.
+Preserve existing token names and component APIs where possible and audit
+callers before changing defaults.
 
 ## Adding components
 
-Run from `apps/web` (or this package — both have `components.json`):
+Run from `apps/web` using its aliases into `@repo/ui`:
 
 ```sh
 pnpm dlx shadcn@latest add <component>
