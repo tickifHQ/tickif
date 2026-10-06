@@ -96,6 +96,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     await expect(preview).toHaveCSS('--primary', '#123ABC');
     await expect(save).toBeDisabled();
     await preview.scrollIntoViewIfNeeded();
+    await preview.locator('..').evaluate((element) => element.scrollIntoView({ block: 'center' }));
     await preview.locator('..').screenshot({
       path: testInfo.outputPath('custom-accent-preview-desktop.png'),
       animations: 'disabled',
@@ -128,6 +129,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    await preview.locator('..').evaluate((element) => element.scrollIntoView({ block: 'center' }));
     await preview.locator('..').screenshot({
       path: testInfo.outputPath('custom-accent-preview-mobile.png'),
       animations: 'disabled',
