@@ -127,7 +127,7 @@ describe('PortfolioCoverCropDialog', () => {
       onSave: vi.fn(),
     };
     const { rerender } = render(<PortfolioCoverCropDialog {...props} isSaving={false} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel', exact: true }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
     rerender(<PortfolioCoverCropDialog {...props} isSaving />);
     const cropper = screen.getByTestId('cropper');
@@ -135,7 +135,7 @@ describe('PortfolioCoverCropDialog', () => {
     expect(cropper).toHaveAttribute('data-crop', JSON.stringify({ x: 0, y: 0 }));
     expect(cropper).toHaveAttribute('data-zoom', '1');
     expect(screen.getByTestId('cover-crop-surface')).toHaveAttribute('inert');
-    expect(screen.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Choose another' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save cover' })).toBeDisabled();
     expect(screen.getByRole('slider', { name: 'Cover zoom' })).toHaveAttribute('data-disabled');
