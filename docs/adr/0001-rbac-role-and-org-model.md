@@ -4,6 +4,9 @@ Status: Accepted
 Date: 2026-06-09, amended 2026-08-27
 Context: E-86 and E-240 (Epic 3 · RBAC & Access Control)
 
+Editorial clarification: 2026-10-06. The original E-86 enforcement deferral and
+subsequent E-87 delivery are distinguished below; the decision is unchanged.
+
 ## Context
 
 The platform needs a 4-role authorization model (visitor, designer, admin, superadmin)
@@ -25,7 +28,7 @@ without hand-rolling tables.
 
 2. **`user.role` is a Postgres `pgEnum`** (`user_role`), default `visitor`, not null.
    Authorization is security-critical and the role set is closed, so we want
-   database-level integrity, per `rules/database.md`. better-auth's CLI generates this
+   database-level integrity, per `docs/coding-guidelines/database.md`. better-auth's CLI generates this
    column as plain `text`; the committed enum is a deliberate, documented "stricter than
    generated" refinement (same posture as `user.status` in E-80). The `admin` plugin is
    configured with `defaultRole: 'visitor'` so better-auth only ever writes values inside
@@ -35,12 +38,14 @@ without hand-rolling tables.
    better-auth access-control definitions, request validation, and a database CHECK.
    Its migration collapses any legacy comma-joined values before adding the CHECK.
 
-3. **`adminRoles` and the fine-grained permission framework are deferred to E-87.** We do
-   NOT set `adminRoles` here: better-auth validates every `adminRoles` entry against the
-   roles defined via `createAccessControl`, so naming `superadmin` before those role
-   definitions exist throws at startup. E-86 establishes only the role _model_ + default;
-   E-87 adds the `createAccessControl` statements, the `requireRole`/`requireOwnership`/
-   org-membership guards, and at that point sets `adminRoles: ['admin', 'superadmin']`.
+3. **Role-model and permission enforcement were delivered in separate steps.**
+   At the original E-86 decision, `adminRoles` and fine-grained permissions were
+   deferred to E-87: Better Auth validates every `adminRoles` entry against the
+   roles defined via `createAccessControl`, so naming `superadmin` before those
+   definitions exist throws at startup. E-87 subsequently delivered the
+   `createAccessControl` statements, role/ownership/org-membership guards, and
+   `adminRoles: ['admin', 'superadmin']`. The deferral describes the original
+   sequence; enforcement is now implemented, as recorded in the consequences.
 
 4. **Company = organization, team = its members.** We do NOT enable better-auth
    sub-`teams`: the Corporate "multi-admin" requirement is satisfied by multiple

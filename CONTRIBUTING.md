@@ -1,5 +1,11 @@
 # Contributing
 
+Before starting a job, follow [AGENTS.md](./AGENTS.md): read the
+[architecture overview](./docs/architecture/overview.md),
+[ADR index](./docs/adr/README.md) and applicable decisions, then apply the
+[coding guidelines](./docs/coding-guidelines/README.md). Update affected docs
+alongside implementation changes; record new architectural decisions as ADRs.
+
 ## Branching
 
 - Branch off `main`. Name branches `type/short-desc` or, when a ticket exists,

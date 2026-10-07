@@ -1,42 +1,54 @@
 # AGENTS.md — Tickif
 
 **Single source of truth** for all AI coding agents (Claude Code, Cursor, Copilot,
-Codex, …). There are no tool-specific rule files — every agent reads this file and
-the modular rules under [`rules/`](./rules/README.md).
+Codex, …). This file is the common entry point; enforced conventions live in
+[`docs/coding-guidelines/`](./docs/coding-guidelines/README.md).
 
-Rules are **enforced conventions**, not suggestions, grounded in the official
-best-practice guidance for this stack. When a rule conflicts with a generic habit,
-the rule wins.
+## Start every new job
 
-Rules are split into focused files so you can **load only what's relevant** to the
-files you're editing. Prose explanations live in [`docs/`](./docs/README.md).
+1. Read [`docs/README.md`](./docs/README.md) and the
+   [architecture overview](./docs/architecture/overview.md).
+2. Read the [ADR index](./docs/adr/README.md), then the decisions relevant to the
+   task. Follow supersession links and amendments to identify the current decision.
+3. Always apply [golden rules](./docs/coding-guidelines/golden-rules.md) and
+   [security](./docs/coding-guidelines/security.md).
+4. Load the architecture documents and scoped coding guidelines for the files
+   and domains being touched, using the table below. Consult guides/runbooks for
+   the development or operational procedure.
+5. Keep affected architecture, guidelines, guides and runbooks synchronized with
+   the implementation. Record a new architectural decision in `docs/adr/` using
+   its template; preserve historical context and link any superseded decision.
+
+These conventions are enforced, not suggestions. Nested agent instruction files,
+if added, must reference this startup procedure and add only scope-specific
+instructions; do not duplicate the common rules.
 
 ## How to use these rules
 
-1. **Always apply** [`rules/golden-rules.md`](./rules/golden-rules.md) and
-   [`rules/security.md`](./rules/security.md).
+1. **Always apply** [`docs/coding-guidelines/golden-rules.md`](./docs/coding-guidelines/golden-rules.md) and
+   [`docs/coding-guidelines/security.md`](./docs/coding-guidelines/security.md).
 2. **Selectively load** the rule file(s) matching what you're touching:
 
-| Editing… | Load |
-| --- | --- |
-| `apps/api/**` | [api](./rules/api.md) + [validation](./rules/validation.md) + [database](./rules/database.md) + [auth](./rules/auth.md) |
-| `apps/web/**` | [frontend](./rules/frontend.md) + [validation](./rules/validation.md) |
-| `packages/ui/**` | [frontend](./rules/frontend.md) |
-| `apps/worker/**` | [background-jobs](./rules/background-jobs.md) |
-| `packages/db/**`, any `repository.ts` | [database](./rules/database.md) |
-| `packages/auth/**` | [auth](./rules/auth.md) |
-| `packages/contracts/**` | [validation](./rules/validation.md) |
-| any `.ts`/`.tsx` | [typescript](./rules/typescript.md) |
-| `**/tests/**`, `e2e/**` | [testing](./rules/testing.md) |
-| deps / workspace / build | [monorepo](./rules/monorepo.md) |
+| Editing…                              | Load                                                                                                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/**`                         | [api](./docs/coding-guidelines/api.md) + [validation](./docs/coding-guidelines/validation.md) + [database](./docs/coding-guidelines/database.md) + [auth](./docs/coding-guidelines/auth.md) |
+| `apps/web/**`                         | [frontend](./docs/coding-guidelines/frontend.md) + [validation](./docs/coding-guidelines/validation.md)                                                                                     |
+| `packages/ui/**`                      | [frontend](./docs/coding-guidelines/frontend.md)                                                                                                                                            |
+| `apps/worker/**`                      | [background-jobs](./docs/coding-guidelines/background-jobs.md)                                                                                                                              |
+| `packages/db/**`, any `repository.ts` | [database](./docs/coding-guidelines/database.md)                                                                                                                                            |
+| `packages/auth/**`                    | [auth](./docs/coding-guidelines/auth.md)                                                                                                                                                    |
+| `packages/contracts/**`               | [validation](./docs/coding-guidelines/validation.md)                                                                                                                                        |
+| any `.ts`/`.tsx`                      | [typescript](./docs/coding-guidelines/typescript.md)                                                                                                                                        |
+| `**/tests/**`, `e2e/**`               | [testing](./docs/coding-guidelines/testing.md)                                                                                                                                              |
+| deps / workspace / build              | [monorepo](./docs/coding-guidelines/monorepo.md)                                                                                                                                            |
 
-Each rule file states its scope (and a glob) at the top — see [`rules/README.md`](./rules/README.md).
+Each rule file states its scope (and a glob) at the top — see [`docs/coding-guidelines/README.md`](./docs/coding-guidelines/README.md).
 
 ## ReUI for Codex
 
 The repository includes the official ReUI skill at
-[`.agents/skills/reui/SKILL.md`](./.agents/skills/reui/SKILL.md) and a project-scoped
-MCP entry in [`.codex/config.toml`](./.codex/config.toml). For ReUI work, read the
+[`.agents/skills/reui/SKILL.md`](.agents/skills/reui/SKILL.md) and a project-scoped
+MCP entry in [`.codex/config.toml`](.codex/config.toml). For ReUI work, read the
 skill alongside the applicable rules above. Repository conventions take
 precedence: use `pnpm dlx shadcn@latest` for CLI commands and install UI items from
 `apps/web`, using its existing `components.json` aliases into `@repo/ui`.
@@ -57,7 +69,7 @@ Reference implementation: `apps/api/src/modules/projects/`.
 
 ```bash
 pnpm install                 # install (pnpm workspace)
-pnpm dev                     # run api(:3001) + web(:3000) + worker
+pnpm dev                     # run api(:8008) + web(:3000) + worker
 pnpm build                   # build all (api/worker → tsup dist, web → .next)
 pnpm typecheck               # tsc --noEmit across workspace
 pnpm lint                    # eslint across workspace
@@ -66,6 +78,9 @@ pnpm db:generate|migrate|studio
 pnpm infra:up|down           # Postgres + Redis via docker compose
 pnpm --filter @repo/<x> <script>   # target one package/app
 ```
+
+Ordinary development uses API port 8008; the isolated E2E launcher uses 3001.
+See [testing](./docs/guides/testing.md) for test targets and setup.
 
 Before declaring done: `pnpm typecheck && pnpm lint && pnpm test` must pass.
 

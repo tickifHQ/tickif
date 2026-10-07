@@ -14,12 +14,18 @@ repository.ts    # ONLY layer that imports Drizzle (@repo/db). Returns
 
 A module is mounted in `../app.ts` with a single `.route('/api/<name>', <name>Routes)`.
 
-## Status
+## Implemented modules and current scope
 
-- ✅ `projects` — fully implemented reference slice (route → service → repo → Drizzle).
-- ✅ `dashboard` — profile dashboard summary aggregate.
-- ✅ `leads` — owner-scoped lead inbox model and API.
-- ✅ `visitors` — authenticated visitor onboarding profile persistence.
-- ⬜ `designers`, `search`, `billing`, `reviews`, `bookings`,
-  `reports` — folders reserved; built in later phases per the
-  Tickif blueprint.
+`projects` is the reference route/service/repository slice. Implemented modules
+include profiles/portfolios, discovery/search, taxonomy, leads/enquiries, reviews,
+billing, organization access/retention, verification, moderation and reporting.
+Some modules provide internal services rather than a dedicated route surface.
+Use [`app.ts`](../app.ts) for the actual mounted route inventory.
+
+Booking code is retained, but scheduling remains disabled by default.
+[ADR 0003](../../../../docs/adr/0003-consultation-enquiries.md) records the
+current enquiry-based product decision. Before a new job, follow the
+[root agent instructions](../../../../AGENTS.md) and load the applicable
+[architecture](../../../../docs/architecture/README.md),
+[ADRs](../../../../docs/adr/README.md) and
+[coding guidelines](../../../../docs/coding-guidelines/README.md).

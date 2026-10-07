@@ -6,16 +6,16 @@ seams that can be split into services later, not premature microservices.
 
 ## Stack
 
-| Layer        | Tech                                                              |
-| ------------ | ---------------------------------------------------------------- |
-| Frontend     | Next.js 16 (App Router), Tailwind v4, TypeScript                 |
-| UI           | `@repo/ui` — token-based design system (Radix + shadcn-style)     |
-| Backend API  | Hono (`@hono/node-server`) + `@hono/zod-openapi`                 |
-| Auth         | better-auth (Phone OTP + Gmail SSO, admin/organization RBAC)      |
-| DB           | PostgreSQL 16 + Drizzle ORM (`casing: snake_case`)               |
-| Queue        | BullMQ + Redis (ioredis)                                         |
-| API docs     | OpenAPI 3.1 → Scalar at `/docs`                                  |
-| Validation   | Zod v4, shared via `@repo/contracts`                            |
+| Layer       | Tech                                                          |
+| ----------- | ------------------------------------------------------------- |
+| Frontend    | Next.js 16 (App Router), Tailwind v4, TypeScript              |
+| UI          | `@repo/ui` — token-based design system (Radix + shadcn-style) |
+| Backend API | Hono (`@hono/node-server`) + `@hono/zod-openapi`              |
+| Auth        | better-auth (Phone OTP + Gmail SSO, admin/organization RBAC)  |
+| DB          | PostgreSQL 16 + Drizzle ORM (`casing: snake_case`)            |
+| Queue       | BullMQ + Redis (ioredis)                                      |
+| API docs    | OpenAPI 3.1 → Scalar at `/docs`                               |
+| Validation  | Zod v4, shared via `@repo/contracts`                          |
 
 ## Layout
 
@@ -33,6 +33,16 @@ packages/
   queue/      BullMQ queues + typed enqueue helpers (the API↔worker contract)
   tsconfig/   Shared TS configs
   eslint-config/  Shared flat ESLint config
+  search/     Typesense bootstrap, indexing and queries
+  billing/    Subscription lifecycle policy
+  google-places/  Google Places integration
+  logger/     Structured logging and privacy filtering
+  telemetry/  OpenTelemetry lifecycle, propagation and metrics
+  ui/         Shared components and theme tokens
+  vitest-config/  Shared test presets
+e2e/          Playwright workspace and isolated full-stack harness
+infra/        Provisioning and deployment configuration
+docs/         Architecture, coding guidelines, ADRs, guides and runbooks
 ```
 
 ## Design system
@@ -46,11 +56,11 @@ JetBrains Mono (code).
 
 Live showcase of every token and component: **`/design-system`** in the web app.
 
-| Light                                          | Dark                                         |
-| ---------------------------------------------- | -------------------------------------------- |
-| ![Design system — light](docs/assets/design-system-light.png) | ![Design system — dark](docs/assets/design-system-dark.png) |
+| Light                                                                        | Dark                                                                       |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| ![Design system — light](./docs/architecture/assets/design-system-light.png) | ![Design system — dark](./docs/architecture/assets/design-system-dark.png) |
 
-Rules for agents and humans: [`rules/frontend.md`](./rules/frontend.md) — reuse
+Rules for agents and humans: [`docs/coding-guidelines/frontend.md`](./docs/coding-guidelines/frontend.md) — reuse
 existing components, create new ones in `@repo/ui` only if missing and reusable.
 
 ## Architectural rule (enforced by convention + review)
@@ -63,17 +73,19 @@ Dependency direction inside every API module:
 
 ## Documentation
 
-Full onboarding & reference docs live in [`docs/`](./docs/README.md):
+Start at [the engineering docs](./docs/README.md):
 
-- [Getting Started](./docs/getting-started.md) — run the stack locally
-- [Architecture](./docs/architecture.md) — the modular monolith & layering rule
-- [Adding a Module](./docs/adding-a-module.md) — the everyday how-to
-- [Database & Migrations](./docs/database-and-migrations.md)
-- [Auth](./docs/auth.md) · [Conventions](./docs/conventions.md) · [Troubleshooting](./docs/troubleshooting.md)
+- [Architecture](./docs/architecture/README.md) — system boundaries and domain behavior
+- [Coding guidelines](./docs/coding-guidelines/README.md) — enforced engineering conventions
+- [ADRs](./docs/adr/README.md) — decisions, consequences and supersession history
+- [Getting started](./docs/guides/getting-started.md) — local setup
+- [Adding a module](./docs/guides/adding-a-module.md) and
+  [testing](./docs/guides/testing.md) — development workflows
+- [Runbooks](./docs/runbooks/README.md) — deployment, recovery and operator checks
 
-**AI coding agents:** a single source of truth — [`AGENTS.md`](./AGENTS.md) +
-modular [`rules/`](./rules/README.md), read by every tool (Claude Code, Cursor,
-Copilot, Codex).
+**AI coding agents:** follow [AGENTS.md](./AGENTS.md) at the start of every job.
+Read the architecture overview, ADR index and relevant decisions, plus the
+universal and scoped coding guidelines.
 
 ## Getting started
 
@@ -81,7 +93,7 @@ Copilot, Codex).
 pnpm install
 cp .env.example .env          # set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm infra:up                 # Postgres + Redis + MinIO via docker compose
-pnpm db:generate && pnpm db:migrate
+pnpm db:migrate
 pnpm dev                      # api :8008, web :3000, worker
 ```
 
@@ -99,9 +111,11 @@ pnpm db:studio      # drizzle studio
 pnpm --filter @repo/worker enqueue:demo   # prove the queue path
 ```
 
-## Status
+## Current scope
 
-`auth`, `projects`, and the `media` pipeline (direct-to-R2 upload → commit → BullMQ
-worker → watermarked webp/avif derivatives) are wired end-to-end. Remaining blueprint
-domains (designers, leads, search, billing, reviews, bookings, taxonomy, reports) have
-reserved module folders and land in later phases.
+Projects/media, profiles/portfolios, discovery/search, enquiries/leads, reviews,
+billing, organization access, verification and moderation are implemented.
+Consultation scheduling is deferred; public actions use enquiries under
+[ADR 0003](./docs/adr/0003-consultation-enquiries.md). See the
+[architecture overview](./docs/architecture/overview.md) and mounted API routes
+for the current system boundaries.

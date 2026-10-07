@@ -76,6 +76,27 @@ Set `WATERMARK_REVISION` to the revision shipped with the code before a full bac
 revision change gives regenerated objects new keys; reusing an old revision can leave the
 previous visible watermark in immutable CDN caches.
 
+### Image-quality rollout checks
+
+Before reprocessing existing images in an environment:
+
+1. Deploy the new worker and API together.
+2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v4`) in that environment.
+   This prevents immutable caches from continuing to serve old encoded bytes.
+3. Queue ready images in a controlled batch using
+   `pnpm --filter @repo/worker media:reprocess -- <image-id>`, or use
+   `pnpm --filter @repo/worker media:reprocess -- --all --confirm` only after
+   checking storage and worker capacity.
+4. Run `pnpm --filter @repo/worker search:reindex` so existing search hits
+   switch from their previously indexed small derivative to the medium card derivative.
+
+The UI falls back to the largest older derivative while reprocessing and indexing
+are pending. Check a representative portrait, landscape, and low-resolution
+original at mobile and desktop sizes after the rollout.
+
+For derivative sizing and embedded-token limitations, read
+[media pipeline architecture](../architecture/media-pipeline.md).
+
 ### SynthID boundary
 
 SynthID is embedded by supported Google generation models when AI media is created. This

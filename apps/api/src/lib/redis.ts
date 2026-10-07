@@ -6,7 +6,7 @@ import { log } from './logger.js';
  * Shared Redis client for API-layer caching (E-119 entitlements).
  *
  * Separate from BullMQ's internal connection — never share this instance
- * with BullMQ queues/workers (per project convention in docs/troubleshooting.md).
+ * with BullMQ queues/workers (per project convention in docs/guides/troubleshooting.md).
  *
  * Lazy-initialized: the client connects on first use, not at import time.
  * Graceful degradation: if Redis is unavailable, cache operations are no-ops
