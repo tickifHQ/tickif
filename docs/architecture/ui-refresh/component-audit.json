@@ -1,6 +1,6 @@
 {
-  "baseline": "fbfbb98a9b20cddf1e9c79da19dbd2f70acf6bbe",
-  "coverage": "Static import and JSX audit. Includes direct source/test callers, package dependency edges, and sampled style overrides. Runtime wrapper behavior still requires browser review in Phase 2.",
+  "baseline": "faaf031015ba5fc466a323f55401c0552074ddd9",
+  "coverage": "Static import and JSX audit. Includes direct source/test callers, package dependency edges, and sampled style overrides. Runtime wrapper behavior is exercised in the shared gallery; role-page migrations remain pending.",
   "components": [
     {
       "component": "alert",
@@ -63,13 +63,8 @@
         },
         {
           "file": "apps/web/app/design-system/page.tsx",
-          "line": 159,
-          "styling": ["variant=\"success\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 163,
-          "styling": ["variant=\"destructive\""]
+          "line": 285,
+          "styling": ["variant={variant}"]
         },
         {
           "file": "apps/web/src/components/admin-review-queue.tsx",
@@ -79,6 +74,11 @@
         {
           "file": "apps/web/src/components/admin-review-queue.tsx",
           "line": 365,
+          "styling": ["variant=\"destructive\""]
+        },
+        {
+          "file": "apps/web/src/components/admin-summary-load-error.tsx",
+          "line": 12,
           "styling": ["variant=\"destructive\""]
         }
       ],
@@ -90,6 +90,7 @@
       "exports": ["AnimatedCollapsibleContent"],
       "internalDependencies": [],
       "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-portfolio-settings.tsx",
         "apps/web/src/components/designer-project-upload.tsx",
         "apps/web/src/components/designer-verification-ui.tsx"
@@ -172,6 +173,7 @@
         "apps/web/src/components/admin-users-directory.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
         "apps/web/src/components/consultation-list.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-branches.tsx",
         "apps/web/src/components/designer-dashboard-overview.tsx",
         "apps/web/src/components/designer-discovery-results.tsx",
@@ -190,40 +192,29 @@
         "apps/web/src/components/public-designer-profile.tsx",
         "apps/web/src/components/public-project-card.tsx",
         "apps/web/src/components/subscribe/plan-card.tsx",
-        "apps/web/src/components/subscribe/subscribe-page.tsx",
         "apps/web/src/components/tickif-reviews.tsx"
       ],
       "testCallers": [],
       "overrideExamples": [
         {
           "file": "apps/web/app/design-system/page.tsx",
-          "line": 144,
-          "styling": ["variant=\"secondary\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 145,
-          "styling": ["variant=\"outline\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 146,
-          "styling": ["variant=\"destructive\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 147,
-          "styling": ["variant=\"success\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
           "line": 148,
-          "styling": ["variant=\"warning\""]
+          "styling": ["variant=\"secondary\"", "className=\"self-start\"", "textStyle=\"code\""]
         },
         {
           "file": "apps/web/app/design-system/page.tsx",
-          "line": 149,
-          "styling": ["variant=\"info\""]
+          "line": 211,
+          "styling": ["variant={variant}"]
+        },
+        {
+          "file": "apps/web/app/design-system/page.tsx",
+          "line": 215,
+          "styling": ["shape=\"square\"", "size=\"compact\"", "textStyle=\"code\""]
+        },
+        {
+          "file": "apps/web/app/design-system/page.tsx",
+          "line": 248,
+          "styling": ["variant=\"outline\"", "textStyle=\"code\""]
         },
         {
           "file": "apps/web/src/components/admin-enquiries-list.tsx",
@@ -237,6 +228,16 @@
           "file": "apps/web/src/components/admin-moderation-queue.tsx",
           "line": 233,
           "styling": ["variant=\"secondary\""]
+        },
+        {
+          "file": "apps/web/src/components/admin-moderation-queue.tsx",
+          "line": 235,
+          "styling": ["variant=\"outline\""]
+        },
+        {
+          "file": "apps/web/src/components/admin-moderation-queue.tsx",
+          "line": 448,
+          "styling": ["variant={statusVariant(project.status)}"]
         }
       ],
       "internalConsumers": []
@@ -272,6 +273,7 @@
         "apps/web/src/components/consultations-error.tsx",
         "apps/web/src/components/consultations-page.tsx",
         "apps/web/src/components/copy-link-button.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-analytics-charts.tsx",
         "apps/web/src/components/designer-analytics-dashboard.tsx",
         "apps/web/src/components/designer-branches.tsx",
@@ -320,6 +322,7 @@
         "apps/web/src/components/public-project-recommendations.tsx",
         "apps/web/src/components/review-editor.tsx",
         "apps/web/src/components/subscribe/checkout-flow.tsx",
+        "apps/web/src/components/subscribe/checkout-result.tsx",
         "apps/web/src/components/subscribe/downgrade-confirmation-step.tsx",
         "apps/web/src/components/subscribe/plan-card.tsx",
         "apps/web/src/components/subscribe/reactivate-step.tsx",
@@ -371,8 +374,8 @@
         },
         {
           "file": "apps/web/app/design-system/page.tsx",
-          "line": 132,
-          "styling": ["variant=\"secondary\""]
+          "line": 258,
+          "styling": ["variant=\"outline\""]
         }
       ],
       "internalConsumers": ["carousel", "mode-toggle", "month-picker-field"]
@@ -403,6 +406,7 @@
         "apps/web/src/components/admin-enquiries-list.tsx",
         "apps/web/src/components/admin-platform-summary.tsx",
         "apps/web/src/components/consultation-list.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-analytics-dashboard.tsx",
         "apps/web/src/components/designer-branches.tsx",
         "apps/web/src/components/designer-dashboard-overview.tsx",
@@ -485,6 +489,7 @@
       ],
       "internalDependencies": ["button"],
       "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/project-hero-carousel.tsx",
         "apps/web/src/components/project-room-navigation.tsx",
         "apps/web/src/components/public-project-recommendations.tsx",
@@ -492,6 +497,21 @@
       ],
       "testCallers": [],
       "overrideExamples": [
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 634,
+          "styling": ["className=\"mt-4 flex justify-end gap-2\""]
+        },
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 635,
+          "styling": ["className=\"static inset-auto\""]
+        },
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 636,
+          "styling": ["className=\"static inset-auto\""]
+        },
         {
           "file": "apps/web/src/components/project-hero-carousel.tsx",
           "line": 61,
@@ -524,21 +544,6 @@
             "size=\"icon\"",
             "className=\"right-3 size-10 rounded-md opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none sm:right-14\""
           ]
-        },
-        {
-          "file": "apps/web/src/components/project-room-navigation.tsx",
-          "line": 38,
-          "styling": ["className=\"w-fit max-w-full\""]
-        },
-        {
-          "file": "apps/web/src/components/project-room-navigation.tsx",
-          "line": 44,
-          "styling": ["className=\"ml-0 gap-px\""]
-        },
-        {
-          "file": "apps/web/src/components/project-room-navigation.tsx",
-          "line": 49,
-          "styling": ["className=\"basis-auto pl-0\""]
         }
       ],
       "internalConsumers": []
@@ -549,9 +554,9 @@
       "exports": ["Checkbox"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/admin-moderation-queue.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/visitor-onboarding-form.tsx"
       ],
       "testCallers": [],
@@ -575,13 +580,13 @@
       ],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/action-login-dialog.tsx",
         "apps/web/src/components/admin-moderation-queue.tsx",
         "apps/web/src/components/admin-review-queue.tsx",
         "apps/web/src/components/admin-users-directory.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
         "apps/web/src/components/booking-cta.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-branches.tsx",
         "apps/web/src/components/designer-close-studio.tsx",
         "apps/web/src/components/designer-lead-detail-dialog.tsx",
@@ -600,11 +605,6 @@
       ],
       "testCallers": [],
       "overrideExamples": [
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 209,
-          "styling": ["className=\"font-display\""]
-        },
         {
           "file": "apps/web/src/components/action-login-dialog.tsx",
           "line": 22,
@@ -643,6 +643,11 @@
           "styling": [
             "className=\"left-auto right-0 top-0 h-[100dvh] max-h-none w-full max-w-2xl translate-x-0 translate-y-0 grid-cols-1 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0 sm:max-w-2xl\""
           ]
+        },
+        {
+          "file": "apps/web/src/components/admin-moderation-queue.tsx",
+          "line": 1112,
+          "styling": ["className=\"sr-only\""]
         }
       ],
       "internalConsumers": []
@@ -669,9 +674,9 @@
       ],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/account-menu.tsx",
         "apps/web/src/components/analytics-date-range-control.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-analytics-dashboard.tsx",
         "apps/web/src/components/designer-branch-selector.tsx",
         "apps/web/src/components/designer-discovery-filters.tsx",
@@ -689,11 +694,6 @@
       ],
       "testCallers": [],
       "overrideExamples": [
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 228,
-          "styling": ["variant=\"destructive\""]
-        },
         {
           "file": "apps/web/src/components/account-menu.tsx",
           "line": 120,
@@ -728,6 +728,11 @@
           "file": "apps/web/src/components/analytics-date-range-control.tsx",
           "line": 90,
           "styling": ["className=\"w-40\""]
+        },
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 487,
+          "styling": ["variant=\"destructive\""]
         }
       ],
       "internalConsumers": []
@@ -743,6 +748,7 @@
         "apps/web/src/components/admin-review-queue.tsx",
         "apps/web/src/components/admin-users-directory.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-discovery-results.tsx",
         "apps/web/src/components/designer-leads-list.tsx",
         "apps/web/src/components/designer-projects-list.tsx",
@@ -784,7 +790,10 @@
         "FieldTitle"
       ],
       "internalDependencies": ["label", "separator"],
-      "sourceCallers": ["apps/web/src/components/personal-settings-form.tsx"],
+      "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
+        "apps/web/src/components/personal-settings-form.tsx"
+      ],
       "testCallers": [],
       "overrideExamples": [
         {
@@ -806,12 +815,12 @@
       "exports": ["Input"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/admin-moderation-queue.tsx",
         "apps/web/src/components/admin-review-queue.tsx",
         "apps/web/src/components/admin-users-filters.tsx",
         "apps/web/src/components/apartment-name-combobox.tsx",
         "apps/web/src/components/booking-cta.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-branches.tsx",
         "apps/web/src/components/designer-close-studio.tsx",
         "apps/web/src/components/designer-list-controls.tsx",
@@ -884,7 +893,6 @@
       "exports": ["Label"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/admin-moderation-queue.tsx",
         "apps/web/src/components/admin-review-queue.tsx",
         "apps/web/src/components/admin-users-filters.tsx",
@@ -892,6 +900,7 @@
         "apps/web/src/components/apartment-name-combobox.tsx",
         "apps/web/src/components/booking-cta.tsx",
         "apps/web/src/components/consultation-schedule-actions.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-branches.tsx",
         "apps/web/src/components/designer-close-studio.tsx",
         "apps/web/src/components/designer-logo-input.tsx",
@@ -926,6 +935,11 @@
           "styling": ["className=\"text-[13px] leading-[1.6] font-medium text-foreground\""]
         },
         {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 546,
+          "styling": ["className=\"mb-2\""]
+        },
+        {
           "file": "apps/web/src/components/designer-branches.tsx",
           "line": 728,
           "styling": ["className=\"text-sm font-medium text-muted-foreground\""]
@@ -949,11 +963,6 @@
           "file": "apps/web/src/components/designer-onboarding.tsx",
           "line": 633,
           "styling": ["className=\"gap-0 text-[13px] font-medium leading-relaxed\""]
-        },
-        {
-          "file": "apps/web/src/components/designer-onboarding.tsx",
-          "line": 652,
-          "styling": ["className=\"text-[13px] font-medium leading-relaxed\""]
         }
       ],
       "internalConsumers": ["field", "month-picker-field", "select-field", "tag-combobox"]
@@ -973,7 +982,10 @@
       "source": "packages/ui/src/components/month-picker-field.tsx",
       "exports": ["MonthPickerField"],
       "internalDependencies": ["button", "input", "label"],
-      "sourceCallers": ["apps/web/src/components/designer-project-upload.tsx"],
+      "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
+        "apps/web/src/components/designer-project-upload.tsx"
+      ],
       "testCallers": [],
       "overrideExamples": [],
       "internalConsumers": []
@@ -983,7 +995,10 @@
       "source": "packages/ui/src/components/number-input.tsx",
       "exports": ["NumberInput"],
       "internalDependencies": ["input"],
-      "sourceCallers": ["apps/web/src/components/designer-project-upload.tsx"],
+      "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
+        "apps/web/src/components/designer-project-upload.tsx"
+      ],
       "testCallers": [],
       "overrideExamples": [
         {
@@ -1005,32 +1020,45 @@
         "PaginationLink"
       ],
       "internalDependencies": [],
-      "sourceCallers": ["apps/web/src/components/list-pagination.tsx"],
+      "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
+        "apps/web/src/components/list-pagination.tsx"
+      ],
       "testCallers": [],
       "overrideExamples": [
         {
           "file": "apps/web/src/components/list-pagination.tsx",
-          "line": 87,
+          "line": 88,
           "styling": ["className={controlClassName}"]
         },
         {
           "file": "apps/web/src/components/list-pagination.tsx",
-          "line": 175,
+          "line": 176,
           "styling": ["className=\"max-w-full justify-self-center overflow-x-auto sm:w-auto\""]
         },
         {
           "file": "apps/web/src/components/list-pagination.tsx",
-          "line": 176,
+          "line": 177,
           "styling": [
             "className=\"overflow-hidden rounded-lg border border-border bg-background shadow-xs\""
           ]
         },
         {
           "file": "apps/web/src/components/list-pagination.tsx",
-          "line": 200,
+          "line": 201,
           "styling": ["className=\"border-y-0 border-l-0\""]
         }
       ],
+      "internalConsumers": []
+    },
+    {
+      "component": "recognition-badge",
+      "source": "packages/ui/src/components/recognition-badge.tsx",
+      "exports": ["RecognitionBadge"],
+      "internalDependencies": [],
+      "sourceCallers": ["apps/web/app/design-system/page.tsx"],
+      "testCallers": [],
+      "overrideExamples": [],
       "internalConsumers": []
     },
     {
@@ -1039,6 +1067,7 @@
       "exports": ["RequiredFieldIndicator"],
       "internalDependencies": [],
       "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-logo-input.tsx",
         "apps/web/src/components/designer-onboarding.tsx",
         "apps/web/src/components/designer-portfolio-settings.tsx",
@@ -1063,9 +1092,22 @@
       "source": "packages/ui/src/components/reui/rating.tsx",
       "exports": ["Rating"],
       "internalDependencies": [],
-      "sourceCallers": ["apps/web/src/components/public-designer-profile.tsx"],
+      "sourceCallers": [
+        "apps/web/app/design-system/page.tsx",
+        "apps/web/src/components/public-designer-profile.tsx"
+      ],
       "testCallers": [],
       "overrideExamples": [
+        {
+          "file": "apps/web/app/design-system/page.tsx",
+          "line": 255,
+          "styling": ["size=\"lg\""]
+        },
+        {
+          "file": "apps/web/app/design-system/page.tsx",
+          "line": 299,
+          "styling": ["size=\"sm\""]
+        },
         {
           "file": "apps/web/src/components/public-designer-profile.tsx",
           "line": 632,
@@ -1078,12 +1120,13 @@
       "component": "select-field",
       "source": "packages/ui/src/components/select-field.tsx",
       "exports": ["SelectField", "SelectFieldOption"],
-      "internalDependencies": ["label"],
+      "internalDependencies": ["label", "select"],
       "sourceCallers": [
         "apps/web/src/components/admin-users-filters.tsx",
         "apps/web/src/components/analytics-branch-control.tsx",
         "apps/web/src/components/booking-cta.tsx",
         "apps/web/src/components/consultation-schedule-actions.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-branches.tsx",
         "apps/web/src/components/designer-lead-detail-dialog.tsx",
         "apps/web/src/components/designer-profile-editor.tsx",
@@ -1098,42 +1141,42 @@
           "file": "apps/web/src/components/analytics-branch-control.tsx",
           "line": 65,
           "styling": [
-            "className=\"w-52 space-y-0 [&_label]:sr-only [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8\""
+            "className=\"w-52 space-y-0 [&_label]:sr-only [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8\""
           ]
         },
         {
           "file": "apps/web/src/components/designer-branches.tsx",
           "line": 772,
           "styling": [
-            "className=\"space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8\""
+            "className=\"space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8\""
           ]
         },
         {
           "file": "apps/web/src/components/designer-branches.tsx",
           "line": 786,
           "styling": [
-            "className=\"space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8\""
+            "className=\"space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8\""
           ]
         },
         {
           "file": "apps/web/src/components/designer-branches.tsx",
           "line": 816,
           "styling": [
-            "className=\"space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8\""
+            "className=\"space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8\""
           ]
         },
         {
           "file": "apps/web/src/components/designer-branches.tsx",
           "line": 828,
           "styling": [
-            "className=\"space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8\""
+            "className=\"space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8\""
           ]
         },
         {
           "file": "apps/web/src/components/designer-branches.tsx",
           "line": 904,
           "styling": [
-            "className=\"space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8\""
+            "className=\"space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8\""
           ]
         },
         {
@@ -1148,6 +1191,35 @@
         }
       ],
       "internalConsumers": []
+    },
+    {
+      "component": "select",
+      "source": "packages/ui/src/components/select.tsx",
+      "exports": [
+        "Select",
+        "SelectContent",
+        "SelectGroup",
+        "SelectItem",
+        "SelectLabel",
+        "SelectScrollDownButton",
+        "SelectScrollUpButton",
+        "SelectSeparator",
+        "SelectTrigger",
+        "SelectValue"
+      ],
+      "internalDependencies": [],
+      "sourceCallers": ["apps/web/src/components/list-pagination.tsx"],
+      "testCallers": [],
+      "overrideExamples": [
+        {
+          "file": "apps/web/src/components/list-pagination.tsx",
+          "line": 246,
+          "styling": [
+            "className=\"h-8 w-auto px-3 text-sm/none font-medium text-muted-foreground\""
+          ]
+        }
+      ],
+      "internalConsumers": ["select-field"]
     },
     {
       "component": "separator",
@@ -1166,12 +1238,7 @@
       "overrideExamples": [
         {
           "file": "apps/web/app/design-system/page.tsx",
-          "line": 74,
-          "styling": ["className=\"ml-2 flex-1\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 263,
+          "line": 342,
           "styling": ["className=\"h-10\""]
         },
         {
@@ -1254,11 +1321,18 @@
       "exports": ["Slider"],
       "internalDependencies": [],
       "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/logo-crop-dialog.tsx",
         "apps/web/src/components/portfolio-cover-crop-dialog.tsx"
       ],
       "testCallers": [],
-      "overrideExamples": [],
+      "overrideExamples": [
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 303,
+          "styling": ["className=\"my-2\""]
+        }
+      ],
       "internalConsumers": []
     },
     {
@@ -1267,7 +1341,7 @@
       "exports": ["Switch"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-portfolio-settings.tsx"
       ],
       "testCallers": [],
@@ -1294,6 +1368,7 @@
         "apps/web/src/components/admin-users-directory.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
         "apps/web/src/components/analytics-data-table.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-analytics-dashboard.tsx",
         "apps/web/src/components/designer-leads-list.tsx",
         "apps/web/src/components/designer-projects-list.tsx",
@@ -1351,35 +1426,15 @@
       "exports": ["Tabs", "TabsContent", "TabsList", "TabsTrigger"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/admin-moderation-queue.tsx",
         "apps/web/src/components/admin-review-queue.tsx",
         "apps/web/src/components/admin-users-directory.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/login-card.tsx"
       ],
       "testCallers": [],
       "overrideExamples": [
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 240,
-          "styling": ["className=\"max-w-md\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 246,
-          "styling": ["className=\"text-sm text-muted-foreground\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 249,
-          "styling": ["className=\"text-sm text-muted-foreground\""]
-        },
-        {
-          "file": "apps/web/app/design-system/page.tsx",
-          "line": 252,
-          "styling": ["className=\"text-sm text-muted-foreground\""]
-        },
         {
           "file": "apps/web/src/components/admin-moderation-queue.tsx",
           "line": 1091,
@@ -1399,6 +1454,26 @@
           "file": "apps/web/src/components/admin-users-directory.tsx",
           "line": 181,
           "styling": ["className=\"mt-4\""]
+        },
+        {
+          "file": "apps/web/src/components/admin-users-directory.tsx",
+          "line": 211,
+          "styling": ["className=\"mt-4\""]
+        },
+        {
+          "file": "apps/web/src/components/admin-verification-queue.tsx",
+          "line": 957,
+          "styling": ["className=\"mt-5\""]
+        },
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 549,
+          "styling": ["variant={variant}"]
+        },
+        {
+          "file": "apps/web/src/components/design-system-demos.tsx",
+          "line": 556,
+          "styling": ["className=\"pt-3 text-sm text-muted-foreground\""]
         }
       ],
       "internalConsumers": []
@@ -1408,7 +1483,10 @@
       "source": "packages/ui/src/components/tag-combobox.tsx",
       "exports": ["TagCombobox", "TagComboboxOption"],
       "internalDependencies": ["input", "label"],
-      "sourceCallers": ["apps/web/src/components/designer-project-upload.tsx"],
+      "sourceCallers": [
+        "apps/web/src/components/design-system-demos.tsx",
+        "apps/web/src/components/designer-project-upload.tsx"
+      ],
       "testCallers": [],
       "overrideExamples": [],
       "internalConsumers": []
@@ -1419,12 +1497,12 @@
       "exports": ["Textarea"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/admin-moderation-queue.tsx",
         "apps/web/src/components/admin-review-queue.tsx",
         "apps/web/src/components/admin-verification-queue.tsx",
         "apps/web/src/components/booking-cta.tsx",
         "apps/web/src/components/consultation-schedule-actions.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-lead-detail-dialog.tsx",
         "apps/web/src/components/designer-portfolio-settings.tsx",
         "apps/web/src/components/designer-profile-editor.tsx",
@@ -1484,12 +1562,19 @@
       "exports": ["TipCallout"],
       "internalDependencies": [],
       "sourceCallers": [
+        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/designer-portfolio-settings.tsx",
         "apps/web/src/components/designer-project-upload.tsx",
-        "apps/web/src/components/designer-verification.tsx"
+        "apps/web/src/components/designer-verification.tsx",
+        "apps/web/src/components/subscribe/plan-selection.tsx"
       ],
       "testCallers": [],
       "overrideExamples": [
+        {
+          "file": "apps/web/app/design-system/page.tsx",
+          "line": 294,
+          "styling": ["variant=\"info\""]
+        },
         {
           "file": "apps/web/src/components/designer-verification.tsx",
           "line": 760,
@@ -1509,8 +1594,8 @@
       "exports": ["Tooltip", "TooltipContent", "TooltipProvider", "TooltipTrigger"],
       "internalDependencies": [],
       "sourceCallers": [
-        "apps/web/app/design-system/page.tsx",
         "apps/web/src/components/admin-review-queue.tsx",
+        "apps/web/src/components/design-system-demos.tsx",
         "apps/web/src/components/designer-project-details.tsx",
         "apps/web/src/components/designer-verification-ui.tsx",
         "apps/web/src/components/enquiry-cta.tsx",
@@ -1559,6 +1644,7 @@
     "apps/web/app/(designer)/designer/leads/page.tsx",
     "apps/web/app/(designer)/designer/plan-billing/(overview)/loading.tsx",
     "apps/web/app/(designer)/designer/plan-billing/(overview)/page.tsx",
+    "apps/web/app/(designer)/designer/plan-billing/subscribe/[outcome]/page.tsx",
     "apps/web/app/(designer)/designer/plan-billing/subscribe/page.tsx",
     "apps/web/app/(designer)/designer/portfolio/loading.tsx",
     "apps/web/app/(designer)/designer/portfolio/page.tsx",

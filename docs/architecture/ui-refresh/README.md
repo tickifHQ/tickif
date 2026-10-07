@@ -1,8 +1,10 @@
 # Tickif UI Refresh Specification
 
-Phase 1 converts the new designer portfolio reference into a shared token and
-component specification. The production theme and UI components are unchanged
-in this batch. Phase 2 applies the specification in `@repo/ui`.
+The new designer portfolio is the visual source for the shared system. Runtime
+theme values, components, a crown presentation primitive and an interactive
+gallery now apply that reference. The user approved the component gallery on
+7 October 2026 for publication in the single shared phase PR. Detailed profile
+composition is the next phase.
 
 ## Sources and coverage
 
@@ -12,27 +14,29 @@ Portfolio page; use it rather than inventing the profile's mobile composition.
 
 Detailed MCP context covers the desktop hero, recognition, projects,
 testimonial, ratings, experience centres, sharing, consultation, navigation,
-and floating enquiry control. Recognition was captured in the preceding
-planning turn. The current account exhausted its MCP quota before footer and
-mobile extraction and a compact variable/component-source audit completed.
-The other connected account does not have the file access required by MCP.
+and floating enquiry control. On 7 October, primary MCP access was restored:
+fresh high-fidelity contexts now include all eleven desktop and mobile sections,
+including the footer. The desktop subtree contains no component instances or
+bound variables; Code Connect lookup is unavailable on the current Figma plan.
+The mobile frame's own opacity is 1%, explaining its faint screenshots; that
+canvas setting must not be copied into the application. Full profile integration
+and visual comparison remain phase 2 work.
 
 The first programmatic style response was truncated at 20KB. Only its complete
 palette and frame inventory were retained; do not treat it as a full variable,
 typography, or component-binding export.
 
-| Artifact                                                                                                                                                 | Purpose                                                                                                                          |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [token-spec.json](./token-spec.json)                                                                                                                     | Proposed semantic values, source nodes, measured geometry, fonts, inferred dark palette, and motion                              |
-| [figma-palette.json](./figma-palette.json)                                                                                                               | Observed desktop fill colors with source nodes and nearby frame inventory                                                        |
-| [component-audit.json](./component-audit.json)                                                                                                           | All 33 shared component files, exports, direct callers, internal dependencies, sample overrides, and 81 route/state source files |
-| [asset-manifest.json](./asset-manifest.json)                                                                                                             | Local static exports, source slots, dimensions, and imagery that must remain dynamic                                             |
-| [figma-hero.png](./figma-hero.png)                                                                                                                       | Hero reference screenshot                                                                                                        |
-| [figma-recognition.png](./figma-recognition.png)                                                                                                         | Recognition reference screenshot                                                                                                 |
-| [figma-share.png](./figma-share.png)                                                                                                                     | Sharing reference screenshot                                                                                                     |
-| `figma-projects.png`, `figma-testimonial.png`, `figma-ratings.png`, `figma-centres.png`, `figma-consultation.png`, `figma-nav.png`, `figma-floating.png` | Other retrieved desktop section screenshots in this directory                                                                    |
-| [baseline-desktop.png](./baseline-desktop.png), [baseline-dark.png](./baseline-dark.png), [baseline-mobile.png](./baseline-mobile.png)                   | Existing `/design-system` before production changes                                                                              |
-| [contrast-check.json](./contrast-check.json)                                                                                                             | Opaque text/surface pairs checked against the proposed palette                                                                   |
+| Artifact                                                                                                                                                 | Purpose                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [token-spec.json](./token-spec.json)                                                                                                                     | Proposed semantic values, source nodes, measured geometry, fonts, inferred dark palette, and motion           |
+| [figma-palette.json](./figma-palette.json)                                                                                                               | Observed desktop fill colors with source nodes and nearby frame inventory                                     |
+| [component-audit.json](./component-audit.json)                                                                                                           | Current shared component files, exports, direct callers, dependencies, overrides and route/state source files |
+| [asset-manifest.json](./asset-manifest.json)                                                                                                             | Local static exports, source slots, dimensions, and imagery that must remain dynamic                          |
+| [figma-hero.png](./figma-hero.png)                                                                                                                       | Hero reference screenshot                                                                                     |
+| [figma-recognition.png](./figma-recognition.png)                                                                                                         | Recognition reference screenshot                                                                              |
+| [figma-share.png](./figma-share.png)                                                                                                                     | Sharing reference screenshot                                                                                  |
+| `figma-projects.png`, `figma-testimonial.png`, `figma-ratings.png`, `figma-centres.png`, `figma-consultation.png`, `figma-nav.png`, `figma-floating.png` | Other retrieved desktop section screenshots in this directory                                                 |
+| [contrast-check.json](./contrast-check.json)                                                                                                             | Opaque text/surface pairs checked against the proposed palette                                                |
 
 Source node IDs identify provenance. Mapping an observed color to a semantic
 role is still an implementation decision; it does not assert a Figma variable
@@ -40,7 +44,7 @@ binding. Temporary asset URLs are excluded from committed artifacts. Full
 reference code and remaining screenshots are cached locally under the ignored
 `.ui-refresh.local` directory; obtain fresh MCP context when that cache is absent.
 
-Run `node docs/design/ui-refresh/verify.mjs` from the repository root to check
+Run `node docs/architecture/ui-refresh/verify.mjs` from the repository root to check
 asset bytes/dimensions and SHA-256 hashes, token provenance, caller paths, and proposed contrast
 ratios without changing the artifacts. Rebuild the component inventory when
 source files change; this verifier does not discover new callers or routes.
@@ -51,24 +55,26 @@ Keep existing token names where possible. Add narrowly named roles for new
 visual treatments instead of hardcoding colors in components or merging
 recognition artwork into destructive/success intent colors.
 
-| Role                              | Proposed value                              | Basis                                                          |
-| --------------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| Background and standard card      | `#ffffff`                                   | Observed                                                       |
-| Foreground                        | `#171612`                                   | Observed                                                       |
-| Secondary body text               | `#4a473f`                                   | Observed                                                       |
-| Muted foreground                  | `#6b675c`                                   | Observed                                                       |
-| Decorative metadata text          | `#8a867a`                                   | Observed; contrast review required for small functional labels |
-| Primary and foreground            | `#1e7a55` / white                           | Observed CTA                                                   |
-| Secondary, accent, subtle surface | `#e2ece4` / `#0f3326`                       | Observed badge and sharing surfaces                            |
-| Muted/neutral button surface      | `#f6f6f4`                                   | Observed reviews and share action                              |
-| Inverse surface and foreground    | `#0f3326` / `#f4f0e8`                       | Observed consultation section                                  |
-| Soft primary CTA                  | `#8fd8b4` / `#0f3326`                       | Observed inverse-section button                                |
-| Normal/strong border              | foreground at 14% / 20% opacity             | Observed divider / outline action                              |
-| Rating decoration                 | `#e8a317`                                   | Observed stars; rating text stays readable foreground          |
-| Recognition hues                  | purple, gold, clay, deep green, green, rose | Observed artwork; separate from intent status                  |
+| Role                              | Proposed value                              | Basis                                                                   |
+| --------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------- |
+| Background and standard card      | `#ffffff`                                   | Observed                                                                |
+| Foreground                        | `#171612`                                   | Observed                                                                |
+| Secondary body text               | `#4a473f`                                   | Observed                                                                |
+| Muted foreground                  | `#6b675c`                                   | Observed                                                                |
+| Decorative metadata text          | `#8a867a`                                   | Observed; contrast review required for small functional labels          |
+| Primary and foreground            | `#1e7a55` / white                           | Observed CTA                                                            |
+| Secondary, accent, subtle surface | `#e2ece4` / `#0f3326`                       | Observed badge and sharing surfaces                                     |
+| Muted/neutral button surface      | `#f6f6f4`                                   | Observed reviews and share action                                       |
+| Inverse surface and foreground    | `#0f3326` / `#f4f0e8`                       | Observed consultation section                                           |
+| Soft primary CTA                  | `#8fd8b4` / `#0f3326`                       | Observed inverse-section button                                         |
+| Normal/strong border              | foreground at 14% / 20% opacity             | Observed divider / outline action                                       |
+| Input boundary                    | foreground at 48% light / cream at 40% dark | Inferred for distinguishable controls; stronger than decorative borders |
+| Rating decoration                 | `#e8a317`                                   | Observed stars; rating text stays readable foreground                   |
+| Recognition hues                  | purple, gold, clay, deep green, green, rose | Observed artwork; separate from intent status                           |
 
-Preserve existing destructive, warning, info, success, and feature semantics
-until their components are restyled and checked. A clay heading accent is not
+Destructive, warning, info, success and feature retain their intent semantics.
+Success uses the brand green, and red/blue pairs were strengthened for readable
+status text in both themes. These intent colors are inferred. A clay heading accent is not
 an error indicator, and a gold recognition wreath is not a warning badge.
 
 The proposed dark palette is explicitly inferred. Use deep green surfaces,
@@ -86,8 +92,9 @@ Record the fallback as a visual deviation and compare wrapping at each width;
 do not depend on a locally installed font for consistent cross-platform output.
 
 Keep `--font-body`, `--font-heading`, and `--font-code` as the theme contracts.
-The app already loads Inter and JetBrains Mono through `next/font`. Map display
-sizes into dedicated semantic type roles in Phase 2 rather than applying the
+The app loads Inter and JetBrains Mono through `next/font`, with their font
+variables on `<html>` so the root theme can resolve them. Map display
+sizes into dedicated semantic type roles (`text-display`, `text-section`) rather than applying the
 profile's 94px hero size to every screen heading.
 
 | Desktop role       | Size and line height                | Tracking       |
@@ -126,17 +133,17 @@ updating `input` also affects `number-input`, and changing `label` affects
 composed form controls. `reui/icon-stack` has no direct app caller but remains
 part of the package inventory. Sampled override lists are not exhaustive.
 
-| Component family                                  | Phase 2 implementation direction                                                                                   |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Buttons                                           | Pill shape; primary, inverse, neutral, outline, ghost, link, and destructive roles; retain compact/icon variants   |
-| Inputs and composed fields                        | Warm borders, white surface, rectangular radius, consistent labels and validation; preserve native/select behavior |
-| Dropdowns, dialogs, tooltips                      | Rounded surfaces with warm shadows, semantic selection/focus, existing keyboard and dismissal behavior             |
-| Badges and avatars                                | Compact metadata chips and availability indicators; artwork belongs in a separate recognition composition          |
-| Cards, tables, pagination                         | Softer surfaces and separators; maintain dense row alignment and horizontal overflow when necessary                |
-| Tabs                                              | Preserve segmented behavior; add the source's line-style treatment for experience-centre tabs as a variant         |
-| Checkbox, switch, slider                          | Match primary/border roles without weakening native or Radix semantics                                             |
-| Alerts and empty/loading states                   | Match typography and surfaces while preserving intent distinction and accessible status announcements              |
-| Carousel, collapsible content, rating, icon stack | Reuse existing behavior; update tokens, icon geometry, and motion preferences                                      |
+| Component family                                  | Shared implementation                                                                                                                                  |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Buttons                                           | Pill shape; primary, inverse, neutral, outline, ghost, link, and destructive roles; retain compact/icon variants                                       |
+| Inputs and composed fields                        | Warm borders, white surface, rectangular radius, consistent labels and validation; custom select popup preserves form submission and keyboard behavior |
+| Dropdowns, dialogs, tooltips                      | Rounded surfaces with warm shadows, semantic selection/focus, existing keyboard and dismissal behavior                                                 |
+| Badges and avatars                                | Compact metadata chips and availability indicators; artwork belongs in a separate recognition composition                                              |
+| Cards, tables, pagination                         | Softer surfaces and separators; maintain dense row alignment and horizontal overflow when necessary                                                    |
+| Tabs                                              | Preserve segmented behavior; add the source's line-style treatment for experience-centre tabs as a variant                                             |
+| Checkbox, switch, slider                          | Match primary/border roles without weakening native or Radix semantics                                                                                 |
+| Alerts and empty/loading states                   | Match typography and surfaces while preserving intent distinction and accessible status announcements                                                  |
+| Carousel, collapsible content, rating, icon stack | Reuse existing behavior; update tokens, icon geometry, and motion preferences                                                                          |
 
 ## States inferred for missing controls
 
@@ -206,13 +213,16 @@ production integration, validate each source slot, wrapper geometry, and SVG
 root size against current detailed context. Map artwork is a design reference;
 preserve real centre selection, links, and location data when making it live.
 
-## Remaining Phase 1 work
+## Current implementation and remaining profile extraction
 
-The baseline showcase was checked at 1440px and 390px: name-field editing,
-dialog dismissal with Escape, light/dark switching, no mobile horizontal
-overflow, and no browser errors. Its existing dark mode renders several
-headings and ghost-button text with low contrast; treat this as a Phase 2
-verification target, not evidence that the new dark palette is already applied.
+The gallery at `/design-system` now exercises all 35 shared component files.
+New light/dark values replace the old dark heading/ghost contrast issues.
+Generic form controls, reduced-motion states, custom accent behavior, and exact
+crown exports are included. Generated baseline and verification screenshots
+are retained outside committed source, following current main's guidelines.
+The [component review guide](../../guides/shared-ui-review.md) records each
+component's behavior; the [handoff](../../guides/ui-refresh-handoff.md) tracks
+validation and the user confirmation gate.
 
 - [ ] Restore primary-account MCP capacity or provide the required file access
       to the other connected account.
@@ -223,8 +233,8 @@ verification target, not evidence that the new dark palette is already applied.
 - [ ] Retrieve fresh desktop/mobile motion context.
 - [ ] Capture designer, visitor, and admin baseline screenshots with suitable
       fixtures/session access; the unauthenticated `/design-system` baseline exists.
-- [ ] Complete the phase gate and update the handoff before declaring Phase 1
-      complete. Keep the foundations and aggregate PRs draft until their work is ready.
+- [ ] Complete profile fidelity and role-page validation after shared-component
+      approval. Do not create a duplicate aggregate PR for the current phase.
 
-See [the phased handoff](../../ui-refresh-handoff.md) for stack tracking,
+See [the phased handoff](../../guides/ui-refresh-handoff.md) for delivery tracking,
 completion gates, and subsequent role rollout.

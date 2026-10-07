@@ -779,7 +779,7 @@ export function DesignerBranches({
                   { value: 'billing_admin', label: 'Billing Admin' },
                   { value: 'admin', label: 'Admin' },
                 ]}
-                className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
                 disabled={isPending}
                 onValueChange={(value) => setInviteRole(value as AssignableRole)}
               />
@@ -788,7 +788,7 @@ export function DesignerBranches({
                 value={inviteBranchId}
                 placeholder="Select a branch"
                 options={branchOptions}
-                className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
                 disabled={isPending}
                 onValueChange={setInviteBranchId}
               />
@@ -821,7 +821,7 @@ export function DesignerBranches({
                   value: member.userId,
                   label: `${member.name} (${member.email})`,
                 }))}
-                className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
                 disabled={isPending}
                 onValueChange={setAssignMemberId}
               />
@@ -830,7 +830,7 @@ export function DesignerBranches({
                 value={assignBranchId}
                 placeholder="Select a branch"
                 options={branchOptions}
-                className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
                 disabled={isPending}
                 onValueChange={setAssignBranchId}
               />
@@ -908,7 +908,7 @@ export function DesignerBranches({
               options={publicRemovalTargets
                 .filter((target) => target.id !== removeDialogBranch?.id)
                 .map((target) => ({ value: target.id, label: target.name }))}
-              className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+              className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
               disabled={isPending}
               onValueChange={(value) => {
                 if (!removeDialogBranch) return;

@@ -29,11 +29,12 @@ test('project budget choices persist and room descriptions are absent from the e
     expect(active.ok()).toBeTruthy();
     await page.goto(`/designer/projects/upload?projectId=${target.id}`);
     const budget = page.getByLabel('Cost range', { exact: true });
-    await expect(budget).toHaveValue('upscale');
-    await expect(budget.locator('option:checked')).toHaveText('₹15L - ₹35L');
+    await expect(budget).toHaveText('₹15L - ₹35L');
     await expect(page.getByText('About this room', { exact: true })).toHaveCount(0);
-    await budget.selectOption('30l-40l');
-    await expect(budget.locator('option:not([value=""])')).toHaveText([
+    await budget.click();
+    await page.getByRole('option', { name: '₹30L - ₹40L', exact: true }).click();
+    await budget.click();
+    await expect(page.getByRole('option')).toHaveText([
       'Under ₹5L',
       '₹5L - ₹10L',
       '₹10L - ₹20L',
@@ -43,6 +44,7 @@ test('project budget choices persist and room descriptions are absent from the e
       '₹50L - ₹1Cr',
       '₹1Cr+',
     ]);
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
     const readBudget = async () => {
       const response = await context.request.get(`${moderationApiUrl}/api/projects/${target.id}`);
@@ -51,17 +53,18 @@ test('project budget choices persist and room descriptions are absent from the e
     };
     await expect.poll(readBudget).toBe('30l-40l');
     await page.reload();
-    await expect(budget).toHaveValue('30l-40l');
+    await expect(budget).toHaveText('₹30L - ₹40L');
     await budget.scrollIntoViewIfNeeded();
     await testInfo.attach('project-budget-ranges', {
       body: await page.screenshot({ path: testInfo.outputPath('budget-ranges.png') }),
       contentType: 'image/png',
     });
-    await budget.selectOption('1cr-plus');
+    await budget.click();
+    await page.getByRole('option', { name: '₹1Cr+', exact: true }).click();
     await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
     await expect.poll(readBudget).toBe('1cr-plus');
     await page.reload();
-    await expect(budget).toHaveValue('1cr-plus');
+    await expect(budget).toHaveText('₹1Cr+');
     await page.getByText('Upload Files', { exact: true }).first().scrollIntoViewIfNeeded();
     await testInfo.attach('room-without-description', {
       body: await page.screenshot({ path: testInfo.outputPath('room-without-description.png') }),
@@ -69,7 +72,9 @@ test('project budget choices persist and room descriptions are absent from the e
     });
     await page.goto('/designer/projects/upload');
     await page.getByRole('button', { name: 'Step 2 Timeline & Cost', exact: true }).click();
-    await expect(budget.locator('option:not([value=""])')).toHaveCount(8);
+    await budget.click();
+    await expect(page.getByRole('option')).toHaveCount(8);
+    await page.keyboard.press('Escape');
     await expect(page.getByText('About this room', { exact: true })).toHaveCount(0);
   } finally {
     await fixture.cleanup();

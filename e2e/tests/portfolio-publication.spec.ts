@@ -524,7 +524,8 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.getByLabel('Name').fill('Whitefield Experience Center');
       await page.getByLabel('Address').fill('12, 1st Main Road, Whitefield');
       await page.getByLabel('City').fill('Bengaluru');
-      await page.getByLabel('State', { exact: true }).selectOption('Karnataka');
+      await page.getByLabel('State', { exact: true }).click();
+      await page.getByRole('option', { name: 'Karnataka', exact: true }).click();
       await page.getByLabel('Postal code (optional)').fill('560066');
       await page.getByLabel('Phone (optional)').fill('+91 99946-45911');
       await page
@@ -535,7 +536,8 @@ test.describe('E-278 portfolio publication readiness', () => {
       await page.getByLabel('Name').fill('Powai Studio');
       await page.getByLabel('Address').fill('4, Hiranandani Gardens, Powai');
       await page.getByLabel('City').fill('Mumbai');
-      await page.getByLabel('State', { exact: true }).selectOption('Maharashtra');
+      await page.getByLabel('State', { exact: true }).click();
+      await page.getByRole('option', { name: 'Maharashtra', exact: true }).click();
       await page.getByRole('button', { name: 'Add center' }).click();
       await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();

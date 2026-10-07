@@ -121,6 +121,8 @@ catalog:
   '@radix-ui/react-dialog': ^1.1.23
   '@radix-ui/react-dropdown-menu': ^2.1.18
   '@radix-ui/react-label': ^2.1.15
+  # Match Dialog's shared focus/dismissal layers for nested select popups.
+  '@radix-ui/react-select': 2.3.7
   '@radix-ui/react-separator': ^1.1.11
   '@radix-ui/react-slider': ^1.4.7
   '@radix-ui/react-switch': ^1.2.6

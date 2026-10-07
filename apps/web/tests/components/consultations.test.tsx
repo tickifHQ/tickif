@@ -105,7 +105,8 @@ describe('consultation request', () => {
     await user.click(screen.getByRole('button', { name: 'Add another time' }));
     await user.click(screen.getByRole('button', { name: 'Add another time' }));
     expect(screen.queryByRole('button', { name: 'Add another time' })).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Time window 2'), 'evening');
+    await user.click(screen.getByRole('combobox', { name: 'Time window 2' }));
+    await user.click(screen.getByRole('option', { name: 'evening' }));
     await user.type(
       screen.getByLabelText('What would you like to discuss? (optional)'),
       'A kitchen renovation',

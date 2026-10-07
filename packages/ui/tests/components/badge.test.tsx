@@ -29,7 +29,7 @@ describe('Badge', () => {
     expect(screen.getByText('4.9')).toHaveClass(
       'rounded-sm',
       'bg-background',
-      'text-2xs',
+      'text-2xs/none',
       'font-mono',
     );
   });

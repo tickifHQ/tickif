@@ -2,15 +2,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 import { cn } from '../lib/utils';
 
-const cardVariants = cva('border bg-card text-card-foreground shadow-sm', {
+const cardVariants = cva('border bg-card text-card-foreground shadow-card', {
   variants: {
     variant: {
       default: 'border-border/80',
       muted: 'border-border/80 bg-muted/30',
       accent: 'border-primary/15 bg-primary/5',
+      subtle: 'border-surface-subtle-border bg-surface-subtle text-secondary-foreground',
+      inverse: 'border-transparent bg-surface-inverse text-surface-inverse-foreground',
       ghost: 'border-transparent bg-transparent shadow-none',
     },
     radius: {
+      card: 'rounded-card',
+      feature: 'rounded-feature',
       lg: 'rounded-lg',
       xl: 'rounded-xl',
       '2xl': 'rounded-2xl',
@@ -19,7 +23,7 @@ const cardVariants = cva('border bg-card text-card-foreground shadow-sm', {
   },
   defaultVariants: {
     variant: 'default',
-    radius: 'xl',
+    radius: 'card',
   },
 });
 
@@ -27,23 +31,25 @@ type CardProps = ComponentProps<'div'> & VariantProps<typeof cardVariants>;
 
 export function Card({ className, radius, variant, ...props }: CardProps) {
   return (
-    <div
-      data-slot="card"
-      className={cn(cardVariants({ radius, variant, className }))}
-      {...props}
-    />
+    <div data-slot="card" className={cn(cardVariants({ radius, variant, className }))} {...props} />
   );
 }
 
 export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div data-slot="card-header" className={cn('flex flex-col gap-1.5 p-6', className)} {...props} />;
+  return (
+    <div
+      data-slot="card-header"
+      className={cn('flex flex-col gap-1.5 p-6', className)}
+      {...props}
+    />
+  );
 }
 
 export function CardTitle({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-title"
-      className={cn('leading-none font-semibold tracking-tight', className)}
+      className={cn('font-display leading-tight font-medium tracking-tight', className)}
       {...props}
     />
   );

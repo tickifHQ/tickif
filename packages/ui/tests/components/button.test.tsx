@@ -61,7 +61,7 @@ describe('Button', () => {
 
     expect(screen.getByRole('button', { name: 'Login' })).toHaveClass(
       'h-10',
-      'rounded-lg',
+      'rounded-full',
       'border-button-fancy-border',
       'bg-button-fancy',
       'text-button-fancy-foreground',

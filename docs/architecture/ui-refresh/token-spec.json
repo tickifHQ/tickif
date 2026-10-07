@@ -2,7 +2,7 @@
   "fileKey": "WJhOguDptAwt2735BS2WMG",
   "frame": "15885:2549",
   "capturedOn": "2026-10-07",
-  "status": "Phase 1 specification only; production theme and components are unchanged. Pending footer/mobile extraction and variable/component origin audit due to Figma MCP limits.",
+  "status": "Shared runtime palette and component variants reviewed and approved for phase PR publication on 2026-10-07. Footer/mobile context and component binding audit remain pending for the profile phase.",
   "tokens": [
     {
       "name": "--background",
@@ -132,7 +132,7 @@
     },
     {
       "name": "--input",
-      "value": "rgba(23,22,18,0.20)",
+      "value": "rgba(23,22,18,0.48)",
       "basis": "inferred",
       "sourceNodeId": null
     },
@@ -440,22 +440,23 @@
     "fillOpacity": [0.32, 0, 0.32],
     "reducedMotion": "Static marker; omit pulse"
   },
-  "unchangedIntentTokens": [
-    "destructive",
-    "destructive-foreground",
-    "success",
-    "success-foreground",
-    "warning",
-    "warning-foreground",
-    "info",
-    "info-foreground",
-    "feature",
-    "feature-lighter"
-  ],
   "notes": [
     "Semantic association of observed values is a design decision, even when basis is figma. No CSS variables should be claimed bound unless binding metadata is retrieved.",
     "Map illustration colors and glyph-specific fonts are not global design-system tokens.",
     "Default radius and form-control geometry are inferred; do not apply giant display sizes or pill shapes to dense tables and multiline fields.",
-    "Preserve portfolioAccentStyle's scoped --primary/--primary-foreground overrides."
-  ]
+    "Preserve portfolioAccentStyle's scoped primary, foreground, hover, shadow and ring overrides. Custom rings mix the accent with the current readable foreground to remain visible for black/white accents."
+  ],
+  "implementation": {
+    "theme": "packages/ui/src/styles/themes/tickif.css",
+    "bridge": "packages/ui/src/styles/globals.css",
+    "gallery": "apps/web/app/design-system/page.tsx",
+    "tokenAliases": {
+      "--radius-card": "--card-radius",
+      "--radius-feature": "--feature-radius",
+      "--shadow-button-primary": "--button-primary-shadow",
+      "--shadow-location-card": "--location-card-shadow"
+    },
+    "recognition": "Artwork hues remain in exact SVG exports, not intent-token aliases.",
+    "intent": "Intent meanings preserved; success/destructive/info pairs strengthened for contrast. See current theme for runtime values."
+  }
 }

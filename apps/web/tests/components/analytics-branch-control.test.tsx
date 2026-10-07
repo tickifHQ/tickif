@@ -75,7 +75,8 @@ describe('AnalyticsBranchControl', () => {
     const user = userEvent.setup();
     render(<AnalyticsBranchControl />);
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Branch' }), 'team-2');
+    await user.click(await screen.findByRole('combobox', { name: 'Branch' }));
+    await user.click(screen.getByRole('option', { name: 'Bandra' }));
 
     await waitFor(() => {
       expect(mocks.push).toHaveBeenCalledWith('/designer/analytics?branchId=team-2');
@@ -87,7 +88,8 @@ describe('AnalyticsBranchControl', () => {
     const user = userEvent.setup();
     render(<AnalyticsBranchControl />);
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Branch' }), '');
+    await user.click(await screen.findByRole('combobox', { name: 'Branch' }));
+    await user.click(screen.getByRole('option', { name: 'Organization roll-up' }));
 
     await waitFor(() => {
       expect(mocks.push).toHaveBeenCalledWith('/designer/analytics');
@@ -98,15 +100,17 @@ describe('AnalyticsBranchControl', () => {
     const user = userEvent.setup();
     render(<AnalyticsBranchControl />);
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Branch' }), 'team-2');
+    await user.click(await screen.findByRole('combobox', { name: 'Branch' }));
+    await user.click(screen.getByRole('option', { name: 'Bandra' }));
+    await user.click(screen.getByRole('combobox', { name: 'Branch' }));
 
     expect(
-      within(screen.getByRole('combobox', { name: 'Branch' })).getByRole('option', {
+      within(screen.getByRole('listbox')).getByRole('option', {
         name: 'Andheri',
       }),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByRole('combobox', { name: 'Branch' })).getByRole('option', {
+      within(screen.getByRole('listbox')).getByRole('option', {
         name: 'Bandra',
       }),
     ).toBeInTheDocument();
@@ -131,9 +135,12 @@ describe('AnalyticsBranchControl', () => {
       }),
     });
 
+    const user = userEvent.setup();
     render(<AnalyticsBranchControl />);
 
-    const select = await screen.findByRole('combobox', { name: 'Branch' });
-    expect(within(select).queryByRole('option', { name: 'Powai' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('combobox', { name: 'Branch' }));
+    expect(
+      within(screen.getByRole('listbox')).queryByRole('option', { name: 'Powai' }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,75 +1,98 @@
 'use client';
 
-import { ChevronsUpDown } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { useId } from 'react';
 import { cn } from '../lib/utils';
 import { Label } from './label';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './select';
 
 export type SelectFieldOption = {
+  disabled?: boolean;
   label: string;
   value: string;
 };
 
-type SelectFieldProps = Omit<ComponentProps<'select'>, 'onChange'> & {
-  allowEmpty?: boolean;
-  error?: string;
-  label: string;
-  onValueChange: (value: string) => void;
-  options: readonly SelectFieldOption[];
-  placeholder: string;
-  value: string;
-};
+type SelectFieldProps = Omit<
+  ComponentProps<typeof SelectTrigger>,
+  'onChange' | 'value' | 'defaultValue' | 'children' | 'type' | 'name'
+> &
+  Pick<ComponentProps<typeof Select>, 'required' | 'autoComplete'> & {
+    allowEmpty?: boolean;
+    error?: string;
+    label: string;
+    name?: string;
+    onValueChange: (value: string) => void;
+    options: readonly SelectFieldOption[];
+    placeholder: string;
+    value: string;
+  };
 
 export function SelectField({
   allowEmpty = false,
+  autoComplete,
   className,
+  disabled,
   error,
+  form,
   label,
+  name,
   onValueChange,
   options,
   placeholder,
+  required,
   value,
   ...props
 }: SelectFieldProps) {
   const generatedId = useId();
   const selectId = props.id ?? generatedId;
   const errorId = `${selectId}-error`;
+  // Radix reserves an empty item value for its placeholder. Keep the public
+  // empty-string contract and use a collision-free internal clearing item.
+  let emptyItemValue = `${generatedId}-empty`;
+  while (options.some((option) => option.value === emptyItemValue)) emptyItemValue += '-empty';
+  const describedBy =
+    [props['aria-describedby'], error ? errorId : undefined].filter(Boolean).join(' ') || undefined;
 
   return (
-    <div className={cn('space-y-1.5', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       <Label htmlFor={selectId} className="text-sm font-medium text-foreground">
         {label}
       </Label>
-      <div className="relative">
-        <select
+      <Select
+        value={value}
+        onValueChange={(nextValue) => onValueChange(nextValue === emptyItemValue ? '' : nextValue)}
+        disabled={disabled}
+        required={required}
+        name={name}
+        form={form}
+        autoComplete={autoComplete}
+      >
+        <SelectTrigger
           {...props}
           id={selectId}
           aria-invalid={error ? true : props['aria-invalid']}
-          aria-describedby={error ? errorId : props['aria-describedby']}
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          className={cn(
-            'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm shadow-xs transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-            !value && 'text-muted-foreground',
-          )}
+          aria-describedby={describedBy}
         >
-          {allowEmpty ? (
-            <option value="">{placeholder}</option>
-          ) : (
-            <option value="" disabled hidden>
-              {placeholder}
-            </option>
-          )}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <ChevronsUpDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      </div>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {allowEmpty ? <SelectItem value={emptyItemValue}>{placeholder}</SelectItem> : null}
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {error ? (
         <p id={errorId} className="text-xs text-destructive">
           {error}

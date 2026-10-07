@@ -56,7 +56,9 @@ export function TagCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const blurTimeoutRef = useRef<number | null>(null);
-  const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number } | null>(
+    null,
+  );
 
   const normalizedValue = normalizeTag(value);
   const selectedValues = useMemo(() => new Set(tags.map((tag) => tag.toLowerCase())), [tags]);
@@ -64,10 +66,16 @@ export function TagCombobox({
     const query = normalizedValue.toLowerCase();
 
     return options
-      .filter((option) => !selectedValues.has(option.label.toLowerCase()) && !selectedValues.has(option.value.toLowerCase()))
+      .filter(
+        (option) =>
+          !selectedValues.has(option.label.toLowerCase()) &&
+          !selectedValues.has(option.value.toLowerCase()),
+      )
       .filter((option) => {
         if (!query) return true;
-        return option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query);
+        return (
+          option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query)
+        );
       })
       .slice(0, maxSuggestions);
   }, [maxSuggestions, normalizedValue, options, selectedValues]);
@@ -83,10 +91,17 @@ export function TagCombobox({
     );
 
   const menuItems = [
-    ...filteredOptions.map((option) => ({ type: 'option' as const, label: option.label, value: option.value })),
-    ...(canCreate ? [{ type: 'create' as const, label: createLabel(normalizedValue), value: normalizedValue }] : []),
+    ...filteredOptions.map((option) => ({
+      type: 'option' as const,
+      label: option.label,
+      value: option.value,
+    })),
+    ...(canCreate
+      ? [{ type: 'create' as const, label: createLabel(normalizedValue), value: normalizedValue }]
+      : []),
   ];
-  const showMenu = focused && (menuItems.length > 0 || normalizedValue.length > 0 || options.length > 0);
+  const showMenu =
+    focused && (menuItems.length > 0 || normalizedValue.length > 0 || options.length > 0);
   const clampedActiveIndex =
     activeIndex === null ? null : Math.min(activeIndex, Math.max(menuItems.length - 1, 0));
 
@@ -164,8 +179,7 @@ export function TagCombobox({
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
       if (normalizedValue.length === 0 && clampedActiveIndex === null) return;
-      const selected =
-        clampedActiveIndex === null ? menuItems[0] : menuItems[clampedActiveIndex];
+      const selected = clampedActiveIndex === null ? menuItems[0] : menuItems[clampedActiveIndex];
       addTag(selected?.value ?? normalizedValue);
       return;
     }
@@ -182,12 +196,12 @@ export function TagCombobox({
   }
 
   return (
-    <div className={cn('space-y-1.5', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       <Label htmlFor={inputId} className="text-sm font-medium text-foreground">
         {label} {labelHint ? <span className="text-muted-foreground">({labelHint})</span> : null}
       </Label>
       <div ref={containerRef}>
-        <div className="rounded-md border border-input bg-background px-3 py-2 shadow-xs transition-[border-color,box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+        <div className="rounded-lg border border-input bg-background px-3.5 py-2.5 shadow-xs transition-[border-color,box-shadow] hover:border-foreground-secondary focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25 focus-within:ring-offset-2 focus-within:ring-offset-background motion-reduce:transition-none">
           {tags.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">
               {tags.map((tag) => (
@@ -195,10 +209,11 @@ export function TagCombobox({
                   key={tag}
                   type="button"
                   onClick={() => onRemoveTag(tag)}
-                  className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent"
+                  aria-label={`Remove ${tag}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
                 >
                   <span>{tag}</span>
-                  <X className="size-3 text-muted-foreground" />
+                  <X aria-hidden="true" className="size-3" />
                 </button>
               ))}
             </div>
@@ -243,7 +258,7 @@ export function TagCombobox({
           <div
             id={listboxId}
             role="listbox"
-            className="fixed z-50 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+            className="fixed z-50 overflow-hidden rounded-popover border border-border bg-popover p-1.5 text-popover-foreground shadow-popover"
             style={{ left: menuRect.left, top: menuRect.top, width: menuRect.width }}
           >
             <div className="max-h-40 overflow-y-auto">
@@ -261,15 +276,19 @@ export function TagCombobox({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => addTag(item.value)}
                     className={cn(
-                      'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
-                      index === clampedActiveIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',
+                      'flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-colors motion-reduce:transition-none',
+                      index === clampedActiveIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
                     {item.label}
                   </button>
                 ))
               ) : (
-                <div className="px-2 py-3 text-center text-xs text-muted-foreground">{emptyLabel}</div>
+                <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                  {emptyLabel}
+                </div>
               )}
             </div>
           </div>

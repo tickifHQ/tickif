@@ -18,7 +18,7 @@ export function AvatarImage({ className, ...props }: ComponentProps<typeof Avata
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
-      className={cn('aspect-square size-full', className)}
+      className={cn('aspect-square size-full object-cover', className)}
       {...props}
     />
   );
@@ -32,7 +32,7 @@ export function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        'flex size-full items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground',
+        'flex size-full items-center justify-center rounded-full bg-secondary text-sm font-medium text-secondary-foreground',
         className,
       )}
       {...props}

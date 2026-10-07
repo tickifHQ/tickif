@@ -82,7 +82,7 @@ describe('ExperienceCentersEditor', () => {
     const center = { ...whitefield, state: 'NCT of Delhi' };
     render(<ExperienceCentersEditor value={[center]} onChange={onChange} />);
     await user.click(screen.getByRole('button', { name: 'Edit Whitefield Experience Center' }));
-    expect(screen.getByLabelText('State')).toHaveValue('NCT of Delhi');
+    expect(screen.getByRole('combobox', { name: 'State' })).toHaveTextContent('NCT of Delhi');
     await user.click(screen.getByRole('button', { name: 'Save center' }));
     expect(onChange).toHaveBeenCalledWith([center]);
   });
@@ -123,7 +123,8 @@ describe('ExperienceCentersEditor', () => {
     await user.type(screen.getByLabelText('Name'), 'Powai Studio');
     await user.type(screen.getByLabelText('Address'), '4, Hiranandani Gardens, Powai');
     await user.type(screen.getByLabelText('City'), 'Mumbai');
-    await user.selectOptions(screen.getByLabelText('State'), 'Maharashtra');
+    await user.click(screen.getByRole('combobox', { name: 'State' }));
+    await user.click(screen.getByRole('option', { name: 'Maharashtra' }));
     await user.click(screen.getByRole('button', { name: 'Add center' }));
 
     await waitFor(() => {
@@ -149,10 +150,10 @@ describe('ExperienceCentersEditor', () => {
     await user.click(screen.getByRole('button', { name: /add experience center/i }));
 
     const stateField = screen.getByLabelText('State');
-    expect(stateField.tagName).toBe('SELECT');
-    // 36 selectable States/UTs (the disabled "Select a state" placeholder is
-    // hidden and excluded from the option role).
-    const optionLabels = within(stateField)
+    expect(stateField.tagName).toBe('BUTTON');
+    await user.click(stateField);
+    // The placeholder is not a selectable item.
+    const optionLabels = within(screen.getByRole('listbox'))
       .getAllByRole('option')
       .map((option) => option.textContent);
     expect(optionLabels).toHaveLength(36);
@@ -180,8 +181,9 @@ describe('ExperienceCentersEditor', () => {
     await user.type(screen.getByLabelText('Address'), '5 Marine Drive');
     await user.type(screen.getByLabelText('City'), 'Kochi');
     const stateField = screen.getByLabelText('State');
-    await user.selectOptions(stateField, 'Kerala');
-    expect((stateField as HTMLSelectElement).value).toBe('Kerala');
+    await user.click(stateField);
+    await user.click(screen.getByRole('option', { name: 'Kerala' }));
+    expect(stateField).toHaveTextContent('Kerala');
     await user.click(screen.getByRole('button', { name: 'Add center' }));
 
     await waitFor(() => {
@@ -197,7 +199,7 @@ describe('ExperienceCentersEditor', () => {
 
     await user.click(screen.getByRole('button', { name: /edit whitefield experience center/i }));
 
-    expect((screen.getByLabelText('State') as HTMLSelectElement).value).toBe('Karnataka');
+    expect(screen.getByRole('combobox', { name: 'State' })).toHaveTextContent('Karnataka');
   });
 
   it('flags the required State field when left unselected', async () => {
@@ -294,7 +296,8 @@ describe('ExperienceCentersEditor', () => {
     await user.type(screen.getByLabelText('Name'), 'Test Center');
     await user.type(screen.getByLabelText('Address'), '1 Test Road');
     await user.type(screen.getByLabelText('City'), 'Bengaluru');
-    await user.selectOptions(screen.getByLabelText('State'), 'Karnataka');
+    await user.click(screen.getByRole('combobox', { name: 'State' }));
+    await user.click(screen.getByRole('option', { name: 'Karnataka' }));
     await user.type(screen.getByLabelText(/google maps link/i), 'not-a-url');
     await user.click(screen.getByRole('button', { name: 'Add center' }));
 

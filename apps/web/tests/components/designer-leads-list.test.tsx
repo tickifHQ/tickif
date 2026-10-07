@@ -165,7 +165,7 @@ describe('DesignerLeadsList', () => {
     expect(screen.getByLabelText('Your notes')).toHaveValue('Follow up after the budget review.');
     expect(screen.getByLabelText('Your notes')).not.toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
-      'h-10',
+      'h-11',
       'bg-button-inverted',
       'text-button-inverted-foreground',
     );

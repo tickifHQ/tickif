@@ -4,6 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { portfolioAccentStyle, validPortfolioAccent } from '../../src/lib/portfolio-accent';
 
 describe('portfolio accent styles', () => {
+  it.each([
+    ['#123456', '--portfolio-accent-on-light'],
+    ['#F2D355', '--portfolio-accent-on-dark'],
+  ])('keeps hover and focus scoped to the chosen accent %s', (value, hoverTarget) => {
+    expect(portfolioAccentStyle(value)).toMatchObject({
+      '--ring': `color-mix(in srgb, ${value} 50%, var(--foreground))`,
+      '--primary-hover': `color-mix(in oklab, ${value} 92%, var(${hoverTarget}))`,
+    });
+  });
+
   it('keeps every neutral colour above 4.5:1 using the actual foreground token values', () => {
     const theme = readFileSync(resolve('../../packages/ui/src/styles/themes/tickif.css'), 'utf8');
     expect(theme).toMatch(/--portfolio-accent-on-light:\s*#000000;/);

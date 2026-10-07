@@ -400,7 +400,8 @@ describe('DesignerBranches', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'teammate@example.com');
     const branchSelects = screen.getAllByRole('combobox', { name: 'Branch' });
-    await user.selectOptions(branchSelects[0]!, 'team-2');
+    await user.click(branchSelects[0]!);
+    await user.click(screen.getByRole('option', { name: 'Bandra' }));
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
     await waitFor(() => {
@@ -418,9 +419,11 @@ describe('DesignerBranches', () => {
     const user = userEvent.setup();
     render(<DesignerBranches branches={branches} workspace={workspace} />);
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Member' }), 'user-rohan');
+    await user.click(screen.getByRole('combobox', { name: 'Member' }));
+    await user.click(screen.getByRole('option', { name: 'Rohan Shah (rohan@example.com)' }));
     const branchSelects = screen.getAllByRole('combobox', { name: 'Branch' });
-    await user.selectOptions(branchSelects[1]!, 'team-2');
+    await user.click(branchSelects[1]!);
+    await user.click(screen.getByRole('option', { name: 'Bandra' }));
     await user.click(screen.getByRole('button', { name: 'Assign' }));
 
     await waitFor(() => {
@@ -471,7 +474,8 @@ describe('DesignerBranches', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('combobox', { name: 'Move projects to' }));
+    await user.click(screen.getByRole('option', { name: 'Andheri' }));
     await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
 
     await waitFor(() => {
@@ -494,7 +498,8 @@ describe('DesignerBranches', () => {
     render(<DesignerBranches branches={branches} workspace={workspace} />);
 
     await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('combobox', { name: 'Move projects to' }));
+    await user.click(screen.getByRole('option', { name: 'Andheri' }));
     await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The final branch stands alone');
@@ -506,7 +511,8 @@ describe('DesignerBranches', () => {
     render(<DesignerBranches branches={branches} workspace={workspace} />);
 
     await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('combobox', { name: 'Move projects to' }));
+    await user.click(screen.getByRole('option', { name: 'Andheri' }));
     await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
 
     expect(await screen.findByRole('dialog')).toHaveTextContent('Could not remove the branch.');
@@ -518,7 +524,8 @@ describe('DesignerBranches', () => {
     render(<DesignerBranches branches={branches} workspace={workspace} />);
 
     await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('combobox', { name: 'Move projects to' }));
+    await user.click(screen.getByRole('option', { name: 'Andheri' }));
     await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
 
     expect(await screen.findByRole('dialog')).toHaveTextContent(

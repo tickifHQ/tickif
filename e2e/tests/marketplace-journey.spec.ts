@@ -630,7 +630,8 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await visitor.keyboard.press('Escape');
     await expect(enquiry).not.toBeVisible();
     await visitor.goto(`${publicProfileUrl}#tickif-reviews`);
-    await visitor.getByLabel('Your rating').selectOption('5');
+    await visitor.getByLabel('Your rating').click();
+    await visitor.getByRole('option', { name: '5 stars', exact: true }).click();
     await visitor
       .getByLabel('Your experience (optional)')
       .fill('The designer responded clearly to our synthetic renovation enquiry.');

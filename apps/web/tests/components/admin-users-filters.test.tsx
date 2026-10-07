@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminUsersFilters } from '../../src/components/admin-users-filters';
 
@@ -31,10 +32,12 @@ describe('AdminUsersFilters', () => {
     );
   });
 
-  it('updates one filter without losing the others and resets to page one', () => {
+  it('updates one filter without losing the others and resets to page one', async () => {
+    const user = userEvent.setup();
     render(<AdminUsersFilters query={{ role: 'designer', status: 'active' }} />);
 
-    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } });
+    await user.click(screen.getByRole('combobox', { name: 'Role' }));
+    await user.click(screen.getByRole('option', { name: 'Admin' }));
 
     expect(mocks.push).toHaveBeenCalledWith('/users?role=admin&status=active&page=1&limit=50');
   });

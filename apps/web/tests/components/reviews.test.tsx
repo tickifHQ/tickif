@@ -61,7 +61,8 @@ describe('review submission and editing', () => {
     const onSaved = vi.fn().mockResolvedValue(undefined);
     const bookingId = '33333333-3333-4333-8333-333333333333';
     render(<ReviewEditor designerProfileId={profileId} bookingId={bookingId} onSaved={onSaved} />);
-    await user.selectOptions(screen.getByLabelText('Your rating'), '3');
+    await user.click(screen.getByRole('combobox', { name: 'Your rating' }));
+    await user.click(screen.getByRole('option', { name: '3 stars' }));
     await user.click(screen.getByRole('button', { name: 'Submit review' }));
     expect(mock.submitReview).toHaveBeenCalledWith({
       designerProfileId: profileId,

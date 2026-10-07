@@ -95,7 +95,7 @@ function Rating({
             <span key={starRating} className="relative">
               <StarIcon
                 data-slot="rating-star-empty"
-                className={cn(starVariants({ size }), 'text-warning/30')}
+                className={cn(starVariants({ size }), 'text-rating/30')}
                 aria-hidden="true"
               />
               <span
@@ -104,7 +104,7 @@ function Rating({
               >
                 <StarIcon
                   data-slot="rating-star-filled"
-                  className={cn(starVariants({ size }), 'fill-warning text-warning')}
+                  className={cn(starVariants({ size }), 'fill-rating text-rating')}
                   aria-hidden="true"
                 />
               </span>

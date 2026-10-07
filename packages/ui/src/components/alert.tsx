@@ -8,9 +8,11 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: 'bg-card text-card-foreground',
-        destructive: 'border-destructive/30 bg-destructive/5 text-destructive [&>svg]:text-destructive',
+        destructive:
+          'border-destructive/30 bg-destructive/5 text-destructive [&>svg]:text-destructive',
         success: 'border-success/30 bg-success/5 text-success [&>svg]:text-success',
-        warning: 'border-warning/40 bg-warning/10 text-warning-foreground [&>svg]:text-warning-foreground',
+        warning:
+          'border-warning/40 bg-warning/10 text-warning-foreground [&>svg]:text-warning-foreground',
         info: 'border-info/30 bg-info/5 text-info [&>svg]:text-info',
       },
     },
@@ -24,7 +26,12 @@ type AlertProps = ComponentProps<'div'> & VariantProps<typeof alertVariants>;
 
 export function Alert({ className, variant, ...props }: AlertProps) {
   return (
-    <div data-slot="alert" role="alert" className={cn(alertVariants({ variant, className }))} {...props} />
+    <div
+      data-slot="alert"
+      role="alert"
+      className={cn(alertVariants({ variant, className }))}
+      {...props}
+    />
   );
 }
 
@@ -42,7 +49,10 @@ export function AlertDescription({ className, ...props }: ComponentProps<'div'>)
   return (
     <div
       data-slot="alert-description"
-      className={cn('col-start-2 grid justify-items-start gap-1 text-sm opacity-90 [&_p]:leading-relaxed', className)}
+      className={cn(
+        'col-start-2 grid justify-items-start gap-1 text-sm opacity-90 [&_p]:leading-relaxed',
+        className,
+      )}
       {...props}
     />
   );

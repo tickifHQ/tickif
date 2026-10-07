@@ -413,7 +413,8 @@ describe('DesignerTermsRoles', () => {
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'teammate@example.com');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Role' }), 'admin');
+    await user.click(screen.getByRole('combobox', { name: 'Role' }));
+    await user.click(screen.getByRole('option', { name: 'Admin' }));
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
     await waitFor(() => {
@@ -692,10 +693,10 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
-    await user.selectOptions(
+    await user.click(
       screen.getByRole('combobox', { name: 'Nominate an Admin or Member as Owner' }),
-      'member-rohan',
     );
+    await user.click(screen.getByRole('option', { name: 'Rohan Shah (Member)' }));
     await user.click(screen.getByRole('button', { name: 'Request transfer' }));
 
     await waitFor(() => {

@@ -122,9 +122,11 @@ test('E-340 and E-341 admin directory filters users and shows their recent histo
   await page.getByLabel('Search users').fill(targetPhone.slice(-7));
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page).toHaveURL(/q=\d+/);
-  await page.getByLabel('Role').selectOption('visitor');
+  await page.getByLabel('Role').click();
+  await page.getByRole('option', { name: 'Visitor', exact: true }).click();
   await expect(page).toHaveURL(/role=visitor/);
-  await page.getByLabel('Status').selectOption('active');
+  await page.getByLabel('Status').click();
+  await page.getByRole('option', { name: 'Active', exact: true }).click();
   await expect(page).toHaveURL(/status=active/);
   await expect(page.getByText(target.name)).toBeVisible();
   await expect(page.getByText('Filtered Designer')).toHaveCount(0);

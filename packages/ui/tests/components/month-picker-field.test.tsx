@@ -8,13 +8,13 @@ describe('MonthPickerField', () => {
     render(<MonthPickerField label="Project completed by" value="2026-03" onChange={vi.fn()} />);
 
     expect(screen.getByDisplayValue('2026-03')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('2026-03')).toHaveAttribute('type', 'month');
+    expect(screen.getByDisplayValue('2026-03')).toHaveAttribute('type', 'text');
   });
 
   it('associates the label with the input', () => {
     render(<MonthPickerField label="Project completed by" value="2026-03" onChange={vi.fn()} />);
 
-    expect(screen.getByLabelText('Project completed by')).toHaveAttribute('type', 'month');
+    expect(screen.getByLabelText('Project completed by')).toHaveAttribute('type', 'text');
   });
 
   it('emits a YYYY-MM value when a month is selected', async () => {
@@ -58,11 +58,15 @@ describe('MonthPickerField', () => {
     render(<MonthPickerField label="Project completed by" value="2026-03" onChange={vi.fn()} />);
 
     await user.click(screen.getByDisplayValue('2026-03'));
-    expect(screen.getByRole('dialog', { name: 'Project completed by month picker' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Project completed by month picker' }),
+    ).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
 
-    expect(screen.queryByRole('dialog', { name: 'Project completed by month picker' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: 'Project completed by month picker' }),
+    ).not.toBeInTheDocument();
   });
 
   it('closes the picker when clicking outside the field', async () => {
