@@ -564,7 +564,7 @@ export const auth = betterAuth({
     }),
     // Platform RBAC: 4 roles (visitor/designer/admin/superadmin) live on user.role.
     // defaultRole keeps better-auth writing only our values; ac/roles define the four
-    // roles so adminRoles validates at startup (rules/auth.md: adminRoles entries MUST
+    // roles so adminRoles validates at startup (docs/coding-guidelines/auth.md: adminRoles entries MUST
     // exist in roles). Both privileged roles enter the Tickif admin console, but only
     // superadmin has Better Auth user/session administration permissions. Keeping both
     // names here also makes Better Auth treat both as protected impersonation targets.

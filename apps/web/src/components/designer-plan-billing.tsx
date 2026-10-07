@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -9,6 +10,7 @@ import {
   Building2,
   Check,
   CreditCard,
+  Clock3,
   Crown,
   Eye,
   Globe,
@@ -22,23 +24,24 @@ import {
 } from 'lucide-react';
 import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types';
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
-import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
 import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
-import { PlanSelection } from '@/components/subscribe/plan-selection';
 import {
   usePlanSelection,
   type BillingSelectionScope,
 } from '@/components/subscribe/use-plan-selection';
-import { useSelectionContext } from '@/components/subscribe/use-selection-context';
+import {
+  getResumableCheckoutTier,
+  useSelectionContext,
+} from '@/components/subscribe/use-selection-context';
 import { useBillingAutoRefresh } from '@/components/subscribe/use-billing-auto-refresh';
 import { api } from '@/lib/api';
 import { mapSubscriptionToBillingState } from '@/lib/billing-state';
 import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import { subscriptionResponseSchema } from '@repo/contracts';
+import { subscriptionResponseSchema, type BillingSelectionContext } from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 interface DesignerPlanBillingProps extends BillingSelectionScope {
@@ -104,7 +107,9 @@ function CurrentPlanCard({
   onPayment,
   paymentBusy,
   suppressPlanActions = false,
+  checkoutContext = null,
 }: {
+  checkoutContext?: BillingSelectionContext | null;
   suppressPlanActions?: boolean;
   onPayment?: () => void;
   paymentBusy?: boolean;
@@ -114,55 +119,69 @@ function CurrentPlanCard({
   const tierLabel = PLAN_TIER_LABELS[billing.tier];
   const cta = lifecycleCta(billing);
   const price = billing.billing?.planAmount ?? PLAN_TIER_PRICES[billing.tier];
+  const resumableTarget = getResumableCheckoutTier(checkoutContext);
+  const checkoutTarget =
+    checkoutContext?.pendingOperation?.targetTier ??
+    checkoutContext?.unfinishedCheckout?.targetTier ??
+    checkoutContext?.recovery?.targetTier ??
+    resumableTarget;
+  const resumable = !!checkoutTarget && resumableTarget === checkoutTarget;
 
   return (
-    <Card radius="2xl">
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-8">
+    <Card radius="lg" variant="accent" className="border-l-2 border-l-primary/60 shadow-none">
+      <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div
           data-testid="current-plan-identity"
-          className="flex min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-stretch sm:gap-5"
+          className="flex min-w-0 flex-1 flex-col items-start sm:flex-row"
         >
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:h-auto sm:w-36 sm:self-stretch sm:rounded-2xl">
-            <Crown className="size-9" />
-          </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-muted-foreground">Current Plan</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-bold text-foreground">{tierLabel}</h2>
-              {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
-                <Badge variant="secondary">Free</Badge>
-              )}
-              {billing.lifecycle === 'locked' && <Badge variant="destructive">Locked</Badge>}
-              {billing.lifecycle === 'downgraded' && <Badge variant="warning">Downgraded</Badge>}
-              {billing.lifecycle === 'downgraded' && billing.preLapseTier && (
-                <span className="text-sm font-normal text-muted-foreground">
-                  from {PLAN_TIER_LABELS[billing.preLapseTier]}
-                </span>
-              )}
-              {billing.lifecycle === 'grace' && <Badge variant="warning">Payment Due</Badge>}
-              {billing.lifecycle === 'payment_failed' && (
-                <Badge variant="destructive">Payment Failed</Badge>
-              )}
-            </div>
-            <p className="mt-2 text-sm text-foreground">
-              <span className="font-semibold">₹{price.toLocaleString('en-IN')} / month</span>
-              {billing.usage.seats.limit != null && (
-                <>
-                  <span className="mx-2">·</span>
-                  <span className="font-semibold">
-                    {billing.usage.seats.current} seat{billing.usage.seats.current !== 1 ? 's' : ''}
+            <p className="text-xs font-medium text-muted-foreground">Current Plan</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]">
+                  {tierLabel}
+                </h2>
+                {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
+                  <Badge
+                    variant="outline"
+                    className="border-primary/20 bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]"
+                  >
+                    Free
+                  </Badge>
+                )}
+                {billing.lifecycle === 'locked' && <Badge variant="destructive">Locked</Badge>}
+                {billing.lifecycle === 'downgraded' && <Badge variant="warning">Downgraded</Badge>}
+                {billing.lifecycle === 'downgraded' && billing.preLapseTier && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    from {PLAN_TIER_LABELS[billing.preLapseTier]}
                   </span>
-                </>
-              )}
-              {billing.usage.seats.limit === null && (
-                <>
-                  <span className="mx-2">·</span>
-                  <span className="font-semibold">Unlimited seats</span>
-                </>
-              )}
-            </p>
+                )}
+                {billing.lifecycle === 'grace' && <Badge variant="warning">Payment Due</Badge>}
+                {billing.lifecycle === 'payment_failed' && (
+                  <Badge variant="destructive">Payment Failed</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">₹{price.toLocaleString('en-IN')} / month</span>
+                {billing.usage.seats.limit != null && (
+                  <>
+                    <span className="mx-2">·</span>
+                    <span>
+                      {billing.usage.seats.current} seat
+                      {billing.usage.seats.current !== 1 ? 's' : ''}
+                    </span>
+                  </>
+                )}
+                {billing.usage.seats.limit === null && (
+                  <>
+                    <span className="mx-2">·</span>
+                    <span className="font-medium">Unlimited seats</span>
+                  </>
+                )}
+              </p>
+            </div>
             {billing.tier === 'hobby' && (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
                 No paid subscription required. Upgrade anytime for more features.
               </p>
             )}
@@ -176,37 +195,61 @@ function CurrentPlanCard({
                     : `Your plan renews on ${formatDate(billing.renewalDate)}`}
                 </p>
               )}
-            {billing.subscriptionId && (
-              <div className="mt-1.5 flex min-w-0 flex-col items-start gap-1.5 text-xs text-muted-foreground">
-                Subscription ID:{' '}
-                <span className="max-w-full break-all font-mono">{billing.subscriptionId}</span>
-                <CopyLinkButton
-                  value={billing.subscriptionId}
-                  variant="ghost"
-                  size="compact"
-                  label="Copy subscription ID"
-                  icon="copy"
-                />
-              </div>
+            {checkoutTarget && (
+              <p
+                role="status"
+                className="mt-3 flex items-start gap-2 text-xs leading-5 text-muted-foreground"
+              >
+                <Clock3 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                {resumable
+                  ? `${PLAN_TIER_LABELS[checkoutTarget]} checkout is awaiting completion.`
+                  : `We’re confirming your ${PLAN_TIER_LABELS[checkoutTarget]} checkout. Your current access remains until confirmation.`}
+              </p>
             )}
           </div>
         </div>
-        {cta &&
+        {checkoutTarget &&
+          (resumable ? (
+            <Button
+              variant="fancy"
+              size="sm"
+              className="w-full shrink-0 sm:w-auto"
+              onClick={() => onSubscribe(checkoutTarget)}
+            >
+              Continue checkout
+            </Button>
+          ) : (
+            <Button asChild variant="fancy" size="sm" className="w-full shrink-0 sm:w-auto">
+              <Link href={`/designer/plan-billing/subscribe/complete?plan=${checkoutTarget}`}>
+                View checkout status
+              </Link>
+            </Button>
+          ))}
+        {!checkoutTarget &&
+          cta &&
           (!suppressPlanActions ||
             cta.kind === 'payment' ||
             (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')) && (
             <Button
-              variant="outline"
-              className="shrink-0"
+              asChild={billing.lifecycle === 'active' && cta.kind === 'subscribe'}
+              variant="fancy"
+              size="sm"
+              className="w-full shrink-0 sm:w-auto"
               disabled={paymentBusy}
               onClick={
-                cta.kind === 'payment' ||
-                (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
-                  ? onPayment
-                  : () => onSubscribe()
+                billing.lifecycle === 'active' && cta.kind === 'subscribe'
+                  ? undefined
+                  : cta.kind === 'payment' ||
+                      (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
+                    ? onPayment
+                    : () => onSubscribe()
               }
             >
-              {cta.label}
+              {billing.lifecycle === 'active' && cta.kind === 'subscribe' ? (
+                <Link href="/designer/plan-billing/subscribe">{cta.label}</Link>
+              ) : (
+                cta.label
+              )}
             </Button>
           )}
       </div>
@@ -234,24 +277,24 @@ function UsageMetricCard({
   const percentage = limit ? Math.min((current / limit) * 100, 100) : null;
 
   return (
-    <Card radius="2xl">
-      <div className="px-5 py-5">
+    <div className="min-w-0">
+      <div className="p-5 sm:px-6">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon className="size-5" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]">
+            <Icon className="size-4" />
           </span>
           <div>
-            <span className="text-sm font-bold text-foreground">{label}</span>
+            <span className="text-sm font-medium text-foreground">{label}</span>
             {frozen && (
               <Badge variant="warning" className="ml-2 text-[10px]">
                 <Snowflake className="size-3" /> Frozen
               </Badge>
             )}
             <div className="mt-1">
-              <span className="text-2xl font-semibold text-foreground">{current}</span>
-              {limit != null && <span className="text-base text-muted-foreground"> / {limit}</span>}
+              <span className="text-xl font-semibold text-foreground">{current}</span>
+              {limit != null && <span className="text-sm text-muted-foreground"> / {limit}</span>}
               {limit === null && (
-                <span className="text-base text-muted-foreground"> (unlimited)</span>
+                <span className="text-sm text-muted-foreground"> (unlimited)</span>
               )}
             </div>
           </div>
@@ -268,16 +311,18 @@ function UsageMetricCard({
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 
 function UsageSummary({ billing }: { billing: BillingState }) {
   return (
-    <Card radius="2xl">
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-foreground">Usage Summary</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <Card radius="lg" className="overflow-hidden shadow-none">
+      <div>
+        <h2 className="border-b border-border bg-muted/30 px-5 py-4 text-sm font-semibold text-foreground">
+          Usage Summary
+        </h2>
+        <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
           <UsageMetricCard
             label={billing.usage.seats.label}
             current={billing.usage.seats.current}
@@ -296,13 +341,13 @@ function UsageSummary({ billing }: { billing: BillingState }) {
           />
         </div>
         {billing.tier === 'professional_plus' && (
-          <p className="mt-4 text-xs text-muted-foreground">
+          <p className="border-t border-border bg-muted/30 px-5 py-3 text-xs leading-5 text-muted-foreground">
             Professional+ includes 1 seat. For additional team members and branches, upgrade to
             Corporate.
           </p>
         )}
         {billing.tier === 'hobby' && (
-          <p className="mt-4 text-xs text-muted-foreground">
+          <p className="border-t border-border bg-muted/30 px-5 py-3 text-xs leading-5 text-muted-foreground">
             Hobby includes 1 seat and 1 studio. Upgrade to Professional+ for verified badge and
             discovery priority.
           </p>
@@ -329,16 +374,18 @@ function BillingSummary({
   const info = billing.billing;
 
   return (
-    <Card radius="2xl">
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-foreground">Billing Summary</h2>
-        <div className="mt-5 grid gap-6 sm:grid-cols-2">
+    <Card radius="lg" className="overflow-hidden shadow-none">
+      <h2 className="border-b border-border bg-muted/30 px-5 py-4 text-sm font-semibold text-foreground">
+        Billing Summary
+      </h2>
+      <div className="p-5">
+        <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-4">
             <div>
               <p className="text-xs text-muted-foreground">
                 {billing.cancellationScheduled ? 'Access until' : 'Next Billing Date'}
               </p>
-              <p className="mt-0.5 text-lg font-semibold text-foreground">
+              <p className="mt-0.5 text-base font-semibold text-foreground">
                 {formatDate(info.nextBillingDate)}
               </p>
             </div>
@@ -363,7 +410,7 @@ function BillingSummary({
               Update Payment Method
             </Button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3 self-start rounded-lg bg-muted/30 p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Plan Amount</span>
               <span className="font-medium text-foreground">{formatCurrency(info.planAmount)}</span>
@@ -399,11 +446,11 @@ function FrozenResourcesCard({
   if (resources.length === 0) return null;
 
   return (
-    <Card radius="2xl">
-      <div className="p-6">
+    <Card radius="lg" className="shadow-none">
+      <div className="p-5">
         <div className="flex items-center gap-2">
           <Snowflake className="size-5 text-warning-foreground" />
-          <h2 className="text-lg font-semibold text-foreground">Frozen Resources</h2>
+          <h2 className="text-base font-semibold text-foreground">Frozen Resources</h2>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
           These resources are preserved and will be restored when you upgrade. Nothing has been
@@ -431,7 +478,7 @@ function FrozenResourcesCard({
           ))}
         </div>
         {!suppressPlanActions && (
-          <Button className="mt-5 w-full" onClick={() => onSubscribe()}>
+          <Button variant="fancy" className="mt-5 w-full" onClick={() => onSubscribe()}>
             Upgrade to Restore
             <ArrowRight className="size-4" />
           </Button>
@@ -445,9 +492,9 @@ function FrozenResourcesCard({
 
 function LockedAccessCard({ access }: { access: NonNullable<BillingState['lockedAccess']> }) {
   return (
-    <Card radius="2xl">
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-foreground">Account Access</h2>
+    <Card radius="lg" className="shadow-none">
+      <div className="p-5">
+        <h2 className="text-base font-semibold text-foreground">Account Access</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-destructive">
@@ -576,10 +623,12 @@ function PlanIncludesCard({
     tier === 'hobby' ? 'professional_plus' : tier === 'professional_plus' ? 'corporate' : null;
 
   return (
-    <Card radius="2xl">
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-foreground">Your Plan Includes</h2>
-        <div className="mt-5 grid gap-6 sm:grid-cols-3 lg:grid-cols-5">
+    <Card radius="lg" className="overflow-hidden shadow-none">
+      <h2 className="border-b border-border bg-muted/30 px-5 py-4 text-sm font-semibold text-foreground">
+        Your Plan Includes
+      </h2>
+      <div>
+        <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => {
             const Icon = feature.icon;
             const suspended = impaired && feature.suspendedWhenImpaired;
@@ -589,8 +638,10 @@ function PlanIncludesCard({
                 className={`flex items-start gap-3 ${suspended ? 'opacity-50' : ''}`}
               >
                 <span
-                  className={`flex size-9 shrink-0 items-center justify-center rounded-full ${
-                    suspended ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'
+                  className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                    suspended
+                      ? 'bg-muted text-muted-foreground'
+                      : 'bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]'
                   }`}
                 >
                   <Icon className="size-4" />
@@ -611,13 +662,18 @@ function PlanIncludesCard({
           })}
         </div>
         {nextTier && lifecycle === 'active' && !suppressPlanActions && (
-          <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
-            <p className="text-sm font-medium text-foreground">
+          <div className="flex flex-col items-start justify-between gap-3 border-t border-border bg-muted/30 px-5 py-4 sm:flex-row sm:items-center">
+            <p className="text-sm text-muted-foreground">
               {tier === 'hobby'
                 ? 'Want verified status and priority ranking?'
                 : 'Need more team members or branches?'}
             </p>
-            <Button variant="outline" size="sm" onClick={() => onSubscribe(nextTier)}>
+            <Button
+              variant="fancy"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => onSubscribe(nextTier)}
+            >
               Upgrade to {PLAN_TIER_LABELS[nextTier]}
             </Button>
           </div>
@@ -627,17 +683,19 @@ function PlanIncludesCard({
   );
 }
 
-// ─── Help Card (sidebar) ─────────────────────────────────────────────────────
+// ─── Help Card ───────────────────────────────────────────────────────────────
 
 function HelpCard() {
   return (
-    <Card radius="2xl">
-      <div className="p-5">
-        <h2 className="text-base font-semibold text-foreground">Need Help?</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Our support team is here to help you with any billing queries.
-        </p>
-        <Button asChild variant="outline" size="sm" className="mt-4 w-full">
+    <Card radius="lg" variant="muted" className="shadow-none">
+      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Need Help?</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            Our support team is here to help you with any billing queries.
+          </p>
+        </div>
+        <Button asChild variant="neutral" size="sm" className="shrink-0">
           <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
             <Receipt className="size-4" />
             Contact Support
@@ -753,15 +811,21 @@ function ScopedDesignerPlanBilling({
     (billing.lifecycle === 'grace' || billing.lifecycle === 'payment_failed');
   const suppressPlanActions =
     !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
+  const checkoutContext =
+    selection.context &&
+    (getResumableCheckoutTier(selection.context) ||
+      selection.context.unfinishedCheckout?.targetTier ||
+      selection.context.pendingOperation?.reason === 'replacement_checkout_pending' ||
+      selection.context.recovery?.status === 'checkout_pending')
+      ? selection.context
+      : null;
 
   return (
-    <div className="p-6 md:p-8 xl:p-10">
+    <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          Plan & Billing
-        </h1>
-        <p className="mt-2 text-base text-muted-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Plan & Billing</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
           Manage your subscription, billing details and usage.
         </p>
       </div>
@@ -801,45 +865,37 @@ function ScopedDesignerPlanBilling({
         </Alert>
       )}
 
-      <BillingStatusNotice
-        context={selection.context}
-        currentTier={billing.tier}
-        cancellationScheduled={billing.cancellationScheduled}
-        currentPeriodEnd={billing.renewalDate}
-        onDismissed={refreshNow}
-        onReview={openSubscribe}
-      />
-
-      <section className="mt-8" aria-label="Compare plans">
-        <PlanSelection
+      {!checkoutContext && (
+        <BillingStatusNotice
+          context={selection.context}
           currentTier={billing.tier}
-          lifecycleState={billing.lifecycle}
-          selectedTier={selection.savedTargetTier ?? selectedTier}
-          actions={selection.actions}
-          onSelectPlan={openSubscribe}
+          cancellationScheduled={billing.cancellationScheduled}
+          currentPeriodEnd={billing.renewalDate}
+          onDismissed={refreshNow}
+          onReview={openSubscribe}
         />
-        {selectedTier && !suppressPlanActions && !selection.actions[selectedTier]?.disabled && (
-          <Button variant="outline" className="mt-4" onClick={() => openSubscribe(selectedTier)}>
-            Continue {PLAN_TIER_LABELS[selectedTier]}
-          </Button>
-        )}
-        {selection.error && (
-          <p role="status" className="mt-4 text-sm text-muted-foreground">
-            {selection.error}
-          </p>
-        )}
-      </section>
+      )}
+
+      <div className="mt-8">
+        <CurrentPlanCard
+          checkoutContext={checkoutContext}
+          suppressPlanActions={suppressPlanActions}
+          billing={billing}
+          onSubscribe={openSubscribe}
+          onPayment={payment.open}
+          paymentBusy={payment.busy}
+        />
+      </div>
+
+      {selection.error && (
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          {selection.error}
+        </p>
+      )}
 
       {/* Main content */}
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-6">
-          <CurrentPlanCard
-            suppressPlanActions={suppressPlanActions}
-            billing={billing}
-            onSubscribe={openSubscribe}
-            onPayment={payment.open}
-            paymentBusy={payment.busy}
-          />
+      <div className="mt-5 space-y-5">
+        <div className="min-w-0 space-y-5">
           <UsageSummary billing={billing} />
 
           {billing.lifecycle === 'locked' && billing.lockedAccess && (
@@ -855,7 +911,6 @@ function ScopedDesignerPlanBilling({
           )}
 
           <BillingSummary billing={billing} onPayment={payment.open} paymentBusy={payment.busy} />
-          <PaymentHistory />
 
           <PlanIncludesCard
             suppressPlanActions={suppressPlanActions}
@@ -863,12 +918,13 @@ function ScopedDesignerPlanBilling({
             lifecycle={billing.lifecycle}
             onSubscribe={openSubscribe}
           />
+          <PaymentHistory />
         </div>
 
-        {/* Sidebar */}
-        <aside className="space-y-4">
+        {/* Payment notice and support */}
+        <aside className="space-y-5">
           {showPaymentDueCard && billing.billing && (
-            <Card radius="2xl" className="border-warning bg-warning/10">
+            <Card radius="lg" className="border-warning bg-warning/10 shadow-none">
               <div className="p-5">
                 <div className="flex items-center gap-2">
                   <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">

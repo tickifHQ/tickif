@@ -4,9 +4,18 @@ import { cn } from '../lib/utils';
 
 type TipCalloutProps = ComponentProps<'div'> & {
   variant?: 'info' | 'tip';
+  label?: string;
+  align?: 'center' | 'start';
 };
 
-export function TipCallout({ className, children, variant = 'tip', ...props }: TipCalloutProps) {
+export function TipCallout({
+  className,
+  children,
+  variant = 'tip',
+  label = 'Tip',
+  align = 'center',
+  ...props
+}: TipCalloutProps) {
   const isInfo = variant === 'info';
 
   return (
@@ -19,7 +28,8 @@ export function TipCallout({ className, children, variant = 'tip', ...props }: T
       <div
         data-slot="tip-callout-content"
         className={cn(
-          'flex min-w-0 flex-1 items-center border',
+          'flex min-w-0 flex-1 border',
+          align === 'start' ? 'items-start' : 'items-center',
           isInfo
             ? 'rounded-l-sm rounded-r-lg border-info/40 bg-info/10 px-3 py-1.5'
             : 'gap-2 rounded-xl border-border bg-primary/5 px-4 py-3',
@@ -27,13 +37,18 @@ export function TipCallout({ className, children, variant = 'tip', ...props }: T
       >
         {isInfo ? null : (
           <>
-            <Lightbulb aria-hidden="true" className="size-4 shrink-0 text-primary" />
-            <span className="text-xs font-semibold leading-[1.6] text-primary">Tip</span>
+            <Lightbulb
+              aria-hidden="true"
+              className={cn('size-4 shrink-0 text-primary', align === 'start' && 'mt-0.5')}
+            />
+            <span className="shrink-0 text-xs font-semibold leading-[1.6] text-primary">
+              {label}
+            </span>
           </>
         )}
         <span
           className={cn(
-            'text-xs leading-[1.6]',
+            'min-w-0 text-xs leading-[1.6]',
             isInfo ? 'font-normal text-info' : 'font-medium text-muted-foreground',
           )}
         >

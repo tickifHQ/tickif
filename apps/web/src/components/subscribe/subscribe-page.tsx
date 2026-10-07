@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@repo/ui/components/button';
-import { Badge } from '@repo/ui/components/badge';
 import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
 import { PlanSelection } from './plan-selection';
 import { usePlanSelection, type BillingSelectionScope } from './use-plan-selection';
 import { useSelectionContext } from './use-selection-context';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import type { SubscriptionState, SubscriptionResponse } from '@repo/contracts';
 import { subscriptionResponseSchema } from '@repo/contracts';
 import { PLAN_MAP } from '@/lib/plan-config';
@@ -114,7 +114,6 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
   }
 
   const { tier, lifecycleState } = subscription;
-  const currentPlan = PLAN_MAP[tier];
   const suppressPlanActions =
     !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
   const needsPaymentRecovery =
@@ -123,7 +122,14 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
     lifecycleState === 'grace';
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
+      <Link
+        href="/designer/plan-billing"
+        className="mb-6 inline-flex items-center gap-2 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ArrowLeft className="size-4" aria-hidden="true" />
+        Back to billing
+      </Link>
       {loading && (
         <p role="status" className="mb-4 text-sm text-muted-foreground">
           Refreshing billing status…
@@ -136,31 +142,11 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
           </p>
         </div>
       )}
-      {/* Current plan summary */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Subscription</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Manage your plan and billing.</p>
-
-        <div className="mt-4 rounded-lg border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Current plan</p>
-              <p className="text-lg font-semibold text-foreground">{currentPlan.label}</p>
-            </div>
-            <LifecycleBadge state={lifecycleState} />
-          </div>
-          {subscription.currentPeriodEnd &&
-            !(suppressPlanActions && subscription.cancellationScheduled) && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Current period ends:{' '}
-                {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
-              </p>
-            )}
+      {lifecycleState !== 'active' && (
+        <div className="mb-6">
+          <LifecycleNotice state={lifecycleState} />
         </div>
-
-        {/* Lifecycle warnings */}
-        <LifecycleNotice state={lifecycleState} />
-      </div>
+      )}
 
       <BillingStatusNotice
         context={selection.context}
@@ -175,6 +161,8 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
       />
 
       <PlanSelection
+        headingLevel={1}
+        description="Compare plans and manage your subscription"
         currentTier={tier}
         lifecycleState={lifecycleState}
         selectedTier={selection.savedTargetTier ?? selectedTier}
@@ -195,27 +183,10 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         </p>
       )}
 
-      {/* Plan selection / upgrade button */}
-      {(!suppressPlanActions || needsPaymentRecovery) && (
-        <Button
-          onClick={() => {
-            if (
-              subscription.razorpayStatus === 'halted' ||
-              lifecycleState === 'payment_failed' ||
-              lifecycleState === 'grace'
-            )
-              payment.open();
-            else setDialogOpen(true);
-          }}
-          disabled={payment.busy}
-        >
-          {subscription.razorpayStatus === 'halted' ||
-          lifecycleState === 'payment_failed' ||
-          lifecycleState === 'grace'
-            ? 'Update Payment Method'
-            : tier === 'hobby'
-              ? 'Upgrade Plan'
-              : 'Change Plan'}
+      {/* Payment recovery remains separate from plan selection. */}
+      {needsPaymentRecovery && (
+        <Button variant="fancy" className="mt-4" onClick={payment.open} disabled={payment.busy}>
+          Update Payment Method
         </Button>
       )}
       {payment.message && (
@@ -238,14 +209,6 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         </p>
       )}
 
-      <p className="mt-2 text-xs text-muted-foreground">
-        For billing history and lifecycle details, visit{' '}
-        <a href="/designer/plan-billing" className="text-primary underline">
-          Plan &amp; Billing
-        </a>
-        .
-      </p>
-
       {/* Checkout dialog */}
       <CheckoutFlow
         scopeKey={JSON.stringify([userId, organizationId])}
@@ -265,23 +228,6 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
 }
 
 // ─── Lifecycle UI Components ─────────────────────────────────────────────────
-
-function LifecycleBadge({ state }: { state: SubscriptionState }) {
-  const config: Record<
-    SubscriptionState,
-    { label: string; className: 'success' | 'warning' | 'destructive' | 'secondary' }
-  > = {
-    active: { label: 'Active', className: 'success' },
-    payment_failed: { label: 'Payment Issue', className: 'warning' },
-    grace: { label: 'Grace Period', className: 'warning' },
-    locked: { label: 'Suspended', className: 'destructive' },
-    downgraded: { label: 'Downgraded', className: 'secondary' },
-  };
-
-  const { label, className } = config[state];
-
-  return <Badge variant={className}>{label}</Badge>;
-}
 
 function LifecycleNotice({ state }: { state: SubscriptionState }) {
   if (state === 'active') return null;

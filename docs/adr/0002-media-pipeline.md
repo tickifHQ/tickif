@@ -4,6 +4,9 @@ Status: Accepted
 Date: 2026-06-14
 Context: E-107/108/109/110/111/112 (Epic 7 · Media)
 
+Editorial clarification: 2026-10-06. The original authorization deferral is
+distinguished from the current organization capability checks in the consequences.
+
 ## Context
 
 Designers upload project photos that must be served fast, responsive, and watermarked,
@@ -53,7 +56,7 @@ than once.
    purpose:
    - **Permanent** (oversize, invalid/undecodable, rejected duplicate) → the worker flips
      the row to `failed`, **deletes the now-orphaned original from R2**, and returns
-     *normally* (no exception), so BullMQ does **not** retry a doomed job.
+     _normally_ (no exception), so BullMQ does **not** retry a doomed job.
    - **Transient** (R2 hiccup, transient I/O) → the handler **rethrows without touching
      status**, so BullMQ retries with exponential backoff (`attempts: 3`). The row is only
      marked `failed` once attempts are exhausted, by the worker's `failed` handler — a single
@@ -88,13 +91,15 @@ than once.
 - The upload is a **three-call dance** (mint → PUT → commit); a client that mints but never
   commits leaves a `processing` row and an orphan original until the database-aware sweep
   removes it. That's accepted: commit is the only signal the bytes actually landed.
-- Authorization is **owner OR superadmin** (moderation) for every media use-case, matching
-  the canonical `requireOwnership` policy. **Org-member access is deferred** until
-  `designer_profile ↔ organization` is modeled (E-66) — there is no designer↔org link yet.
+- At the original decision, authorization was **owner OR superadmin** (moderation),
+  and org-member access was deferred until the designer/organization link was modeled
+  in E-66. This is historical context: organization linkage and capability-based media
+  access are now implemented. For the current boundary, read
+  [media architecture](../architecture/media-pipeline.md) and `media/service.ts`.
 - Because derivative keys are deterministic and the swap is CAS, **replaying a failed or
   stuck job is always safe** — see [the runbook](../runbooks/media-pipeline.md).
 - `@repo/storage` requires the `R2_*` env in production (`assertMediaStorageConfig` fails
   the worker fast at boot rather than failing every job later). Locally, point `R2_ENDPOINT`
-  at MinIO — see [getting-started.md](../getting-started.md).
+  at MinIO — see [getting-started.md](../guides/getting-started.md).
 - The `flag` dedup action is currently observability-only; shipping a moderation queue is a
   follow-up and will need a new status/surface, not just a config flip.

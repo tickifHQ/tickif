@@ -7,7 +7,7 @@
  *
  * Run: `pnpm db:seed:demo` (add `--force` to wipe and reseed the demo projects).
  *
- * Requires (see docker-compose.yml + docs/getting-started.md):
+ * Requires (see docker-compose.yml + docs/guides/getting-started.md):
  *   - Postgres  (DATABASE_URL / POSTGRES_*)
  *   - MinIO/R2  (R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET)
  *   - Redis     (REDIS_URL, defaults to redis://localhost:6379)
@@ -62,7 +62,7 @@ async function ensureBucket(): Promise<void> {
     const isLocal = /localhost|127\.0\.0\.1|minio/.test(endpoint);
     if (!isLocal) {
       throw new Error(
-        `Bucket '${bucket}' not reachable at ${endpoint || 'R2'} — create it first (see docs/getting-started.md)`,
+        `Bucket '${bucket}' not reachable at ${endpoint || 'R2'} — create it first (see docs/guides/getting-started.md)`,
       );
     }
     console.log(`[seed-demo] creating local bucket '${bucket}'...`);

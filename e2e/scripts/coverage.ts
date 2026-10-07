@@ -50,6 +50,16 @@ const requiredEntries: [file: string, title: string][] = [
     'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
   ],
   ...billingMatrixEntries,
+  ...[1412, 390].flatMap((width): [string, string][] => [
+    [
+      'billing-checkout-return.spec.ts',
+      `checkout loader, close, resume and verified success at ${width}px`,
+    ],
+    [
+      'billing-checkout-return.spec.ts',
+      `upgrade resumes the same adjustment after mandate authorization at ${width}px`,
+    ],
+  ]),
   ...['Upgrade to Corporate', 'Downgrade to Professional+'].flatMap((action) =>
     [false, true].map((cancelled): [string, string] => [
       'billing-same-cycle.spec.ts',
@@ -114,7 +124,7 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   ...(['Hobby', 'Professional+', 'Corporate'] as const).map((label): [string, string] => [
     'billing-management.spec.ts',
-    `${label} owner can compare all plans on both billing pages at desktop and mobile widths`,
+    `${label} owner opens comparison from billing or directly at desktop and mobile widths`,
   ]),
   [
     'billing-management.spec.ts',

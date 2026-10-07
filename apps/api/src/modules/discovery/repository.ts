@@ -161,7 +161,7 @@ function feedVisibilityWhere(filters: DiscoveryFeedFilters, q?: string) {
  * taxonomy slugs that `projectFeedFilterClauses` already covers as exact filters.
  *
  * `ILIKE '%q%'` has a leading wildcard and so cannot use a btree index; all three columns
- * carry GIN trigram indexes (migration 0036) — see docs/database-and-migrations.md.
+ * carry GIN trigram indexes (migration 0036) — see docs/guides/database-and-migrations.md.
  */
 function feedTextMatch(q: string) {
   const pattern = `%${escapeLikePattern(q)}%`;

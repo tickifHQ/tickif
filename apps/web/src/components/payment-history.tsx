@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from '@repo/ui/components/card';
 import { Button } from '@repo/ui/components/button';
+import { Receipt } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -56,14 +57,14 @@ function PaymentHistoryPage({
   }, [offset]);
   useBillingAutoRefresh(load, { urgent: error });
   return (
-    <Card radius="2xl">
-      <CardHeader>
-        <CardTitle>Payment history</CardTitle>
+    <Card radius="lg" className="overflow-hidden shadow-none">
+      <CardHeader className="gap-1 border-b border-border bg-muted/30 px-5 py-4">
+        <CardTitle className="text-sm leading-5">Payment history</CardTitle>
         <CardDescription>
           Payments recorded from Razorpay. Recent payments can take a moment to appear.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-4 p-5">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>
@@ -72,7 +73,9 @@ function PaymentHistoryPage({
           </Alert>
         )}
         {loading ? (
-          <p role="status">Loading payments…</p>
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading payments…
+          </p>
         ) : data?.items.length ? (
           <Table>
             <TableHeader>
@@ -105,11 +108,14 @@ function PaymentHistoryPage({
             </TableBody>
           </Table>
         ) : data ? (
-          <p>No payments recorded yet.</p>
+          <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-5">
+            <Receipt className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+          </div>
         ) : null}
-        <div data-testid="payment-history-controls" className="flex flex-wrap gap-2">
+        <div data-testid="payment-history-controls" className="flex flex-wrap justify-end gap-2">
           <Button
-            variant="outline"
+            variant="neutral"
             size="sm"
             disabled={loading || offset === 0}
             onClick={() => setOffset(Math.max(0, offset - 20))}
@@ -117,7 +123,7 @@ function PaymentHistoryPage({
             Previous payments
           </Button>
           <Button
-            variant="outline"
+            variant="neutral"
             size="sm"
             disabled={loading || error || data?.nextOffset == null}
             onClick={() => setOffset(data?.nextOffset ?? offset)}
