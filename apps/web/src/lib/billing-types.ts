@@ -20,7 +20,7 @@ export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
  *
  * These are display-only plan prices, not authoritative billing totals. Tax,
  * invoices, and payment receipts are an intentional non-goal of the billing UI
- * (see docs/billing-staging-smoke.md); no ticket surfaces real billing totals
+ * (see docs/runbooks/billing-staging-smoke.md); no ticket surfaces real billing totals
  * today. (E-239 is the plan-lapse lifecycle engine and does NOT provide totals.)
  */
 export const PLAN_TIER_PRICES: Record<PlanTier, number> = {

@@ -1,51 +1,42 @@
-# Tickif — Engineering Docs
+# Tickif — Engineering docs
 
-Onboarding and reference docs for the Tickif platform. Start at the top and
-work down; the first two get you running, the rest are reference.
+Start with [the architecture overview](./architecture/overview.md), then read the
+[ADR index](./adr/README.md) and decisions relevant to your task. Apply the
+[coding guidelines](./coding-guidelines/README.md) when making changes.
+AI coding agents follow [AGENTS.md](../AGENTS.md) at the start of every new job.
 
-| Doc                                                              | Read it when                                                                                         |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| [getting-started.md](./getting-started.md)                       | Day one. Get the stack running locally.                                                              |
-| [architecture.md](./architecture.md)                             | You want the mental model — monorepo layout, the modular monolith, the layering rule.                |
-| [adding-a-module.md](./adding-a-module.md)                       | You're about to build a new domain (leads, media, search…). The most-used guide.                     |
-| [database-and-migrations.md](./database-and-migrations.md)       | You're changing the schema or running migrations.                                                    |
-| [runbooks/admin-access.md](./runbooks/admin-access.md)           | You're bootstrapping or recovering privileged platform access.                                       |
-| [runbooks/search.md](./runbooks/search.md)                       | You're provisioning Typesense credentials, bootstrapping collections, or diagnosing degraded search. |
-| [media-quality.md](./media-quality.md)                           | You're checking public image sharpness or reprocessing existing derivatives.                         |
-| [auth.md](./auth.md)                                             | You're protecting a route, working on login, or touching RBAC.                                       |
-| [branches.md](./branches.md)                                     | You're working on Corporate branches, active-team context, or branch freeze/restore.                 |
-| [testing.md](./testing.md)                                       | You're writing tests or practicing TDD (you should be).                                              |
-| [conventions.md](./conventions.md)                               | Anytime — coding standards, env config, shared contracts.                                            |
-| [troubleshooting.md](./troubleshooting.md)                       | Something broke, or you hit a pnpm/build oddity.                                                     |
-| [signoz-implementation-plan.md](./signoz-implementation-plan.md) | You want the implemented logging/telemetry design, rollout requirements, and deferred coverage.      |
-| [runbooks/observability.md](./runbooks/observability.md)         | You are provisioning SigNoz secrets, deploying collection, checking telemetry, or enabling alerts.   |
+| Area                                               | Purpose                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| [Architecture](./architecture/README.md)           | Current system boundaries, data models and domain behavior    |
+| [Coding guidelines](./coding-guidelines/README.md) | Enforced conventions, with universal and file-scoped rules    |
+| [ADRs](./adr/README.md)                            | Architectural and product decisions, context and consequences |
+| [Guides](./guides/README.md)                       | Setup and development workflows                               |
+| [Runbooks](./runbooks/README.md)                   | Deployment, diagnosis, recovery and operator validation       |
 
-## TL;DR
+## Local setup
+
+Use Node >=22.13.0, the pinned pnpm 10.33.0 and Docker. Follow
+[getting started](./guides/getting-started.md) for configuration and storage setup.
 
 ```bash
-# prerequisites: Node >= 22.13.0, pnpm >= 10, Docker
-pnpm install
-cp .env.example .env          # then set BETTER_AUTH_SECRET (see getting-started)
-pnpm infra:up                 # Postgres + Redis in Docker
-pnpm db:migrate               # apply schema
-pnpm dev                      # api :8008, web :3000, worker
+pnpm install --frozen-lockfile
+cp .env.example .env          # set BETTER_AUTH_SECRET
+pnpm infra:up
+pnpm db:migrate
+pnpm dev                      # API :8008, web :3000, worker
 ```
 
-- Web: <http://localhost:3000>
-- API docs (Scalar): <http://localhost:8008/docs>
-- OpenAPI spec: <http://localhost:8008/openapi.json>
+The API serves [Scalar](http://localhost:8008/docs) and
+[OpenAPI](http://localhost:8008/openapi.json). The isolated E2E launcher uses
+API port 3001; see [testing](./guides/testing.md) before running test suites.
 
-## The one rule to internalize
+## Documentation ownership
 
-Inside every API module, dependencies flow one direction only:
+Keep architecture descriptive of the implementation, coding guidelines normative,
+ADRs explicit about decisions and their history, and guides/runbooks procedural.
+Update the relevant documents in the same change as implementation changes.
+Keep reusable package and infrastructure instructions in their local READMEs.
 
-```
-routes (Hono)  →  service (pure logic)  →  repository (Drizzle)
-```
-
-- **routes** are the only files that import Hono.
-- **services** import neither Hono nor Drizzle.
-- **repositories** are the only files that import Drizzle.
-
-See [architecture.md](./architecture.md) for why, and
-[adding-a-module.md](./adding-a-module.md) for how.
+Commit media only when a maintained document or the application references it.
+Generated screenshots, recordings, traces and reports belong in ignored output
+directories and CI artifacts. Commercial proposals stay outside the repository.
