@@ -22,6 +22,10 @@ vi.mock('next/navigation', () => ({
   redirect: mock.redirect,
 }));
 
+vi.mock('@/components/legacy-profile-review-entry', () => ({
+  LegacyProfileReviewEntry: () => null,
+}));
+
 vi.mock('@/components/public-designer-profile', () => ({
   PublicDesignerProfile: ({ portfolio }: { portfolio: { displayName: string } }) => (
     <div data-testid="profile">{portfolio.displayName}</div>

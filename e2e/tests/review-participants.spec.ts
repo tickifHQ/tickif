@@ -115,7 +115,7 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
     await expect(moderator.getByRole('dialog')).not.toBeVisible();
     await visitor.getByRole('button', { name: 'Refresh reviews' }).click();
     await expect(visitor.getByRole('region', { name: 'Your review' })).toContainText('removed');
-    await expect(visitor.getByLabel('5 star reviews')).toHaveAttribute('value', '0');
+    await expect(visitor.getByText('No ratings yet')).toBeVisible();
     await visitorContext.request.post(`${apiUrl}/api/auth/sign-out`, {
       headers: { origin: webUrl },
     });

@@ -9,18 +9,25 @@ export async function TickifReviewsSection({
   slug,
   bookingId,
   page = 1,
+  embedded = false,
+  showOverallRating = true,
 }: {
   designerProfileId: string;
   slug: string;
   bookingId?: string;
   page?: number;
+  embedded?: boolean;
+  showOverallRating?: boolean;
 }) {
   const [session, published] = await Promise.all([
     getServerSession({ disableCookieCache: true }),
-    fetchTickifReviews(designerProfileId, page).catch(() => null),
+    fetchTickifReviews(designerProfileId, page, 2).catch(() => null),
   ]);
   if (published && page > Math.max(published.totalPages, 1)) {
-    const query = new URLSearchParams({ reviewsPage: String(Math.max(published.totalPages, 1)) });
+    const query = new URLSearchParams({
+      review: 'tickif',
+      reviewsPage: String(Math.max(published.totalPages, 1)),
+    });
     if (bookingId) query.set('bookingId', bookingId);
     redirect(`/d/${encodeURIComponent(slug)}?${query}#tickif-reviews`);
   }
@@ -33,10 +40,15 @@ export async function TickifReviewsSection({
   const mine = personal
     ? await fetchOwnReview(designerProfileId, cookie).catch(() => undefined)
     : undefined;
-  const href = `/d/${encodeURIComponent(slug)}${bookingId ? `?bookingId=${encodeURIComponent(bookingId)}` : ''}#tickif-reviews`;
+  const query = new URLSearchParams({ review: 'tickif' });
+  if (bookingId) query.set('bookingId', bookingId);
+  const href = `/d/${encodeURIComponent(slug)}?${query}#tickif-reviews`;
   return (
     <TickifReviews
       designerProfileId={designerProfileId}
+      pageSize={2}
+      embedded={embedded}
+      showOverallRating={showOverallRating}
       bookingId={bookingId}
       initialPage={published}
       initialOwn={mine?.item ?? null}

@@ -5,7 +5,13 @@ Refresh the shared system and every web UI from the
 Apply it to the profile first, then remaining designer views, visitor/public
 views, and admin views. Preserve data contracts and product behavior.
 
-## Current handoff — 7 October 2026
+## Current handoff — 9 October 2026
+
+The user now explicitly requests a phase 2 PR and a thorough publishing, editor,
+and signed-in CTA audit. This supersedes the earlier phase 2 publication gates
+recorded below. See [the publishing audit](./portfolio-publishing-audit.md) for
+findings, fixes and browser evidence. Keep the phase PR stacked on
+`codex/ui-refresh/foundations`; no merge is authorized.
 
 The user reviewed the component gallery and explicitly confirmed publication:
 **"great raise this PR and start working on the next phase"** on 7 October 2026.
@@ -14,6 +20,17 @@ The final full workspace test run passed; publication is approved.
 Phase 2 is the designer profile; branch it from this phase for the incremental stack.
 
 - Branch: `codex/ui-refresh/foundations`.
+- Published phase 1 head: `98a5fec1a0df393b24b5f6d3827b330dbaa9da6b`.
+  Implementation commit: `5e31fb7a`; coverage registration fix: `98a5fec1`.
+  #710 is open and ready for review. Its first run passed the main verification,
+  security and image checks and all 137 browser tests. The post-run coverage
+  assertion failed because seven new shared-UI tests were missing from its
+  manifest; this is now fixed without relaxing the assertion. Ten coverage unit
+  tests pass and the corrected validator accepts the saved 137-pass CI report.
+  The rerun is now green for head `98a5fec1`: all verification, critical E2E,
+  security and image checks passed; the deployment job was skipped as expected.
+  The watcher reports `ready`, with no unresolved review threads. No merge or
+  auto-merge was requested; retain the stack's single final merge intention.
 - Current main incorporated: `43723979` (#712 engineering documentation
   reorganization, including #709 billing changes). Merge commit: `faaf031`.
 - [#710](https://github.com/tickifHQ/tickif/pull/710) is the single shared-foundation
@@ -74,20 +91,351 @@ Keep generated captures/reports outside committed source.
 
 ## Phase 2 — designer profile
 
+Started locally on `codex/ui-refresh/designer-profile`, based on phase 1 head
+`98a5fec1` (fast-forwarded after the phase 1 manifest repair). Its eventual PR
+must target `codex/ui-refresh/foundations` so the
+diff is incremental. Phase 2 publication was explicitly authorized on 9 October;
+the publishing audit is complete and the full workspace gate is running before
+marking the phase PR ready.
+
+Initial implementation replaces the hero proof strip with the reference's
+rating/project/founding/budget grid, adds a responsive identity card using the
+real portfolio cover and project imagery, and replaces legacy award images
+with shared crowns and live captions. API eligibility, New on Tickif, hidden
+ratings/recognition, KYC, canonical sharing and enquiry login gates remain intact.
+The live page now includes the refreshed hero/card, navigation, numbered sections, landscape project cards, testimonial/ratings layouts, sharing panel, enquiry section, footer and floating enquiry control. Supported static assets are integrated without changing their export bytes.
+
+The user clarified on 8 October: **"I dont want preview, I want real updates in
+live pages."** The example profile component and the `/design-system?view=profile`
+branch have been removed. Implement and review directly through the existing
+`/d/[slug]` page, using its real API payload and production actions. The shared
+component inventory remains at `/design-system`.
+
+The reported Next.js error reproduced when the old example card opened
+`/image/33333333-3333-4333-8333-333333333333` while no API was running. Do not
+reintroduce fixture IDs into live navigation or substitute preview dialogs for
+real project, like, or enquiry behavior.
+
+Local API configuration is now present in the gitignored `.env`; the real API
+uses port 8008 and the web app uses 3020. Existing local data was copied into
+`tickif_ui_refresh_dev` and upgraded with committed migrations, leaving the
+original development database intact. For the user's live-profile review request
+on 8 October, the existing repository development designer **Studio Meraki** was
+completed through the portfolio service: signed logo/cover uploads and a saved
+tagline, with ownership, upload and publication checks intact. It is now available
+at [localhost:3020/d/studio-meraki](http://localhost:3020/d/studio-meraki) through
+the normal route and API. This is development data in the actual application;
+there is no separate profile preview route or mocked browser API. Other copied
+profiles remain unchanged. MinIO credentials were corrected in the gitignored
+local configuration. API and web now run as hidden background processes so the
+review page remains available after the chat turn.
+
+- Initial focused validation: 51 profile tests pass, including two failing
+  reproductions before implementation for proof data and live crown captions.
+  Web typecheck and focused lint pass. Browser checks at 1512/768/390px pass:
+  no overflow or page/console errors, all five supported artwork slots load,
+  enquiry opens/dismisses sign-in, and missing fields/long names render safely.
+  Browser API responses were stubbed for the isolated example-data review.
+  Those checks used the now-removed example surface and do not prove live page
+  behavior. After removing it, root typecheck/lint and 64 profile, gallery and
+  enquiry tests pass. Initial phase 2 changes remain local and uncommitted.
+- Live-route validation on 8 October: the API health endpoint reports ready with
+  Postgres up. The API-backed `/designers` page loads and its sign-in dialog
+  opens/dismisses without console errors; local search schemas were bootstrapped
+  on the isolated Typesense service at 8112. `/d/shikhar-studio` returns a real
+  404 without a runtime overlay because its required logo is absent. Seventeen
+  public profile routing/metadata and API-client tests also pass. These checks
+  preceded the working Studio Meraki review profile. No backend publication or
+  eligibility logic was changed.
+- Published-profile review: Studio Meraki's public API responds 200 with its two
+  published projects and earned Established badge. The live in-app browser shows
+  the new hero/proof grid, cover/identity card and recognition section. All nine
+  images load, console error/warning logs are empty, and Enquire opens the real
+  sign-in dialog. The published image-detail API also responds 200. The review
+  tab is retained for the user. Further fidelity work is recorded below; phase 2 remains local for live review.
+- Fresh high-fidelity contexts for all eleven desktop and mobile sections were
+  retrieved again through Figma MCP on 8 October. The real profile composition
+  now uses those measurements and static decorations.
+- The Google API provides an aggregate and recent reviews without a histogram.
+  Tickif reviews retain their existing real histogram, pagination and write/edit
+  flow. Centre data supplies addresses/phone/maps links without hours/photos/
+  coordinates/centre ratings. Designer-like count, acceptance status and response
+  SLA are absent. Do not invent these values or unsupported awards.
+- New on Tickif currently reuses the exact established laurel silhouette with
+  its own live caption and 90-day criterion. This presentation is inferred;
+  dedicated New artwork is absent from the new Figma reference.
+
 - [x] Obtain fresh high-fidelity footer/mobile context, screenshots, compact
       variable/component-origin audit and motion context through Figma MCP.
 - [x] Check Code Connect: unavailable on this Figma plan. The desktop subtree has
       no instances or variable bindings; reuse the repository's shared components.
-- [ ] Compose hero, recognition, selected projects, testimonial/ratings, experience
+- [x] Compose hero, recognition, selected projects, testimonial/ratings, experience
       centres, sharing, consultation, footer, navigation and floating enquiry.
-- [ ] Wire existing profile/project/review/centre data and existing actions.
-- [ ] Preserve studio details and Tickif reviews absent from the reference frame.
-- [ ] Map supported earned badges through the shared presentation mapping.
-- [ ] Preserve New on Tickif's existing 90-day eligibility and live label.
-- [ ] Do not award Client Favourite/Fast Reply without supported eligibility data.
-- [ ] Keep studio/project photographs dynamic; integrate exact static assets.
+- [x] Wire existing profile/project/review/centre data and existing actions.
+- [x] Preserve studio details and Tickif reviews absent from the reference frame.
+- [x] Map supported earned badges through the shared presentation mapping.
+- [x] Preserve New on Tickif's existing 90-day eligibility and live label.
+- [x] Do not award Client Favourite/Fast Reply without supported eligibility data.
+- [x] Keep studio/project photographs dynamic; integrate exact static assets.
 - [ ] Verify desktop/mobile geometry, wrapping, long content and empty states.
 - [ ] Verify enquiry/share/location links, accessibility and reduced motion.
+
+### Fidelity review follow-up — 8 October 2026
+
+- [x] Apply the Figma name treatment, proof grid, card photo masks, seal layers,
+      project geometry, sharing/CTA gradients, navigation and footer to /d/[slug].
+- [x] Keep hero seals data-driven; reproduce supported letter positions from MCP.
+- [x] Use Helvetica Neue/Helvetica/Arial for display text. The user accepted this
+      fallback; exact licensed Helvetica Neue webfont remains unavailable.
+- [x] Add regressions for live section anchors, conditional navigation and earned
+      seals, plus the floating enquiry's visibility and cleanup.
+- [x] Root typecheck and lint pass; focused profile/enquiry/gallery tests: 67 pass.
+- [x] Record final current root test result: all 17 tasks passed; web 1,733 tests,
+      API 1,943 tests (four intentional skips). See `profile-root-tests-corrected.log`.
+- [ ] Complete user live review before pushing/opening a phase 2 PR.
+- [x] Recover circular text path 15888:6643 through read-only use_figma after
+      get_design_context reported unsupported node type. Preserve its exact
+      curve and typography, with real counts/year/location and gated ratings/KYC.
+- [ ] Reproduce geographic centre composition when real coordinates/centre media
+      and opening hours are supported; official Google Maps embeds now accompany
+      supported address/contact/map links.
+- [ ] Run build and critical E2E journeys before phase publication/merge.
+
+Current review evidence:
+
+- The real Studio Meraki page is retained and visible at
+  `http://localhost:3020/d/studio-meraki`. Its hero/card, earned crown,
+  landscape projects, sharing panel, enquiry section and footer use the new
+  compositions. Review/testimonial/centre sections remain data-driven; the local
+  demo is now populated as recorded below.
+- Real browser checks: canonical link copied correctly, Enquire opened and
+  dismissed the existing sign-in flow, project navigation loaded the actual
+  image-detail page, hero images loaded, mobile and desktop layouts had no
+  horizontal overflow, and a fresh page produced no console warnings/errors.
+- Latest card review typecheck: 17 tasks passed (`profile-card-typecheck.log`).
+  Lint: 16 tasks passed (`profile-card-lint.log`), retaining existing API warnings.
+- Latest card production build passed (`profile-card-build.log`). The preceding
+  root production build had three tasks pass (`profile-build-reviewed.log`).
+  Turbo emitted a Windows standalone-cache symlink warning for `has-flag`;
+  compilation and build completed successfully. Verify CI packaging before release.
+- Full web suite: 178 files / 1,733 tests passed in the final root run.
+  The subsequent ticket-visibility regression reproduced before the fix;
+  latest focused profile/floating/project-card suite: 68 tests passed, including
+  all 55 profile tests (`profile-ticket-red.log`, `profile-card-tests-reviewed.log`).
+- Top-card correction after user feedback: fresh Figma context 15885:2576,
+  desktop card 406 × 536 px and mobile minimum height 540 px. Photo arch radii
+  now match 107.32 px desktop / 94.5 px mobile; the upper cutout uses the source
+  pill geometry. Studio metadata, stamp-specific rotation/opacity, foil surface
+  gradients and footer-ticket dimensions were corrected. Dynamic proof text is
+  split across both sides of the source curve, with overflow visible so letters
+  at the right edge are retained. No additional credentials or reviews were added.
+  Browser measurements at 390 px CSS width found no horizontal overflow.
+- Exact asset/runtime-copy integrity passes: 53 exports, 63 specification tokens,
+  35 shared component files and 82 route/state files. This is integrity evidence,
+  separate from the rendered browser review.
+- Browser screenshots are outside the repository in the task's visualization
+  directory: `profile-main-card-desktop.png` and `profile-main-card-mobile.png`.
+- The preceding full run passed all API integration tests but failed four URL
+  assertions because the live `.env` uses port 3020. The server URL variable is
+  `PUBLIC_WEB_URL`, separate from `NEXT_PUBLIC_WEB_URL`. A focused retry with
+  `PUBLIC_WEB_URL=http://localhost:3000` passed all 101 tests in those two files
+  (`profile-api-origin-corrected.log`). The full rerun passed, using
+  `pnpm test --env-mode=loose` to pass this shell override through Turbo without
+  altering the live `.env` (`profile-root-tests-corrected.log`). All 17 tasks
+  passed in 22m38s; API 135 files / 1,943 tests passed, with one file / four tests
+  intentionally skipped. User review and critical E2E remain before publication;
+  review changes remain local.
+  Critical E2E journeys remain required before merging phase 2.
+
+### Populated live profile review — 8 October 2026
+
+- [x] Populate the existing Studio Meraki development profile through its real
+      portfolio service and database records: featured testimonial, 12 published
+      Tickif demo reviews, 4.8 Google aggregate with five demo reviews, and two
+      Bengaluru experience centres. The office count is two.
+- [x] Label the profile, testimonial, reviewer identities and review bodies as
+      demo content. Google data is a local cache fixture, not a fetched or
+      verified business listing. No KYC or verified consultation was fabricated.
+- [x] Obtain official Google Maps Share embeds for HSR Layout and Whitefield.
+      These show neighbourhoods rather than invented precise studio addresses.
+- [x] Add reusable `@repo/ui/components/google-map-embed` and integrate it into
+      real centre cards, preserving ordinary Maps links and navigation links.
+- [x] Verify both interactive maps load in the live browser and the Tickif
+      histogram, review pagination, rating summaries and testimonial appear.
+- [x] Reproduce the dual-rating summary's mobile overflow before correcting its
+      wrapping and wreath sizing. A 320px check also exposed review navigation
+      overflow; pagination controls now wrap. Browser width checks pass at
+      320px and approximately 390px; page two contains the final two demo reviews.
+- [x] Confirm review writing opens and dismisses the existing sign-in dialog.
+- [x] Add `public-profile-ratings-mobile.spec.ts` to retain the dual-source mobile
+      regression in the isolated E2E suite; execute it before phase publication.
+- [x] Test iframe markup and URL validation without mounting network-loading
+      iframes in unit tests. Third-party rendering is checked in the browser.
+- [x] Focused tests: 10 map URL/markup and 56 profile tests passed, without external
+      iframe requests (`studio-map-tests-static.log`, `studio-profile-tests-static.log`).
+- [x] Production web build passes, including the final mobile artwork correction
+      (`studio-filled-final-build.log`).
+- [x] Final root typecheck: 17 tasks; final lint: 16 tasks, with existing API
+      warnings (`studio-filled-final-typecheck.log`, `studio-filled-final-root-lint.log`).
+- [x] Full web suite: 178 files / 1,734 tests. Shared UI: 16 files / 65 tests.
+      Worker: 44 files / 225 tests. API: 135 files / 1,943 tests, with one file /
+      four intentional skips. Root: all 17 tasks passed in 26m12s, with no cached
+      test results (`studio-filled-root-tests.log`).
+- [x] Record final checks for this additional population/map update.
+- [ ] Complete the user's live review before phase 2 publication.
+
+Local fixtures and the before-state backup are ignored under `.ui-refresh.local/`:
+`populate-studio-details.mts`, `studio-extra-fixtures.sql`,
+`studio-map-fixtures.json` and `studio-details-before.json`. Both mutation paths
+guard the exact local `tickif_ui_refresh_dev` database; the original database
+is untouched. The dummy Google place ID must not be used as a real connection.
+Sample accounts use reserved `example.invalid` addresses and have no credentials.
+These records are local review data and are excluded from the PR.
+
+Screenshots in the task's visualization directory: `profile-filled-centres.png`,
+`profile-filled-ratings.png`, `profile-filled-testimonial.png` and
+`profile-filled-hero.png`.
+
+### Bounded sections and location fidelity — 8 October 2026
+
+This records the first correction pass. The Google/source-tab and Studio
+decisions below are superseded by the follow-up correction pass after it.
+
+- [x] Retrieve fresh desktop project, testimonial, rating and centre contexts,
+      plus mobile project/testimonial/rating/centre contexts through Figma MCP.
+- [x] Keep projects bounded to six cards per displayed page. Previous/next
+      navigation reaches loaded and subsequent API pages; sorting/filtering
+      reset to the first page. Failed fetches retain visible projects and retry.
+- [x] Replace the duplicate review lists with one Client ratings section and
+      Google/Tickif source tabs. Show at most two cards per source page. Public
+      Tickif API pagination also requests two items; `reviewsPage` stays usable.
+- [x] Preserve review writing, private status, editing, moderation refresh,
+      pagination correction and sign-in. Switching sources preserves Tickif
+      drafts and the current Tickif page. Source counts remain separate.
+- [x] Match the testimonial's 880px width, 32px desktop/22px mobile type,
+      32px author avatar and corner marks. Add exact avatar colours and the
+      rating summary/review radii as semantic tokens with Figma provenance.
+- [x] Match the ratings summary's wreath/distribution layout and the two
+      review cards. Only Tickif has an authoritative histogram; Google shows
+      its aggregate and paged recent cache reviews without inventing a histogram.
+- [x] Replace separate centre cards with one selected map and a 400px details
+      panel, stacked on narrow screens. Centre tabs update the real Google
+      embed, address, phone and Maps link together. Overview/About tabs work.
+- [x] Reuse the unchanged Figma address-pin SVG. Use real portfolio imagery
+      with a "Studio portfolio" caption; do not claim centre-specific photos,
+      hours, ratings, sizes or coordinates absent from the contract.
+- [x] Replace aggregate "verified reviews" copy with "Tickif reviews"; only
+      completed consultations receive the existing verified-client marker.
+- [x] Reproduce the unbounded project/review and separate-centre-card bugs in
+      failing tests before implementation. Focused checks passed after fixes.
+- [x] Final focused checks: 78 tests across profile, project gallery and review
+      suites (`section-correction-focused-final.log`). Typecheck and lint pass;
+      production web build passes. Specification integrity: 53 assets, 67 tokens,
+      36 shared component files and 82 route/state files.
+- [x] Register the mobile profile regression in the critical E2E coverage gate;
+      all 11 coverage gate unit tests and E2E typecheck pass. Browser E2E execution
+      remains outstanding; unit coverage validation does not execute the journeys.
+- [x] Live browser checks confirm two visible reviews, paged Google/Tickif data,
+      no overflow at narrow widths, one selected map, keyboard centre switching
+      and Overview/About panels. Temporary viewport overrides were reset.
+- [x] Production web build passes (`section-correction-build.log`); root
+      typecheck passes 17 tasks and lint passes 16 tasks with five existing API
+      warnings (`section-correction-root-{typecheck,lint}-final.log`).
+- [x] Save current mobile review/location evidence as
+      `profile-corrected-ratings-current.png` and
+      `profile-corrected-centres-current.png` in the task visualization directory.
+      Final desktop captures are `profile-corrected-centres-desktop-final.png`
+      and `profile-corrected-ratings-desktop-final.png`. At 1412px, the centre
+      card measures 660px high with a 400px details panel and no overflow.
+- [x] Complete root test run: 17/17 tasks successful in 46m33.587s. API: 1,943
+      passed / four skipped; web: 1,737 passed; UI: 65 passed; worker: 225 passed.
+      This baseline predates the follow-up frontend corrections below.
+- [ ] Execute the updated isolated E2E regressions before phase publication.
+- [ ] Complete user live review before pushing or opening the phase 2 PR.
+
+Google Maps retains Google's own map styling and controls. The layout matches
+the Figma centre composition; the sample Chennai illustration is still excluded
+from unrelated live addresses. Local Studio Meraki fixtures remain demo data.
+
+Runtime verification note: the first root test run hit a 30s timeout in the
+unchanged API draft-image deletion test. MinIO health timed out through
+`localhost:9000` but responded over `127.0.0.1:9000` (150ms; Node with IPv4-first
+DNS returned 200 in 25ms). That failed run was stopped; the fresh root run uses
+`NODE_OPTIONS=--dns-result-order=ipv4first` with the existing isolated test
+databases, Redis and Typesense (`section-correction-root-tests-ipv4.log`).
+Automatic approval review rejected restarting the live API, reporting only
+"blocked by policy". Its existing process remains running; API source and the
+live `.env` were not changed. The IPv4-first retry completed successfully.
+
+### Follow-up Figma correction pass — 8 October 2026
+
+- [x] Re-read desktop/mobile rating and centre Figma contexts and centre motion
+      context through MCP. Added unchanged active/inactive centre pin SVGs and
+      the control shadow token (68 tokens; 53 static assets).
+- [x] Remove the extra Studio section and its navigation entries. Remove the
+      hero secondary Share action: backend supports project saving/likes only.
+      Keep the source share card and footer social links.
+- [x] Make Client ratings Google-only. Use the shared Carousel with two reviews
+      per slide and shared numbered Pagination; arrow and number state sync.
+      Projects retain their six-item cap and now use shared Pagination too.
+- [x] Match the Google summary's wreath, count, supporting percentage and
+      distribution layout. Distribution uses only cached reviews, explicitly
+      labelled when its sample is smaller than the aggregate. No invented totals.
+- [x] Preserve existing Tickif review entry through booking links and old
+      #tickif-reviews deep links, including pagination and sign-in return URLs.
+      Normal profile visits render only the Google client ratings section.
+- [x] Float the 34px location controls over the map, using Figma's exact pin
+      assets, colours, spacing and shadow; use neighbourhood names when centre
+      cities repeat. Selected centre updates map/address/details together.
+      Mobile map height is 400px, desktop details panel width is 400px.
+- [x] Regression-first checks reproduced the reported extras and incorrect
+      controls. Focused corrected profile/gallery/review/legacy-link suites:
+      83 tests passed. The route test mocks the independently tested client leaf.
+- [x] Production web build passes. Live desktop review arrows/numbered pages
+      and centre switching verified; 320px/390px widths fit without horizontal
+      overflow. Final frontend gate results are recorded below.
+- [x] Root typecheck: 17 tasks passed; lint: 16 tasks passed. Specification
+      integrity passes (53 assets, 68 tokens, 36 shared files, 82 route/state files).
+- [x] Live legacy review hash redirected to review=tickif and showed community
+      reviews. Returning to the default profile removed that section. Browser
+      error log was empty; temporary viewport overrides were reset.
+- [x] Review evidence: profile-round2-reviews.png and profile-round2-centres.png
+      in the task visualization directory.
+- [x] Final affected run: UI 65 tests and E2E coverage-gate unit tests pass.
+      Web: 1,740 passed; two unchanged onboarding/upload tests exceeded 5s.
+      Both files pass on an isolated single-worker retry (110/110 tests,
+      52.76s). All 1,742 web tests have passed across the run and retry;
+      the broad run itself exited nonzero. No test timeout was increased.
+      Logs: figma-review-round2-tests-final.log and
+      figma-review-round2-timeout-retry.log under the ignored local directory.
+- [ ] Execute isolated browser E2E regressions before phase publication.
+- [ ] Obtain user visual approval before pushing or raising the phase 2 PR.
+
+### HTML motion pass — 8 October 2026
+
+- [x] Decode the supplied HTML template and study its actual CSS and React
+      behavior; record source hash, timing and adaptations in the specification.
+- [x] Apply reveal/stagger, numeric counts, seal rotation, pointer tilt/light,
+      stamp/wreath entrances, image/recognition/share hover, centre transitions
+      and enquiry dock entrance/exit to the real profile.
+- [x] Preserve server output, keyboard access and actual review/project/enquiry
+      actions. Reduced motion, touch pointers, unmount cleanup and background
+      tabs have explicit handling. No animation library or demo data was added.
+- [x] Initial targeted checks: 66 tests passed across motion, floating enquiry
+      and profile behavior. Root typecheck (17 tasks) and lint (16 tasks) pass.
+- [x] Production web build passes. Browser checks confirm centred rotation,
+      pointer tilt/reset, no horizontal overflow at 1412px/390px, offscreen
+      pause, working carousel pagination and floating enquiry. Error log empty;
+      viewport reset. Hero proof: profile-motion-hero.png in the task directory.
+- [x] Final affected run: 1,742 web tests passed; five tests in unchanged
+      onboarding/upload files exceeded 5s under broad-run load. Both files pass
+      in an isolated single-worker retry (110/110, 57.21s). Thus all 1,747 web
+      tests passed across the run/retry; the broad command itself exited nonzero.
+      UI 65 tests and coverage-gate unit tests pass. No timeout was increased.
+      Logs: profile-motion-tests.log and profile-motion-timeout-retry.log.
+      Earlier complete backend/workspace baseline remains recorded above;
+      isolated browser E2E execution is still required before publication.
+- [ ] User visual approval remains required before phase 2 publication.
 
 ## Phase 3 — remaining designer views
 
@@ -130,7 +478,7 @@ Keep generated captures/reports outside committed source.
 | Topic                       | Current position                                                                                                                                                                                                                               |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Figma IDs                   | File `WJhOguDptAwt2735BS2WMG`, section `15885:4108`, desktop `15885:2549` (1512px), mobile `15885:4109` (390px).                                                                                                                               |
-| Heading font                | Helvetica Neue Medium is in Figma; existing Inter 500 is the portable implementation fallback.                                                                                                                                                 |
+| Heading font                | Helvetica Neue Medium is in Figma; Helvetica Neue/Helvetica/Arial system stack is approved until a licensed webfont is supplied.                                                                                                               |
 | Dark mode / absent controls | Inferred styles, demonstrated in the gallery; not claimed as exact Figma specifications.                                                                                                                                                       |
 | Recognition                 | Exact artwork, live labels; generic component has no awarding logic. Client Favourite/Fast Reply remain unsupported domain awards.                                                                                                             |
 | Figma access                | Primary MCP access restored. Fresh desktop/mobile section contexts, footer, screenshots, motion and component/variable audit retrieved on 7 October. The mobile frame itself has 1% opacity; do not reproduce that opacity in the application. |
@@ -233,9 +581,21 @@ Keep generated captures/reports outside committed source.
 
 ## Resume checklist
 
+- [ ] Keep phase 2 changes on the profile branch. Phase 1 is already published;
+      do not mix further profile work into #710 or open a duplicate shared PR.
 - [ ] Inspect Git status; preserve local implementation and any user changes.
 - [ ] Read latest user instructions and this handoff before acting on PRs.
 - [ ] Keep the shared phase separate from the profile phase; preserve the single-final-merge intention.
 - [ ] Check currently running verification before restarting expensive suites.
 - [ ] Continue from the first incomplete checklist item; preserve completed work.
 - [ ] Record check outcomes, exact next action and changed head when handing off.
+
+### Publishing audit — 9 October 2026
+
+- [x] User explicitly requested the phase PR and configuration/publishing audit.
+- [x] Verify real owner and visitor workflows; see [audit matrix](./portfolio-publishing-audit.md).
+- [x] Fix independent Google summary visibility and align editor recognition artwork.
+- [x] Restore demo configuration and remove the synthetic visitor/enquiry after verification.
+- [x] Focused editor/profile suite: 152 tests passed. Workspace typecheck and lint pass; E2E source typecheck and asset verification pass.
+- [ ] Fresh root test gate: initial run stopped at a test Typesense key mismatch; corrected isolated-service credentials and restarted.
+- [ ] GitHub CI and review readiness for the phase PR. Keep it unmerged.

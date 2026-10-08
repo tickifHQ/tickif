@@ -65,7 +65,7 @@ Run from `apps/web` using its aliases into `@repo/ui`:
 pnpm dlx shadcn@latest add <component>
 ```
 
-Generated components land in `src/components/` and already consume the semantic tokens. A live showcase of everything lives at `/design-system` in the web app.
+Generated components land in `src/components/` and already consume the semantic tokens. The shared control gallery lives at `/design-system` in the web app. `GoogleMapEmbed` is reviewed in the real `/d/[slug]` profile's centre section when its data includes an official embed URL.
 
 ## Shared component additions
 
@@ -103,6 +103,11 @@ Generated components land in `src/components/` and already consume the semantic 
 - ReUI `Rating` remains read-only with clamped values and descriptive ARIA text.
   Its stars use the dedicated `rating` token. `IconStack` retains its installed
   composition and is reused by `EmptyState`.
+- `GoogleMapEmbed`: renders a lazy, accessible iframe from an HTTPS Google Maps
+  Share → Embed URL. A title is required; unsupported hosts, schemes, credentials,
+  ports and non-embed paths render nothing. The profile keeps its separate
+  Open in Maps link. Unit tests inspect server markup without loading Google;
+  browser checks verify the interactive map.
 
 Custom portfolio accents must override primary, primary foreground, primary hover,
 primary shadow, and ring together. The web app's validated `portfolioAccentStyle`

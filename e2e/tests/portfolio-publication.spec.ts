@@ -543,23 +543,26 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
       await page.goto(`/d/${seed.portfolioSlug}`);
-      const centers = page.getByRole('region', { name: 'Experience centers' });
+      const centers = page.getByRole('region', { name: 'Experience centres' });
       await expect(centers).toBeVisible();
       await expect(
         centers.getByRole('heading', { name: 'Whitefield Experience Center' }),
       ).toBeVisible();
-      await expect(centers.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
-      await expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
+      const details = centers.getByRole('complementary', { name: 'Selected experience centre' });
+      await expect(details.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
       await expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeVisible();
-      await expect(centers.getByText('Mumbai, Maharashtra')).toBeVisible();
       await expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
         'href',
         'tel:+919994645911',
       );
-      await expect(centers.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
+      await expect(details.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
         'rel',
         'noopener noreferrer nofollow',
       );
+      await centers.getByRole('tab', { name: 'Powai Studio', exact: true }).click();
+      await expect(details.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
+      await expect(details.getByText('Mumbai, Maharashtra', { exact: true })).toBeVisible();
+      await centers.getByRole('tab', { name: 'Whitefield Experience Center', exact: true }).click();
       await centers.screenshot({
         path: testInfo.outputPath('experience-centers-desktop.png'),
         animations: 'disabled',
