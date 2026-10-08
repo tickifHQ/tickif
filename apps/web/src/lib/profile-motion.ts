@@ -20,7 +20,7 @@ export function mountProfileMotion(root: HTMLElement) {
 
   const start = () => {
     stop();
-    if (reduced.matches || !('IntersectionObserver' in window)) return;
+    if (reduced.matches || typeof window.IntersectionObserver !== 'function') return;
     root.dataset.profileMotion = 'enabled';
     const targets = new Set<HTMLElement>();
     const counted = new Set<HTMLElement>();
@@ -144,6 +144,9 @@ export function mountProfileMotion(root: HTMLElement) {
     };
     const focus = (event: FocusEvent) => {
       if (!(event.target instanceof Element)) return;
+      // Mouse focus happens between pointerdown and pointerup. Snapping the
+      // reveal then can move the control away from the click's release point.
+      if (!event.target.matches(':focus-visible')) return;
       const target = event.target.closest<HTMLElement>('[data-profile-reveal="pending"]');
       if (target) target.dataset.profileReveal = 'visible';
     };

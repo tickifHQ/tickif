@@ -20,6 +20,12 @@ on the shared UI foundation (#710), published as [PR #713](https://github.com/ti
 - The initial PR security gate identified Next.js 16.3.7 advisory
   [GHSA-cjq9-62q9-8jv4](https://github.com/advisories/GHSA-cjq9-62q9-8jv4).
   The workspace now pins the patched 16.3.8 release; the audit threshold stays unchanged.
+- CI browser traces exposed a reveal/focus race that could move an enquiry or
+  like button between pointerdown and pointerup. Pointer focus no longer snaps
+  the reveal; pending invisible content cannot intercept clicks. Keyboard focus
+  still reveals its target immediately.
+- Motion now also handles an explicitly unavailable `IntersectionObserver`
+  without crashing the portfolio after navigation from designer discovery.
 
 ## Live browser verification
 

@@ -521,7 +521,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         .locator('xpath=ancestor::button')
         .click();
       await page.getByRole('button', { name: 'Add experience center' }).click();
-      await page.getByLabel('Name').fill('Whitefield Experience Center');
+      await page.getByLabel('Name', { exact: true }).fill('Whitefield Experience Center');
       await page.getByLabel('Address').fill('12, 1st Main Road, Whitefield');
       await page.getByLabel('City').fill('Bengaluru');
       await page.getByLabel('State', { exact: true }).click();
@@ -533,7 +533,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         .fill('https://maps.google.com/?q=Whitefield');
       await page.getByRole('button', { name: 'Add center' }).click();
       await page.getByRole('button', { name: 'Add experience center' }).click();
-      await page.getByLabel('Name').fill('Powai Studio');
+      await page.getByLabel('Name', { exact: true }).fill('Powai Studio');
       await page.getByLabel('Address').fill('4, Hiranandani Gardens, Powai');
       await page.getByLabel('City').fill('Mumbai');
       await page.getByLabel('State', { exact: true }).click();
@@ -807,8 +807,9 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(portfolioCover).toHaveAttribute('loading', 'eager');
       // This studio has no founding year or legacy experience, so omit the unknown value.
       await expect(page.getByText('Years experience')).toHaveCount(0);
-      await expect(page.getByText('Projects', { exact: true })).toBeVisible();
-      await expect(page.getByText('Cities present')).toBeVisible();
+      const hero = page.getByRole('region', { name: 'Portfolio hero' });
+      await expect(hero.getByText('Projects', { exact: true })).toBeVisible();
+      await expect(hero.getByRole('heading', { level: 1 })).toContainText(seed.organization.name);
       await expect(
         page.getByRole('button', { name: 'Send enquiry', exact: true }).first(),
       ).toBeVisible();

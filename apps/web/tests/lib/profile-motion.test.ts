@@ -77,6 +77,9 @@ describe('profile motion enhancement', () => {
     stop();
     reduced.matches = false;
     vi.stubGlobal('IntersectionObserver', undefined);
+    stop = mountProfileMotion(root);
+    expect(root.dataset.profileMotion).toBeUndefined();
+    stop();
     // Older browsers genuinely omit the property.
     Reflect.deleteProperty(window, 'IntersectionObserver');
     stop = mountProfileMotion(root);
@@ -86,10 +89,21 @@ describe('profile motion enhancement', () => {
     stop = mountProfileMotion(root);
     const card = root.querySelector<HTMLElement>('article')!;
     expect(card.dataset.profileReveal).toBe('pending');
+    vi.spyOn(card.querySelector('a')!, 'matches').mockReturnValue(true);
     card.querySelector('a')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     expect(card.dataset.profileReveal).toBe('visible');
     intersect(card);
     expect(card.dataset.profileInview).toBe('true');
+  });
+  it('does not snap a revealing control when pointer focus arrives before click release', () => {
+    stop = mountProfileMotion(root);
+    const card = root.querySelector<HTMLElement>('article')!;
+    const link = card.querySelector('a')!;
+    vi.spyOn(link, 'matches').mockReturnValue(false);
+    link.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    expect(card.dataset.profileReveal).toBe('pending');
+    intersect(card);
+    expect(card.dataset.profileReveal).toBe('visible');
   });
   it('counts numeric statistics to their real values while keeping accessible labels and ranges stable', () => {
     stop = mountProfileMotion(root);

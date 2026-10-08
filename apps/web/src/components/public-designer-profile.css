@@ -63,8 +63,9 @@
   .designer-profile [data-profile-reveal='pending'] {
     opacity: 0;
     translate: 0 32px;
+    pointer-events: none;
   }
-  .designer-profile [data-profile-reveal]:focus-within {
+  .designer-profile [data-profile-reveal]:is(:focus-visible, :has(:focus-visible)) {
     opacity: 1;
     translate: none;
     transition: none;
