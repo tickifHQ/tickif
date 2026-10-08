@@ -599,3 +599,6 @@ live `.env` were not changed. The IPv4-first retry completed successfully.
 - [x] Focused editor/profile suite: 152 tests passed. Workspace typecheck and lint pass; E2E source typecheck and asset verification pass.
 - [ ] Fresh root test gate: initial run stopped at a test Typesense key mismatch; corrected isolated-service credentials and restarted.
 - [ ] GitHub CI and review readiness for the phase PR. Keep it unmerged.
+- [x] Open draft [PR #713](https://github.com/tickifHQ/tickif/pull/713), stacked on #710.
+      Initial head `8d3b168` passes GitHub typecheck/lint/test/build. The security gate
+      requires Next.js 16.3.8 (GHSA-cjq9-62q9-8jv4); apply the patch and recheck the new head.

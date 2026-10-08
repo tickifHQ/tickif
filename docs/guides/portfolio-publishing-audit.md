@@ -2,7 +2,7 @@
 
 Phase 2, 9 October 2026. The public route is `/d/[slug]`; the owner editor is
 `/designer/portfolio`. This audit accompanies the designer-profile phase stacked
-on the shared UI foundation (#710).
+on the shared UI foundation (#710), published as [PR #713](https://github.com/tickifHQ/tickif/pull/713).
 
 ## Corrections found during the audit
 
@@ -17,6 +17,9 @@ on the shared UI foundation (#710).
   references to the previous trust strip and public state-group layout.
 - Browser regression expectations follow the established-year hero and selected
   centre detail panel; office count remains editable and in the API contract.
+- The initial PR security gate identified Next.js 16.3.7 advisory
+  [GHSA-cjq9-62q9-8jv4](https://github.com/advisories/GHSA-cjq9-62q9-8jv4).
+  The workspace now pins the patched 16.3.8 release; the audit threshold stays unchanged.
 
 ## Live browser verification
 
