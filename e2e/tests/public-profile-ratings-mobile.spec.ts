@@ -19,6 +19,8 @@ test('Google rating summary and review carousel fit narrow profile screens', asy
       displayName: organization.name,
       slug: `ratings-${suffix}`,
       status: 'active',
+      bio: 'Synthetic studio for Google review layout verification.',
+      logoImageId: 'e2e/public/ratings-studio-logo.png',
       avgRating: '5.00',
       reviewCount: 1,
     });
@@ -56,7 +58,8 @@ test('Google rating summary and review carousel fit narrow profile screens', asy
 
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.goto(`/d/${profile.slug}`);
+      const response = await page.goto(`/d/${profile.slug}`);
+      expect(response?.status()).toBe(200);
       const ratings = page.getByRole('region', { name: 'Client ratings' });
       await expect(ratings.getByRole('tablist')).toHaveCount(0);
       await expect(ratings.getByText('5 Google reviews')).toBeVisible();

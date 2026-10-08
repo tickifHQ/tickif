@@ -603,7 +603,8 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(portfolioHero.getByRole('button', { name: 'Enquire', exact: true })).toHaveCount(
       1,
     );
-    await expect(portfolioHero.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    await expect(portfolioHero.getByRole('button', { name: 'Share', exact: true })).toHaveCount(0);
+    await expect(visitor.getByRole('button', { name: 'Copy link', exact: true })).toBeVisible();
     await expect(visitor.getByRole('button', { name: /Book consultation/i })).toHaveCount(0);
     await visitor.screenshot({
       path: testInfo.outputPath('portfolio-hero-desktop.png'),
