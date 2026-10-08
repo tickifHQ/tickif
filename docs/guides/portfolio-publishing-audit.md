@@ -64,6 +64,9 @@ was not sent using the deliberately synthetic business ID in the demo fixture.
 
 ## Automated verification and limits
 
+- Legacy `#tickif-reviews` links are handled both on initial load and when the
+  hash changes on an already mounted portfolio. Regression tests cover the
+  redirect, explicit review URLs and listener cleanup.
 - Editor and profile component tests: 152 passing, including the independent
   Google-summary regression, save/error handling, section settings and editor
   validation.
