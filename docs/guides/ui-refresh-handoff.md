@@ -607,8 +607,9 @@ live `.env` were not changed. The IPv4-first retry completed successfully.
       Initial head `8d3b168` passes GitHub typecheck/lint/test/build. The security gate
       identified GHSA-cjq9-62q9-8jv4; Next.js 16.3.8 is installed and the patched security gate passes.
 - [x] Fix browser-traced motion failures: unavailable observer fallback and a pointer-focus
-      reveal jump that swallowed first clicks. Six motion regressions pass.
+      reveal jump that swallowed first clicks. Eight motion/floating-enquiry regressions pass.
       Align publication/marketplace assertions with named controls and decorative hero punctuation.
 - [x] Final local workspace typecheck (17 tasks), lint (16 tasks), and E2E source typecheck pass.
+- [x] Production build passes on Next.js 16.3.8 (three tasks, 1m56s).
 - [ ] Restart the local web server to activate Next.js 16.3.8. Automatic approval review
       rejected the verified port-3020 process restart as "blocked by policy"; do not bypass it.

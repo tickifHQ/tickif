@@ -15,6 +15,24 @@ afterEach(() => {
 });
 
 describe('ProfileFloatingEnquiry', () => {
+  it('keeps the optional dock hidden when observers are unavailable', () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    const hero = document.createElement('section');
+    hero.setAttribute('aria-label', 'Portfolio hero');
+    const enquiry = document.createElement('section');
+    enquiry.id = 'enquire';
+    document.body.append(hero, enquiry);
+    render(
+      <ProfileFloatingEnquiry
+        designerProfileId="profile-1"
+        designerName="Studio Meraki"
+        logoUrl={null}
+        initials="SM"
+        loginHref="/login"
+      />,
+    );
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  });
   it('appears after the hero and yields to the full enquiry section', () => {
     const hero = document.createElement('section');
     hero.setAttribute('aria-label', 'Portfolio hero');

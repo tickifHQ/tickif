@@ -22,6 +22,8 @@ export function ProfileFloatingEnquiry({
 }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
+    // Inline enquiry controls remain available without the optional floating dock.
+    if (typeof window.IntersectionObserver !== 'function') return;
     const hero = document.querySelector('[aria-label="Portfolio hero"]');
     const enquiry = document.getElementById('enquire');
     if (!hero || !enquiry) return;

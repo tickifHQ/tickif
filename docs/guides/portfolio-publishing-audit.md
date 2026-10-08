@@ -69,7 +69,7 @@ was not sent using the deliberately synthetic business ID in the demo fixture.
   validation.
 - Workspace typecheck and lint pass. Existing API lint warnings are unchanged.
 - Asset/token/component inventory verification passes.
-- Motion regression tests: six passing, including unavailable observer support
+- Motion and floating enquiry regression tests: eight passing, including unavailable observer support
   and pointer-focus behavior. The two portfolio API suites pass all 101 tests
   with `PUBLIC_WEB_URL=http://localhost:3000`, matching their fixture contract.
 - The fresh local root run completed 15 of 17 tasks before failing: web had
@@ -79,6 +79,7 @@ was not sent using the deliberately synthetic business ID in the demo fixture.
   worker suite passes all 225 tests. This is not recorded as a clean root pass.
 - GitHub's initial typecheck/lint/test/build gate passes. The patched dependency
   security gate passes; the final browser and build checks remain tracked on #713.
+- The local production build passes on Next.js 16.3.8 (all three build tasks).
 - Playwright journey sources were updated and typechecked. The live journeys
   above ran through the desktop browser; the complete Playwright suite still
   runs in CI. Project pagination beyond the two-project demo is covered by
