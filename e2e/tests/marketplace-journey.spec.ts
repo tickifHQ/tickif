@@ -597,7 +597,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     // this entry point must deliver the same real lead as a project enquiry.
     await visitor.goto(publicProfileUrl);
     const portfolioHero = visitor.getByRole('region', { name: 'Portfolio hero' });
-    await expect(portfolioHero.getByRole('heading', { level: 1 })).toHaveText(
+    await expect(portfolioHero.getByRole('heading', { level: 1 })).toHaveAccessibleName(
       `Journey Studio ${suffix}`,
     );
     await expect(portfolioHero.getByRole('button', { name: 'Enquire', exact: true })).toHaveCount(
