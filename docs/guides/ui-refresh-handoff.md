@@ -597,8 +597,18 @@ live `.env` were not changed. The IPv4-first retry completed successfully.
 - [x] Fix independent Google summary visibility and align editor recognition artwork.
 - [x] Restore demo configuration and remove the synthetic visitor/enquiry after verification.
 - [x] Focused editor/profile suite: 152 tests passed. Workspace typecheck and lint pass; E2E source typecheck and asset verification pass.
-- [ ] Fresh root test gate: initial run stopped at a test Typesense key mismatch; corrected isolated-service credentials and restarted.
+- [x] Record fresh root gate accurately: 15/17 tasks completed; web 1,737 passed / 11 failed
+      (timeouts and short async waits), plus API canonical URL mismatches from the demo origin.
+      All five affected web files pass on retry (186 tests, one worker, unchanged timeout);
+      both portfolio API files pass (101 tests) with the fixture's public URL. Worker: 225 passed.
+      Initial GitHub typecheck/lint/test/build passes; do not claim a clean local root pass.
 - [ ] GitHub CI and review readiness for the phase PR. Keep it unmerged.
 - [x] Open draft [PR #713](https://github.com/tickifHQ/tickif/pull/713), stacked on #710.
       Initial head `8d3b168` passes GitHub typecheck/lint/test/build. The security gate
-      requires Next.js 16.3.8 (GHSA-cjq9-62q9-8jv4); apply the patch and recheck the new head.
+      identified GHSA-cjq9-62q9-8jv4; Next.js 16.3.8 is installed and the patched security gate passes.
+- [x] Fix browser-traced motion failures: unavailable observer fallback and a pointer-focus
+      reveal jump that swallowed first clicks. Six motion regressions pass.
+      Align publication/marketplace assertions with named controls and decorative hero punctuation.
+- [x] Final local workspace typecheck (17 tasks), lint (16 tasks), and E2E source typecheck pass.
+- [ ] Restart the local web server to activate Next.js 16.3.8. Automatic approval review
+      rejected the verified port-3020 process restart as "blocked by policy"; do not bypass it.

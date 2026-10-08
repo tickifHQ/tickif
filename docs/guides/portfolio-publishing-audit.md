@@ -69,8 +69,16 @@ was not sent using the deliberately synthetic business ID in the demo fixture.
   validation.
 - Workspace typecheck and lint pass. Existing API lint warnings are unchanged.
 - Asset/token/component inventory verification passes.
-- The phase already has a successful production web build and full workspace
-  baseline. A fresh full workspace test run is recorded in the phase handoff.
+- Motion regression tests: six passing, including unavailable observer support
+  and pointer-focus behavior. The two portfolio API suites pass all 101 tests
+  with `PUBLIC_WEB_URL=http://localhost:3000`, matching their fixture contract.
+- The fresh local root run completed 15 of 17 tasks before failing: web had
+  1,737 passing tests and 11 failures across five files; API canonical-URL
+  assertions inherited the local demo origin. All five web files subsequently
+  pass their 186 tests at the default timeout with one worker. The isolated
+  worker suite passes all 225 tests. This is not recorded as a clean root pass.
+- GitHub's initial typecheck/lint/test/build gate passes. The patched dependency
+  security gate passes; the final browser and build checks remain tracked on #713.
 - Playwright journey sources were updated and typechecked. The live journeys
   above ran through the desktop browser; the complete Playwright suite still
   runs in CI. Project pagination beyond the two-project demo is covered by
@@ -79,6 +87,10 @@ was not sent using the deliberately synthetic business ID in the demo fixture.
   development runtime emitted a script-render warning and a negative performance
   timestamp diagnostic. These are recorded separately from functional results;
   do not present the development console as entirely error-free.
+- After installing Next.js 16.3.8, automatic approval review rejected restarting
+  the existing local web process as "blocked by policy". That process must be
+  restarted before certifying the patched runtime on port 3020. CI starts from
+  the updated lockfile independently.
 
 Private fixture snapshots, raw logs and screenshots stay outside committed
 source under the task's local artifact paths. No production data or schema was
