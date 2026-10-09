@@ -1,12 +1,48 @@
 import '../lib/environment';
 import { readFile } from 'node:fs/promises';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { deleteObject, putObject } from '@repo/storage';
 import { listProjectImagesResponseSchema } from '@repo/contracts';
 import { createProjectVersionFixture } from '../lib/project-version-fixtures';
 import { moderationApiUrl, signInProjectAdmin } from '../lib/project-moderation-fixtures';
 import { webUrl } from '../lib/environment';
+
+async function settlePhotoGrid(grid: Locator) {
+  // Focus can start smooth scrolling after reload; a visible card can still be
+  // moving. Wait for every drop target, including cancellation transitions,
+  // to keep the same viewport geometry across consecutive animation frames.
+  await expect
+    .poll(() =>
+      grid.evaluate(async (element) => {
+        const items = Array.from(element.querySelectorAll('li'));
+        const containers: Element[] = [];
+        for (let parent: Element | null = element; parent; parent = parent.parentElement) {
+          containers.push(parent);
+        }
+        const positions = () => ({
+          cards: items.map((item) => {
+            const { x, y, width, height } = item.getBoundingClientRect();
+            return [x, y, width, height];
+          }),
+          scroll: containers.map((container) => [container.scrollLeft, container.scrollTop]),
+        });
+        const idle = () =>
+          items.every((item) =>
+            item
+              .getAnimations()
+              .every((animation) => !animation.pending && animation.playState !== 'running'),
+          );
+        const before = JSON.stringify(positions());
+        for (let frame = 0; frame < 3; frame++) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          if (!idle() || JSON.stringify(positions()) !== before) return false;
+        }
+        return true;
+      }),
+    )
+    .toBe(true);
+}
 
 async function dragPhoto(page: Page, from: number, to: number, touch: boolean) {
   const photoButtons = page.getByRole('button', { name: /^Open Image/ });
@@ -168,7 +204,9 @@ for (const phone of [false, true]) {
       ).toBeVisible();
       if (!phone) {
         const first = page.getByRole('button', { name: 'Open Image 1', exact: true });
+        await first.scrollIntoViewIfNeeded();
         await first.focus();
+        await settlePhotoGrid(grid);
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');
         // Active state precedes dnd-kit's measurement of the initial drop target.
@@ -178,20 +216,8 @@ for (const phone of [false, true]) {
         await page.keyboard.press('Escape');
         await expect(first).not.toHaveAttribute('aria-pressed', 'true');
         expect(await readOrder()).toEqual(reordered);
-        // Cancellation restores the order before the cards finish moving back.
-        // Start the next keyboard drag only once its target geometry is stable.
-        await expect
-          .poll(() =>
-            grid
-              .getByRole('listitem')
-              .evaluateAll((items) =>
-                items.every((item) =>
-                  item.getAnimations().every((animation) => animation.playState !== 'running'),
-                ),
-              ),
-          )
-          .toBe(true);
         await first.focus();
+        await settlePhotoGrid(grid);
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');
         await expect(page.getByText('Move to position 1 of 3.', { exact: true })).toBeAttached();
