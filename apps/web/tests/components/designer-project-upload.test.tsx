@@ -300,6 +300,27 @@ describe('DesignerProjectUpload', () => {
     expect(screen.queryByText('About this room')).not.toBeInTheDocument();
   });
 
+  it.each(['2026-13', '2026-', 'abc'])(
+    'rejects an invalid completion month %s before saving the draft',
+    async (month) => {
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      const field = screen.getByRole('textbox', { name: 'Project completed by' });
+      await user.clear(field);
+      await user.type(field, month);
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+      expect(
+        await screen.findByText('Enter a valid project completion month in YYYY-MM format.'),
+      ).toBeInTheDocument();
+      expect(mock.projectPatch).not.toHaveBeenCalled();
+      expect(mock.createProject).not.toHaveBeenCalled();
+      expect(mock.roomPatch).not.toHaveBeenCalled();
+    },
+  );
+
   it('preserves a saved legacy budget and leaves stored room descriptions untouched on save', async () => {
     const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
     project.budgetBandSlug = 'moderate';
