@@ -40,7 +40,9 @@ export function PublicNavigation({
     <nav
       aria-label={mobile ? 'Mobile primary' : 'Primary'}
       className={
-        mobile ? 'flex items-center gap-2 px-5 pb-3 md:hidden' : 'hidden items-center gap-1 md:flex'
+        mobile
+          ? 'flex flex-wrap items-center gap-2 px-5 pb-3 md:hidden'
+          : 'hidden items-center gap-1 md:flex'
       }
     >
       {items.map((item) => {

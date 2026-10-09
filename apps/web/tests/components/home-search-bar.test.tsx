@@ -99,6 +99,9 @@ describe('HomeSearchBar', () => {
     vi.useRealTimers();
     mock.params = new URLSearchParams('city=chennai&room=kitchen&page=3');
     render(<LandingHeaderSearch />);
+    expect(
+      screen.queryByRole('button', { name: 'Focus search (Control or Command K)' }),
+    ).not.toBeInTheDocument();
     expect(await screen.findByRole('combobox', { name: 'Header search city' })).toHaveTextContent(
       'Chennai',
     );

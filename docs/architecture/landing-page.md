@@ -23,14 +23,17 @@ designer/admin routing and other public pages retain their existing behavior.
   canonical 24-project API page. Its explicit load-more control keeps the directory
   and designer signup reachable. Filtered/search results retain automatic loading.
 - The landing grid reaches six columns at 1440px, matching the supplied
-  1512px frame, capped at the number of real results so sparse feeds fill the row.
+  1512px frame, capped at the number of real results. Landing cards have a maximum
+  width of 320px, so sparse and filtered feeds stay compact and left aligned.
   Landing photographs use a consistent 285px crop (240px on mobile), with studio
   initials and metadata below. Allocation uses equal card heights; other feeds
   retain their natural image ratios and existing breakpoints.
 - `ShowcaseCard` has a landing presentation with visible title, studio, location,
   tags and budget. Other routes retain the existing overlay presentation.
 - The hero and header city pickers use taxonomy options. The header fetches the
-  public city taxonomy and supports Control/Command K. Search and suggestions preserve
+  public city taxonomy and supports Control/Command K without a visible shortcut
+  button. The header forms a layer above the hero so suggestions remain unobscured.
+  Search and suggestions preserve
   filters, reset pagination and navigate to the existing discovery/search route.
 - Bookmarks reuse `ProjectActions` and the saved-project endpoints. Anonymous
   visitors enter the existing login dialog; repeated project cards synchronize
@@ -43,6 +46,9 @@ designer/admin routing and other public pages retain their existing behavior.
   it makes no additional request and clears previews when leaving the homepage.
   Its backdrop begins fading only when the panel enters the viewport, so the
   hero remains undimmed while the prompt is below the fold.
+  Measurement and display share one mounted form and the same scroll container,
+  so responsive eligibility changes cannot repeatedly remount the authentication
+  controls. The mobile navigation wraps at narrow widths to avoid page overflow.
 - `GET /api/billing/plans` supplies server-configured prices, tier features and the
   current promotion. The homepage validates this response and never invents prices
   on failure. Pricing cards use Hobby, Professional+ and Corporate; the design's

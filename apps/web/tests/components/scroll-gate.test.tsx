@@ -236,11 +236,13 @@ describe('ScrollGate', () => {
     });
     render(<ScrollGate />);
     expect(screen.getByTestId('scroll-signup-gate')).toBeInTheDocument();
+    const loginCard = screen.getByTestId('login-card');
 
     measuredCardHeight = 500;
     act(() => window.dispatchEvent(new Event('resize')));
     expect(screen.queryByTestId('scroll-signup-gate')).not.toBeInTheDocument();
     expect(screen.getByTestId('scroll-signup-measurement')).toBeInTheDocument();
+    expect(screen.getByTestId('login-card')).toBe(loginCard);
 
     Object.defineProperty(document.documentElement, 'scrollHeight', {
       configurable: true,
@@ -248,6 +250,7 @@ describe('ScrollGate', () => {
     });
     act(notifyResizeObservers);
     expect(screen.getByTestId('scroll-signup-gate')).toBeInTheDocument();
+    expect(screen.getByTestId('login-card')).toBe(loginCard);
   });
 
   it('keeps an active form visible when the viewport changes', () => {

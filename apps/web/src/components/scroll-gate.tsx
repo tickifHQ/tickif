@@ -145,7 +145,7 @@ export function ScrollGate() {
     const gate = gateRef.current;
     const backdrop = backdropRef.current;
     const panel = panelRef.current;
-    if (!gate || !backdrop || !panel) return;
+    if (!gate || !backdrop || !panel || !geometryEligibleRef.current) return;
 
     const progress = clamp(distanceRef.current / Math.max(revealDistanceRef.current, 1), 0, 1);
     const interactive = progress >= 1;
@@ -354,41 +354,13 @@ export function ScrollGate() {
       typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncCardHeight);
     resizeObserver?.observe(panel);
     return () => resizeObserver?.disconnect();
-  }, [
-    geometryEligible,
-    hasScrollRange,
-    measuredPathname,
-    mounted,
-    pathname,
-    suppressed,
-    syncGeometry,
-  ]);
+  }, [hasScrollRange, measuredPathname, mounted, pathname, suppressed, syncGeometry]);
 
   if (!mounted || suppressed || !hasScrollRange || measuredPathname !== pathname) return null;
 
-  if (!geometryEligible) {
-    return createPortal(
-      <div
-        data-testid="scroll-signup-measurement"
-        data-landing={pathname === '/' || undefined}
-        className="invisible pointer-events-none fixed inset-0 flex items-center justify-center p-4 sm:p-8"
-        aria-hidden="true"
-        inert
-      >
-        <div
-          ref={panelRef}
-          className={pathname === '/' ? 'w-full max-w-[862px]' : 'w-full max-w-3xl'}
-        >
-          <LoginCard onClose={dismiss} presentation={pathname === '/' ? 'landing' : 'default'} />
-        </div>
-      </div>,
-      document.body,
-    );
-  }
-
   const progress = clamp(distanceRef.current / Math.max(revealDistanceRef.current, 1), 0, 1);
   const visualProgress = reducedMotionRef.current ? (progress >= 1 ? 1 : 0) : progress;
-  const interactive = progress >= 1;
+  const interactive = geometryEligible && progress >= 1;
   const panelOffset = reducedMotionRef.current
     ? interactive
       ? 0
@@ -398,11 +370,12 @@ export function ScrollGate() {
   return createPortal(
     <div
       ref={gateRef}
-      data-testid="scroll-signup-gate"
+      data-testid={geometryEligible ? 'scroll-signup-gate' : 'scroll-signup-measurement'}
       data-landing={pathname === '/' || undefined}
       data-scroll-progress={progress.toFixed(3)}
-      className="pointer-events-none fixed inset-0 z-50"
+      className={`pointer-events-none fixed inset-0 z-50 overflow-hidden ${geometryEligible ? '' : 'invisible'}`}
       aria-hidden={!interactive}
+      inert={!geometryEligible}
     >
       <div
         ref={backdropRef}
@@ -418,10 +391,11 @@ export function ScrollGate() {
           pointerEvents: interactive ? 'auto' : 'none',
         }}
       />
-      <div className="absolute inset-0 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+      {/* Keep measurement and reveal geometry identical across responsive changes. */}
+      <div className="absolute inset-0 flex items-start justify-center overflow-y-auto p-4 [scrollbar-gutter:stable] sm:p-8">
         <div
           ref={panelRef}
-          role="dialog"
+          role={geometryEligible ? 'dialog' : undefined}
           aria-label="Sign in required"
           aria-modal={interactive}
           inert={!interactive}

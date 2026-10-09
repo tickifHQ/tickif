@@ -411,21 +411,12 @@ export function HomeSearchBar({
             <img src="/images/landing/search-light.svg" alt="" className="dark:brightness-0" />
             <span className="hidden sm:inline">Search</span>
           </Button>
-        ) : variant === 'header' ? (
-          <button
-            type="button"
-            aria-label="Focus search (Control or Command K)"
-            onClick={() => inputRef.current?.focus()}
-            className="shrink-0 rounded-md bg-card px-1.5 py-1 font-mono text-[10px] text-muted-foreground"
-          >
-            ⌘K
-          </button>
-        ) : (
+        ) : variant !== 'header' ? (
           <Button type="submit" variant="emphasis" size="compact" className="shrink-0">
             Explore
             <ArrowRight className="size-4" aria-hidden />
           </Button>
-        )}
+        ) : null}
       </div>
 
       {showDropdown ? (

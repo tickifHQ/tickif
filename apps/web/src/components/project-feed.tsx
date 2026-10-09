@@ -166,7 +166,7 @@ function FeedEntryCard({
     <TryFilterCard suggestions={entry.suggestions} hasActiveCriteria={hasActiveCriteria} />
   ) : presentation === 'landing' ? (
     <Reveal delay={entriesDelay(entry)}>
-      <div data-feed-page={entry.page} className="break-inside-avoid">
+      <div data-feed-page={entry.page} className="w-full max-w-80 break-inside-avoid">
         <ShowcaseCard project={entry.project} priority={entry.priority} presentation="landing" />
       </div>
     </Reveal>
@@ -254,7 +254,9 @@ function StableMasonry({
       data-masonry-feed
       data-masonry-mode="stable"
       className={`grid gap-x-4 ${columnCountClasses}`}
-      style={{ gridTemplateColumns: `repeat(${visibleColumnCount}, minmax(0, 1fr))` }}
+      style={{
+        gridTemplateColumns: `repeat(${visibleColumnCount}, minmax(0, ${presentation === 'landing' ? '20rem' : '1fr'}))`,
+      }}
     >
       {columns.map((column, columnIndex) => (
         <div key={columnIndex} data-feed-column={columnIndex} className="min-w-0">

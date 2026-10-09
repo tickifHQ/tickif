@@ -26,7 +26,7 @@ export function PublicHeader({
       : getListYourWorkHref({ isAuthenticated, userRole });
 
   return (
-    <header className="border-b border-border bg-background/90 backdrop-blur-md">
+    <header className="relative z-40 border-b border-border bg-background/90 backdrop-blur-md">
       <div
         className={`flex w-full items-center justify-between gap-4 px-5 ${landing ? 'h-[72px] sm:px-8 lg:px-12' : 'h-14 sm:px-6'}`}
       >
