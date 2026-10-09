@@ -33,6 +33,7 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     entityType: 'company',
     status: 'active',
     bio: 'Homes inspired by your own colours.',
+    foundedYear: 2018,
   });
   const logoKey = `originals/logos/${profile.id}/logo.png`;
   const coverKey = `originals/portfolio-covers/${profile.id}/cover.jpg`;
@@ -86,11 +87,11 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     const input = page.getByLabel('Custom accent hex');
     const preview = page.getByRole('region', { name: 'Accent colour preview' });
     const save = page.getByRole('button', { name: 'Save changes', exact: true });
-    await expect(input).toHaveValue('#FF8F73');
+    await expect(input).toHaveValue('#1E7A55');
     await input.fill('url(https://example.test)');
     await expect(input).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByRole('button', { name: 'Use colour' })).toBeDisabled();
-    await expect(preview).toHaveCSS('--primary', '#FF8F73');
+    await expect(preview).toHaveCSS('--primary', '#1E7A55');
     await expect(save).toBeDisabled();
     await input.fill('#123abc');
     await expect(preview).toHaveCSS('--primary', '#123ABC');
@@ -112,6 +113,35 @@ test('custom portfolio accent previews validates saves reloads and discards on d
     ).toMatchObject({ accentColor: '#123ABC' });
     await page.goto(`/d/${slug}`);
     await expect(page.locator('main')).toHaveCSS('--primary', '#123ABC');
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator('.profile-hero-title')).toHaveCSS('font-family', /^Inter(?:,|$)/);
+    await expect(page.locator('.profile-hero-title')).toHaveCSS('font-weight', '500');
+    expect(
+      await page.evaluate(() =>
+        [...document.fonts].some((font) => font.family === 'Inter' && font.status === 'loaded'),
+      ),
+    ).toBe(true);
+    // The sharing card can be narrower on tablets than on mobile. A year must
+    // remain on one line inside its cell at every breakpoint, without overflow.
+    for (const width of [1440, 1024, 830, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const year = page.locator('.profile-share-stats dd').filter({ hasText: /^2018$/ });
+      await expect(year).toBeVisible();
+      expect(
+        await year.evaluate((element) => {
+          const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+          return (
+            element.clientHeight <= Math.ceil(lineHeight) &&
+            element.scrollWidth <= element.clientWidth
+          );
+        }),
+        `Sharing-card year should fit at ${width}px`,
+      ).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.screenshot({
       path: testInfo.outputPath('custom-accent-public-desktop.png'),
       fullPage: true,

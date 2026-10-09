@@ -4,7 +4,31 @@ import { PublicPortfolioSocialCard } from '@/components/public-portfolio-social-
 import { makePublicPortfolio } from '../fixtures/public-portfolio';
 
 describe('PublicPortfolioSocialCard', () => {
-  it('respects hidden overall rating and verification sections in shared previews', () => {
+  it('uses the on-page share card facts, cover, ticket and canonical link', () => {
+    render(<PublicPortfolioSocialCard portfolio={makePublicPortfolio()} />);
+    expect(screen.getByText('Anika Spaces')).toBeInTheDocument();
+    expect(screen.getByText('Interior Design Studio · Chennai')).toBeInTheDocument();
+    for (const text of [
+      'Projects',
+      '28',
+      'Established',
+      '2018',
+      'Starting at',
+      '₹10L+',
+      'Rating',
+      '4.7',
+      'Verified',
+    ]) {
+      expect(screen.getByText(text)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('img', { name: 'Anika Spaces portfolio preview' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.test/portfolio-covers/anika-spaces.jpg',
+    );
+    expect(screen.getByText('localhost:3000/d/anika-spaces')).toBeInTheDocument();
+  });
+
+  it('respects hidden rating and verification controls', () => {
     const portfolio = makePublicPortfolio();
     render(
       <PublicPortfolioSocialCard
@@ -14,117 +38,51 @@ describe('PublicPortfolioSocialCard', () => {
         }}
       />,
     );
-
-    expect(screen.queryByText(/rating ·/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Verified on Tickif')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rating')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+    expect(screen.getByText('Portfolio')).toBeInTheDocument();
   });
 
-  it('falls back to Tickif reviews when Google has no reviews', () => {
+  it('matches the on-page Google rating fallback when Tickif reviews are absent', () => {
     const portfolio = makePublicPortfolio();
+    render(
+      <PublicPortfolioSocialCard
+        portfolio={{ ...portfolio, stats: { ...portfolio.stats, tickif: null } }}
+      />,
+    );
+    expect(screen.getByText('4.8')).toBeInTheDocument();
+  });
+
+  it('contains the uploaded logo and falls back cleanly when cover and optional facts are absent', () => {
+    const portfolio = makePublicPortfolio({
+      logoUrl: 'https://cdn.example.test/logo.png',
+      heroCoverUrl: null,
+      foundedYear: null,
+    });
     render(
       <PublicPortfolioSocialCard
         portfolio={{
           ...portfolio,
-          stats: { ...portfolio.stats, google: { rating: 0, reviewCount: 0 } },
+          stats: { ...portfolio.stats, tickif: null, google: null, startingBudget: null },
         }}
       />,
     );
-
-    expect(screen.getByText('4.7 rating · 42 reviews')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Tickif rating' })).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
-  });
-
-  it('shows uploaded studio identity beside the name and attributes the Google rating', () => {
-    render(
-      <PublicPortfolioSocialCard
-        portfolio={makePublicPortfolio({ logoUrl: 'https://cdn.example.test/logo.png' })}
-      />,
-    );
-    expect(screen.getByRole('img', { name: 'Anika Spaces logo' })).toHaveAttribute(
-      'src',
-      'https://cdn.example.test/logo.png',
-    );
     expect(screen.getByRole('img', { name: 'Anika Spaces logo' })).toHaveStyle({
-      borderRadius: '50%',
       objectFit: 'contain',
     });
-    expect(screen.getByRole('img', { name: 'Google' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Tickif' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /portfolio preview/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Established')).not.toBeInTheDocument();
+    expect(screen.queryByText('Starting at')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rating')).not.toBeInTheDocument();
   });
 
-  it('uses initials and Tickif attribution when no studio logo or Google rating exists', () => {
-    const portfolio = makePublicPortfolio();
+  it('keeps the studio initials and bounds long names in the fixed canvas', () => {
     render(
       <PublicPortfolioSocialCard
-        portfolio={{ ...portfolio, logoUrl: null, stats: { ...portfolio.stats, google: null } }}
+        portfolio={makePublicPortfolio({ displayName: 'N'.repeat(100) })}
       />,
     );
-    expect(screen.getByText('AS')).toBeInTheDocument();
-    expect(screen.getByText('AS')).toHaveStyle({ borderRadius: '50%' });
-    expect(screen.getByRole('img', { name: 'Tickif rating' })).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
-  });
-
-  it('renders profile-specific identity, location, work, rating, and verification data', () => {
-    render(<PublicPortfolioSocialCard portfolio={makePublicPortfolio()} />);
-
-    expect(screen.getByText('Anika Spaces')).toBeInTheDocument();
-    expect(screen.getByText('Interior Design Studio · Chennai')).toBeInTheDocument();
-    expect(screen.getByText('28 projects')).toBeInTheDocument();
-    expect(screen.getByText('4.8 rating · 57 reviews')).toBeInTheDocument();
-    expect(screen.getByText('Verified on Tickif')).toBeInTheDocument();
-  });
-
-  it('omits ratings and verification claims when the profile has neither', () => {
-    render(
-      <PublicPortfolioSocialCard
-        portfolio={makePublicPortfolio({
-          isKycVerified: false,
-          stats: {
-            tickif: null,
-            google: null,
-            projectCount: 1,
-            yearsExperience: 2,
-            cityPresenceCount: 0,
-            startingBudget: null,
-          },
-        })}
-      />,
-    );
-
-    expect(screen.getByText('1 project')).toBeInTheDocument();
-    expect(screen.queryByText(/rating/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Verified on Tickif')).not.toBeInTheDocument();
-  });
-
-  it('fits the longest accepted profile text inside the fixed social card', () => {
-    const displayName = 'N'.repeat(100);
-    const tagline = 'T'.repeat(200);
-
-    render(
-      <PublicPortfolioSocialCard
-        portfolio={makePublicPortfolio({
-          displayName,
-          tagline,
-        })}
-      />,
-    );
-
-    const fittedName = screen.getByText(`${'N'.repeat(71)}…`);
-    const fittedTagline = screen.getByText(`${'T'.repeat(139)}…`);
-    expect(fittedName).toHaveStyle({
-      fontSize: '46px',
-      overflowWrap: 'anywhere',
-      wordBreak: 'break-all',
-    });
-    expect(fittedTagline).toHaveStyle({
-      fontSize: '25px',
-      overflowWrap: 'anywhere',
-      wordBreak: 'break-all',
-    });
-    expect(screen.queryByText(displayName)).not.toBeInTheDocument();
-    expect(screen.queryByText(tagline)).not.toBeInTheDocument();
+    expect(screen.getByText('NN')).toBeInTheDocument();
+    expect(screen.getByText(`${'N'.repeat(71)}…`)).toBeInTheDocument();
   });
 });
