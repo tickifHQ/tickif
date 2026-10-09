@@ -108,6 +108,34 @@ describe('review submission and editing', () => {
 });
 
 describe('Tickif review display', () => {
+  it.each([false, true])(
+    'hides a disabled rating summary while keeping reviews available (embedded=%s)',
+    (embedded) => {
+      render(
+        <TickifReviews
+          designerProfileId={profileId}
+          initialPage={{
+            ...page,
+            averageRating: 4,
+            reviewCount: 1,
+            totalPages: 1,
+            histogram: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 },
+            items: [{ ...own.review, publishedAt: own.review.createdAt }],
+          }}
+          initialOwn={null}
+          canWrite={false}
+          embedded={embedded}
+          showOverallRating={false}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Tickif rating distribution')).not.toBeInTheDocument();
+      expect(screen.queryByText(/1 Tickif reviews/)).not.toBeInTheDocument();
+      expect(screen.getByRole('article')).toHaveTextContent(own.review.body!);
+      expect(screen.getByRole('button', { name: 'Refresh reviews' })).toBeEnabled();
+    },
+  );
+
   it('bounds embedded profile reviews to two cards and requests matching API pages', async () => {
     const published = {
       ...page,
