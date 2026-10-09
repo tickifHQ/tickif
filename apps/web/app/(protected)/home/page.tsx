@@ -1,3 +1,7 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getVisitorFeedPreferences } from '@/lib/visitor-feed.server';
+import { visitorFeedHref } from '@/lib/visitor-feed';
 import { listTaxonomyResponseSchema } from '@repo/contracts';
 import { ProjectFeed } from '@/components/project-feed';
 import { PublicFooter } from '@/components/public-footer';
@@ -67,7 +71,10 @@ async function fetchFeedSafely(request: HomeFeedRequest, page: number): Promise<
   try {
     return await fetchHomeFeedPage(request, page);
   } catch (error) {
-    getServerLogger().error({ event: 'web.feed.failed', error, component: 'PersonalHomePage' }, 'Personal feed fetch failed');
+    getServerLogger().error(
+      { event: 'web.feed.failed', error, component: 'PersonalHomePage' },
+      'Personal feed fetch failed',
+    );
     return emptyHomeFeedPage(page);
   }
 }
@@ -81,11 +88,15 @@ export default async function PersonalHomePage({
   searchParams = Promise.resolve({}),
 }: PersonalHomePageProps = {}) {
   const params = await searchParams;
+  const session = await requireActiveVisitor();
+  if (Object.keys(params).length === 0) {
+    const saved = await getVisitorFeedPreferences();
+    if (Object.keys(saved.filters).length > 0) redirect(visitorFeedHref(saved.filters));
+  }
   const page = parseFeedPage(params.page);
   const query = parseFeedQuery(params.q);
   const filters = parseFeedParams(params);
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
-  const session = await requireActiveVisitor();
 
   const [taxonomyOptions, initialPage] = await Promise.all([
     fetchTaxonomyOptions(),
@@ -130,6 +141,12 @@ export default async function PersonalHomePage({
           <p className="text-sm leading-relaxed text-muted-foreground">
             Discover studios and projects, and keep track of your enquiries.
           </p>
+          <Link
+            href="/onboarding"
+            className="inline-block text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Personalize your feed
+          </Link>
         </header>
 
         <section className="w-full" aria-label="Discover">

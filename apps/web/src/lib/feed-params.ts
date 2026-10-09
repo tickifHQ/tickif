@@ -5,8 +5,10 @@ export const MAX_HOME_FEED_PAGE = Math.floor(1000 / HOME_FEED_PAGE_SIZE);
 
 export const FEED_FILTER_KEYS = [
   'city',
+  'locality',
   'bhk',
   'propertyType',
+  'propertySubtype',
   'scope',
   'budgetBand',
   'room',
@@ -21,8 +23,10 @@ export type FeedFilterState = Record<FeedFilterKey, string[]>;
 
 export type FeedFacetKey =
   | 'citySlug'
+  | 'localitySlug'
   | 'bhkSlug'
   | 'propertyTypeSlug'
+  | 'propertySubtypeSlug'
   | 'scopeSlug'
   | 'budgetBandSlug'
   | 'roomSlugs'
@@ -32,8 +36,10 @@ export type FeedFacetKey =
 
 type FeedTaxonomyKind =
   | 'city'
+  | 'locality'
   | 'bhk'
   | 'property_type'
+  | 'property_subtype'
   | 'scope'
   | 'budget_band'
   | 'room'
@@ -47,6 +53,13 @@ export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   label: string;
 }> = [
   { key: 'city', apiKey: 'citySlug', kind: 'city', label: 'City' },
+  { key: 'locality', apiKey: 'localitySlug', kind: 'locality', label: 'Locality' },
+  {
+    key: 'propertySubtype',
+    apiKey: 'propertySubtypeSlug',
+    kind: 'property_subtype',
+    label: 'Home type',
+  },
   { key: 'bhk', apiKey: 'bhkSlug', kind: 'bhk', label: 'BHK' },
   {
     key: 'propertyType',
@@ -68,6 +81,8 @@ const MAX_VALUES_PER_FACET = 20;
 function emptyState(): FeedFilterState {
   return {
     city: [],
+    locality: [],
+    propertySubtype: [],
     bhk: [],
     propertyType: [],
     scope: [],

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ACCOUNT_STATUS, PLATFORM_ROLE } from '@repo/contracts';
+import { useHydrated } from '@/lib/use-hydrated';
 import { authClient } from '@/lib/auth-client';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { Avatar } from '@repo/ui/components/avatar';
@@ -46,8 +47,9 @@ export function AccountMenu({
 }) {
   const { data: session, isPending } = authClient.useSession();
   const [open, setOpen] = useState(false);
+  const hydrated = useHydrated();
 
-  if (isPending) {
+  if (!hydrated || isPending) {
     return (
       <Skeleton
         role="status"

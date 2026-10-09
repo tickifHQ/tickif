@@ -24,6 +24,12 @@ const options = {
 };
 
 describe('feed-page-helpers', () => {
+  it('keeps cleared personal filters and locality/subtype in pagination URLs', () => {
+    expect(
+      feedPageLink({ feed: 'custom', locality: 'adyar', propertySubtype: 'villa' }, 2, '/home'),
+    ).toBe('/home?feed=custom&locality=adyar&propertySubtype=villa&page=2');
+    expect(feedPageLink({ feed: 'custom' }, 2, '/home')).toBe('/home?feed=custom&page=2');
+  });
   it('keeps pagination links on the given base', () => {
     expect(feedPageLink({ q: 'villa' }, 2, '/home')).toBe('/home?q=villa&page=2');
     expect(feedPageLink({}, 1, '/home')).toBe('/home');

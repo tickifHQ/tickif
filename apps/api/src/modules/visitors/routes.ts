@@ -5,6 +5,8 @@ import {
   platformRoleSchema,
   upsertVisitorProfileSchema,
   visitorProfileResponseSchema,
+  visitorFeedPreferencesSchema,
+  visitorFeedPreferencesResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requirePersonalContext } from '../../lib/auth-middleware.js';
@@ -73,6 +75,44 @@ const upsertMineRoute = createRoute({
   },
 });
 
+const getFeedPreferencesRoute = createRoute({
+  method: 'get',
+  path: '/me/feed-preferences',
+  tags: ['Visitors'],
+  summary: 'Get saved home preferences and discovery filters',
+  security: [{ cookieAuth: [] }],
+  middleware: [requirePersonalContext] as const,
+  responses: {
+    200: {
+      description: 'Preferences are null until the visitor answers or skips the questions',
+      content: { 'application/json': { schema: visitorFeedPreferencesResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Visitor profile access is not permitted'),
+  },
+});
+
+const saveFeedPreferencesRoute = createRoute({
+  method: 'put',
+  path: '/me/feed-preferences',
+  tags: ['Visitors'],
+  summary: 'Save home preferences and complete optional visitor onboarding',
+  security: [{ cookieAuth: [] }],
+  middleware: [requirePersonalContext] as const,
+  request: {
+    body: { content: { 'application/json': { schema: visitorFeedPreferencesSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Saved preferences and filters for the public discovery feed',
+      content: { 'application/json': { schema: visitorFeedPreferencesResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Visitor profile access is not permitted'),
+    422: errorJson('Invalid home or location selection'),
+  },
+});
+
 export const visitorsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -82,6 +122,19 @@ export const visitorsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   })
   .openapi(upsertMineRoute, async (c) => {
     const result = await visitorsService.upsertMine(c.req.valid('json'), caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(getFeedPreferencesRoute, async (c) => {
+    const result = await visitorsService.getFeedPreferences(caller(c.get('user')));
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(result, 200);
+  })
+  .openapi(saveFeedPreferencesRoute, async (c) => {
+    const result = await visitorsService.saveFeedPreferences(
+      c.req.valid('json'),
+      caller(c.get('user')),
+    );
+    c.header('Cache-Control', 'private, no-store');
     return c.json(result, 200);
   });
 

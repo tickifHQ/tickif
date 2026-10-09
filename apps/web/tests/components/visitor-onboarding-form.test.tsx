@@ -1,196 +1,128 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { visitorFeedFilters, type VisitorFeedPreferences } from '@repo/contracts';
 import { VisitorOnboardingForm } from '../../src/components/visitor-onboarding-form';
 
 const mock = vi.hoisted(() => ({
-  updateUser: vi.fn(),
-  getSession: vi.fn(),
-  upsertVisitor: vi.fn(),
-  router: {
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  },
+  save: vi.fn(),
+  taxonomy: vi.fn(),
+  search: vi.fn(),
+  session: vi.fn(),
+  assign: vi.fn(),
 }));
-
-vi.mock('@/lib/auth-client', () => ({
-  authClient: {
-    updateUser: mock.updateUser,
-    getSession: mock.getSession,
-  },
-}));
-
+vi.mock('@/lib/auth-client', () => ({ authClient: { getSession: mock.session } }));
 vi.mock('@/lib/api', () => ({
-  api: { api: { visitors: { me: { $put: mock.upsertVisitor } } } },
+  api: {
+    api: {
+      visitors: { me: { 'feed-preferences': { $put: mock.save } } },
+      taxonomy: { terms: { $get: mock.taxonomy } },
+      search: { $get: mock.search },
+    },
+  },
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => mock.router,
-}));
+const chennai = {
+  id: '00000000-0000-4000-8000-000000000001',
+  slug: 'chennai',
+  label: 'Chennai',
+  parentId: null,
+};
+const adyar = {
+  id: '00000000-0000-4000-8000-000000000002',
+  slug: 'adyar',
+  label: 'Adyar',
+  parentId: chennai.id,
+};
+const empty = { homeType: null, citySlug: null, localitySlug: null };
 
-describe('VisitorOnboardingForm', () => {
-  it('does not offer a skip control that leaves visitor onboarding incomplete', () => {
-    render(
-      <VisitorOnboardingForm
-        displayName="Visitor"
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
-      />,
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubGlobal('location', { assign: mock.assign });
+  mock.taxonomy.mockImplementation(async ({ query }: { query: { kind: string } }) =>
+    Response.json({ terms: query.kind === 'city' ? [chennai] : [adyar] }),
+  );
+  mock.search.mockResolvedValue(new Response(null, { status: 503 }));
+  mock.session.mockResolvedValue({ data: { user: { status: 'active' } } });
+  mock.save.mockImplementation(async ({ json }: { json: VisitorFeedPreferences }) =>
+    Response.json({ preferences: json, filters: visitorFeedFilters(json) }),
+  );
+});
+afterEach(() => vi.unstubAllGlobals());
+
+describe('visitor welcome form', () => {
+  it('saves 4 BHK+ and a locality before navigating to the matching feed', async () => {
+    const user = userEvent.setup();
+    render(<VisitorOnboardingForm />);
+    await user.click(screen.getByRole('button', { name: '4 BHK+' }));
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled());
+    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Adyar, Chennai' }));
+    await user.click(screen.getByRole('button', { name: 'Show my feed' }));
+    await waitFor(() =>
+      expect(mock.assign).toHaveBeenCalledWith(
+        '/home?feed=custom&bhk=4-bhk%2C4-plus-bhk&city=chennai&locality=adyar',
+      ),
     );
-    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
+    expect(mock.save).toHaveBeenCalledWith({
+      json: { homeType: '4-plus-bhk', citySlug: 'chennai', localitySlug: 'adyar' },
+    });
   });
 
-  it('opens support through the WhatsApp Business number', () => {
-    render(
-      <VisitorOnboardingForm
-        displayName="Visitor"
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
-      />,
-    );
-
-    const supportLink = screen.getByRole('link', { name: /contact support/i });
-    expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
-    expect(supportLink).toHaveAttribute('target', '_blank');
-    expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
+  it('persists Skip as an explicit empty choice and preserves the original action', async () => {
+    const user = userEvent.setup();
+    render(<VisitorOnboardingForm callbackPath="/projects/project-1?save=1" />);
+    await user.click(screen.getByRole('button', { name: 'Villa' }));
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
+    await waitFor(() => expect(mock.assign).toHaveBeenCalledWith('/projects/project-1?save=1'));
+    expect(mock.save).toHaveBeenCalledWith({ json: empty });
   });
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mock.updateUser.mockResolvedValue({ data: { status: true }, error: null });
-    mock.getSession.mockResolvedValue({ data: null, error: null });
-    mock.upsertVisitor.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          address: '12 Studio Lane, Chennai',
-          whatsappNumber: '+919123456789',
-          onboardingCompletedAt: '2026-09-08T07:00:00.000Z',
-          createdAt: '2026-09-08T07:00:00.000Z',
-          updatedAt: '2026-09-08T07:00:00.000Z',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
+
+  it('keeps choices after a failed save and retries without an early redirect', async () => {
+    mock.save.mockResolvedValueOnce(
+      Response.json({ error: { message: 'Try again' } }, { status: 503 }),
+    );
+    const user = userEvent.setup();
+    render(<VisitorOnboardingForm />);
+    await user.click(screen.getByRole('button', { name: 'Villa' }));
+    await user.click(screen.getByRole('button', { name: 'Show my feed' }));
+    await screen.findByRole('alert');
+    expect(mock.assign).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Villa' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Show my feed' }));
+    await waitFor(() =>
+      expect(mock.assign).toHaveBeenCalledWith(
+        '/home?feed=custom&propertyType=residential&propertySubtype=villa',
       ),
     );
   });
 
-  it('copies the signed-in phone number into WhatsApp when selected', async () => {
+  it('can skip if location loading fails, without inventing matching project counts', async () => {
+    mock.taxonomy.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    render(<VisitorOnboardingForm />);
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.queryByText(/418|12,400|verified|nearby/i)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Skip setup' }));
+    await waitFor(() => expect(mock.save).toHaveBeenCalledWith({ json: empty }));
+  });
+
+  it('restores saved choices for editing and clears locality when selecting a city', async () => {
     const user = userEvent.setup();
     render(
       <VisitorOnboardingForm
-        displayName=""
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
+        initialPreferences={{ homeType: '3-bhk', citySlug: 'chennai', localitySlug: 'adyar' }}
       />,
     );
-
-    const avatar = screen.getByRole('img', { name: 'Generated visitor initials' });
-    expect(avatar.parentElement).toHaveClass('aspect-square', 'self-stretch');
-    expect(screen.queryByText('x')).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Your name')).toBeRequired();
-    expect(screen.getByPlaceholderText('Your name')).toHaveAttribute('minlength', '2');
-    expect(screen.getByPlaceholderText('Your name')).toHaveAttribute('maxlength', '100');
-    expect(screen.getByLabelText(/^address$/i)).toHaveAttribute('maxlength', '300');
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('+919123456789');
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('readonly');
-    expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
-
-    await user.click(screen.getByRole('checkbox', { name: /use phone number for whatsapp/i }));
-
-    expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('+919123456789');
-  });
-
-  it('keeps sign-in identity read-only and saves a Google visitor contact number as WhatsApp', async () => {
-    const user = userEvent.setup();
-    render(
-      <VisitorOnboardingForm
-        displayName="Sarthak Wade"
-        signedInAs="sarthak@example.com"
-        initialPhoneNumber=""
-      />,
-    );
-
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('readonly');
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('');
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('placeholder', 'Not added');
-    expect(screen.getByRole('checkbox', { name: /use phone number for whatsapp/i })).toBeDisabled();
-
-    await user.type(screen.getByLabelText(/whatsapp number/i), '+919123456789');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    expect(mock.upsertVisitor).toHaveBeenCalledWith({
-      json: { address: null, whatsappNumber: '+919123456789' },
-    });
-    expect(mock.router.replace).toHaveBeenCalledWith('/home');
-  });
-
-  it('persists onboarding through the visitor API before entering personal home', async () => {
-    const user = userEvent.setup();
-    render(
-      <VisitorOnboardingForm
-        displayName=""
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/display name/i), 'Sarthak Wade');
-    await user.type(screen.getByLabelText(/^address$/i), '12 Studio Lane, Chennai');
-    await user.click(screen.getByRole('checkbox', { name: /use phone number for whatsapp/i }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    expect(mock.updateUser).toHaveBeenCalledWith({ name: 'Sarthak Wade' });
-    expect(mock.upsertVisitor).toHaveBeenCalledWith({
-      json: {
-        address: '12 Studio Lane, Chennai',
-        whatsappNumber: '+919123456789',
-      },
-    });
-    expect(mock.getSession).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
-    expect(mock.router.replace).toHaveBeenCalledWith('/home');
-    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the visitor on onboarding when the name cannot be persisted', async () => {
-    mock.updateUser.mockResolvedValue({
-      data: null,
-      error: { message: 'Update failed' },
-    });
-    const user = userEvent.setup();
-    render(
-      <VisitorOnboardingForm
-        displayName=""
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/display name/i), 'Sarthak Wade');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Update failed');
-    expect(mock.upsertVisitor).not.toHaveBeenCalled();
-    expect(mock.router.replace).not.toHaveBeenCalled();
-  });
-
-  it('keeps the visitor on onboarding when profile persistence fails', async () => {
-    mock.upsertVisitor.mockResolvedValue(
-      new Response(JSON.stringify({ error: { message: 'Could not save visitor profile' } }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('Adyar, Chennai'));
+    expect(screen.getByRole('button', { name: '3 BHK' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Chennai' }));
+    await user.click(screen.getByRole('button', { name: 'Show my feed' }));
+    await waitFor(() =>
+      expect(mock.save).toHaveBeenCalledWith({
+        json: { homeType: '3-bhk', citySlug: 'chennai', localitySlug: null },
       }),
     );
-    const user = userEvent.setup();
-    render(
-      <VisitorOnboardingForm
-        displayName=""
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/display name/i), 'Sarthak Wade');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save visitor profile');
-    expect(mock.router.replace).not.toHaveBeenCalled();
   });
 });

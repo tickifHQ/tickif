@@ -15,6 +15,9 @@ These documents explain how to work on Tickif. Before implementation, follow
 | [Shared UI review](./shared-ui-review.md)               | Component gallery, states, behavior and approval checklist        |
 | [UI refresh handoff](./ui-refresh-handoff.md)           | Phased rollout, current progress and delivery constraints         |
 
+See [visitor welcome form integration](./visitor-feed-preferences.md) for saving
+home/location preferences and applying them to the public discovery feed.
+
 The [critical E2E journeys](../../e2e/critical-journeys.md) and
 [verification lifecycle check](../../e2e/verification-lifecycle.md) remain beside
 their harness. Use [runbooks](../runbooks/README.md) for deployment and recovery.

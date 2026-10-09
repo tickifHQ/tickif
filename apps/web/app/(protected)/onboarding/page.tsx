@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import {
   ACCOUNT_STATUS,
@@ -7,13 +6,17 @@ import {
   platformRoleSchema,
 } from '@repo/contracts';
 import { requireAuth } from '@/lib/auth-guard';
+import { safeCallbackPath } from '@/lib/auth-paths';
+import { getVisitorFeedPreferences } from '@/lib/visitor-feed.server';
 import { VisitorOnboardingForm } from '@/components/visitor-onboarding-form';
 
 export const metadata = {
   title: 'Onboarding · Tickif',
 };
 
-export default async function VisitorOnboardingPage() {
+export default async function VisitorOnboardingPage({
+  searchParams = Promise.resolve({}),
+}: { searchParams?: Promise<{ callbackURL?: string | string[] }> } = {}) {
   const session = await requireAuth();
 
   const role = platformRoleSchema.safeParse(session.user.role);
@@ -24,53 +27,17 @@ export default async function VisitorOnboardingPage() {
   }
   const status = accountStatusSchema.safeParse(session.user.status);
   if (!status.success) redirect('/unauthorized');
-  if (status.data === ACCOUNT_STATUS.ACTIVE) redirect('/home');
-  if (status.data !== ACCOUNT_STATUS.PENDING) redirect('/unauthorized');
+  if (status.data !== ACCOUNT_STATUS.ACTIVE && status.data !== ACCOUNT_STATUS.PENDING)
+    redirect('/unauthorized');
 
-  const phoneNumber = session.user.phoneNumber?.trim() ?? '';
-  const sessionName = session.user.name?.trim() ?? '';
-  const displayName = sessionName === phoneNumber ? '' : sessionName;
-  const signedInAs = phoneNumber || session.user.email?.trim() || displayName;
-
+  if (session.session.activeOrganizationId) redirect('/unauthorized');
+  const [params, saved] = await Promise.all([searchParams, getVisitorFeedPreferences()]);
   return (
-    <main className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(420px,600px)]">
-      <section className="flex min-h-screen items-center justify-center px-6 py-12">
-        <VisitorOnboardingForm
-          displayName={displayName}
-          signedInAs={signedInAs}
-          initialPhoneNumber={phoneNumber}
-        />
-      </section>
-
-      <aside className="relative hidden min-h-screen overflow-hidden border-l border-border bg-card lg:block">
-        <div className="absolute inset-y-0 left-6 w-px border-l border-dashed border-border" />
-        <div className="absolute inset-y-0 left-48 w-px border-l border-dashed border-border" />
-        <div className="absolute inset-x-0 top-[35%] border-t border-border" />
-        <div className="absolute inset-x-0 top-[57%] border-t border-border" />
-        <figure className="absolute left-12 top-[43%] w-[22rem] -translate-y-1/2">
-          <blockquote className="font-display text-2xl leading-tight text-foreground">
-            &quot;Tickif is why I still have hair.
-            <br />
-            No more worrying about <span className="text-primary">getting clients.</span>&quot;
-          </blockquote>
-          <figcaption className="mt-5 flex items-center gap-3">
-            <span className="inline-flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-              AM
-            </span>
-            <span>
-              <span className="block text-sm font-medium text-foreground">Antika M.</span>
-              <span className="block text-xs text-muted-foreground">Antika Interiors</span>
-            </span>
-          </figcaption>
-        </figure>
-        <Image
-          src="/illustrations/onboarding-living-room.svg"
-          alt=""
-          width={334}
-          height={189}
-          className="absolute bottom-8 right-8 h-auto w-[334px]"
-        />
-      </aside>
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <VisitorOnboardingForm
+        initialPreferences={saved.preferences}
+        callbackPath={safeCallbackPath(params.callbackURL)}
+      />
     </main>
   );
 }

@@ -35,6 +35,7 @@ import {
   type OnboardingStep,
   type OnboardingDraftFields,
   type LogoCropArea,
+  type VisitorFeedPreferences,
 } from '@repo/contracts';
 import { user, organization, member, team } from './auth.js';
 
@@ -280,6 +281,7 @@ export const visitorProfile = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     address: text('address'),
     whatsappNumber: text('whatsapp_number'),
+    feedPreferences: jsonb('feed_preferences').$type<VisitorFeedPreferences>(),
     onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

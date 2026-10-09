@@ -12,9 +12,13 @@ vi.mock('../../../src/modules/visitors/repository.js', () => ({
     upsertCompleted: vi.fn(),
   },
 }));
+vi.mock('../../../src/modules/taxonomy/service.js', () => ({
+  taxonomyService: { list: vi.fn() },
+}));
 
 const { visitorsService } = await import('../../../src/modules/visitors/service.js');
 const { visitorsRepository } = await import('../../../src/modules/visitors/repository.js');
+const { taxonomyService } = await import('../../../src/modules/taxonomy/service.js');
 
 const pendingVisitor = {
   userId: 'visitor_1',
@@ -27,6 +31,7 @@ const profile: VisitorProfileRecord = {
   userId: pendingVisitor.userId,
   address: 'Bandra West, Mumbai',
   whatsappNumber: '+919800000001',
+  feedPreferences: null,
   onboardingCompletedAt: new Date('2026-08-09T10:00:00.000Z'),
   createdAt: new Date('2026-08-09T10:00:00.000Z'),
   updatedAt: new Date('2026-08-09T10:00:00.000Z'),
@@ -124,5 +129,95 @@ describe('visitor profile authorization', () => {
     await expect(
       visitorsService.upsertMine({ address: null, whatsappNumber: null }, caller),
     ).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('visitor feed preferences', () => {
+  it('returns empty filters before preferences have been saved', async () => {
+    vi.mocked(visitorsRepository.findByUserId).mockResolvedValue(null);
+    await expect(visitorsService.getFeedPreferences(pendingVisitor)).resolves.toEqual({
+      preferences: null,
+      filters: {},
+    });
+  });
+
+  it.each([
+    ['1-bhk', { bhkSlug: '1-bhk' }],
+    ['2-bhk', { bhkSlug: '2-bhk' }],
+    ['3-bhk', { bhkSlug: '3-bhk' }],
+    ['4-plus-bhk', { bhkSlug: ['4-bhk', '4-plus-bhk'] }],
+    ['villa', { propertyTypeSlug: 'residential', propertySubtypeSlug: 'villa' }],
+    [null, {}],
+  ] as const)('maps %s to canonical feed filters', async (homeType, filters) => {
+    const preferences = { homeType, citySlug: null, localitySlug: null };
+    vi.mocked(visitorsRepository.upsertCompleted).mockResolvedValue({
+      ...profile,
+      feedPreferences: preferences,
+    });
+    await expect(visitorsService.saveFeedPreferences(preferences, pendingVisitor)).resolves.toEqual(
+      {
+        preferences,
+        filters,
+      },
+    );
+    expect(visitorsRepository.upsertCompleted).toHaveBeenCalledWith(pendingVisitor.userId, {
+      feedPreferences: preferences,
+    });
+    expect(taxonomyService.list).not.toHaveBeenCalled();
+  });
+
+  it('validates the active city and its localities, then returns their filters', async () => {
+    const preferences = { homeType: '3-bhk' as const, citySlug: 'chennai', localitySlug: 'adyar' };
+    vi.mocked(taxonomyService.list)
+      .mockResolvedValueOnce({
+        terms: [{ id: 'city-id', slug: 'chennai', label: 'Chennai', parentId: null }],
+      })
+      .mockResolvedValueOnce({
+        terms: [{ id: 'locality-id', slug: 'adyar', label: 'Adyar', parentId: 'city-id' }],
+      });
+    vi.mocked(visitorsRepository.upsertCompleted).mockResolvedValue({
+      ...profile,
+      feedPreferences: preferences,
+    });
+    await expect(visitorsService.saveFeedPreferences(preferences, pendingVisitor)).resolves.toEqual(
+      {
+        preferences,
+        filters: { bhkSlug: '3-bhk', citySlug: 'chennai', localitySlug: 'adyar' },
+      },
+    );
+    expect(taxonomyService.list).toHaveBeenCalledWith('locality', 'city-id');
+  });
+
+  it('rejects an unknown city before writing', async () => {
+    vi.mocked(taxonomyService.list).mockResolvedValue({ terms: [] });
+    await expect(
+      visitorsService.saveFeedPreferences(
+        {
+          homeType: null,
+          citySlug: 'missing',
+          localitySlug: null,
+        },
+        pendingVisitor,
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(visitorsRepository.upsertCompleted).not.toHaveBeenCalled();
+  });
+
+  it('rejects ineligible callers before reading location data or preferences', async () => {
+    const caller = { ...pendingVisitor, isBanned: true };
+    await expect(visitorsService.getFeedPreferences(caller)).rejects.toMatchObject({ status: 403 });
+    await expect(
+      visitorsService.saveFeedPreferences(
+        {
+          homeType: null,
+          citySlug: 'chennai',
+          localitySlug: null,
+        },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(taxonomyService.list).not.toHaveBeenCalled();
+    expect(visitorsRepository.findByUserId).not.toHaveBeenCalled();
+    expect(visitorsRepository.upsertCompleted).not.toHaveBeenCalled();
   });
 });

@@ -35,6 +35,7 @@ export function canonicalFeedParams(
   page: number,
 ): FeedPageSearchParams {
   const result: FeedPageSearchParams = {};
+  if (params.feed === 'custom') result.feed = 'custom';
   const query = parseFeedQuery(params.q);
   if (query) result.q = query;
 

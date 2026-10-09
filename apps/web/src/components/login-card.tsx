@@ -22,6 +22,7 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Separator } from '@repo/ui/components/separator';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
+import { VisitorLoginContinuation } from '@/components/visitor-login-continuation';
 import { OtpInput } from '@/components/otp-input';
 import { OtpVerificationPanel } from '@/components/otp-verification-panel';
 import { GoogleBrandIcon } from '@/components/brand-icons';
@@ -31,7 +32,7 @@ import {
   toE164PhoneNumber,
   type Country,
 } from '@/components/phone-number-input';
-import { DESIGNER_AUTH_CONTINUE_PATH, VISITOR_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
+import { DESIGNER_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
 import { useLandingProjectPreviews } from '@/components/landing-project-preview';
 
 type LoginMode = 'browsing' | 'designer';
@@ -146,7 +147,7 @@ export function LoginCard({
   emailCooldownRef.current = emailCooldown;
 
   useEffect(() => {
-    if (!success) return;
+    if (!success || loginMode === 'browsing') return;
     if (onSuccess) {
       onSuccess();
       return;
@@ -158,9 +159,7 @@ export function LoginCard({
     }
     // Otherwise continue through the server-rendered login page so it resolves
     // the fresh Better Auth session and owns the platform-role redirect.
-    const continuePath =
-      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH;
-    window.location.href = continuePath;
+    window.location.href = DESIGNER_AUTH_CONTINUE_PATH;
   }, [success, loginMode, callbackPath, onSuccess]);
 
   // Phone OTP cooldown
@@ -363,6 +362,10 @@ export function LoginCard({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (success && loginMode === 'browsing') {
+    return <VisitorLoginContinuation callbackPath={callbackPath} onSuccess={onSuccess} />;
   }
 
   if (success) {

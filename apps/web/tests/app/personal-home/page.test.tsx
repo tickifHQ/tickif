@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 
 const mock = vi.hoisted(() => ({
   requireActiveVisitor: vi.fn(),
+  preferences: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`NEXT_REDIRECT:${path}`);
   }),
@@ -31,6 +32,8 @@ vi.mock('@/lib/api', () => ({
     },
   },
 }));
+
+vi.mock('@/lib/visitor-feed.server', () => ({ getVisitorFeedPreferences: mock.preferences }));
 
 vi.mock('@/lib/auth-guard', () => ({ requireActiveVisitor: mock.requireActiveVisitor }));
 
@@ -82,6 +85,7 @@ import PersonalHomePage from '../../../app/(protected)/home/page';
 describe('PersonalHomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.preferences.mockResolvedValue({ preferences: null, filters: {} });
     mock.requireActiveVisitor.mockResolvedValue({
       user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'visitor', status: 'active' },
       session: { activeOrganizationId: null, activeTeamId: null },
@@ -105,5 +109,16 @@ describe('PersonalHomePage', () => {
   it('honors the visitor guard before rendering the personal workspace', async () => {
     mock.requireActiveVisitor.mockRejectedValue(new Error('NEXT_REDIRECT:/designer/dashboard'));
     await expect(PersonalHomePage()).rejects.toThrow('NEXT_REDIRECT:/designer/dashboard');
+  });
+  it('uses saved filters only when opening the default personal feed', async () => {
+    mock.preferences.mockResolvedValue({
+      filters: { bhkSlug: ['4-bhk', '4-plus-bhk'], citySlug: 'chennai', localitySlug: 'adyar' },
+    });
+    await expect(PersonalHomePage()).rejects.toThrow(
+      'NEXT_REDIRECT:/home?feed=custom&bhk=4-bhk%2C4-plus-bhk&city=chennai&locality=adyar',
+    );
+    mock.preferences.mockClear();
+    render(await PersonalHomePage({ searchParams: Promise.resolve({ feed: 'custom' }) }));
+    expect(mock.preferences).not.toHaveBeenCalled();
   });
 });
