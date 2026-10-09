@@ -104,7 +104,7 @@ describe('media pipeline (integration)', () => {
     for (const d of row.derivatives) {
       const key = d.key;
       expect(key).toBe(
-        `derivatives/${projectId}/${imageId}/${d.variant}-${config.WATERMARK_REVISION}-sig-v1.${d.format}`,
+        `derivatives/${projectId}/${imageId}/${d.variant}-${config.WATERMARK_REVISION}-sig-v2.${d.format}`,
       );
       expect(r2.has(key)).toBe(true);
       const meta = await sharp(r2.get(key)!).metadata();
@@ -136,7 +136,7 @@ describe('media pipeline (integration)', () => {
     const ready = await reload(imageId);
     const legacyDerivatives = ready.derivatives.map((derivative) => ({
       ...derivative,
-      key: derivative.key.replace(`-${config.WATERMARK_REVISION}-sig-v1.`, '.'),
+      key: derivative.key.replace(`-${config.WATERMARK_REVISION}-sig-v2.`, '.'),
     }));
     for (const derivative of legacyDerivatives) r2.set(derivative.key, Buffer.from('legacy'));
     await db
@@ -151,7 +151,7 @@ describe('media pipeline (integration)', () => {
     expect(refreshed.status).toBe('ready');
     expect(
       refreshed.derivatives.every((derivative) =>
-        derivative.key.includes(`-${config.WATERMARK_REVISION}-sig-v1.`),
+        derivative.key.includes(`-${config.WATERMARK_REVISION}-sig-v2.`),
       ),
     ).toBe(true);
     expect(legacyDerivatives.every((derivative) => !r2.has(derivative.key))).toBe(true);

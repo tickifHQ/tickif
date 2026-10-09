@@ -124,6 +124,8 @@ describe('generateDerivatives', () => {
   it.each([
     { photo: 'bright-kitchen-living-room.jpg', width: 640, format: 'avif' as const },
     { photo: 'neutral-living-room.jpg', width: 1024, format: 'webp' as const },
+    { photo: 'neutral-living-room.jpg', width: 1600, format: 'avif' as const },
+    { photo: 'warm-pendant-living-room.jpg', width: 1600, format: 'avif' as const },
   ])(
     'retains the token with restrained perturbation: $photo $format',
     async ({ photo, width, format }) => {

@@ -61,7 +61,12 @@ check for a match. Without an ID, the command prints the recovered token.
 This is a best-effort identifier, not proof of ownership: cropping, resizing,
 screenshots, and very small or flat images can remove or obscure it.
 The pixel changes can introduce low-level visual texture in smooth image areas.
-The `sig-v1` key suffix bypasses immutable caches for newly processed images.
+The `sig-v2` key suffix bypasses immutable caches for newly processed images.
+The encoder repeats each bit in up to twelve distributed blocks, retaining the
+same coefficient strength; the reader also accepts the older six-repeat `sig-v1`
+layout. Extra redundancy improves recovery across codecs without increasing the
+per-channel perturbation, but touches more blocks and does not remove the limits
+above. Recovery must be checked from encoded bytes, not inferred from a key suffix.
 Previously ready images need reprocessing before they gain the token.
 
 For retries, derivative regeneration and rollout checks, use the

@@ -32,11 +32,21 @@ service. Cropping, resizing, screenshots, very small images and flat areas can
 destroy or obscure it. Pixel changes may introduce low-level texture. These
 limitations are documented in the [media architecture](../architecture/media-pipeline.md).
 
-The implementation uses the `sig-v1` derivative key suffix to bypass immutable
+The implementation uses revisioned derivative key suffixes to bypass immutable
 caches. Existing images need the [documented reprocessing operation](../runbooks/media-pipeline.md)
 before they contain the token; deploying the code alone does not finish the
 rollout. This record accepts the mechanism, not a claim that backfill is complete.
 
 ## Amendments
 
-None.
+### Implementation update — 2026-10-10
+
+A staging photographic canary recovered its token from WebP but failed AVIF
+identification on the deployed Linux codec. The `sig-v2` implementation doubles
+the maximum repetitions per bit from six to twelve while retaining the same
+coefficient strength and token/checksum format. The reader retains the v1 layout
+for previously downloaded images. More blocks receive small changes, so this
+improves codec recovery without claiming invisible or guaranteed identification.
+Deployment requires another derivative backfill; `sig-v1` keys alone never proved
+that every encoded token was recoverable. The accepted mechanism and private
+original boundary remain the same.

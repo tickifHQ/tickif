@@ -158,7 +158,7 @@ describe('processMedia', () => {
         (['webp', 'avif'] as const).map((format) => ({
           variant,
           format,
-          key: `derivatives/proj-1/img-1/${variant}-wm-v4-sig-v1.${format}`,
+          key: `derivatives/proj-1/img-1/${variant}-wm-v4-sig-v2.${format}`,
           width: 320,
           height: 240,
         })),
