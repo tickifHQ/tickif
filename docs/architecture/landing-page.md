@@ -1,7 +1,8 @@
 # Public landing page
 
 The homepage implements the [logged-out Figma frame](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=16095-51371)
-on top of PR #710's shared UI. It is scoped to `/`; signed-in visitor routing,
+after PR #713's designer-profile refresh in the stack rooted at PR #710's shared UI.
+It is scoped to `/`; signed-in visitor routing,
 designer/admin routing and other public pages retain their existing behavior.
 
 ## Data and interactions
