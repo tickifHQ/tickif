@@ -80,7 +80,7 @@ export function LandingDesignerCallout({ catalog }: { catalog: BillingCatalogRes
               <span>work, in front of</span>
             </span>
             <span className="mt-2.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-              <span className="flex items-center gap-3.5">
+              <span className="flex max-w-full flex-wrap items-center justify-center gap-3.5 sm:flex-nowrap">
                 <span aria-hidden="true" className="flex -space-x-3 sm:-space-x-4">
                   {[1, 2, 3].map((portrait) => (
                     <span
