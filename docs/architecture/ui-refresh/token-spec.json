@@ -1,8 +1,8 @@
 {
   "fileKey": "WJhOguDptAwt2735BS2WMG",
   "frame": "15885:2549",
-  "capturedOn": "2026-10-07",
-  "status": "Shared runtime palette and component variants reviewed and approved for phase PR publication on 2026-10-07. Footer/mobile context and component binding audit remain pending for the profile phase.",
+  "capturedOn": "2026-10-08",
+  "status": "Shared phase approved and published as #710. Real /d/[slug] profile composition implemented locally for user review. Eleven desktop/mobile contexts retrieved on 8 October. No phase 2 PR opened. Known fidelity gaps: centre map needs supported live data; heading fallback approved by user.",
   "tokens": [
     {
       "name": "--background",
@@ -294,6 +294,143 @@
       "basis": "inferred",
       "sourceNodeId": null,
       "newToken": true
+    },
+    {
+      "name": "--profile-card-background",
+      "value": "#f7f7f4",
+      "basis": "figma",
+      "sourceNodeId": "15885:2739"
+    },
+    {
+      "name": "--profile-card-radius",
+      "value": "1.5rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:2739"
+    },
+    {
+      "name": "--profile-photo-radius",
+      "value": "0.875rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:2872"
+    },
+    {
+      "name": "--profile-photo-arch-radius",
+      "value": "6.7075rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:2886"
+    },
+    {
+      "name": "--profile-photo-mobile-arch-radius",
+      "value": "5.90625rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:4421"
+    },
+    {
+      "name": "--profile-photo-cutout-radius",
+      "value": "8.278125rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:2885"
+    },
+    {
+      "name": "--profile-seal-radius",
+      "value": "2.03125rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:2830"
+    },
+    {
+      "name": "--profile-card-glow",
+      "value": "radial-gradient(circle at 35.1% 82%, rgba(255, 255, 255, 0.55), transparent 45%)",
+      "basis": "figma",
+      "sourceNodeId": "15885:2899"
+    },
+    {
+      "name": "--profile-card-sheen",
+      "value": "linear-gradient(115deg, rgba(143, 216, 180, 0) 20%, rgba(143, 216, 180, 0.6) 38%, rgba(232, 185, 74, 0.5) 50%, rgba(110, 95, 192, 0.5) 62%, rgba(110, 95, 192, 0) 80%)",
+      "basis": "figma",
+      "sourceNodeId": "15885:2900"
+    },
+    {
+      "name": "--profile-grid-color",
+      "value": "rgba(30, 122, 85, 0.07)",
+      "basis": "figma",
+      "sourceNodeId": "15885:4123"
+    },
+    {
+      "name": "--profile-card-shadow",
+      "value": "0 1px 0 rgba(23, 22, 18, 0.06), 0 40px 80px -36px rgba(15, 51, 38, 0.55)",
+      "basis": "inferred composition from Figma shadows",
+      "sourceNodeId": "15885:2739"
+    },
+    {
+      "name": "--profile-heading-punctuation",
+      "value": "#c2603a",
+      "basis": "figma",
+      "sourceNodeId": "15885:2597"
+    },
+    {
+      "name": "--profile-seal-verified",
+      "value": "#6e5fc0",
+      "basis": "figma",
+      "sourceNodeId": "15885:2765"
+    },
+    {
+      "name": "--profile-seal-established",
+      "value": "#c2603a",
+      "basis": "figma",
+      "sourceNodeId": "15885:2787"
+    },
+    {
+      "name": "--profile-seal-performer",
+      "value": "#b88418",
+      "basis": "figma",
+      "sourceNodeId": "15885:2815"
+    },
+    {
+      "name": "--profile-seal-projects",
+      "value": "#1e7a55",
+      "basis": "figma",
+      "sourceNodeId": "15885:2845"
+    },
+    {
+      "name": "--profile-orbit-foreground",
+      "value": "#83b6a2",
+      "basis": "figma",
+      "sourceNodeId": "15888:6643"
+    },
+    {
+      "name": "--profile-note-avatar-background",
+      "value": "#f2e1d6",
+      "basis": "figma",
+      "sourceNodeId": "15885:3368",
+      "usage": "Public profile testimonial and client ratings composition; dark avatar colours are inferred."
+    },
+    {
+      "name": "--profile-note-avatar-foreground",
+      "value": "#7a3519",
+      "basis": "figma",
+      "sourceNodeId": "15885:3369",
+      "usage": "Public profile testimonial and client ratings composition; dark avatar colours are inferred."
+    },
+    {
+      "name": "--profile-review-radius",
+      "value": "1.125rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:3492",
+      "usage": "Public profile testimonial and client ratings composition; dark avatar colours are inferred."
+    },
+    {
+      "name": "--profile-summary-radius",
+      "value": "1.25rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:3390",
+      "usage": "Public profile testimonial and client ratings composition; dark avatar colours are inferred."
+    },
+    {
+      "name": "--location-control-shadow",
+      "value": "0 1px 2px rgba(15,51,38,0.2), 0 4px 12px -4px rgba(15,51,38,0.25)",
+      "basis": "figma",
+      "sourceNodeId": "15885:3771",
+      "usage": "Floating experience-centre pin buttons; dark shadow inferred."
     }
   ],
   "darkMode": {
@@ -316,8 +453,8 @@
   "typography": {
     "display": {
       "figma": "Helvetica Neue Medium",
-      "implementation": "Inter 500 via existing next/font loader until an approved Helvetica Neue webfont is supplied",
-      "basis": "inferred fallback"
+      "implementation": "Helvetica Neue where installed, then Helvetica/Arial/sans-serif; existing Inter body and JetBrains Mono metadata loaders retained",
+      "basis": "System-font fallback accepted by the user on 2026-10-08; no licensed Helvetica Neue webfont is bundled."
     },
     "body": {
       "family": "Inter",
@@ -383,7 +520,21 @@
         "letterSpacingPx": 1.2,
         "nodeId": "15885:2595"
       }
-    ]
+    ],
+    "circularProof": {
+      "sourceNodeId": "15888:6643",
+      "family": "Inter",
+      "weight": 500,
+      "sizePx": 16,
+      "letterSpacingPx": 3.84,
+      "curveWidthPx": 515,
+      "curveHeightPx": 460,
+      "sourceOffset": {
+        "segment": 1,
+        "position": 0.610914409160614
+      },
+      "implementation": "Exact vector geometry retrieved via read-only use_figma; text stays dynamic and obeys visibility/KYC gates."
+    }
   },
   "geometry": {
     "desktopWidthPx": 1512,
@@ -427,12 +578,12 @@
     "mobile": {
       "frame": "15885:4109",
       "widthPx": 390,
-      "status": "Discovered; detailed context and screenshot still required"
+      "status": "All eleven section contexts retrieved; application renders normally despite source frame 1% opacity. Responsive composition implemented."
     }
   },
   "motion": {
     "nodeId": "15885:3736",
-    "basis": "planning-turn get_motion_context; fresh call blocked by MCP limit",
+    "basis": "Fresh recursive get_motion_context retrieved on 2026-10-08; marker pulse is deferred with the geographic map.",
     "periodSeconds": 2.2,
     "easing": "linear",
     "repeat": "infinite",

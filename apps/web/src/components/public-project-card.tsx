@@ -41,9 +41,14 @@ export function PublicProjectCard({
   const budget = project.budget ? formatCompactBudgetLabel(project.budget) : null;
 
   return (
-    <article>
+    <article className={cn(presentation === 'portfolio' && 'profile-project-card')}>
       <Link href={href} className="group block">
-        <div className="relative aspect-4/5 overflow-hidden rounded-sm bg-muted">
+        <div
+          className={cn(
+            'relative overflow-hidden bg-muted',
+            presentation === 'portfolio' ? 'aspect-4/3 rounded-xl' : 'aspect-4/5 rounded-sm',
+          )}
+        >
           {project.coverImageUrl ? (
             <Image
               src={project.coverImageUrl}
@@ -52,19 +57,16 @@ export function PublicProjectCard({
               // Presigned storage URL — see the note in public-designer-profile.
               unoptimized
               sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
             />
           ) : null}
-          {project.completionYear ? (
+          {project.completionYear && presentation !== 'portfolio' ? (
             <Badge
               variant="inverse"
               shape="square"
               size={presentation === 'recommendation' ? 'compact' : 'default'}
               textStyle="code"
-              className={cn(
-                'absolute left-3 top-3',
-                presentation === 'portfolio' && 'font-semibold',
-              )}
+              className="absolute left-3 top-3"
             >
               {project.completionYear}
             </Badge>
@@ -83,8 +85,8 @@ export function PublicProjectCard({
             </Badge>
           ) : null}
         </div>
-        <div className={cn('px-0.5', presentation === 'recommendation' ? 'pt-4' : 'pt-2')}>
-          {metadata ? (
+        <div className={cn('px-0.5', presentation === 'recommendation' ? 'pt-4' : 'pt-3.5')}>
+          {metadata && presentation !== 'portfolio' ? (
             <p
               className={cn(
                 'font-mono tracking-widest text-muted-foreground uppercase',
@@ -94,27 +96,50 @@ export function PublicProjectCard({
               {metadata}
             </p>
           ) : null}
-          <h3
-            className={cn(
-              'text-lg font-medium',
-              presentation === 'recommendation' ? 'mt-1.5 leading-relaxed' : 'mt-1',
-            )}
-          >
-            {project.title}
-          </h3>
+          <div className="flex items-baseline justify-between gap-3">
+            <h3
+              className={cn(
+                'text-lg font-medium',
+                presentation === 'recommendation' ? 'mt-1.5 leading-relaxed' : 'mt-1',
+              )}
+            >
+              {project.title}
+            </h3>
+            {presentation === 'portfolio' && project.completionYear ? (
+              <span className="shrink-0 text-sm text-muted-foreground">
+                {project.completionYear}
+              </span>
+            ) : null}
+          </div>
+          {presentation === 'portfolio' ? (
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              {[
+                project.bhk ?? project.propertyType,
+                location,
+                project.sizeSqft != null
+                  ? `${project.sizeSqft.toLocaleString('en-IN')} sq ft`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          ) : null}
           <div
             className={cn(
               'mt-1 flex items-start justify-between gap-4 text-sm text-muted-foreground',
               presentation === 'recommendation' && 'font-medium leading-none',
             )}
           >
-            {location ? <p>{location}</p> : <span />}
+            {presentation !== 'portfolio' && location ? <p>{location}</p> : <span />}
             {budget ? <p className="shrink-0 text-right">{budget}</p> : null}
           </div>
         </div>
       </Link>
-      <div className="mt-3">
-        <ProjectLikeButton projectId={project.id} loginHref={`/login?callbackURL=${encodeURIComponent(href)}`} />
+      <div className="mt-3 flex">
+        <ProjectLikeButton
+          projectId={project.id}
+          loginHref={`/login?callbackURL=${encodeURIComponent(href)}`}
+        />
       </div>
     </article>
   );

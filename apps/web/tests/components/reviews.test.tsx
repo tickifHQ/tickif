@@ -108,6 +108,69 @@ describe('review submission and editing', () => {
 });
 
 describe('Tickif review display', () => {
+  it.each([false, true])(
+    'hides a disabled rating summary while keeping reviews available (embedded=%s)',
+    (embedded) => {
+      render(
+        <TickifReviews
+          designerProfileId={profileId}
+          initialPage={{
+            ...page,
+            averageRating: 4,
+            reviewCount: 1,
+            totalPages: 1,
+            histogram: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 },
+            items: [{ ...own.review, publishedAt: own.review.createdAt }],
+          }}
+          initialOwn={null}
+          canWrite={false}
+          embedded={embedded}
+          showOverallRating={false}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Tickif rating distribution')).not.toBeInTheDocument();
+      expect(screen.queryByText(/1 Tickif reviews/)).not.toBeInTheDocument();
+      expect(screen.getByRole('article')).toHaveTextContent(own.review.body!);
+      expect(screen.getByRole('button', { name: 'Refresh reviews' })).toBeEnabled();
+    },
+  );
+
+  it('bounds embedded profile reviews to two cards and requests matching API pages', async () => {
+    const published = {
+      ...page,
+      limit: 2,
+      reviewCount: 3,
+      totalPages: 2,
+      items: [1, 2, 3].map((index) => ({
+        ...own.review,
+        id: `review-${index}`,
+        status: 'published' as const,
+        author: { ...own.review.author, name: `Member ${index}` },
+        publishedAt: own.review.createdAt,
+      })),
+    };
+    mock.fetchTickifReviews.mockResolvedValue({
+      ...published,
+      page: 2,
+      items: [published.items[2]],
+    });
+    render(
+      <TickifReviews
+        designerProfileId={profileId}
+        initialPage={published}
+        initialOwn={null}
+        canWrite={false}
+        embedded
+        pageSize={2}
+      />,
+    );
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Next reviews' }));
+    expect(mock.fetchTickifReviews).toHaveBeenCalledWith(profileId, 2, 2);
+    expect(await screen.findByText('Member 3')).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+  });
   it('opens the shared login dialog in place before a signed-out review', async () => {
     const user = userEvent.setup();
     render(

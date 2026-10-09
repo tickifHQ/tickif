@@ -43,15 +43,13 @@ test('portfolio details persist from editor to public studio on desktop and mobi
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   try {
-    await db
-      .insert(schema.member)
-      .values({
-        id: randomUUID(),
-        organizationId: organization.id,
-        userId: user.id,
-        role: 'owner',
-        createdAt: new Date(),
-      });
+    await db.insert(schema.member).values({
+      id: randomUUID(),
+      organizationId: organization.id,
+      userId: user.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
     for (const asset of [
       { key: logoKey, file: 'email/tickif-mark.png', contentType: 'image/png' },
       { key: coverKey, file: 'home-hero/neutral-living-room.jpg', contentType: 'image/jpeg' },
@@ -68,15 +66,13 @@ test('portfolio details persist from editor to public studio on desktop and mobi
       .update(schema.designerProfile)
       .set({ logoImageId: logoKey })
       .where(eq(schema.designerProfile.id, profile.id));
-    await db
-      .insert(schema.designerPortfolio)
-      .values({
-        profileId: profile.id,
-        portfolioSlug: slug,
-        tagline: 'Space to feel at home',
-        heroImageId: coverKey,
-        publicLinkEnabled: true,
-      });
+    await db.insert(schema.designerPortfolio).values({
+      profileId: profile.id,
+      portfolioSlug: slug,
+      tagline: 'Space to feel at home',
+      heroImageId: coverKey,
+      publicLinkEnabled: true,
+    });
     await signInPhone(context, user.phoneNumber);
     expect(
       (
@@ -106,9 +102,12 @@ test('portfolio details persist from editor to public studio on desktop and mobi
     });
     await page.goto(`/d/${slug}`);
     const hero = page.getByRole('region', { name: 'Portfolio hero' });
-    await expect(hero.getByText('Years experience', { exact: true })).toBeVisible();
-    await expect(hero.getByText('8', { exact: true })).toBeVisible();
-    await expect(page.getByText('Offices', { exact: true })).toHaveCount(1);
+    await expect(hero.getByText('Established', { exact: true })).toBeVisible();
+    await expect(hero.getByText('8 years experience', { exact: true })).toBeVisible();
+    await expect(
+      hero.getByLabel(String(new Date().getUTCFullYear() - 8), { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Offices', { exact: true })).toHaveCount(0);
     await page.screenshot({
       path: testInfo.outputPath('portfolio-details-public-desktop.png'),
       fullPage: true,

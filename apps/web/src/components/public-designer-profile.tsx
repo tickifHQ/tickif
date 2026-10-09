@@ -1,60 +1,37 @@
 import Image from 'next/image';
+import './public-designer-profile.css';
+import { ProfileFloatingEnquiry } from '@/components/profile-floating-enquiry';
+import { ProfileMotion } from '@/components/profile-motion';
+import { profileSealLetterLayout } from '@/components/profile-seal-letter-layout';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { portfolioAccentStyle } from '@/lib/portfolio-accent';
+import { portfolioRecognitionArtwork } from '@/lib/portfolio-recognition';
 import type { ReactNode } from 'react';
-import {
-  BadgeCheck,
-  CalendarDays,
-  Check,
-  Globe,
-  MapPin,
-  Link2,
-  MessageSquare,
-  Navigation,
-  Phone,
-  Quote,
-  Shield,
-  Sparkle,
-  Star,
-} from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, MessageSquare, Star } from 'lucide-react';
 import {
   PORTFOLIO_BADGE_PRESENTATION,
   type PublicPortfolioResponse,
-  type PublicPortfolioReview,
   type PublicPortfolioStats,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Card } from '@repo/ui/components/card';
-import { Rating } from '@repo/ui/components/reui/rating';
+import { RecognitionBadge } from '@repo/ui/components/recognition-badge';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-cta';
 import { ConsultationCta } from '@/components/consultation-cta';
-import {
-  GoogleBrandIcon,
-  InstagramBrandIcon,
-  LinkedInBrandIcon,
-  TickifBrandIcon,
-  YouTubeBrandIcon,
-} from '@/components/brand-icons';
-import { TrustStrip, type TrustStripItem } from '@/components/trust-strip';
 import { PublicProjectGallery } from '@/components/public-project-gallery';
+import { ProfileClientRatings } from '@/components/profile-client-ratings';
+import { ProfileExperienceCentres } from '@/components/profile-experience-centres';
 import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
 import {
   formatRating,
   socialHref,
-  socialLabel,
   strapline,
   studioInitials,
   studioLocation,
   studioType,
   websiteLabel,
 } from '@/lib/public-portfolio-view';
-
-const profileTrustItems = [
-  { icon: Check, label: 'Every project verified before it goes live' },
-  { icon: Shield, label: 'Every designer phone-verified' },
-  { icon: Sparkle, label: 'Free to browse · No middlemen' },
-] satisfies TrustStripItem[];
 
 /** Everything the sections need that isn't on the API payload. */
 type ProfileView = {
@@ -82,14 +59,6 @@ function headlineReviewAggregate(stats: PublicPortfolioStats) {
   return null;
 }
 
-function SectionEyebrow({ children }: { children: ReactNode }) {
-  return (
-    <p className="font-mono text-xs font-medium tracking-widest text-muted-foreground uppercase">
-      {children}
-    </p>
-  );
-}
-
 function safeExternalHref(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
@@ -98,14 +67,6 @@ function safeExternalHref(value: string | null | undefined): string | null {
   } catch {
     return null;
   }
-}
-
-function phoneHref(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return null;
-  return `tel:${trimmed.startsWith('+') ? '+' : ''}${digits}`;
 }
 
 /** Logo when the designer uploaded one, else an initials monogram. */
@@ -122,7 +83,7 @@ function StudioMark({
       sizePx={sizePx}
       className={`${className} font-semibold`}
       fallback={
-        <span className="grid size-full place-items-center bg-foreground text-background">
+        <span className="grid size-full place-items-center bg-surface-inverse text-surface-inverse-foreground">
           {view.initials}
         </span>
       }
@@ -189,15 +150,248 @@ function StudioBar({ portfolio, view }: SectionProps) {
 /** One cell of the hero proof strip. */
 type HeroStatTile = { value: string; label: string; detail: string };
 
+function ProfileTicket({
+  portfolio,
+  share = false,
+}: {
+  portfolio: PublicPortfolioResponse;
+  share?: boolean;
+}) {
+  return (
+    <span className="profile-ticket">
+      <span>TICKIF</span>
+      <i aria-hidden="true" />
+      <span>
+        {portfolio.sections.tickifBadge && portfolio.isKycVerified
+          ? share
+            ? 'Verified'
+            : 'KYC verified'
+          : 'Portfolio'}
+      </span>
+    </span>
+  );
+}
+
+/** Intrinsic SVG dimensions are retained; each layer is a separate Figma export. */
+function ProfileArtwork({ name, className }: { name: string; className?: string }) {
+  // Exact decorative SVGs retain their fractional intrinsic root dimensions.
+  return (
+    <img
+      src={`/ui/profile/${name}`}
+      alt=""
+      aria-hidden="true"
+      className={`max-w-none ${className ?? ''}`}
+    />
+  );
+}
+
+const sealStyles = {
+  verified: { start: 0, color: 'var(--profile-seal-verified)', letters: 'verified', value: '✓' },
+  established: {
+    start: 3,
+    color: 'var(--profile-seal-established)',
+    letters: 'established',
+    value: '',
+  },
+  'top-performer': {
+    start: 6,
+    color: 'var(--profile-seal-performer)',
+    letters: 'performer',
+    value: '★',
+  },
+  'projects-published': {
+    start: 9,
+    color: 'var(--profile-seal-projects)',
+    letters: 'projects',
+    value: '',
+  },
+} as const;
+
+function HeroIdentityCard({ portfolio, view }: SectionProps) {
+  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
+  const project = portfolio.projects.projects.find((item) => item.coverImageUrl);
+  const seals = portfolio.sections.trustCredentials
+    ? portfolio.badges.filter(
+        (badge): badge is keyof typeof sealStyles =>
+          badge in sealStyles && (badge !== 'verified' || portfolio.isKycVerified),
+      )
+    : [];
+  const orbitText = [
+    [
+      portfolio.sections.tickifBadge && portfolio.isKycVerified
+        ? 'VERIFIED ON TICKIF'
+        : 'ON TICKIF',
+      `${portfolio.stats.projectCount} PROJECTS`,
+    ],
+    [
+      portfolio.foundedYear != null ? `EST ${portfolio.foundedYear}` : null,
+      rating ? `★ ${formatRating(rating.rating)} FROM ${rating.reviewCount} REVIEWS` : null,
+      view.location?.toUpperCase(),
+    ],
+  ].map((facts) => facts.filter(Boolean).join(' · '));
+  return (
+    <div className="profile-identity-wrap">
+      <svg
+        className="profile-identity-orbit"
+        width="530"
+        height="530"
+        viewBox="0 0 530 530"
+        aria-hidden="true"
+      >
+        <defs>
+          {/* Exact vector path from Figma text-path node 15888:6643. */}
+          <path
+            id="profile-identity-curve"
+            d="M 515 230 C 515 357.0254876708984 399.7133177185059 460 257.5 460 C 115.28668228149414 460 0 357.0254876708984 0 230 C 0 102.97451232910156 115.28668228149414 0 257.5 0 C 399.7133177185059 0 515 102.97451232910156 515 230 Z"
+          />
+        </defs>
+        <g className="profile-orbit-rotor">
+          <text transform="translate(15.319378852844238 32.999900817871094)">
+            {/* Arc-length equivalent of source segment 1, position 0.610914409160614. */}
+            <textPath href="#profile-identity-curve" startOffset="40.637057536046775%">
+              {orbitText[0]}
+            </textPath>
+          </text>
+          {orbitText[1] ? (
+            <text transform="translate(15.319378852844238 32.999900817871094) rotate(180 257.5 230)">
+              <textPath href="#profile-identity-curve" startOffset="40.637057536046775%">
+                {orbitText[1]}
+              </textPath>
+            </text>
+          ) : null}
+        </g>
+      </svg>
+      <Card className="profile-identity-card">
+        <div className="profile-cover">
+          <Image
+            src={portfolio.heroCoverUrl!}
+            alt={`${portfolio.displayName} portfolio cover`}
+            fill
+            priority
+            loading="eager"
+            unoptimized
+            sizes="(min-width: 768px) 362px, calc(100vw - 84px)"
+            className="object-cover"
+          />
+        </div>
+        {project?.coverImageUrl ? (
+          <div className="profile-detail-photo">
+            <Image
+              src={project.coverImageUrl}
+              alt={`${project.title} project detail`}
+              fill
+              unoptimized
+              loading="eager"
+              sizes="(min-width: 768px) 362px, calc(100vw - 84px)"
+              className="object-cover"
+            />
+          </div>
+        ) : null}
+        <p className="profile-card-name profile-highlight flex items-center gap-2">
+          <span className="min-w-0 break-words">{portfolio.displayName}</span>
+          {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+            <BadgeCheck
+              aria-label="Verified studio"
+              className="size-4 shrink-0 fill-primary text-primary-foreground"
+            />
+          ) : null}
+        </p>
+        <p className="profile-card-type profile-highlight">{view.type}</p>
+        {seals.length > 0 ? (
+          <ul aria-label="Studio recognition" className="profile-seals">
+            {seals.map((badge) => {
+              const seal = sealStyles[badge];
+              const value =
+                badge === 'established'
+                  ? String(portfolio.stats.yearsExperience ?? '')
+                  : badge === 'projects-published'
+                    ? String(portfolio.stats.projectCount)
+                    : seal.value;
+              const [upper, lower] = profileSealLetterLayout[seal.letters];
+              const caption =
+                badge === 'established'
+                  ? portfolio.foundedYear != null
+                    ? `SINCE${portfolio.foundedYear}`
+                    : 'ON TICKIF'
+                  : badge === 'top-performer'
+                    ? ' ONTICKIF '
+                    : lower.map((letter) => letter.letter).join('');
+              return (
+                <li
+                  key={badge}
+                  className={`profile-seal profile-seal-${badge}`}
+                  style={{ color: seal.color }}
+                >
+                  <span className="sr-only">{PORTFOLIO_BADGE_PRESENTATION[badge].label}</span>
+                  {[0, 1, 2].map((offset) => (
+                    <ProfileArtwork
+                      key={offset}
+                      name={`hero-vector${seal.start + offset || ''}.svg`}
+                      className="profile-seal-layer"
+                    />
+                  ))}
+                  <span aria-hidden="true" className="profile-seal-letters">
+                    {upper.map((letter) => (
+                      <span key={letter.nodeId} style={{ inset: letter.inset }}>
+                        {letter.letter}
+                      </span>
+                    ))}
+                  </span>
+                  <span aria-hidden="true" className="profile-seal-letters profile-seal-bottom">
+                    {lower.map((letter, index) => (
+                      <span key={letter.nodeId} style={{ inset: letter.inset }}>
+                        {caption[index] ?? ''}
+                      </span>
+                    ))}
+                  </span>
+                  <span aria-hidden="true" className="profile-seal-value">
+                    {value}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        <div className="profile-card-footer">
+          <ProfileTicket portfolio={portfolio} />
+          {rating ? (
+            <div className="text-right">
+              <span className="inline-flex items-center gap-1 text-sm">
+                <Star aria-hidden="true" className="size-3 fill-current" />
+                {formatRating(rating.rating)}
+              </span>
+              <p className="mt-1 font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+                {rating.reviewCount} reviews
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </Card>
+      {portfolio.sections.shareBlock ? (
+        <div className="mt-8 flex justify-center">
+          <CopyLinkButton
+            value={view.publicProfileHref}
+            label="Share this card"
+            icon="share"
+            variant="outline"
+            className="bg-muted text-[13px]"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
+  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(stats) : null;
   const tiles: HeroStatTile[] = [
-    ...(stats.yearsExperience != null
+    ...(rating
       ? [
           {
-            value: String(stats.yearsExperience),
-            label: 'Years experience',
-            detail: 'Studio experience',
+            value: formatRating(rating.rating),
+            label: 'Rating',
+            detail: `${rating.reviewCount} ${rating.source === 'tickif' ? 'Tickif' : 'Google'} reviews`,
           },
         ]
       : []),
@@ -206,76 +400,107 @@ function HeroSection({ portfolio, view }: SectionProps) {
       label: 'Projects',
       detail: 'Published on Tickif',
     },
-    {
-      value: String(stats.cityPresenceCount),
-      label: 'Cities present',
-      detail: 'Service footprint',
-    },
+    ...(portfolio.foundedYear != null
+      ? [
+          {
+            value: String(portfolio.foundedYear),
+            label: 'Established',
+            detail:
+              stats.yearsExperience != null
+                ? `${stats.yearsExperience} years experience`
+                : 'Studio founded',
+          },
+        ]
+      : stats.yearsExperience != null
+        ? [
+            {
+              value: String(stats.yearsExperience),
+              label: 'Years experience',
+              detail: 'Studio experience',
+            },
+          ]
+        : []),
+    ...(stats.startingBudget
+      ? [
+          {
+            value: formatCompactBudgetLabel(stats.startingBudget),
+            label: 'Starting at',
+            detail: 'Typical budget',
+          },
+        ]
+      : []),
   ];
 
   return (
-    <section aria-label="Portfolio hero" className="grid border-b lg:grid-cols-12">
-      <div
-        className={`flex items-center px-4 py-14 sm:px-8 lg:px-12 ${
-          portfolio.heroCoverUrl ? 'lg:col-span-7' : 'lg:col-span-12'
-        }`}
-      >
-        <div className="mx-auto w-full max-w-xl">
-          <div className="mb-7 flex items-start justify-between gap-4 border-b pb-7">
-            <div className="flex min-w-0 items-center gap-3">
-              <StudioMark
-                portfolio={portfolio}
-                view={view}
-                className="size-11 text-sm"
-                sizePx={44}
-              />
-              <div className="min-w-0">
-                <Badge variant="secondary" className="rounded-sm uppercase">
-                  {view.type}
-                </Badge>
-                {view.location ? (
-                  <p className="mt-1 truncate text-xs text-muted-foreground">{view.location}</p>
-                ) : null}
-              </div>
+    <section aria-label="Portfolio hero" className="profile-hero">
+      <div className={`profile-shell ${portfolio.heroCoverUrl ? 'profile-hero-grid' : ''}`}>
+        <div className="profile-hero-copy">
+          {view.location ? (
+            <Badge variant="secondary" className="font-mono text-xs uppercase tracking-widest">
+              {view.location}
+            </Badge>
+          ) : null}
+          <div className="flex min-w-0 items-center gap-3.5">
+            <StudioMark
+              portfolio={portfolio}
+              view={view}
+              className="size-16 rounded-xl text-3xl shadow-card"
+              sizePx={64}
+            />
+            <div className="min-w-0">
+              {portfolio.isKycVerified ? (
+                <p className="mb-1 inline-flex items-center gap-1 font-mono text-metadata uppercase text-foreground">
+                  <Check aria-hidden="true" className="size-3 text-primary" />
+                  Verified studio
+                </p>
+              ) : null}
+              <p className="font-mono text-metadata uppercase text-muted-foreground">
+                {view.type}
+                {portfolio.foundedYear != null ? ` · Est. ${portfolio.foundedYear}` : ''}
+              </p>
             </div>
-            {portfolio.isKycVerified ? (
-              <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-3 text-xs">
-                <Shield className="size-3" />
-                Verified
-              </span>
-            ) : null}
           </div>
 
-          <p className="font-mono text-xs font-medium tracking-widest uppercase">
-            Portfolio on Tickif
-          </p>
-          <h1 className="mt-2 text-5xl leading-none tracking-tight sm:text-6xl">
-            {portfolio.displayName}
+          <h1 className="profile-hero-title" aria-label={portfolio.displayName}>
+            <StudioName name={portfolio.displayName} />
+            <span aria-hidden="true" className="profile-punctuation">
+              .
+            </span>
           </h1>
           {view.pitch ? (
-            <p className="mt-2 max-w-md text-lg leading-relaxed text-muted-foreground">
+            <p className="max-w-125 text-base leading-relaxed text-foreground-secondary sm:text-lg">
               {view.pitch}
             </p>
           ) : null}
 
-          <dl
-            className={`mt-6 grid ${tiles.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-px overflow-hidden rounded border bg-border p-px`}
-          >
+          <dl className="profile-proof-grid">
             {tiles.map((tile) => (
-              <div
-                key={tile.label}
-                className="flex min-h-20 min-w-0 flex-col justify-center bg-background px-3 py-4"
-              >
-                <dd className="text-2xl leading-none">{tile.value}</dd>
-                <dt className="mt-2 text-xs font-medium">{tile.label}</dt>
-                <p className="mt-1 hidden text-xs leading-tight text-muted-foreground sm:block">
-                  {tile.detail}
-                </p>
+              <div key={tile.label}>
+                <dt>{tile.label}</dt>
+                <dd aria-label={tile.value}>
+                  <span aria-hidden="true" data-profile-count={tile.label}>
+                    {tile.value}
+                  </span>
+                </dd>
+                <p>{tile.detail}</p>
               </div>
             ))}
+            <ProfileArtwork
+              name="hero-vertical-divider1.png"
+              className="profile-proof-divider left-0"
+            />
+            <ProfileArtwork
+              name="hero-vertical-divider.png"
+              className="profile-proof-divider left-1/2"
+            />
+            <ProfileArtwork
+              name="hero-vertical-divider1.png"
+              className="profile-proof-divider right-0"
+            />
+            <span className="profile-proof-junction" aria-hidden="true" />
           </dl>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <EnquiryCta
               context={{
                 type: 'designer',
@@ -285,76 +510,93 @@ function HeroSection({ portfolio, view }: SectionProps) {
               }}
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
-              variant="emphasis"
+              variant="default"
               ariaLabel="Enquire"
-              className="min-w-36 transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
+              className="h-12 px-6 shadow-button-primary"
             >
               <MessageSquare className="size-4" />
               Enquire
             </EnquiryCta>
-            {portfolio.sections.shareBlock ? (
-              <CopyLinkButton
-                value={view.publicProfileHref}
-                label="Share"
-                icon="share"
-                variant="outline"
-                className="h-10 px-4"
-              />
-            ) : null}
           </div>
         </div>
+        {portfolio.heroCoverUrl ? <HeroIdentityCard portfolio={portfolio} view={view} /> : null}
       </div>
-
-      {portfolio.heroCoverUrl ? (
-        <figure className="flex min-h-96 flex-col bg-muted lg:col-span-5 lg:min-h-full">
-          <div className="relative min-h-96 flex-1">
-            <Image
-              src={portfolio.heroCoverUrl}
-              alt={`${portfolio.displayName} portfolio cover`}
-              fill
-              priority
-              loading="eager"
-              unoptimized
-              sizes="(min-width: 1024px) 42vw, 100vw"
-              className="object-cover"
-            />
-          </div>
-        </figure>
-      ) : null}
     </section>
   );
 }
 
-function CredentialsSection({ portfolio }: SectionProps) {
-  // No badges → hide the whole section (wrapper + heading), matching the
-  // self-guarding pattern used by Portfolio/Story/Reviews. An empty credentials
-  // header reads as broken.
-  if (portfolio.badges.length === 0) return null;
+function StudioName({ name }: { name: string }) {
+  const space = name.indexOf(' ');
+  return space > 0 ? (
+    <>
+      {name.slice(0, space)} <span className="profile-highlight">{name.slice(space + 1)}</span>
+    </>
+  ) : (
+    <>{name}</>
+  );
+}
 
+function ProfileHeading({
+  number,
+  children,
+  id,
+  detail,
+}: {
+  number: string;
+  children: ReactNode;
+  id: string;
+  detail?: ReactNode;
+}) {
   return (
-    <section className="border-b bg-muted/30 px-4 py-16 sm:px-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="text-center">
-          <p className="font-mono text-xs font-medium tracking-widest uppercase">
-            Tickif credentials
-          </p>
-          <h2 className="mt-3 text-4xl tracking-tight">
-            <span className="font-medium">Verified</span>{' '}
-            <span className="font-light text-muted-foreground">on Tickif</span>
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">Earned through real work</p>
-        </div>
-        <ul className="mt-12 flex flex-wrap items-center justify-center gap-10">
-          {portfolio.badges.map((badge) => {
-            const { label, imageSrc } = PORTFOLIO_BADGE_PRESENTATION[badge];
-            return (
-              <li key={badge}>
-                <Image src={imageSrc} alt={label} width={160} height={176} className="h-44 w-40" />
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+    <header className="profile-section-header">
+      <h2 id={id} className="profile-heading">
+        <span className="profile-section-number" aria-hidden="true">
+          {number}
+        </span>
+        {children}
+      </h2>
+      {detail ? (
+        <div className="font-mono text-metadata uppercase text-muted-foreground">{detail}</div>
+      ) : null}
+    </header>
+  );
+}
+
+function CredentialsSection({ portfolio }: SectionProps) {
+  if (portfolio.badges.length === 0) return null;
+  return (
+    <section
+      id="recognition"
+      aria-labelledby="recognition-heading"
+      className="profile-shell profile-section"
+    >
+      <ProfileHeading id="recognition-heading" number="01" detail="Earned through real work">
+        Recognition on Tickif
+      </ProfileHeading>
+      <ul className="profile-recognition-list">
+        {portfolio.badges.map((badge) => {
+          const { label, criterion } = PORTFOLIO_BADGE_PRESENTATION[badge];
+          const detail =
+            badge === 'established' && portfolio.foundedYear != null
+              ? `Since ${portfolio.foundedYear}`
+              : badge === 'projects-published'
+                ? String(portfolio.stats.projectCount)
+                : undefined;
+          return (
+            <li key={badge}>
+              <RecognitionBadge
+                artwork={
+                  <Image src={portfolioRecognitionArtwork[badge]} alt="" width={150} height={132} />
+                }
+                eyebrow="Tickif"
+                label={label}
+                detail={detail}
+                description={criterion}
+              />
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -366,658 +608,203 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
     !portfolio.projects.hasMore
   )
     return null;
-
   return (
-    <section className="px-4 pt-12 pb-12 sm:px-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="grid gap-8 border-b pb-7 lg:grid-cols-2">
-          <div>
-            <p className="font-mono text-xs font-medium tracking-widest text-muted-foreground uppercase">
-              Portfolio
-            </p>
-            <h2 className="mt-2 text-4xl tracking-tight">
-              Selected <span className="font-light text-foreground italic">projects</span>.
-            </h2>
-          </div>
-          <div className="max-w-md lg:justify-self-end">
-            <p className="text-sm font-medium">
-              {portfolio.stats.projectCount}{' '}
-              <span className="font-normal text-muted-foreground">published</span>
-            </p>
-            {/* Bio intentionally omitted here (E-212 #14): it is the hero
-                strapline fallback and the Studio details "about" copy. Repeating
-                it in the Portfolio section produced up to three renders of the
-                same text. */}
-          </div>
-        </div>
-
-        <PublicProjectGallery
-          profileId={portfolio.profileId}
-          initialPage={portfolio.projects}
-          studioName={portfolio.displayName}
-          emptyMessage={`${view.type} — no published projects yet.`}
-        />
-      </div>
-    </section>
-  );
-}
-
-function StorySection({ portfolio, view }: SectionProps) {
-  const testimonial = portfolio.testimonial;
-  const headlineRating = portfolio.sections.overallRating
-    ? headlineReviewAggregate(portfolio.stats)
-    : null;
-  if (!testimonial) return null;
-
-  const attribution = [testimonial.author, testimonial.projectTitle]
-    .filter((part): part is string => !!part)
-    .join(', ');
-
-  return (
-    <section className="overflow-hidden px-4 pt-0 pb-24 sm:px-6">
-      <div className="mx-auto max-w-6xl">
-        <SectionEyebrow>Project narrative</SectionEyebrow>
-        <h2 className="mt-2 text-4xl tracking-tight">
-          their <span className="font-light text-foreground italic">words</span>.
-        </h2>
-
-        <div className="relative mt-7 border bg-muted/30 px-6 py-10 sm:px-12 lg:px-16">
-          <span
-            className="absolute top-2 left-2 size-5 border-t border-l border-primary/20"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute top-2 right-2 size-5 border-t border-r border-primary/20"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute bottom-2 left-2 size-5 border-b border-l border-primary/20"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute right-2 bottom-2 size-5 border-r border-b border-primary/20"
-            aria-hidden="true"
-          />
-
-          <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
-            <div className="lg:col-span-8">
-              <Quote className="size-10 rotate-180 fill-primary text-foreground" />
-              <blockquote className="mt-5 max-w-2xl text-2xl leading-snug sm:text-3xl">
-                {testimonial.words}
-              </blockquote>
-              {attribution ? (
-                <footer className="mt-7 flex items-center gap-3">
-                  <div className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                    {studioInitials(testimonial.author ?? portfolio.displayName)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{attribution}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      From a homeowner · {portfolio.displayName}
-                    </p>
-                  </div>
-                </footer>
-              ) : null}
-            </div>
-
-            <Card
-              className="mx-auto w-full max-w-72 -rotate-2 overflow-hidden shadow-sm lg:col-span-4 lg:-my-16 lg:-translate-y-8 lg:justify-self-end"
-              radius="lg"
-            >
-              <div className="p-5">
-                <div className="flex items-start gap-3">
-                  <StudioMark
-                    portfolio={portfolio}
-                    view={view}
-                    className="size-17 text-lg"
-                    sizePx={68}
-                  />
-                  <div className="min-w-0 pt-1">
-                    <p className="font-mono text-2xs tracking-widest text-muted-foreground uppercase">
-                      {view.type}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1 font-medium">
-                      <span className="truncate">{portfolio.displayName}</span>
-                      {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
-                        <BadgeCheck
-                          aria-label="Verified studio"
-                          className="size-4 shrink-0 fill-primary text-primary-foreground"
-                        />
-                      ) : null}
-                    </p>
-                    {portfolio.isKycVerified ? (
-                      <p className="mt-1 flex items-center gap-1 font-mono text-2xs tracking-wider uppercase">
-                        <Shield className="size-2.5" />
-                        KYC verified
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-2 text-sm">
-                  <p className="flex items-center gap-1.5">
-                    <TickifBrandIcon
-                      className="size-3 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span>{portfolio.stats.projectCount} Projects</span>
-                    <span className="text-muted-foreground">published</span>
-                  </p>
-                  {portfolio.foundedYear ? (
-                    <p className="flex items-center gap-1.5">
-                      <CalendarDays className="size-3.5 text-muted-foreground" />
-                      <span>{portfolio.foundedYear}</span>
-                      {(portfolio.stats.yearsExperience ?? 0) > 0 ? (
-                        <span className="text-muted-foreground">
-                          ({portfolio.stats.yearsExperience} Years of Experience)
-                        </span>
-                      ) : null}
-                    </p>
-                  ) : null}
-                  {headlineRating && headlineRating.reviewCount > 0 ? (
-                    <p className="flex items-center gap-1.5">
-                      <Star className="size-3 fill-muted-foreground text-muted-foreground" />
-                      <span>{formatRating(headlineRating.rating)}</span>
-                      <span className="text-muted-foreground">
-                        (
-                        {headlineRating.source === 'tickif'
-                          ? `${headlineRating.reviewCount} verified reviews`
-                          : `${headlineRating.reviewCount} Google reviews`}
-                        )
-                      </span>
-                    </p>
-                  ) : null}
-                </div>
-
-                <EnquiryCta
-                  context={{
-                    type: 'designer',
-                    designerName: portfolio.displayName,
-                    designerLocation: view.location,
-                    designerLogoUrl: portfolio.logoUrl,
-                  }}
-                  designerProfileId={portfolio.profileId}
-                  loginHref={view.loginHref}
-                  variant="emphasis"
-                  ariaLabel="Send enquiry"
-                  className="mt-5 h-8 w-full transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
-                >
-                  <MessageSquare className="size-4" />
-                  Send enquiry
-                </EnquiryCta>
-              </div>
-
-              {headlineRating && headlineRating.reviewCount > 0 ? (
-                <div className="flex items-center justify-between border-t px-5 py-3 text-muted-foreground">
-                  {headlineRating.source === 'tickif' ? (
-                    <TickifBrandIcon
-                      role="img"
-                      aria-label="Tickif"
-                      className="size-4 text-foreground"
-                    />
-                  ) : (
-                    <GoogleBrandIcon
-                      role="img"
-                      aria-label="Google reviews"
-                      aria-hidden={false}
-                      className="size-4"
-                    />
-                  )}
-                  <span className="inline-flex items-center gap-1 font-mono text-2xs leading-none tracking-wider uppercase">
-                    <span>{formatRating(headlineRating.rating)}</span>
-                    <Star className="block size-2.5 shrink-0 fill-current" aria-hidden="true" />
-                    <span>· {headlineRating.reviewCount}</span>
-                  </span>
-                </div>
-              ) : null}
-            </Card>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ReviewCard({ review }: { review: PublicPortfolioReview }) {
-  return (
-    <Card
-      role="article"
-      className="flex h-55 w-100 shrink-0 flex-col gap-4 p-4 shadow-md"
-      radius="xl"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          {review.avatarUrl ? (
-            <Image
-              src={review.avatarUrl}
-              alt=""
-              width={48}
-              height={48}
-              // Google-hosted reviewer photo — not a configured image host.
-              unoptimized
-              className="size-12 rounded-full object-cover"
-            />
-          ) : (
-            <div
-              className="grid size-12 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold text-muted-foreground"
-              aria-hidden="true"
-            >
-              {studioInitials(review.author)}
-            </div>
-          )}
-          <div>
-            <p className="flex items-center gap-1 text-sm font-medium">
-              {review.author}
-              {review.verifiedConsultation ? (
-                <BadgeCheck
-                  aria-label="Verified client"
-                  className="size-4 fill-primary text-primary-foreground"
-                />
-              ) : null}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">{review.relativeTime}</p>
-          </div>
-        </div>
-        {review.source === 'google' ? (
-          <GoogleBrandIcon className="size-6" />
-        ) : (
-          <TickifBrandIcon className="size-6 text-foreground" />
-        )}
-      </div>
-      {review.text ? (
-        <p className="flex-1 text-sm leading-relaxed">“{review.text}”</p>
-      ) : (
-        <div className="flex-1" aria-hidden="true" />
-      )}
-      <Rating rating={review.rating} size="lg" />
-    </Card>
-  );
-}
-
-function ReviewAggregateCard({
-  source,
-  rating,
-  reviewCount,
-}: {
-  source: 'tickif' | 'google';
-  rating: number;
-  reviewCount: number;
-}) {
-  return (
-    <Card
-      className="shadow-floating-card relative flex min-h-56 w-60 shrink-0 flex-col justify-between overflow-hidden border-surface-inverse-foreground/15 bg-surface-inverse p-5 text-surface-inverse-foreground"
-      radius="xl"
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -inset-y-24 left-4 w-8 rotate-12 -skew-x-6 bg-linear-to-r from-transparent via-surface-inverse-foreground/20 to-transparent opacity-80"
+    <section id="work" className="profile-shell profile-section" aria-labelledby="projects-heading">
+      <ProfileHeading
+        id="projects-heading"
+        number="02"
+        detail={`${portfolio.stats.projectCount} published`}
+      >
+        Selected projects
+      </ProfileHeading>
+      <PublicProjectGallery
+        profileId={portfolio.profileId}
+        initialPage={portfolio.projects}
+        studioName={portfolio.displayName}
+        emptyMessage={`${view.type} — no published projects yet.`}
       />
-      <div className="relative flex items-center justify-between border-b border-surface-inverse-foreground/10 pb-3">
-        <p className="font-mono text-xs tracking-widest text-surface-inverse-foreground/60 uppercase">
-          {source === 'tickif' ? 'Tickif' : 'Google'}
-        </p>
-        {source === 'tickif' ? (
-          <TickifBrandIcon className="size-4 text-surface-inverse-foreground" />
-        ) : (
-          <GoogleBrandIcon className="size-4" />
-        )}
-      </div>
-      <p className="relative text-7xl font-normal tracking-tight">{formatRating(rating)}</p>
-      <div className="relative">
-        <Rating rating={rating} />
-        <p className="mt-2 text-sm text-surface-inverse-foreground">
-          Based on {reviewCount} {source === 'tickif' ? 'verified reviews' : 'Google reviews'}
-        </p>
-      </div>
-    </Card>
-  );
-}
-
-function ReviewsSection({ portfolio }: SectionProps) {
-  const { reviews, stats } = portfolio;
-  const reviewAggregates = portfolio.sections.overallRating
-    ? [
-        stats.tickif && stats.tickif.reviewCount > 0
-          ? { source: 'tickif' as const, ...stats.tickif }
-          : null,
-        stats.google && stats.google.reviewCount > 0
-          ? { source: 'google' as const, ...stats.google }
-          : null,
-      ].filter((aggregate): aggregate is NonNullable<typeof aggregate> => aggregate !== null)
-    : [];
-  if (reviewAggregates.length === 0 && reviews.length === 0) return null;
-
-  return (
-    <section className="overflow-hidden border-t border-surface-subtle-border bg-surface-subtle px-4 py-22 sm:px-6">
-      <div className="mx-auto max-w-7xl">
-        <SectionEyebrow>Ratings & client voices</SectionEyebrow>
-        <h2
-          className="mt-2 max-w-2xl text-4xl font-medium"
-          aria-label="What it’s like to work with us."
-        >
-          What it’s like to <span className="font-light text-foreground italic">work with us</span>.
-        </h2>
-        <div className="mt-9 flex flex-col gap-8 pb-20 md:flex-row">
-          {reviewAggregates.length > 0 ? (
-            <div className="flex shrink-0 gap-4">
-              {reviewAggregates.map((aggregate) => (
-                <ReviewAggregateCard key={aggregate.source} {...aggregate} />
-              ))}
-            </div>
-          ) : null}
-
-          {reviews.length > 0 ? (
-            <div
-              data-testid="review-marquee"
-              className="review-marquee w-screen shrink-0 overflow-hidden py-4"
-            >
-              <div className="review-marquee-track flex w-max">
-                <div data-testid="review-marquee-primary" className="flex shrink-0 gap-6 pr-6">
-                  {reviews.map((review) => (
-                    <ReviewCard key={review.id} review={review} />
-                  ))}
-                </div>
-                <div
-                  data-testid="review-marquee-copy"
-                  className="review-marquee-copy flex shrink-0 gap-6 pr-6"
-                  aria-hidden="true"
-                >
-                  {reviews.map((review) => (
-                    <ReviewCard key={review.id} review={review} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
     </section>
   );
 }
 
-function StudioDetailsSection({ portfolio, view }: SectionProps) {
-  const { social, stats } = portfolio;
-  const socialLinks = [
-    social.instagramHandle
-      ? {
-          key: 'instagram',
-          icon: InstagramBrandIcon,
-          label: socialLabel(social.instagramHandle),
-          href: socialHref('instagram', social.instagramHandle),
-        }
-      : null,
-    social.linkedinHandle
-      ? {
-          key: 'linkedin',
-          icon: LinkedInBrandIcon,
-          label: socialLabel(social.linkedinHandle),
-          href: socialHref('linkedin', social.linkedinHandle),
-        }
-      : null,
-    social.youtubeHandle
-      ? {
-          key: 'youtube',
-          icon: YouTubeBrandIcon,
-          label: socialLabel(social.youtubeHandle),
-          href: socialHref('youtube', social.youtubeHandle),
-        }
-      : null,
-  ].filter(
-    (
-      link,
-    ): link is {
-      key: string;
-      icon: typeof InstagramBrandIcon;
-      label: string;
-      href: string;
-    } => !!link?.href,
-  );
-
-  const facts = [
-    portfolio.foundedYear ? { label: 'Established', value: String(portfolio.foundedYear) } : null,
-    { label: 'Projects published', value: String(stats.projectCount) },
-    stats.officeCount != null
-      ? { label: stats.officeCount === 1 ? 'Office' : 'Offices', value: String(stats.officeCount) }
-      : null,
-    stats.startingBudget
-      ? { label: 'Typical budget', value: formatCompactBudgetLabel(stats.startingBudget) }
-      : null,
-  ].filter((fact): fact is { label: string; value: string } => !!fact);
-
+function StorySection({ portfolio }: SectionProps) {
+  const testimonial = portfolio.testimonial;
+  if (!testimonial) return null;
   return (
-    <section className="bg-background px-4 py-20 sm:px-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-stretch lg:justify-between lg:gap-14">
-          <div className="max-w-4xl">
-            <SectionEyebrow>The studio</SectionEyebrow>
-            <div className="mt-2 flex items-center gap-3.5">
-              <StudioMark
-                portfolio={portfolio}
-                view={view}
-                className="size-14 text-sm"
-                sizePx={56}
-              />
-              <div>
-                <div className="flex items-center gap-1">
-                  <h2 className="text-2xl font-medium">{portfolio.displayName}</h2>
-                  {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
-                    <BadgeCheck
-                      className="size-5 shrink-0 fill-primary text-primary-foreground"
-                      aria-label="Verified studio"
-                    />
-                  ) : null}
-                </div>
-                <p className="mt-1 font-mono text-2xs font-semibold tracking-widest text-muted-foreground uppercase">
-                  {view.type}
-                </p>
-              </div>
-            </div>
-            {portfolio.bio ? (
-              <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted-foreground">
-                {portfolio.bio}
+    <section aria-label="Client note" className="profile-shell">
+      <div className="profile-story">
+        <span aria-hidden="true" className="profile-story-corner left-0 top-0 border-l border-t" />
+        <span aria-hidden="true" className="profile-story-corner right-0 top-0 border-r border-t" />
+        <span
+          aria-hidden="true"
+          className="profile-story-corner bottom-0 left-0 border-b border-l"
+        />
+        <span
+          aria-hidden="true"
+          className="profile-story-corner bottom-0 right-0 border-b border-r"
+        />
+        <p className="font-mono text-metadata tracking-widest text-muted-foreground uppercase">
+          Client note{testimonial.projectTitle ? ` · ${testimonial.projectTitle}` : ''}
+        </p>
+        <blockquote>
+          <span aria-hidden="true" className="profile-punctuation">
+            “
+          </span>
+          {testimonial.words}
+          <span aria-hidden="true" className="profile-punctuation">
+            ”
+          </span>
+        </blockquote>
+        {testimonial.author ? (
+          <footer className="flex items-center justify-center gap-3 pt-1 text-left">
+            <span className="profile-note-avatar grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold">
+              {studioInitials(testimonial.author)}
+            </span>
+            <div>
+              <p className="text-sm font-medium">{testimonial.author}</p>
+              <p className="text-xs text-muted-foreground">
+                {testimonial.projectTitle ?? 'Homeowner'}
               </p>
-            ) : null}
-          </div>
-          <dl className="grid grid-cols-3 gap-6 border-t pt-8 lg:w-72 lg:grid-cols-1 lg:gap-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-            {facts.map((fact) => (
-              <div key={fact.label} className="flex flex-col">
-                <dt className="order-2 mt-1 font-mono text-xs tracking-widest text-muted-foreground uppercase">
-                  {fact.label}
-                </dt>
-                <dd className="order-1 text-4xl font-normal tracking-tight">{fact.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-        {socialLinks.length > 0 || social.websiteUrl ? (
-          <div className="mt-8 flex flex-wrap items-center gap-2 border-t pt-3">
-            {socialLinks.map(({ key, icon: Icon, label, href }) => (
-              <a
-                key={key}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <Icon className="size-4" />
-                {label}
-              </a>
-            ))}
-            {social.websiteUrl ? (
-              <a
-                href={social.websiteUrl}
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <Globe className="size-4 text-muted-foreground" />
-                {websiteLabel(social.websiteUrl)}
-              </a>
-            ) : null}
-          </div>
+            </div>
+          </footer>
         ) : null}
       </div>
     </section>
   );
 }
 
-function ExperienceCentersSection({ portfolio }: SectionProps) {
-  const groups = (portfolio.experienceCenterGroups ?? []).filter(
-    (group) => group.centers.length > 0,
+function hasGoogleClientRatings(portfolio: PublicPortfolioResponse) {
+  return (
+    (portfolio.reviewVisibility.google.reviews &&
+      portfolio.reviews.some((review) => review.source === 'google')) ||
+    (portfolio.sections.overallRating &&
+      portfolio.reviewVisibility.google.overallRating &&
+      (portfolio.stats.google?.reviewCount ?? 0) > 0)
   );
-  const centers = groups.flatMap((group) => group.centers);
-  if (centers.length === 0) return null;
+}
 
+function ReviewsSection({ portfolio }: SectionProps) {
+  if (!hasGoogleClientRatings(portfolio)) return null;
+  return (
+    <section
+      id="reviews"
+      className="profile-shell profile-section"
+      aria-labelledby="client-ratings-heading"
+    >
+      <ProfileHeading id="client-ratings-heading" number="03">
+        Client ratings
+      </ProfileHeading>
+      <ProfileClientRatings portfolio={portfolio} />
+    </section>
+  );
+}
+
+function ExperienceCentersSection({ portfolio, view }: SectionProps) {
+  const centres = (portfolio.experienceCenterGroups ?? []).flatMap((group) => group.centers);
+  if (centres.length === 0) return null;
+  const cities = new Set(centres.map((centre) => centre.city));
   return (
     <section
       aria-labelledby="experience-centers-heading"
-      className="border-t border-surface-subtle-border bg-surface-subtle px-4 py-20 sm:px-6"
+      id="centres"
+      className="profile-shell profile-section"
     >
-      <div className="mx-auto max-w-7xl">
-        <SectionEyebrow>Visit the studio</SectionEyebrow>
-        <h2 id="experience-centers-heading" className="mt-2 text-4xl font-medium tracking-tight">
-          Experience centers
-        </h2>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Explore materials, finishes, and ideas in person at a studio near you.
-        </p>
-
-        <ul
-          className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-          aria-label="Experience centers"
-        >
-          {centers.map((center, index) => {
-            const mapsHref = safeExternalHref(center.mapsUrl);
-            const callHref = phoneHref(center.phone);
-            const location = [center.city, center.state].filter(Boolean).join(', ');
-            const locationWithPostalCode = center.postalCode
-              ? `${location} · ${center.postalCode}`
-              : location;
-
-            return (
-              <li key={`${center.name}-${center.city}-${index}`} className="min-w-0">
-                <Card
-                  data-slot="experience-center-card"
-                  className="h-full overflow-hidden border-surface-subtle-border bg-background p-0"
-                >
-                  <div className="flex items-center gap-1.5 border-b border-surface-subtle-border px-3 py-2.5">
-                    <MapPin className="size-4 shrink-0 text-foreground" aria-hidden="true" />
-                    <h3 className="min-w-0 break-words text-lg font-medium">{center.name}</h3>
-                  </div>
-                  <article className="min-w-0 p-3">
-                    <address className="max-w-xl break-words text-sm leading-5 not-italic text-muted-foreground [overflow-wrap:anywhere]">
-                      <span className="block font-medium text-foreground">
-                        {locationWithPostalCode}
-                      </span>
-                      <span className="mt-0.5 block">{center.address}</span>
-                    </address>
-                    {callHref || mapsHref ? (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                        {callHref && center.phone ? (
-                          <a
-                            href={callHref}
-                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            <Phone className="size-4 shrink-0" aria-hidden="true" />
-                            <span className="break-all">{center.phone}</span>
-                          </a>
-                        ) : null}
-                        {mapsHref ? (
-                          <a
-                            href={mapsHref}
-                            target="_blank"
-                            rel="noopener noreferrer nofollow"
-                            className="inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            <Navigation
-                              className="size-4 shrink-0 text-foreground"
-                              aria-hidden="true"
-                            />
-                            Open in Maps
-                          </a>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </article>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <ProfileHeading
+        id="experience-centers-heading"
+        number="04"
+        detail={`${centres.length} ${centres.length === 1 ? 'centre' : 'centres'} · ${cities.size} ${cities.size === 1 ? 'city' : 'cities'}`}
+      >
+        Experience centres
+      </ProfileHeading>
+      <ProfileExperienceCentres
+        centres={centres}
+        portfolio={portfolio}
+        loginHref={view.loginHref}
+      />
     </section>
   );
 }
 
 function ShareSection({ portfolio, view }: SectionProps) {
+  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
+  const facts = [
+    rating ? { label: 'Rating', value: formatRating(rating.rating) } : null,
+    { label: 'Projects', value: String(portfolio.stats.projectCount) },
+    portfolio.foundedYear != null
+      ? { label: 'Established', value: String(portfolio.foundedYear) }
+      : null,
+    portfolio.stats.startingBudget
+      ? { label: 'Starting at', value: formatCompactBudgetLabel(portfolio.stats.startingBudget) }
+      : null,
+  ].filter((fact): fact is NonNullable<typeof fact> => fact !== null);
   return (
-    <section className="overflow-hidden bg-muted px-4 py-20 sm:px-6">
-      <div className="mx-auto grid max-w-6xl gap-16 lg:grid-cols-5 lg:items-center">
-        <div className="mx-auto w-full max-w-sm py-6 lg:col-span-2">
-          <Card className="-rotate-2 overflow-hidden shadow-2xl" radius="2xl">
+    <section id="share" className="profile-shell profile-section">
+      <div className="profile-share">
+        <Card className="profile-share-card">
+          <div className="flex items-center gap-3">
+            <StudioMark
+              portfolio={portfolio}
+              view={view}
+              className="size-11 rounded-lg text-sm"
+              sizePx={44}
+            />
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 font-display text-lg font-bold">
+                {portfolio.displayName}
+                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                  <BadgeCheck
+                    aria-label="Verified studio"
+                    className="size-4 shrink-0 fill-primary text-primary-foreground"
+                  />
+                ) : null}
+              </p>
+              <p className="mt-1 font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+                {view.type}
+                {view.location ? ` · ${view.location}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="profile-share-grid">
+            <dl className="profile-share-stats">
+              {facts.map((fact) => (
+                <div key={fact.label}>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
             {portfolio.heroCoverUrl ? (
-              <div className="relative h-56">
+              <div className="profile-share-photo">
                 <Image
                   src={portfolio.heroCoverUrl}
                   alt={`${portfolio.displayName} portfolio preview`}
                   fill
                   unoptimized
-                  sizes="360px"
+                  sizes="(min-width: 768px) 200px, 250px"
                   className="object-cover"
                 />
-                <div
-                  className="absolute inset-0 bg-gradient-to-t from-foreground/20 to-transparent"
-                  aria-hidden="true"
-                />
               </div>
-            ) : (
-              <div className="h-56 bg-secondary" aria-hidden="true" />
-            )}
-
-            <div className="relative px-5 pb-5 text-center">
-              <div className="mx-auto -mt-6 w-fit rounded-full border-4 border-background shadow-sm">
-                <StudioMark
-                  portfolio={portfolio}
-                  view={view}
-                  className="size-11 text-sm"
-                  sizePx={44}
-                />
-              </div>
-
-              <div className="mt-2 flex items-center justify-center gap-1">
-                <p className="text-xl font-medium">{portfolio.displayName}</p>
-                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
-                  <BadgeCheck
-                    aria-label="Verified studio"
-                    className="size-5 fill-primary text-primary-foreground"
-                  />
-                ) : null}
-              </div>
-              {view.location ? (
-                <p className="mt-1 text-xs text-muted-foreground">{view.location}</p>
-              ) : null}
-
-              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 font-mono text-xs">
-                <Link2 className="size-3" />
-                {view.publicProfileLabel}
-              </span>
-            </div>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-3">
-          <p className="font-mono text-xs font-medium tracking-widest uppercase">
+            ) : null}
+          </div>
+          <div className="profile-card-footer">
+            <ProfileTicket portfolio={portfolio} share />
+            <span className="break-all font-mono text-2xs text-secondary-foreground">
+              {view.publicProfileLabel}
+            </span>
+          </div>
+        </Card>
+        <div className="relative min-w-0">
+          <p className="profile-highlight font-mono text-xs uppercase tracking-widest">
             One link. Everywhere.
           </p>
-          <h2 className="mt-3 text-4xl tracking-tight">
-            A portfolio worth <span className="font-light text-muted-foreground">sharing</span>.
+          <h2 className="profile-share-title">
+            A portfolio <span className="profile-highlight">worth sharing.</span>
           </h2>
-          <p className="mt-5 max-w-md leading-relaxed text-muted-foreground">
+          <p className="mt-6 max-w-118 text-base leading-relaxed text-foreground-secondary">
             This is {portfolio.displayName}&apos;s living portfolio — every project, rating and
-            detail in one verified link. Send it on WhatsApp, drop it in your Instagram bio, or
-            print it on a card.
+            detail in one link. Send it on WhatsApp, drop it in your Instagram bio, or print it on a
+            card.
           </p>
-
           <div className="mt-6 flex flex-wrap gap-3">
             <EnquiryCta
               context={{
@@ -1030,15 +817,14 @@ function ShareSection({ portfolio, view }: SectionProps) {
               loginHref={view.loginHref}
               variant="emphasis"
               ariaLabel="Send enquiry"
-              className="h-10 px-6 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
+              className="h-12 px-7"
             >
-              <MessageSquare className="size-4" />
               Send enquiry
             </EnquiryCta>
             <CopyLinkButton
               value={view.publicProfileHref}
               variant="outline"
-              className="h-10 px-4 shadow-sm"
+              className="h-12 bg-muted px-7"
             />
           </div>
         </div>
@@ -1049,37 +835,208 @@ function ShareSection({ portfolio, view }: SectionProps) {
 
 function ConsultationSection({ portfolio, view }: SectionProps) {
   return (
-    <section className="bg-surface-inverse px-6 py-24 text-surface-inverse-foreground">
-      <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-        <p className="font-mono text-xs tracking-widest text-surface-inverse-foreground/60 uppercase">
+    <section id="enquire" className="profile-consultation">
+      <div className="profile-shell profile-consultation-inner">
+        <p className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-primary-soft">
+          <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
           Direct line to the designer
         </p>
-        <h2 className="mt-4 text-4xl leading-none font-medium tracking-tight sm:text-5xl">
-          <span className="block">Let&apos;s build something</span>
+        <h2
+          className="profile-consultation-title"
+          aria-label="Let's build something you can't imagine living without."
+        >
+          <span className="block">Let&apos;s build</span>
           <span className="block">
-            you{' '}
-            <span className="font-light text-surface-inverse-foreground/70">
-              can&apos;t imagine
-            </span>
+            something <span className="profile-highlight">you</span>
           </span>
-          <span className="block">living without.</span>
+          <span className="profile-highlight block">can&apos;t imagine</span>
+          <span className="block">
+            living without<span className="profile-punctuation">.</span>
+          </span>
         </h2>
-        <p className="mt-6 max-w-md leading-6 text-surface-inverse-foreground/80">
-          Send an enquiry to {portfolio.displayName} on Tickif and start discussing your project.
-        </p>
-        <div className="mt-9 flex flex-wrap justify-center gap-3">
+        <div className="profile-consultation-bottom">
+          <p className="max-w-104 text-lg leading-relaxed text-surface-inverse-foreground/80">
+            Send an enquiry to {portfolio.displayName} on Tickif and start discussing your project.
+          </p>
           <ConsultationCta
             designerProfileId={portfolio.profileId}
             designerName={portfolio.displayName}
             loginHref={view.loginHref}
-            className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse hover:bg-surface-inverse-foreground/90"
+            className="profile-floating-action h-16 border-0 px-8 text-base"
           />
         </div>
-        <p className="mt-7 font-mono text-xs tracking-wider text-surface-inverse-foreground/55 uppercase">
-          No commitment · No middlemen · No sales calls
-        </p>
       </div>
     </section>
+  );
+}
+
+function ProfileNavigation({ portfolio, view }: SectionProps) {
+  const hasWork =
+    portfolio.stats.projectCount > 0 ||
+    portfolio.projects.projects.length > 0 ||
+    portfolio.projects.hasMore;
+  const hasReviews = hasGoogleClientRatings(portfolio);
+  const hasCentres = portfolio.experienceCenterGroups?.some((group) => group.centers.length > 0);
+  return (
+    <header className="profile-navigation">
+      <div className="profile-shell profile-navigation-inner">
+        <a
+          href="#profile-top"
+          className="flex min-w-0 items-center gap-3"
+          aria-label={`${portfolio.displayName} portfolio`}
+        >
+          <StudioMark
+            portfolio={portfolio}
+            view={view}
+            className="size-10 rounded-lg text-sm"
+            sizePx={40}
+          />
+          <div className="min-w-0">
+            <p className="truncate font-display text-base font-bold">{portfolio.displayName}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {view.type}
+              {view.location ? ` · ${view.location}` : ''}
+            </p>
+          </div>
+        </a>
+        <div className="flex shrink-0 items-center gap-6">
+          <nav aria-label="Portfolio sections" className="profile-nav-links">
+            {hasWork ? <a href="#work">Work</a> : null}
+            {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
+              <a href="#recognition">Recognition</a>
+            ) : null}
+            {hasReviews ? <a href="#reviews">Reviews</a> : null}
+            {hasCentres ? <a href="#centres">Centres</a> : null}
+          </nav>
+          <EnquiryCta
+            context={{ type: 'designer', designerName: portfolio.displayName }}
+            designerProfileId={portfolio.profileId}
+            loginHref={view.loginHref}
+            variant="emphasis"
+            ariaLabel="Enquire about this studio"
+            className="h-9 px-4 text-xs"
+          >
+            Enquire <ArrowRight className="size-3" />
+          </EnquiryCta>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function ProfileFooter({ portfolio, view }: SectionProps) {
+  const social = portfolio.social;
+  const links = portfolio.sections.socialLinks
+    ? [
+        social.instagramHandle
+          ? { label: 'Instagram', href: socialHref('instagram', social.instagramHandle) }
+          : null,
+        social.linkedinHandle
+          ? { label: 'LinkedIn', href: socialHref('linkedin', social.linkedinHandle) }
+          : null,
+        social.youtubeHandle
+          ? { label: 'YouTube', href: socialHref('youtube', social.youtubeHandle) }
+          : null,
+        safeExternalHref(social.websiteUrl)
+          ? { label: websiteLabel(social.websiteUrl!), href: safeExternalHref(social.websiteUrl)! }
+          : null,
+      ].filter(
+        (link): link is { label: string; href: string } => link !== null && Boolean(link.href),
+      )
+    : [];
+  return (
+    <footer className="profile-shell profile-footer">
+      <div className="profile-footer-grid">
+        <div>
+          <div className="flex items-center gap-3">
+            <StudioMark
+              portfolio={portfolio}
+              view={view}
+              className="size-10 rounded-lg text-sm"
+              sizePx={40}
+            />
+            <div>
+              <p className="font-display font-bold">{portfolio.displayName}</p>
+              <p className="text-xs text-muted-foreground">
+                {view.type}
+                {view.location ? ` · ${view.location}` : ''}
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 max-w-95 text-sm leading-relaxed text-foreground-secondary">
+            {portfolio.tagline}
+          </p>
+          <ConsultationCta
+            designerProfileId={portfolio.profileId}
+            designerName={portfolio.displayName}
+            loginHref={view.loginHref}
+            className="mt-4 h-9 bg-button-inverted px-5 text-xs text-button-inverted-foreground hover:bg-button-inverted-hover"
+          />
+        </div>
+        <div>
+          <p className="mb-4 font-mono text-metadata uppercase text-muted-foreground">Portfolio</p>
+          <ul className="space-y-3 text-sm">
+            {portfolio.stats.projectCount > 0 ? (
+              <li>
+                <a href="#work">Projects</a>
+              </li>
+            ) : null}
+            {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
+              <li>
+                <a href="#recognition">Recognition</a>
+              </li>
+            ) : null}
+            {portfolio.experienceCenterGroups?.some((group) => group.centers.length > 0) ? (
+              <li>
+                <a href="#centres">Experience centres</a>
+              </li>
+            ) : null}
+          </ul>
+        </div>
+        {links.length > 0 ? (
+          <div>
+            <p className="mb-4 font-mono text-metadata uppercase text-muted-foreground">
+              Elsewhere
+            </p>
+            <ul className="space-y-3 text-sm">
+              {links.map((link) => (
+                <li key={link.label}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="flex items-center justify-between gap-3"
+                  >
+                    {link.label}
+                    <span className="text-muted-foreground" aria-hidden="true">
+                      ↗
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+      <p className="profile-footer-outline" aria-hidden="true">
+        {portfolio.displayName}
+      </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-6 font-mono text-metadata uppercase text-muted-foreground">
+        <p className="flex items-center gap-2">
+          Portfolio by{' '}
+          <a
+            href="/"
+            className="rounded-sm bg-surface-inverse px-2 py-1 text-surface-inverse-foreground"
+          >
+            Tickif
+          </a>
+          <span>· Published studio portfolio</span>
+        </p>
+        <a href="#profile-top" className="text-foreground">
+          Back to top ↑
+        </a>
+      </div>
+    </footer>
   );
 }
 
@@ -1108,22 +1065,31 @@ export function PublicDesignerProfile({
   return (
     <EnquiryAvailabilityProvider designerProfileId={portfolio.profileId}>
       <main
-        className="min-h-screen overflow-x-hidden bg-background text-foreground"
+        id="profile-top"
+        className="designer-profile min-h-screen bg-background text-foreground"
         style={portfolioAccentStyle(portfolio.accentColor)}
       >
-        <TrustStrip items={profileTrustItems} />
+        <ProfileMotion />
+        <ProfileNavigation {...props} />
         {portfolio.sections.hero ? <HeroSection {...props} /> : <StudioBar {...props} />}
         {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
           <CredentialsSection {...props} />
         ) : null}
         <PortfolioSection {...props} />
         {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
-        {portfolio.sections.reviews ? <ReviewsSection {...props} /> : null}
+        <ReviewsSection {...props} />
         {tickifReviews}
-        <StudioDetailsSection {...props} />
         <ExperienceCentersSection {...props} />
         {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
         <ConsultationSection {...props} />
+        <ProfileFooter {...props} />
+        <ProfileFloatingEnquiry
+          designerProfileId={portfolio.profileId}
+          designerName={portfolio.displayName}
+          logoUrl={portfolio.logoUrl}
+          initials={view.initials}
+          loginHref={view.loginHref}
+        />
       </main>
     </EnquiryAvailabilityProvider>
   );

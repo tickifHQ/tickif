@@ -12,10 +12,9 @@
 :root,
 [data-theme='tickif'] {
   --font-body: var(--font-sans-base, ui-sans-serif, system-ui, sans-serif);
-  --font-heading: var(
-    --font-display-base,
-    var(--font-sans-base, ui-sans-serif, system-ui, sans-serif)
-  );
+  /* Figma uses Helvetica Neue for display text. Keep its system fallback
+   * independent of Inter until a licensed self-hosted font is supplied. */
+  --font-heading: var(--font-display-base, 'Helvetica Neue', Helvetica, Arial, sans-serif);
   --font-code: var(--font-mono-base, ui-monospace, 'SF Mono', monospace);
 
   --radius: 0.75rem;
@@ -109,6 +108,40 @@
   --card-shadow: 0 12px 32px -24px rgba(23, 22, 18, 0.24);
   --popover-shadow: 0 16px 40px -16px rgba(23, 22, 18, 0.2);
   --location-card-shadow: 0 30px 60px -44px rgba(15, 51, 38, 0.4);
+  --location-control-shadow:
+    0 1px 2px rgba(15, 51, 38, 0.2), 0 4px 12px -4px rgba(15, 51, 38, 0.25);
+  --profile-card-background: #f7f7f4;
+  --profile-card-radius: 1.5rem;
+  --profile-photo-radius: 0.875rem;
+  --profile-photo-arch-radius: 6.7075rem;
+  --profile-photo-mobile-arch-radius: 5.90625rem;
+  --profile-photo-cutout-radius: 8.278125rem;
+  --profile-seal-radius: 2.03125rem;
+  --profile-card-glow: radial-gradient(
+    circle at 35.1% 82%,
+    rgba(255, 255, 255, 0.55),
+    transparent 45%
+  );
+  --profile-card-sheen: linear-gradient(
+    115deg,
+    rgba(143, 216, 180, 0) 20%,
+    rgba(143, 216, 180, 0.6) 38%,
+    rgba(232, 185, 74, 0.5) 50%,
+    rgba(110, 95, 192, 0.5) 62%,
+    rgba(110, 95, 192, 0) 80%
+  );
+  --profile-grid-color: rgba(30, 122, 85, 0.07);
+  --profile-card-shadow: 0 1px 0 rgba(23, 22, 18, 0.06), 0 40px 80px -36px rgba(15, 51, 38, 0.55);
+  --profile-heading-punctuation: #c2603a;
+  --profile-note-avatar-background: #f2e1d6;
+  --profile-note-avatar-foreground: #7a3519;
+  --profile-review-radius: 1.125rem;
+  --profile-summary-radius: 1.25rem;
+  --profile-seal-verified: #6e5fc0;
+  --profile-seal-established: #c2603a;
+  --profile-seal-performer: #b88418;
+  --profile-seal-projects: #1e7a55;
+  --profile-orbit-foreground: #83b6a2;
 
   --chart-1: #1e7a55;
   --chart-2: #0f3326;
@@ -192,6 +225,12 @@
   --card-shadow: 0 12px 32px -24px rgba(0, 0, 0, 0.5);
   --popover-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5);
   --location-card-shadow: 0 30px 60px -44px rgba(0, 0, 0, 0.6);
+  --location-control-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
+  --profile-card-background: var(--muted);
+  --profile-grid-color: rgba(143, 216, 180, 0.07);
+  --profile-heading-punctuation: #e09a78;
+  --profile-note-avatar-background: #4c3226;
+  --profile-note-avatar-foreground: #f2d3bf;
 
   --chart-1: #8fd8b4;
   --chart-2: #5ba982;

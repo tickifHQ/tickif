@@ -32,6 +32,8 @@ import {
 } from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
+import { RecognitionBadge } from '@repo/ui/components/recognition-badge';
+import { portfolioRecognitionArtwork } from '@/lib/portfolio-recognition';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import {
@@ -47,10 +49,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
-import {
-  SocialProfileInput,
-  socialProfileError,
-} from '@/components/social-profile-confirmation';
+import { SocialProfileInput, socialProfileError } from '@/components/social-profile-confirmation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
 import { PortfolioCoverCropDialog } from '@/components/portfolio-cover-crop-dialog';
@@ -876,6 +875,7 @@ export function DesignerPortfolioSettings() {
                     </p>
                   </div>
                   <Switch
+                    aria-label="Public link"
                     checked={form.publicLinkEnabled}
                     onCheckedChange={(checked) => updateField('publicLinkEnabled', checked)}
                   />
@@ -921,6 +921,7 @@ export function DesignerPortfolioSettings() {
                         {PORTFOLIO_URL_BASE}/d/
                       </span>
                       <Input
+                        aria-label="Portfolio URL"
                         value={form.portfolioSlug}
                         onChange={(e) => handleSlugChange(e.target.value)}
                         placeholder="your-studio"
@@ -1117,6 +1118,7 @@ export function DesignerPortfolioSettings() {
                           ref={(node) => {
                             heroFieldRefs.current.displayName = node;
                           }}
+                          aria-label="Studio name"
                           value={form.displayName}
                           onChange={(e) => updateField('displayName', e.target.value)}
                           placeholder="Your studio name"
@@ -1139,6 +1141,7 @@ export function DesignerPortfolioSettings() {
                         ref={(node) => {
                           heroFieldRefs.current.tagline = node;
                         }}
+                        aria-label="Tagline"
                         value={form.tagline}
                         onChange={(e) => updateField('tagline', e.target.value)}
                         placeholder="A short tagline for your portfolio"
@@ -1159,6 +1162,7 @@ export function DesignerPortfolioSettings() {
                         ref={(node) => {
                           heroFieldRefs.current.bio = node;
                         }}
+                        aria-label="Bio"
                         value={form.bio}
                         onChange={(e) => updateField('bio', e.target.value)}
                         placeholder="Tell visitors about your design philosophy..."
@@ -1206,17 +1210,20 @@ export function DesignerPortfolioSettings() {
                           data-earned={earned}
                           className="flex flex-col items-center gap-1.5 text-center"
                         >
-                          <Image
-                            src={meta.imageSrc}
-                            alt={meta.label}
-                            width={88}
-                            height={88}
-                            className={cn('h-22 w-auto', earned ? '' : 'opacity-40 grayscale')}
+                          <RecognitionBadge
+                            className={earned ? undefined : 'opacity-40 grayscale'}
+                            artwork={
+                              <Image
+                                src={portfolioRecognitionArtwork[badge]}
+                                alt=""
+                                width={150}
+                                height={132}
+                              />
+                            }
+                            eyebrow="Tickif"
+                            label={meta.label}
+                            description={earned ? 'Earned' : meta.criterion}
                           />
-                          <span className="text-xs font-medium text-foreground">{meta.label}</span>
-                          <span className="text-2xs leading-tight text-muted-foreground">
-                            {earned ? 'Earned' : meta.criterion}
-                          </span>
                         </li>
                       );
                     })}
@@ -1460,10 +1467,11 @@ export function DesignerPortfolioSettings() {
                             Show overall ratings on your profile
                           </p>
                           <p className="text-[13px] text-muted-foreground">
-                            Show Google rating in trust strip
+                            Show the Google rating summary in Client ratings
                           </p>
                         </div>
                         <Switch
+                          aria-label="Show Google rating summary"
                           checked={form.showGoogleOverallRating}
                           onCheckedChange={(checked) =>
                             updateField('showGoogleOverallRating', checked)
@@ -1473,13 +1481,14 @@ export function DesignerPortfolioSettings() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            Show only reviews with over 4+ star ratings
+                            Show only reviews with 4+ star ratings
                           </p>
                           <p className="text-[13px] text-muted-foreground">
                             Show positive testimonials on your portfolio
                           </p>
                         </div>
                         <Switch
+                          aria-label="Show only Google reviews with 4+ stars"
                           checked={form.showGooglePositiveReviewsOnly}
                           onCheckedChange={(checked) =>
                             updateField('showGooglePositiveReviewsOnly', checked)
@@ -1603,7 +1612,7 @@ export function DesignerPortfolioSettings() {
               {/* Experience Centers — grouped by state on the public page */}
               <CollapsibleSection
                 title="Experience Centers"
-                subtitle="List your physical experience centers. They appear grouped by state on your public page."
+                subtitle="List your physical experience centers. Visitors can switch between their maps and details."
                 expanded={sectionExpanded.experienceCenters}
                 onToggleExpanded={() => toggleExpanded('experienceCenters')}
                 compact
@@ -2009,7 +2018,7 @@ function ToggleableSection({
             <p className="text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
           </button>
           <div className="flex items-center gap-3">
-            <Switch checked={enabled} onCheckedChange={onToggle} />
+            <Switch aria-label={`Show ${title}`} checked={enabled} onCheckedChange={onToggle} />
             <button
               type="button"
               onClick={onToggleExpanded}

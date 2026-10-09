@@ -1,7 +1,70 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
+
+describe('Figma review corrections', () => {
+  it('shows Google client ratings without source tabs or Tickif review cards', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          reviews: [
+            makeReview({ author: 'Google client' }),
+            makeReview({ id: 'tickif-only', source: 'tickif', author: 'Tickif client' }),
+          ],
+        })}
+      />,
+    );
+    const section = within(screen.getByRole('region', { name: 'Client ratings' }));
+    expect(section.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(section.getByText('57 Google reviews')).toBeInTheDocument();
+    expect(section.queryByText('Tickif client')).not.toBeInTheDocument();
+    expect(section.getByRole('region', { name: 'Google client reviews' })).toHaveAttribute(
+      'aria-roledescription',
+      'carousel',
+    );
+  });
+
+  it('removes the extra studio section and hero Share action', () => {
+    const { container } = render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+    expect(container.querySelector('#studio')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Studio' })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Portfolio hero' })).queryByRole('button', {
+        name: 'Share',
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share this card' })).toBeInTheDocument();
+  });
+
+  it('uses numbered shared pagination for the review carousel', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          reviews: [1, 2, 3, 4, 5].map((number) =>
+            makeReview({ id: `g-${number}`, author: `Google client ${number}` }),
+          ),
+        })}
+      />,
+    );
+    const pagination = screen.getByRole('navigation', { name: 'Google review pages' });
+    expect(pagination).toHaveAttribute('data-slot', 'pagination');
+    expect(within(pagination).getByRole('button', { name: 'Go to review page 1' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    fireEvent.click(within(pagination).getByRole('button', { name: 'Go to review page 3' }));
+    expect(within(pagination).getByRole('button', { name: 'Go to review page 3' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(
+      within(screen.getByTestId('profile-review-cards')).getByRole('article'),
+    ).toHaveTextContent('Google client 5');
+  });
+});
 
 vi.mock('@/components/project-like-button', () => ({
   ProjectLikeButton: () => <button>Like</button>,
@@ -68,9 +131,9 @@ describe('PublicDesignerProfile — accent colour bug condition', () => {
     expect(container.querySelector('main')!.style.getPropertyValue('--primary-foreground')).toBe(
       foreground,
     );
-    for (const emphasis of ['projects', 'words', 'work with us']) {
-      expect(screen.getByText(emphasis, { exact: true })).toHaveClass('text-foreground');
-    }
+    expect(
+      container.querySelector('main')!.style.getPropertyValue('--profile-heading-accent'),
+    ).toBe('var(--foreground)');
   });
 
   it('leaves theme tokens intact for an unsafe saved accent', () => {
@@ -115,11 +178,9 @@ describe('PublicDesignerProfile — accent colour bug condition', () => {
 describe('PublicDesignerProfile — preservation (sections render regardless of accent)', () => {
   const keyHeadings = [
     { name: 'Anika Spaces', level: 1 as const }, // hero
-    { name: 'Verified on Tickif' }, // credentials
+    { name: 'Recognition on Tickif' }, // credentials
     { name: /Selected projects/i }, // gallery
-    { name: /their words/i }, // story / testimonial
-    { name: 'What it\u2019s like to work with us.' }, // reviews
-    { name: 'Anika Spaces', level: 2 as const }, // studio details
+    { name: 'Client ratings' }, // reviews
     { name: /A portfolio worth sharing/i }, // share block
     { name: "Let's build something you can't imagine living without." }, // CTA
   ];
@@ -154,14 +215,120 @@ describe('PublicDesignerProfile', () => {
     mocks.session = null;
   });
 
+  it('provides working portfolio navigation and a back-to-top link', () => {
+    const { container } = render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+    const navigation = within(screen.getByRole('navigation', { name: 'Portfolio sections' }));
+    for (const label of ['Work', 'Recognition', 'Reviews']) {
+      const href = navigation.getByRole('link', { name: label }).getAttribute('href');
+      expect(href).toMatch(/^#/);
+      expect(container.querySelector(href!)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('link', { name: /Back to top/ })).toHaveAttribute(
+      'href',
+      '#profile-top',
+    );
+  });
+
+  it('does not link visitors to hidden recognition or unavailable centres', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          badges: [],
+          reviews: [],
+          sections: { ...portfolio.sections, reviews: false, overallRating: false },
+          reviewVisibility: {
+            ...portfolio.reviewVisibility,
+            google: { ...portfolio.reviewVisibility.google, reviews: false, overallRating: false },
+          },
+        }}
+      />,
+    );
+    const navigation = within(screen.getByRole('navigation', { name: 'Portfolio sections' }));
+    expect(navigation.queryByRole('link', { name: 'Recognition' })).not.toBeInTheDocument();
+    expect(navigation.queryByRole('link', { name: 'Reviews' })).not.toBeInTheDocument();
+    expect(navigation.queryByRole('link', { name: 'Centres' })).not.toBeInTheDocument();
+  });
+
+  it('composes the hero seals only for earned supported credentials', () => {
+    const { container } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ badges: ['verified', 'established'] })}
+      />,
+    );
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.getByRole('list', { name: 'Studio recognition' }).children).toHaveLength(2);
+    expect(container.querySelector('img[src="/ui/profile/hero-vector.svg"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/ui/profile/hero-vector3.svg"]')).toBeInTheDocument();
+    expect(
+      container.querySelector('img[src="/ui/profile/hero-vector6.svg"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('uses live proof data in the circular text and respects hidden ratings and verification', () => {
+    const base = makePublicPortfolio();
+    const { container } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          isKycVerified: false,
+          foundedYear: 2017,
+          cities: ['Bengaluru'],
+          stats: { ...base.stats, projectCount: 2 },
+          sections: { ...base.sections, overallRating: false, tickifBadge: false },
+        })}
+      />,
+    );
+    const orbit = container.querySelector('.profile-identity-orbit');
+    expect(orbit).toHaveTextContent('ON TICKIF · 2 PROJECTS');
+    expect(orbit).toHaveTextContent('EST 2017 · BENGALURU');
+    expect(orbit).not.toHaveTextContent(/VERIFIED|REVIEWS|CHENNAI|28 PROJECTS/);
+  });
+
+  it('uses live crown captions for supported earned awards, including New on Tickif', () => {
+    const { container } = render(
+      <PublicDesignerProfile portfolio={makePublicPortfolio({ badges: ['verified', 'new'] })} />,
+    );
+    const recognition = screen.getByRole('region', { name: 'Recognition on Tickif' });
+    expect(within(recognition).getByText('Identity verified')).toBeVisible();
+    expect(within(recognition).getByText('New on Tickif')).toBeVisible();
+    expect(within(recognition).getByText('Joined in the last 90 days')).toBeVisible();
+    expect(container.querySelectorAll('[data-slot="recognition-badge"]')).toHaveLength(2);
+    expect(within(recognition).queryByText('Client favourite')).not.toBeInTheDocument();
+    expect(within(recognition).queryByText('Fast reply')).not.toBeInTheDocument();
+  });
+
+  it('shows published rating, founding year and starting budget in the hero proof grid', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.getByText('Rating')).toBeVisible();
+    expect(hero.getByText('42 Tickif reviews')).toBeVisible();
+    expect(hero.getByText('Established')).toBeVisible();
+    expect(hero.getByText('Starting at')).toBeVisible();
+    expect(hero.getByText('Typical budget')).toBeVisible();
+  });
+
+  it('omits hero and identity-card ratings when the overall rating is hidden', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{ ...portfolio, sections: { ...portfolio.sections, overallRating: false } }}
+      />,
+    );
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.queryByText('Rating')).not.toBeInTheDocument();
+    expect(hero.queryByText(/verified reviews/)).not.toBeInTheDocument();
+    expect(hero.queryByText('4.7', { exact: true })).not.toBeInTheDocument();
+  });
+
   it('keeps identity and primary actions together in the hero without a duplicate studio bar', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     const hero = screen.getByRole('region', { name: 'Portfolio hero' });
     expect(within(hero).getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeVisible();
     expect(within(hero).getByRole('button', { name: 'Enquire' })).toBeVisible();
-    expect(within(hero).getByRole('button', { name: 'Share' })).toBeVisible();
-    expect(hero.previousElementSibling).not.toHaveTextContent('Anika Spaces');
+    expect(within(hero).queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(within(hero).getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   it('retains a primary studio heading and enquiry action when the hero is hidden', () => {
@@ -216,15 +383,15 @@ describe('PublicDesignerProfile', () => {
     );
   });
 
-  it('shows years, published projects, and city presence as the hero proof stats', () => {
+  it('uses the published founding year and keeps experience as supporting proof', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
-    expect(hero.getByText('Years experience')).toBeInTheDocument();
+    expect(hero.getByText('Established')).toBeInTheDocument();
+    expect(hero.getByText('8 years experience')).toBeInTheDocument();
     expect(hero.getByText('Projects')).toBeInTheDocument();
-    expect(hero.getByText('Cities present')).toBeInTheDocument();
-    expect(hero.queryByText('Typical budget')).not.toBeInTheDocument();
-    expect(hero.queryByText('Rating')).not.toBeInTheDocument();
+    expect(hero.getByText('Typical budget')).toBeInTheDocument();
+    expect(hero.getByText('Rating')).toBeInTheDocument();
   });
 
   it('uses enquiry copy instead of consultation or conversation copy', () => {
@@ -235,44 +402,41 @@ describe('PublicDesignerProfile', () => {
     expect(screen.queryAllByText(/Start a conversation/i)).toHaveLength(0);
   });
 
-  it('renders every section from the API payload', () => {
+  it('renders every section from the API payload', async () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Verified on Tickif' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Recognition on Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Selected projects/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /their words/i })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Client note' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Client ratings' })).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'What it’s like to work with us.' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 2 })).toBeInTheDocument();
+      screen.queryByRole('heading', { name: 'Anika Spaces', level: 2 }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /A portfolio worth sharing/i })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
         name: "Let's build something you can't imagine living without.",
       }),
     ).toBeInTheDocument();
-    const tickifLogo = screen.getByRole('img', { name: 'Tickif' });
-    expect(tickifLogo).toHaveClass('size-4', 'text-foreground');
-    expect(screen.getByText('28 Projects').previousElementSibling).toHaveClass(
-      'size-3',
-      'shrink-0',
-      'text-muted-foreground',
-    );
+    expect(
+      within(screen.getByRole('region', { name: 'Portfolio hero' })).getByText('28'),
+    ).toBeInTheDocument();
   });
 
   it('renders only the badges the API awarded, not the full badge set', () => {
-    const { container } = render(
+    render(
       <PublicDesignerProfile
         portfolio={makePublicPortfolio({ badges: ['verified', 'top-performer'] })}
       />,
     );
 
-    expect(within(container).getByAltText('Identity verified')).toBeInTheDocument();
-    expect(within(container).getByAltText('Top performer')).toBeInTheDocument();
-    expect(within(container).queryByAltText('New on Tickif')).not.toBeInTheDocument();
-    expect(within(container).queryByAltText('Established studio')).not.toBeInTheDocument();
-    expect(within(container).queryByAltText('Projects published')).not.toBeInTheDocument();
+    const recognition = within(screen.getByRole('region', { name: 'Recognition on Tickif' }));
+    expect(recognition.getByText('Identity verified')).toBeInTheDocument();
+    expect(recognition.getByText('Top performer')).toBeInTheDocument();
+    expect(recognition.queryByText('New on Tickif')).not.toBeInTheDocument();
+    expect(recognition.queryByText('Established studio')).not.toBeInTheDocument();
+    expect(recognition.queryByText('Projects published')).not.toBeInTheDocument();
   });
 
   it('never presents the studio as verified before current KYC approval', () => {
@@ -297,23 +461,60 @@ describe('PublicDesignerProfile', () => {
   it('shows studio verification marks after current KYC approval', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getAllByLabelText('Verified studio')).toHaveLength(3);
+    expect(screen.getAllByLabelText('Verified studio')).toHaveLength(2);
     expect(screen.getByText('KYC verified')).toBeInTheDocument();
   });
 
-  it('renders the reviews the API returned, once to assistive technology', () => {
+  it('respects the hidden Tickif badge setting in identity and sharing tickets', () => {
+    const base = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{ ...base, sections: { ...base.sections, tickifBadge: false } }}
+      />,
+    );
+    expect(screen.queryByText('KYC verified')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verified', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Verified studio')).not.toBeInTheDocument();
+  });
+
+  it('limits client review pages to two cards while keeping every review reachable', () => {
     const reviews = [
       makeReview({ id: 'r1', author: 'Rahul S.' }),
       makeReview({ id: 'r2', author: 'Meera & Karthik', rating: 5 }),
+      makeReview({ id: 'r3', author: 'Third homeowner' }),
     ];
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
 
-    const primaryReviews = within(screen.getByTestId('review-marquee-primary'));
+    const primaryReviews = within(screen.getByTestId('profile-review-cards'));
     const reviewCards = primaryReviews.getAllByRole('article');
 
     expect(reviewCards).toHaveLength(2);
     expect(within(reviewCards[0]!).getByText('Rahul S.')).toBeInTheDocument();
-    expect(screen.getByTestId('review-marquee-copy')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getAllByText('Rahul S.')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Go to review page 2' }));
+    expect(within(screen.getByTestId('profile-review-cards')).getAllByRole('article')).toHaveLength(
+      1,
+    );
+    expect(screen.getByText('Third homeowner')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to review page 1' }));
+    expect(screen.getByText('Rahul S.')).toBeInTheDocument();
+  });
+
+  it('keeps an explicitly requested consultation review outside the Google section', async () => {
+    const user = userEvent.setup();
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio()}
+        tickifReviews={<input aria-label="Review draft" />}
+      />,
+    );
+    await user.type(screen.getByLabelText('Review draft'), 'My review in progress');
+    expect(screen.getByLabelText('Review draft')).toHaveValue('My review in progress');
+    expect(
+      within(screen.getByRole('region', { name: 'Client ratings' })).queryByLabelText(
+        'Review draft',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('omits ratings and client voices when neither ratings nor reviews exist', () => {
@@ -328,10 +529,8 @@ describe('PublicDesignerProfile', () => {
       />,
     );
 
-    expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'What it’s like to work with us.' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('profile-review-cards')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Client ratings' })).not.toBeInTheDocument();
   });
 
   it('omits unknown experience and offices without creating a false zero metric', () => {
@@ -348,7 +547,8 @@ describe('PublicDesignerProfile', () => {
     expect(hero.queryByText('Years experience')).not.toBeInTheDocument();
     expect(screen.queryByText('Offices', { exact: true })).not.toBeInTheDocument();
     expect(hero.getByText('Projects', { exact: true })).toBeInTheDocument();
-    expect(hero.getByText('Cities present', { exact: true })).toBeInTheDocument();
+    expect(hero.getByText('Established', { exact: true })).toBeInTheDocument();
+    expect(hero.queryByText(/years experience/)).not.toBeInTheDocument();
   });
 
   it('preserves explicitly supplied zero experience and office count', () => {
@@ -362,9 +562,8 @@ describe('PublicDesignerProfile', () => {
       />,
     );
     const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
-    expect(hero.getByText('Years experience')).toBeInTheDocument();
-    expect(hero.getByText('0', { exact: true })).toBeInTheDocument();
-    expect(screen.getByText('Offices', { exact: true }).parentElement).toHaveTextContent('0');
+    expect(hero.getByText('0 years experience')).toBeInTheDocument();
+    expect(screen.queryByText('Offices', { exact: true })).not.toBeInTheDocument();
   });
 
   it('omits the selected projects section when the public portfolio has no projects', () => {
@@ -399,32 +598,34 @@ describe('PublicDesignerProfile', () => {
       />,
     );
 
-    expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Google reviews' })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Client ratings' })).getByText('57 Google reviews'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Google client reviews' })).toBeInTheDocument();
     expect(screen.queryByText('Based on 0 verified reviews')).not.toBeInTheDocument();
   });
 
-  it('renders both source aggregates without merging their counts', () => {
+  it('uses only the Google aggregate and labels partial distribution data', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
-
-    expect(screen.getByText('Based on 42 verified reviews')).toBeInTheDocument();
-    expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
+    const section = within(screen.getByRole('region', { name: 'Client ratings' }));
+    expect(section.getByText('57 Google reviews')).toBeInTheDocument();
+    expect(section.queryByText(/42 Tickif reviews/)).not.toBeInTheDocument();
+    expect(section.getByText('Distribution of 1 available Google reviews')).toBeInTheDocument();
+    expect(section.getByRole('meter', { name: '5 star reviews' })).toHaveAttribute(
+      'aria-valuemax',
+      '1',
+    );
   });
 
-  it('marks only completed Tickif consultations as verified and supports rating-only reviews', () => {
-    const reviews = [
-      makeReview({
-        id: 'tickif-rating-only',
-        source: 'tickif',
-        text: null,
-        verifiedConsultation: true,
-      }),
-    ];
-    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
-
-    expect(
-      within(screen.getByTestId('review-marquee-primary')).getByLabelText('Verified client'),
-    ).toBeInTheDocument();
+  it('supports rating-only Google reviews without a verified-consultation marker', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ reviews: [makeReview({ text: null })] })}
+      />,
+    );
+    const reviews = within(screen.getByTestId('profile-review-cards'));
+    expect(reviews.getByText('Rating only')).toBeInTheDocument();
+    expect(reviews.queryByLabelText('Verified client')).not.toBeInTheDocument();
     expect(screen.queryByText('“”')).not.toBeInTheDocument();
   });
 
@@ -434,27 +635,54 @@ describe('PublicDesignerProfile', () => {
       <PublicDesignerProfile
         portfolio={{
           ...portfolio,
+          reviewVisibility: {
+            ...portfolio.reviewVisibility,
+            google: { reviews: false, overallRating: false },
+          },
           sections: {
             ...portfolio.sections,
             trustCredentials: false,
             featuredTestimonial: false,
             reviews: false,
+            overallRating: false,
             shareBlock: false,
           },
         }}
       />,
     );
 
-    expect(screen.queryByRole('heading', { name: 'Verified on Tickif' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /their words/i })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'What it’s like to work with us.' }),
+      screen.queryByRole('heading', { name: 'Recognition on Tickif' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Client note' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Client ratings' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: /A portfolio worth sharing/i }),
     ).not.toBeInTheDocument();
-    // The studio section still renders — it isn't gated.
-    expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 2 })).toBeInTheDocument();
+    // The extra Studio section is intentionally absent from the Figma layout.
+    expect(
+      screen.queryByRole('heading', { name: 'Anika Spaces', level: 2 }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the Google rating summary when both review lists are disabled', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          sections: { ...portfolio.sections, reviews: false },
+          reviewVisibility: {
+            ...portfolio.reviewVisibility,
+            google: { ...portfolio.reviewVisibility.google, reviews: false, overallRating: true },
+          },
+          reviews: [],
+        }}
+      />,
+    );
+    expect(screen.getByRole('region', { name: 'Client ratings' })).toBeInTheDocument();
+    expect(screen.getByText('57 Google reviews')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Google client reviews' })).not.toBeInTheDocument();
   });
 
   it('withholds the rating everywhere when showOverallRating is off', () => {
@@ -472,35 +700,29 @@ describe('PublicDesignerProfile', () => {
     expect(screen.queryByText('Rating')).not.toBeInTheDocument();
   });
 
-  it('renders the studio identity, real stats, and real social handles', () => {
+  it('retains studio identity in the hero and real social links in the footer', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
-
-    const studioSection = screen
-      .getByRole('heading', { name: 'Anika Spaces', level: 2 })
-      .closest('section');
-
-    if (!studioSection) {
-      throw new Error('Studio section was not rendered');
-    }
-
-    const studio = within(studioSection);
-    expect(studio.getByLabelText('Verified studio')).toBeInTheDocument();
-    expect(studio.getByText('Established')).toBeInTheDocument();
-    expect(studio.getByText('2018')).toBeInTheDocument();
-    expect(studio.getByText('Projects published')).toBeInTheDocument();
-    expect(studio.getByText('₹10L+')).toBeInTheDocument();
-    const socialLinks = studio.getAllByRole('link', { name: '@anika' });
-    expect(socialLinks).toHaveLength(2);
-    expect(socialLinks[0]).toHaveAttribute('href', 'https://www.instagram.com/anika');
-    expect(socialLinks[1]).toHaveAttribute('href', 'https://www.linkedin.com/in/anika');
-    socialLinks.forEach((link) => {
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
-    });
-    expect(studio.getByRole('link', { name: 'anikaspaces.in' })).toHaveAttribute(
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeVisible();
+    expect(hero.getByText('2018')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Instagram' })).toHaveAttribute(
       'href',
-      'https://anikaspaces.in',
+      'https://www.instagram.com/anika',
     );
+    expect(screen.getByRole('link', { name: 'LinkedIn' })).toHaveAttribute(
+      'href',
+      'https://www.linkedin.com/in/anika',
+    );
+    expect(screen.getByRole('link', { name: 'anikaspaces.in' })).toHaveAttribute(
+      'href',
+      'https://anikaspaces.in/',
+    );
+    for (const label of ['Instagram', 'LinkedIn', 'anikaspaces.in']) {
+      expect(screen.getByRole('link', { name: label })).toHaveAttribute(
+        'rel',
+        'noopener noreferrer nofollow',
+      );
+    }
   });
 
   it('omits studio facts the designer has not filled in', () => {
@@ -529,10 +751,12 @@ describe('PublicDesignerProfile', () => {
     expect(screen.queryByText('Established')).not.toBeInTheDocument();
     expect(screen.queryByText('Typical budget')).not.toBeInTheDocument();
     expect(screen.queryByText('anikaspaces.in')).not.toBeInTheDocument();
-    expect(screen.getByText('Projects published')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Portfolio hero' })).getByText('Projects'),
+    ).toBeInTheDocument();
   });
 
-  it('renders each experience center with its location hierarchy and complete public details', () => {
+  it('switches the selected experience center and keeps its public details together', async () => {
     render(
       <PublicDesignerProfile
         portfolio={makePublicPortfolio({
@@ -570,19 +794,18 @@ describe('PublicDesignerProfile', () => {
       />,
     );
 
-    const section = screen.getByRole('region', { name: 'Experience centers' });
+    const section = screen.getByRole('region', { name: 'Experience centres' });
     const centers = within(section);
-    const centerGrid = centers.getByRole('list', { name: 'Experience centers' });
     const cards = section.querySelectorAll('[data-slot="experience-center-card"]');
-    expect(cards).toHaveLength(2);
-    expect(centerGrid).toHaveClass('sm:grid-cols-2', 'xl:grid-cols-3');
-    expect(cards[0]?.querySelector('h3')).toHaveClass('text-lg');
+    expect(cards).toHaveLength(1);
     expect(
       centers.getByRole('heading', { name: 'Whitefield Experience Center', level: 3 }),
     ).toBeInTheDocument();
-    expect(centers.getByRole('heading', { name: 'Powai Studio', level: 3 })).toBeInTheDocument();
+    expect(
+      centers.queryByRole('heading', { name: 'Powai Studio', level: 3 }),
+    ).not.toBeInTheDocument();
     expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeInTheDocument();
-    expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeInTheDocument();
+    expect(centers.getAllByText('12, 1st Main Road, Whitefield').length).toBeGreaterThan(0);
     expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
       'href',
       'tel:+919994645911',
@@ -595,6 +818,49 @@ describe('PublicDesignerProfile', () => {
       'rel',
       'noopener noreferrer nofollow',
     );
+    await userEvent.setup().click(centers.getByRole('tab', { name: 'Powai Studio' }));
+    expect(centers.getByRole('heading', { name: 'Powai Studio', level: 3 })).toBeInTheDocument();
+    expect(centers.getAllByText('4, Hiranandani Gardens, Powai').length).toBeGreaterThan(0);
+    expect(centers.queryByRole('link', { name: 'Open in Maps' })).not.toBeInTheDocument();
+  });
+
+  it('embeds a shared Google map while retaining a full Maps navigation link', () => {
+    const mapsUrl = 'https://www.google.com/maps/embed?pb=!1m18!2sWhitefield';
+    const container = document.createElement('div');
+    // Keep external iframe loading out of this server-markup regression.
+    container.innerHTML = renderToStaticMarkup(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          experienceCenterGroups: [
+            {
+              state: 'Karnataka',
+              centers: [
+                {
+                  name: 'Whitefield Studio',
+                  address: 'Whitefield',
+                  city: 'Bengaluru',
+                  state: 'Karnataka',
+                  mapsUrl,
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+    const section = container.querySelector('#centres');
+    expect(section?.querySelector('h2')).toHaveTextContent('Experience centres');
+    expect(section?.querySelector('iframe')).toHaveAttribute(
+      'title',
+      'Google Maps — Whitefield Studio',
+    );
+    expect(section?.querySelector('iframe')).toHaveAttribute('src', mapsUrl);
+    const link = section?.querySelector('a');
+    expect(link).toHaveTextContent('Open in Maps');
+    const destination = new URL(link!.getAttribute('href')!);
+    expect(destination.origin).toBe('https://www.google.com');
+    expect(destination.pathname).toBe('/maps/search/');
+    expect(destination.searchParams.get('query')).toBe('Whitefield, Bengaluru, Karnataka');
   });
 
   it('omits the experience centers section when data is absent or all groups are empty', () => {
@@ -603,7 +869,7 @@ describe('PublicDesignerProfile', () => {
         portfolio={makePublicPortfolio({ experienceCenterGroups: undefined })}
       />,
     );
-    expect(screen.queryByRole('region', { name: 'Experience centers' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Experience centres' })).not.toBeInTheDocument();
 
     rerender(
       <PublicDesignerProfile
@@ -612,7 +878,7 @@ describe('PublicDesignerProfile', () => {
         })}
       />,
     );
-    expect(screen.queryByRole('region', { name: 'Experience centers' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Experience centres' })).not.toBeInTheDocument();
   });
 
   it('omits unavailable contact actions and refuses unsafe map schemes', () => {
@@ -639,26 +905,15 @@ describe('PublicDesignerProfile', () => {
       />,
     );
 
-    const section = screen.getByRole('region', { name: 'Experience centers' });
+    const section = screen.getByRole('region', { name: 'Experience centres' });
     expect(within(section).queryByRole('link')).not.toBeInTheDocument();
-    expect(within(section).getByText('Bengaluru, Karnataka')).toBeInTheDocument();
+    expect(within(section).getAllByText('Bengaluru, Karnataka').length).toBeGreaterThan(0);
   });
 
   it('falls back to initials when the designer has no logo', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ logoUrl: null })} />);
 
     expect(screen.getAllByText('AS').length).toBeGreaterThan(0);
-  });
-
-  it('keeps the rating-card shadow visible instead of clipping it into a block', () => {
-    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
-
-    const ratingSummary = screen
-      .getByText('Based on 42 verified reviews')
-      .closest('[data-slot="card"]');
-
-    expect(ratingSummary).toHaveClass('shadow-floating-card');
-    expect(ratingSummary?.closest('.pb-20')).toBeInTheDocument();
   });
 
   it('builds displayed and copied profile links from the API canonical URL', async () => {
@@ -756,10 +1011,13 @@ describe('PublicDesignerProfile — KYC signals independent of Trust & Credentia
   it('keeps the hero Verified chip and story KYC line when Trust & Credentials is off', () => {
     render(<PublicDesignerProfile portfolio={trustOffButVerified()} />);
 
-    // Credentials section is gone (its heading "Verified on Tickif" is absent),
-    // so the only exact-"Verified" text node left is the hero chip.
-    expect(screen.queryByRole('heading', { name: 'Verified on Tickif' })).not.toBeInTheDocument();
-    expect(screen.getByText('Verified', { selector: 'span' })).toBeInTheDocument();
+    // Hiding recognition does not hide the independently controlled KYC signal.
+    expect(
+      screen.queryByRole('heading', { name: 'Recognition on Tickif' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Portfolio hero' })).getByText('Verified studio'),
+    ).toBeInTheDocument();
     // Story-card independent KYC line.
     expect(screen.getByText('KYC verified')).toBeInTheDocument();
     // The tickif verified tick (gated by sections.tickifBadge && isKycVerified) also remains.
@@ -769,10 +1027,10 @@ describe('PublicDesignerProfile — KYC signals independent of Trust & Credentia
   it('keeps the Trust & Credentials section and the KYC signals when it is on', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getByRole('heading', { name: 'Verified on Tickif' })).toBeInTheDocument();
-    // With the section on, "Verified" appears in both the hero chip and the
-    // section heading — assert the hero chip signal is present among them.
-    expect(screen.getAllByText('Verified', { selector: 'span' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('heading', { name: 'Recognition on Tickif' })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Portfolio hero' })).getByText('Verified studio'),
+    ).toBeInTheDocument();
     expect(screen.getByText('KYC verified')).toBeInTheDocument();
   });
 
@@ -800,7 +1058,7 @@ describe('PublicDesignerProfile — bio is not duplicated across sections (E-212
     // bio appears exactly once — in Studio details.
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ bio })} />);
 
-    expect(screen.getAllByText(bio)).toHaveLength(1);
+    expect(screen.queryAllByText(bio)).toHaveLength(0);
   });
 
   it('shows the bio at most twice when it is also the hero fallback (no tagline)', () => {
@@ -822,12 +1080,10 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
     // Baseline: the default fixture has badges, a testimonial, projects and reviews.
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getByRole('heading', { name: 'Verified on Tickif' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Recognition on Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Selected projects/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /their words/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'What it’s like to work with us.' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Client note' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Client ratings' })).toBeInTheDocument();
   });
 
   it('hides the Credentials section (wrapper + heading) when there are no badges, even with the section enabled', () => {
@@ -842,7 +1098,9 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
       />,
     );
 
-    expect(screen.queryByRole('heading', { name: 'Verified on Tickif' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Recognition on Tickif' }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Earned through real work')).not.toBeInTheDocument();
   });
 
@@ -858,7 +1116,7 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
       />,
     );
 
-    expect(screen.queryByRole('heading', { name: /their words/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Client note' })).not.toBeInTheDocument();
   });
 
   it('hides the Reviews section heading when there are neither ratings nor reviews', () => {
@@ -873,10 +1131,8 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
       />,
     );
 
-    expect(
-      screen.queryByRole('heading', { name: 'What it’s like to work with us.' }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Client ratings' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('profile-review-cards')).not.toBeInTheDocument();
   });
 
   it('hides the Portfolio section heading when there are no published projects', () => {

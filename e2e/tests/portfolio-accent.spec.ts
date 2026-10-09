@@ -160,7 +160,9 @@ test('custom portfolio accent previews validates saves reloads and discards on d
       await page.goto(`/d/${slug}`);
       await expect(page.locator('main')).toHaveCSS('--primary', hex);
       await expect(page.locator('main .bg-primary').first()).toHaveCSS('color', foreground);
-      const headingEmphasis = page.getByText('words', { exact: true });
+      const headingEmphasis = page
+        .getByRole('region', { name: 'Client note' })
+        .locator('blockquote');
       await expect(headingEmphasis).toBeVisible();
       expect(
         await headingEmphasis.evaluate((element) => {

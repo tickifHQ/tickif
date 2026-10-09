@@ -32,6 +32,14 @@ for (const asset of manifest.staticAssets) {
   }
   assert(asset.rootWidth > 0 && asset.rootHeight > 0);
   assert(asset.slots.length > 0 && asset.slots.every(Boolean));
+  if (asset.runtimePath) {
+    const runtime = fs.readFileSync(path.join(repository, asset.runtimePath));
+    assert.equal(
+      createHash('sha256').update(runtime).digest('hex'),
+      asset.sha256,
+      `${asset.runtimePath} differs from the original Figma export`,
+    );
+  }
 }
 
 const spec = read('token-spec.json');

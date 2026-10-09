@@ -3,8 +3,7 @@
 The new designer portfolio is the visual source for the shared system. Runtime
 theme values, components, a crown presentation primitive and an interactive
 gallery now apply that reference. The user approved the component gallery on
-7 October 2026 for publication in the single shared phase PR. Detailed profile
-composition is the next phase.
+7 October 2026 for publication in the single shared phase PR. The real /d/[slug] profile composition is implemented locally and remains in phase 2 review.
 
 ## Sources and coverage
 
@@ -19,8 +18,55 @@ fresh high-fidelity contexts now include all eleven desktop and mobile sections,
 including the footer. The desktop subtree contains no component instances or
 bound variables; Code Connect lookup is unavailable on the current Figma plan.
 The mobile frame's own opacity is 1%, explaining its faint screenshots; that
-canvas setting must not be copied into the application. Full profile integration
-and visual comparison remain phase 2 work.
+canvas setting must not be copied into the application. Fresh contexts for all sections were retrieved again on 8 October. The real profile now implements these compositions; circular proof text uses the exact geometry retrieved through the Plugin API. Centres can now embed official Google Maps Share URLs through the shared `GoogleMapEmbed`. The local demo uses two Bengaluru neighbourhoods. Figma's custom geographic illustration, centre media, opening hours and centre ratings remain unsupported by the current data contract.
+
+The latest profile corrections use six project cards and two Google review cards
+per displayed page, with shared Pagination and Carousel controls. Client ratings
+are Google-only, with no source tabs. The rating distribution describes available
+cached reviews and is labelled as a sample when fewer than the aggregate count
+are available. Existing Tickif review writing/editing, moderation and pagination
+remain available through booking links and legacy #tickif-reviews links, which
+open the explicit review=tickif entry.
+That entry respects the portfolio's Tickif overall-rating visibility setting:
+disabling the summary hides its aggregate and histogram while review cards and
+review actions remain available.
+
+Centres use floating 34px Figma controls with unchanged exported active/inactive
+pins over a real Google map, beside a 400px details panel. Mobile maps are 400px
+high. Overview/About tabs remain functional. Portfolio imagery is labelled as
+such; centre-specific media and hours are not invented. The extra Studio section
+and hero Share action are removed; there is no designer save/like API. The share
+card and footer social links remain. The token specification now contains 68
+entries, including the source location-control shadow.
+
+### Supplied HTML motion reference
+
+The user supplied Anika Spaces Portfolio (4).html on 8 October 2026. Its SHA-256
+is 29d1499be55de7d0e7e1bd7b52ecbd42ca3f7a95ecc8948b4e1c21620564678a. The bundled
+JSON template was decoded and its CSS and component source inspected as data;
+its bundler, third-party runtime, demo data and actions are not application code.
+
+The live profile adapts these effects to existing components:
+
+| Effect            | Source timing / behavior                                                                     | Application                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Scroll reveal     | 32px rise; 1s cubic-bezier(.2,.7,.2,1); 12% intersection                                     | Section headings, projects, recognition, testimonial, ratings, centres and sharing |
+| Stagger           | Projects alternate 120ms; recognition 80ms; reviews 90ms                                     | Newly rendered cards register after pagination too                                 |
+| Statistics        | 1.6s cubic ease-out; founded year starts at 1990                                             | Real hero values; currency ranges stay unchanged; accessible labels stay final     |
+| Seal orbit        | 60s linear rotation                                                                          | Inner SVG group rotates while its frame stays centred                              |
+| Card tilt / light | +/-7deg Y, +/-6deg X; 120ms pointer response; 700ms reset                                    | Fine pointers only; coalesced animation frames and moving sheen                    |
+| Stamp entrance    | 700ms overshoot; 500ms + 220ms stagger                                                       | First visible identity card; existing seal artwork retained                        |
+| Wreath appearance | 500ms fade                                                                                   | Whole exported wreath fades; individual baked SVG leaves remain unchanged          |
+| Hover             | Project image 1.04x / 1s; recognition -4px / 400ms; share card straightens and lifts / 600ms | Hover-capable fine pointers only                                                   |
+| Centres           | 450ms panel fade/rise; 250ms selector colour change                                          | Real Maps embed and detail tabs; no fabricated animated map pin                    |
+| Contact           | 1.8s pulse; dock 500ms slide and 400ms fade                                                  | Existing enquiry flow; hidden dock is inert and removed from accessibility tree    |
+
+Server-rendered content is visible without JavaScript. Reduced-motion preference
+changes cancel frames, restore final numbers and reveal content immediately.
+Offscreen looping effects and background-tab motion pause. The client leaf scopes
+all observers/listeners to this profile and cleans them up on unmount. No new
+animation dependency is required. The source's unused icon/ticker demos and
+removed Studio section are not reintroduced.
 
 The first programmatic style response was truncated at 20KB. Only its complete
 palette and frame inventory were retained; do not treat it as a full variable,
@@ -45,7 +91,7 @@ reference code and remaining screenshots are cached locally under the ignored
 `.ui-refresh.local` directory; obtain fresh MCP context when that cache is absent.
 
 Run `node docs/architecture/ui-refresh/verify.mjs` from the repository root to check
-asset bytes/dimensions and SHA-256 hashes, token provenance, caller paths, and proposed contrast
+asset bytes/dimensions and SHA-256 hashes (including unchanged runtime copies), token provenance, caller paths, and proposed contrast
 ratios without changing the artifacts. Rebuild the component inventory when
 source files change; this verifier does not discover new callers or routes.
 
@@ -86,10 +132,9 @@ consultation block in the light reference as a full dark-mode specification.
 
 Figma uses Helvetica Neue Medium for display headings, Inter for body text,
 and JetBrains Mono for metadata. No Helvetica Neue webfont files were found in
-the repository. Use the existing loaded Inter family at weight 500 as the
-portable heading fallback until an approved Helvetica Neue webfont is supplied.
-Record the fallback as a visual deviation and compare wrapping at each width;
-do not depend on a locally installed font for consistent cross-platform output.
+the repository. Display text uses Helvetica Neue/Helvetica/Arial, with the
+user's fallback approval on 8 October; body and metadata retain their loaded
+fonts. Exact Helvetica Neue metrics still require a licensed webfont.
 
 Keep `--font-body`, `--font-heading`, and `--font-code` as the theme contracts.
 The app loads Inter and JetBrains Mono through `next/font`, with their font
@@ -215,7 +260,9 @@ preserve real centre selection, links, and location data when making it live.
 
 ## Current implementation and remaining profile extraction
 
-The gallery at `/design-system` now exercises all 35 shared component files.
+The phase 1 gallery at `/design-system` exercises its 35 shared component files.
+The additional `GoogleMapEmbed` brings the audit to 36 and is exercised in the
+real public profile's centre section.
 New light/dark values replace the old dark heading/ghost contrast issues.
 Generic form controls, reduced-motion states, custom accent behavior, and exact
 crown exports are included. Generated baseline and verification screenshots
@@ -224,13 +271,13 @@ The [component review guide](../../guides/shared-ui-review.md) records each
 component's behavior; the [handoff](../../guides/ui-refresh-handoff.md) tracks
 validation and the user confirmation gate.
 
-- [ ] Restore primary-account MCP capacity or provide the required file access
+- [x] Restore primary-account MCP capacity or provide the required file access
       to the other connected account.
-- [ ] Fetch high-fidelity desktop footer and mobile section context, screenshots,
+- [x] Fetch high-fidelity desktop footer and mobile section context, screenshots,
       and any additional assets or responsive values.
 - [ ] Re-run a compact style/variable/component-origin audit in outputs below
       the 20KB response cap. Honor any discovered Code Connect/component mappings.
-- [ ] Retrieve fresh desktop/mobile motion context.
+- [x] Retrieve fresh desktop/mobile motion context.
 - [ ] Capture designer, visitor, and admin baseline screenshots with suitable
       fixtures/session access; the unauthenticated `/design-system` baseline exists.
 - [ ] Complete profile fidelity and role-page validation after shared-component
@@ -238,3 +285,13 @@ validation and the user confirmation gate.
 
 See [the phased handoff](../../guides/ui-refresh-handoff.md) for delivery tracking,
 completion gates, and subsequent role rollout.
+
+## Portfolio configuration compatibility
+
+The owner editor and public profile share recognition artwork through
+`apps/web/src/lib/portfolio-recognition.ts` and the UI package RecognitionBadge.
+Google summary visibility is independent of review-card visibility; the public
+section and navigation follow the available enabled Google content. Existing
+publication gates, editor persistence, enquiry authorization and explicit Tickif
+review entry routes remain in place. See the [publishing audit](../../guides/portfolio-publishing-audit.md)
+for verified owner/visitor workflows and remaining external-provider limits.
