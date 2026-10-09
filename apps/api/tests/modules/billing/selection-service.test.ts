@@ -78,6 +78,54 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe('billing selection and signed consent', () => {
+  it.each(['corporate', 'hobby'] as const)(
+    'rejects a %s quote when its paid period expires before confirmation',
+    async (targetTier) => {
+      mocks.find.mockResolvedValue(active);
+      vi.setSystemTime(new Date('2026-09-30T23:59:45Z'));
+      mocks.fetch.mockResolvedValue(remote);
+      const preview = await billingSelectionService.preview(caller, { targetTier });
+      expect(preview.confirmationAllowed).toBe(true);
+      vi.advanceTimersByTime(30_000);
+      await expect(
+        validateBillingPreview(caller, {
+          targetTier,
+          previewToken: preview.previewToken,
+          operationId,
+        }),
+      ).rejects.toMatchObject({ code: 'preview_stale', status: 409 });
+    },
+  );
+  it.each([
+    ['expired', remote.current_start, Date.parse('2026-09-22T00:00:00Z') / 1000],
+    ['at expiry', remote.current_start, Date.parse('2026-09-23T00:00:00Z') / 1000],
+    ['reversed', remote.current_end, remote.current_start],
+    ['future', remote.current_end, remote.current_end + 86400],
+    ['fractional', remote.current_start + 0.5, remote.current_end],
+  ])('blocks changes for an active subscription with a %s period', async (_, start, end) => {
+    mocks.find.mockResolvedValue(active);
+    mocks.fetch.mockResolvedValue({ ...remote, current_start: start, current_end: end });
+    const context = await billingSelectionService.context(caller);
+    expect(context.currentTier).toBe('professional_plus');
+    expect(context.actions.find((entry) => entry.targetTier === 'professional_plus')?.action).toBe(
+      'current',
+    );
+    for (const targetTier of ['corporate', 'hobby'] as const) {
+      expect(context.actions.find((entry) => entry.targetTier === targetTier)).toMatchObject({
+        action: 'blocked',
+        reason: 'billing_period_unverified',
+        effectiveAt: null,
+      });
+      expect(await billingSelectionService.preview(caller, { targetTier })).toMatchObject({
+        action: 'blocked',
+        reason: 'billing_period_unverified',
+        confirmationAllowed: false,
+        effectiveAt: null,
+        nextRenewalAt: null,
+        adjustmentAmount: null,
+      });
+    }
+  });
   it('blocks checkout while a no-card trial is active without reading the provider', async () => {
     mocks.find.mockResolvedValue({
       ...active,

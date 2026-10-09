@@ -38,15 +38,24 @@ export async function assertBillingAccess(caller: BillingCaller) {
   )
     throw AppError.forbidden('Organization billing access required');
 }
+const validTimestamp = (seconds: number | null | undefined): seconds is number =>
+  typeof seconds === 'number' &&
+  Number.isSafeInteger(seconds) &&
+  seconds > 0 &&
+  seconds <= 8_640_000_000_000;
 const iso = (seconds: number | null | undefined) =>
-  seconds ? new Date(seconds * 1000).toISOString() : null;
+  validTimestamp(seconds) ? new Date(seconds * 1000).toISOString() : null;
 function sign(value: string) {
   return createHmac('sha256', config.BETTER_AUTH_SECRET)
     .update(`billing-preview:${value}`)
     .digest('hex');
 }
 
-async function snapshot(caller: BillingCaller, reader: Reader = subscribeRepository) {
+async function snapshot(
+  caller: BillingCaller,
+  reader: Reader = subscribeRepository,
+  quotedAt = Math.floor(Date.now() / 1000),
+) {
   const local = await reader.find(caller.activeOrgId!);
   let remote: Awaited<ReturnType<typeof fetchSubscription>> | null = null;
   let unknown = false;
@@ -69,7 +78,14 @@ async function snapshot(caller: BillingCaller, reader: Reader = subscribeReposit
   }
   const currentTier = local?.planTier ?? 'hobby';
   const terminal = !!remote && ['cancelled', 'expired', 'completed'].includes(remote.status);
-  const effectiveAt = iso(remote?.current_end);
+  const periodVerified =
+    validTimestamp(remote?.current_start) &&
+    validTimestamp(remote?.current_end) &&
+    remote.current_start <= quotedAt &&
+    quotedAt < remote.current_end &&
+    Math.floor(Date.now() / 1000) < remote.current_end;
+  const effectiveAt =
+    remote?.status === 'active' && !periodVerified ? null : iso(remote?.current_end);
   const checkout =
     remote && ['created', 'authenticated'].includes(remote.status)
       ? {
@@ -111,6 +127,13 @@ async function snapshot(caller: BillingCaller, reader: Reader = subscribeReposit
       return targetTier === 'hobby' ? result('current') : result('subscribe');
     if (remote.status !== 'active' || (local && local.subscriptionState !== 'active'))
       return result('blocked', 'payment_recovery_required');
+    // An active status alone does not establish a paid period. Never quote a
+    // past cancellation date or pass stale/malformed timestamps to proration.
+    if (
+      !periodVerified &&
+      (targetTier === 'hobby' || (remote.current_start != null && remote.current_end != null))
+    )
+      return result('blocked', 'billing_period_unverified');
     if (targetTier === 'hobby')
       return result(
         'cancel',
@@ -135,6 +158,7 @@ async function snapshot(caller: BillingCaller, reader: Reader = subscribeReposit
     context,
     local,
     remote,
+    periodVerified,
     revision: sign(JSON.stringify({ local, remote, actions, scheduledChange })),
   };
 }
@@ -187,7 +211,7 @@ async function buildPreview(
       ),
     };
   }
-  const state = await snapshot(caller, reader);
+  const state = await snapshot(caller, reader, quotedAt);
   const action = state.context.actions.find((entry) => entry.targetTier === targetTier)!;
   let recurringAmount: number | null = targetTier === 'hobby' ? 0 : null;
   let currency: string | null = targetTier === 'hobby' ? 'INR' : null;
@@ -263,7 +287,10 @@ async function buildPreview(
             getPlanChangeTiming(state.context.currentTier, targetTier) === 'now'
           ? new Date(quotedAt * 1000).toISOString()
           : action.effectiveAt,
-    nextRenewalAt: iso(state.remote?.current_end),
+    nextRenewalAt:
+      state.remote?.status === 'active' && !state.periodVerified
+        ? null
+        : iso(state.remote?.current_end),
     nextEligibleAction: action.action === 'recover' ? 'subscribe' : null,
     nextEligibleAt: action.action === 'recover' ? action.effectiveAt : null,
     reason: action.reason,
