@@ -6,9 +6,9 @@ test('public sign-in opens over the current page and closes back to it', async (
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.goto('/');
-  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Sign in' }).click();
+  await page.getByRole('link', { name: 'Log in', exact: true }).click();
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('dialog', { name: 'Sign in to continue' })).toBeVisible();
@@ -24,7 +24,10 @@ test('public sign-in opens over the current page and closes back to it', async (
 
 test('designer sign-in opens in designer mode over the current page', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: 'List your work' }).click();
+  await page
+    .getByRole('banner')
+    .getByRole('link', { name: 'List your projects', exact: true })
+    .click();
 
   await expect(page).toHaveURL(/\/login\?mode=designer$/);
   await expect(page.getByRole('dialog', { name: 'Sign in to continue' })).toBeVisible();
@@ -40,7 +43,7 @@ test('designer sign-in opens in designer mode over the current page', async ({ p
 test('a protected public navigation action opens sign-in over the current page', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/designers');
   await page
     .getByRole('navigation', { name: 'Primary' })
     .getByRole('link', {
@@ -80,7 +83,7 @@ test('phone OTP in the dialog rejects a wrong code then completes visitor sign-i
   const phoneNumber = `+9193${randomInt(10_000_000, 99_999_999)}`;
   try {
     await page.goto('/');
-    await page.getByRole('link', { name: 'Sign in' }).click();
+    await page.getByRole('link', { name: 'Log in', exact: true }).click();
     await page.getByPlaceholder('9123456789').fill(phoneNumber.slice(3));
     await page.getByRole('button', { name: 'Get OTP', exact: true }).click();
     const firstDigit = page.getByRole('textbox', { name: 'OTP digit 1', exact: true });
