@@ -352,6 +352,20 @@ describe('DesignerPlanBilling', () => {
       expect(screen.queryByText('Access until')).not.toBeInTheDocument();
     });
 
+    it('shows pending confirmation when the active renewal date is unverified', () => {
+      render(
+        <DesignerPlanBilling
+          billing={makeBilling({
+            renewalDate: null,
+            billing: { ...makeBilling().billing!, nextBillingDate: null },
+          })}
+        />,
+      );
+      expect(screen.getByText('Renewal date is awaiting confirmation.')).toBeInTheDocument();
+      expect(screen.getByText('Awaiting confirmation')).toBeInTheDocument();
+      expect(screen.queryByText(/renews on/)).not.toBeInTheDocument();
+    });
+
     // E-290: a subscription scheduled for cancellation is still `active`, so the
     // period-end date must be shown as an expiry, not a renewal/next-payment.
     describe('scheduled cancellation (E-290)', () => {

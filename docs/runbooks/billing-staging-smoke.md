@@ -26,6 +26,10 @@ reversed, future or malformed period blocks confirmation with
 `billing_period_unverified`; it does not fabricate a renewal date or change the
 current entitlement. Missing periods continue to use the existing paid-plan
 recovery flow, while cancellation remains blocked until its end date is verified.
+The shared server/client billing view model suppresses an expired or malformed
+active-period date without changing the tier, lifecycle or access. The overview
+shows that its renewal date is awaiting confirmation; historical dates in failed
+payment states remain available. Verify this display alongside the preview guard.
 
 On 9 October 2026, read-only checks of the staging QA designer found that both the
 local subscription and Razorpay Test Mode reported active status with a period

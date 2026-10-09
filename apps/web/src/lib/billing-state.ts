@@ -24,8 +24,18 @@ export const HOBBY_DEFAULT: BillingState = {
 };
 
 /** Keep server rendering and client reconciliation on the same complete view model. */
-export function mapSubscriptionToBillingState(sub: SubscriptionResponse): BillingState {
+export function mapSubscriptionToBillingState(
+  sub: SubscriptionResponse,
+  observedAt = Date.now(),
+): BillingState {
   const price = PLAN_TIER_PRICES[sub.tier];
+  // An active provider status can outlive its last known cycle. Keep access
+  // intact, but do not present a past or malformed date as the next renewal.
+  const periodEnd = sub.currentPeriodEnd ? Date.parse(sub.currentPeriodEnd) : NaN;
+  const displayPeriodEnd =
+    sub.lifecycleState === 'active' && !(Number.isFinite(periodEnd) && periodEnd > observedAt)
+      ? null
+      : sub.currentPeriodEnd;
 
   return {
     ...(sub.earlyBirdTrial ? { earlyBirdTrial: sub.earlyBirdTrial } : {}),
@@ -34,7 +44,7 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
     razorpayStatus: sub.razorpayStatus,
     cancellationScheduled: sub.cancellationScheduled,
     preLapseTier: sub.preLapseTier,
-    renewalDate: sub.currentPeriodEnd,
+    renewalDate: displayPeriodEnd,
     subscriptionId: sub.razorpaySubscriptionId ?? null,
     usage: {
       seats: {
@@ -53,7 +63,7 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
     billing:
       sub.tier !== 'hobby' && !sub.earlyBirdTrial
         ? {
-            nextBillingDate: sub.currentPeriodEnd,
+            nextBillingDate: displayPeriodEnd,
             billingCycle: 'monthly',
             planAmount: price,
             tax: 0,
