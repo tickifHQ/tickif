@@ -300,6 +300,27 @@ describe('DesignerProjectUpload', () => {
     expect(screen.queryByText('About this room')).not.toBeInTheDocument();
   });
 
+  it.each(['2026-13', '2026-', 'abc'])(
+    'rejects an invalid completion month %s before saving the draft',
+    async (month) => {
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      const field = screen.getByRole('textbox', { name: 'Project completed by' });
+      await user.clear(field);
+      await user.type(field, month);
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+      expect(
+        await screen.findByText('Enter a valid project completion month in YYYY-MM format.'),
+      ).toBeInTheDocument();
+      expect(mock.projectPatch).not.toHaveBeenCalled();
+      expect(mock.createProject).not.toHaveBeenCalled();
+      expect(mock.roomPatch).not.toHaveBeenCalled();
+    },
+  );
+
   it('preserves a saved legacy budget and leaves stored room descriptions untouched on save', async () => {
     const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
     project.budgetBandSlug = 'moderate';
@@ -313,7 +334,7 @@ describe('DesignerProjectUpload', () => {
     const user = userEvent.setup();
     const { container } = render(<DesignerProjectUpload initialProjectId={project.id} />);
     await screen.findByDisplayValue('2 BHK in Adyar');
-    expect(selectWithOption(container, '₹5L - ₹15L')).toHaveValue('moderate');
+    expect(selectWithOption(container, '₹5L - ₹15L')).toHaveTextContent('₹5L - ₹15L');
     await user.click(screen.getByRole('button', { name: 'Save as draft' }));
     await waitFor(() => expect(mock.roomPatch).toHaveBeenCalled());
     expect(mock.projectPatch).toHaveBeenCalledWith(
@@ -325,12 +346,15 @@ describe('DesignerProjectUpload', () => {
   });
 
   function selectWithOption(container: HTMLElement, optionLabel: string) {
-    const select = Array.from(container.querySelectorAll('select')).find((candidate) =>
-      Array.from(candidate.options).some((option) => option.textContent === optionLabel),
-    );
-
-    if (!select) throw new Error(`Could not find select containing option "${optionLabel}"`);
-    return select;
+    const fieldLabels: Record<string, string | RegExp> = {
+      '₹5L - ₹15L': 'Cost range',
+      '2 BHK': /BHK|Bedrooms/i,
+      Chennai: 'City',
+      Adyar: 'Locality / Area',
+    };
+    const label = fieldLabels[optionLabel];
+    if (!label) throw new Error(`No field label configured for example option "${optionLabel}"`);
+    return within(container).getByRole('combobox', { name: label });
   }
 
   it('requires confirmation before deleting an image and keeps it removed when refresh fails', async () => {
@@ -569,14 +593,14 @@ describe('DesignerProjectUpload', () => {
       />,
     );
     await screen.findByDisplayValue('2 BHK in Adyar');
-    expect(selectWithOption(container, '2 BHK')).toHaveValue('2-bhk');
+    expect(selectWithOption(container, '2 BHK')).toHaveTextContent('2 BHK');
     await user.click(screen.getByRole('button', { name: 'Withdraw and edit' }));
 
     expect(mock.withdrawPost).toHaveBeenCalledWith({
       param: { id: '11111111-1111-4111-8111-111111111111' },
     });
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
-    expect(selectWithOption(container, '2 BHK')).toHaveValue('2-bhk');
+    expect(selectWithOption(container, '2 BHK')).toHaveTextContent('2 BHK');
   });
 
   it('saves minor edits to the live project without submitting a review', async () => {
@@ -1058,12 +1082,21 @@ describe('DesignerProjectUpload', () => {
     const { container } = render(<DesignerProjectUpload />);
 
     await screen.findByText('Upload project');
-    await screen.findByText('2 BHK');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'BHK' })).not.toHaveTextContent('Loading'),
+    );
 
-    await user.selectOptions(selectWithOption(container, '2 BHK'), '2-bhk');
-    await user.selectOptions(selectWithOption(container, 'Chennai'), 'chennai');
-    await screen.findByText('Adyar');
-    await user.selectOptions(selectWithOption(container, 'Adyar'), 'adyar');
+    await user.click(selectWithOption(container, '2 BHK'));
+    await user.click(await screen.findByRole('option', { name: '2 BHK' }));
+    await user.click(selectWithOption(container, 'Chennai'));
+    await user.click(await screen.findByRole('option', { name: 'Chennai' }));
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Locality / Area' })).not.toHaveTextContent(
+        'Loading',
+      ),
+    );
+    await user.click(selectWithOption(container, 'Adyar'));
+    await user.click(await screen.findByRole('option', { name: 'Adyar' }));
     await user.click(screen.getByRole('button', { name: /step 3 project metadata/i }));
 
     expect(screen.getByDisplayValue('2 BHK in Adyar')).toBeInTheDocument();
@@ -1074,7 +1107,9 @@ describe('DesignerProjectUpload', () => {
     const { container } = render(<DesignerProjectUpload />);
 
     await screen.findByText('Upload project');
-    await screen.findByText('2 BHK');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'BHK' })).not.toHaveTextContent('Loading'),
+    );
 
     // Taxonomy city dropdown is the default control.
     expect(selectWithOption(container, 'Chennai')).toBeInTheDocument();
@@ -1088,7 +1123,8 @@ describe('DesignerProjectUpload', () => {
     expect(screen.queryByRole('option', { name: 'Chennai' })).not.toBeInTheDocument();
 
     // The custom city feeds the autogenerated project title (city label path).
-    await user.selectOptions(selectWithOption(container, '2 BHK'), '2-bhk');
+    await user.click(selectWithOption(container, '2 BHK'));
+    await user.click(await screen.findByRole('option', { name: '2 BHK' }));
     await user.type(customCityInput, 'Pondicherry');
     await user.click(screen.getByRole('button', { name: /step 3 project metadata/i }));
 
@@ -1100,7 +1136,9 @@ describe('DesignerProjectUpload', () => {
     const { container } = render(<DesignerProjectUpload />);
 
     await screen.findByText('Upload project');
-    await screen.findByText('2 BHK');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'BHK' })).not.toHaveTextContent('Loading'),
+    );
 
     await user.click(screen.getByRole('button', { name: /enter a custom city/i }));
     await user.type(screen.getByLabelText('City'), 'Pondicherry');
@@ -1255,12 +1293,21 @@ describe('DesignerProjectUpload', () => {
     const { container } = render(<DesignerProjectUpload />);
 
     await screen.findByText('Upload project');
-    await screen.findByText('2 BHK');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'BHK' })).not.toHaveTextContent('Loading'),
+    );
 
-    await user.selectOptions(selectWithOption(container, '2 BHK'), '2-bhk');
-    await user.selectOptions(selectWithOption(container, 'Chennai'), 'chennai');
-    await screen.findByText('Adyar');
-    await user.selectOptions(selectWithOption(container, 'Adyar'), 'adyar');
+    await user.click(selectWithOption(container, '2 BHK'));
+    await user.click(await screen.findByRole('option', { name: '2 BHK' }));
+    await user.click(selectWithOption(container, 'Chennai'));
+    await user.click(await screen.findByRole('option', { name: 'Chennai' }));
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Locality / Area' })).not.toHaveTextContent(
+        'Loading',
+      ),
+    );
+    await user.click(selectWithOption(container, 'Adyar'));
+    await user.click(await screen.findByRole('option', { name: 'Adyar' }));
     await user.click(screen.getByRole('button', { name: /step 3 project metadata/i }));
 
     const input = screen.getByDisplayValue('2 BHK in Adyar');

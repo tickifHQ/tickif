@@ -12,6 +12,8 @@ These documents explain how to work on Tickif. Before implementation, follow
 | [Database and migrations](./database-and-migrations.md) | Schema-change workflow, migration warnings and repository queries |
 | [Testing](./testing.md)                                 | Vitest, isolated integration targets and Playwright               |
 | [Troubleshooting](./troubleshooting.md)                 | Configuration, dependencies, framework typing and builds          |
+| [Shared UI review](./shared-ui-review.md)               | Component gallery, states, behavior and approval checklist        |
+| [UI refresh handoff](./ui-refresh-handoff.md)           | Phased rollout, current progress and delivery constraints         |
 
 The [critical E2E journeys](../../e2e/critical-journeys.md) and
 [verification lifecycle check](../../e2e/verification-lifecycle.md) remain beside

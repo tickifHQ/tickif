@@ -1,0 +1,47 @@
+{
+  "method": "WCAG relative luminance for opaque sRGB pairs; a specification check, not complete rendered accessibility validation.",
+  "contrast": [
+    {
+      "role": "primary",
+      "foreground": "#ffffff",
+      "background": "#1e7a55",
+      "ratio": 5.29
+    },
+    {
+      "role": "muted",
+      "foreground": "#6b675c",
+      "background": "#ffffff",
+      "ratio": 5.65
+    },
+    {
+      "role": "secondary body",
+      "foreground": "#4a473f",
+      "background": "#ffffff",
+      "ratio": 9.27
+    },
+    {
+      "role": "inverse",
+      "foreground": "#f4f0e8",
+      "background": "#0f3326",
+      "ratio": 12.14
+    },
+    {
+      "role": "soft CTA",
+      "foreground": "#0f3326",
+      "background": "#8fd8b4",
+      "ratio": 8.31
+    },
+    {
+      "role": "dark primary",
+      "foreground": "#0f3326",
+      "background": "#8fd8b4",
+      "ratio": 8.31
+    },
+    {
+      "role": "dark muted",
+      "foreground": "#bbb6a8",
+      "background": "#18261f",
+      "ratio": 7.76
+    }
+  ]
+}

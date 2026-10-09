@@ -19,6 +19,13 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  ['shared-ui.spec.ts', 'shared typography uses loaded brand fonts instead of the system fallback'],
+  ['shared-ui.spec.ts', 'button and badge labels share a tight centered line box at every size'],
+  ['shared-ui.spec.ts', 'shared form controls reset native and controlled values together'],
+  ['shared-ui.spec.ts', 'select opens a themed popup with keyboard selection and dismissal'],
+  ['shared-ui.spec.ts', 'a select inside a dialog keeps both focus scopes usable'],
+  ['shared-ui.spec.ts', 'month selection can be cleared with a pointer and selected again'],
+  ['shared-ui.spec.ts', 'shared overlays respect reduced motion and preserve keyboard dismissal'],
   ['project-photo-reorder.spec.ts', 'photo ordering persists with desktop mouse and keyboard'],
   ['project-photo-reorder.spec.ts', 'photo ordering persists with phone touch'],
   [

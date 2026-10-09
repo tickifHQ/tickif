@@ -13,12 +13,13 @@ import {
 } from '@repo/ui/components/pagination';
 import { cn } from '@repo/ui/lib/utils';
 import {
-  ChevronsLeft,
-  ChevronsRight,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsUpDown,
-} from 'lucide-react';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@repo/ui/components/select';
+import { ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const DEFAULT_PAGE_SIZES = [12, 24, 36, 48] as const;
 
@@ -241,22 +242,21 @@ export function ListPagination({
             <label className="sr-only" htmlFor={pageSizeId}>
               Rows per page
             </label>
-            <div className="relative">
-              <select
+            <Select value={String(limit)} disabled={disabled} onValueChange={handleLimitChange}>
+              <SelectTrigger
                 id={pageSizeId}
-                value={String(limit)}
-                disabled={disabled}
-                onChange={(event) => handleLimitChange(event.target.value)}
-                className="h-8 appearance-none rounded-md border border-border bg-background px-3 pr-8 text-sm leading-none font-medium text-muted-foreground shadow-xs outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+                className="h-8 w-auto px-3 text-sm/none font-medium text-muted-foreground"
               >
+                <SelectValue>{limit} / page</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
                 {pageSizes.map((option) => (
-                  <option key={option} value={option}>
+                  <SelectItem key={option} value={String(option)}>
                     {option} / page
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-              <ChevronsUpDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            </div>
+              </SelectContent>
+            </Select>
           </>
         ) : null}
       </div>

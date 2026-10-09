@@ -7,7 +7,20 @@ import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
 
-const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthLabels = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 type MonthPickerFieldProps = {
   className?: string;
@@ -46,7 +59,9 @@ export function MonthPickerField({
   const [visibleYear, setVisibleYear] = useState(() => parseYear(value, currentYear));
   const containerRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const [pickerRect, setPickerRect] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [pickerRect, setPickerRect] = useState<{ left: number; top: number; width: number } | null>(
+    null,
+  );
   const selectedValue = useMemo(() => value.trim(), [value]);
 
   const updatePickerRect = useCallback(() => {
@@ -95,12 +110,17 @@ export function MonthPickerField({
   }
 
   return (
-    <div className={cn('space-y-1.5', className)}>
-      <Label htmlFor={inputId} className="text-sm font-medium text-foreground">{label}</Label>
+    <div className={cn('flex flex-col gap-2', className)}>
+      <Label htmlFor={inputId} className="text-sm font-medium text-foreground">
+        {label}
+      </Label>
       <div ref={containerRef} className="relative">
         <Input
           id={inputId}
-          type="month"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{4}-(0[1-9]|1[0-2])"
+          maxLength={7}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onClick={() => setOpen(true)}
@@ -115,7 +135,7 @@ export function MonthPickerField({
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute right-1 top-1/2 size-8 -translate-y-1/2"
+            className="absolute inset-y-0 right-1 my-auto size-8"
             onClick={(event) => {
               event.stopPropagation();
               onChange('');
@@ -131,7 +151,7 @@ export function MonthPickerField({
             ref={pickerRef}
             role="dialog"
             aria-label={`${label} month picker`}
-            className="fixed z-50 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
+            className="fixed z-50 rounded-popover border border-border bg-popover p-3 text-popover-foreground shadow-popover"
             style={{ left: pickerRect.left, top: pickerRect.top, width: pickerRect.width }}
             onMouseDown={(event) => event.preventDefault()}
           >
@@ -166,19 +186,17 @@ export function MonthPickerField({
                 const selected = monthValue === selectedValue;
 
                 return (
-                  <button
+                  <Button
                     key={month}
                     type="button"
+                    size="sm"
+                    shape="rounded"
+                    variant={selected ? 'default' : 'ghost'}
                     onClick={() => selectMonth(index)}
-                    className={cn(
-                      'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                      selected
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                    )}
+                    aria-pressed={selected}
                   >
                     {month}
-                  </button>
+                  </Button>
                 );
               })}
             </div>

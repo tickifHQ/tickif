@@ -84,7 +84,8 @@ test('invitation acceptance, role changes and studio switching preserve organiza
     await page.goto('/designer/terms-roles');
     await expect(page.getByRole('heading', { name: 'Team & Roles' })).toBeVisible();
     await page.getByLabel('Work email').fill(guest.email);
-    await page.getByLabel('Role', { exact: true }).selectOption('viewer');
+    await page.getByLabel('Role', { exact: true }).click();
+    await page.getByRole('option', { name: 'Viewer', exact: true }).click();
     await page.getByRole('button', { name: 'Send invite', exact: true }).click();
     await expect(page.getByRole('status')).toContainText(`Invitation created for ${guest.email}`);
     const invitation = (await workspace(context)).invitations.find(

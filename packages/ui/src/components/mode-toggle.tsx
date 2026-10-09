@@ -9,13 +9,14 @@ export function ModeToggle() {
 
   return (
     <Button
+      type="button"
       variant="outline"
       size="icon"
       aria-label="Toggle dark mode"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >
-      <SunIcon className="size-4 dark:hidden" />
-      <MoonIcon className="hidden size-4 dark:block" />
+      <SunIcon aria-hidden="true" className="size-4 dark:hidden" />
+      <MoonIcon aria-hidden="true" className="hidden size-4 dark:block" />
     </Button>
   );
 }

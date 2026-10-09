@@ -367,7 +367,9 @@ describe('DesignerProfileEditor', () => {
     );
 
     expect(screen.getByLabelText(/display name/i)).toHaveValue('Mahi Studio');
-    expect(screen.getByLabelText(/listing type/i)).toHaveValue('company');
+    expect(screen.getByRole('combobox', { name: /listing type/i })).toHaveTextContent(
+      'Interior company',
+    );
     expect(screen.getByLabelText(/bio/i)).toHaveValue('Warm, practical homes.');
     expect(screen.getByLabelText(/address/i)).toHaveValue('Bandra West, Mumbai');
     expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('9876543210');
@@ -1075,7 +1077,8 @@ describe('DesignerProfileEditor', () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText(/listing type/i), 'individual');
+    await user.click(screen.getByRole('combobox', { name: /listing type/i }));
+    await user.click(screen.getByRole('option', { name: 'Individual designer' }));
     expect(screen.queryByText('Company details')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -1095,10 +1098,12 @@ describe('DesignerProfileEditor', () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText(/listing type/i), 'company');
+    await user.click(screen.getByRole('combobox', { name: /listing type/i }));
+    await user.click(screen.getByRole('option', { name: 'Interior company' }));
     await user.clear(screen.getByLabelText(/firm type/i));
     await user.type(screen.getByLabelText(/firm type/i), 'LLP');
-    await user.selectOptions(screen.getByLabelText(/listing type/i), 'individual');
+    await user.click(screen.getByRole('combobox', { name: /listing type/i }));
+    await user.click(screen.getByRole('option', { name: 'Individual designer' }));
 
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(screen.getByText('All changes are saved.')).toBeInTheDocument();

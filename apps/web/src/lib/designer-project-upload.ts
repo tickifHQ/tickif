@@ -277,6 +277,15 @@ export function buildCreateProjectPayload(input: {
   selectedProjectSubtypeLabel: string;
   selectedScopes: string[];
 }): CreateProjectInput {
+  // The shared month picker is an editable text input. The upload editor saves
+  // through button handlers, so native pattern validation does not gate requests.
+  const completedMonth = createProjectSchema.shape.completedMonth.safeParse(
+    input.completedByMonth.trim() || undefined,
+  );
+  if (!completedMonth.success) {
+    throw new Error('Enter a valid project completion month in YYYY-MM format.');
+  }
+
   // Custom city and taxonomy city are mutually exclusive. When the designer
   // enters a custom city we send `cityName` and never a taxonomy `citySlug`
   // (nor a taxonomy `localitySlug`, which only makes sense within a taxonomy
@@ -318,7 +327,7 @@ export function buildCreateProjectPayload(input: {
     localitySlug: effectiveLocalitySlug,
     buildingName: input.buildingName.trim() || undefined,
     budgetBandSlug: input.budgetBandSlug || undefined,
-    completedMonth: input.completedByMonth || undefined,
+    completedMonth: completedMonth.data,
     durationMonths: parseDurationMonths(input.projectDuration),
     metadata: mapProjectMetadata({
       uiProjectTypeSlug: input.projectType,

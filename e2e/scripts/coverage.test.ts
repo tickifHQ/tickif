@@ -33,6 +33,19 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires all shared UI journeys without omissions or skips', () => {
+    const sharedUi = requiredTests.filter(({ file }) => file === 'shared-ui.spec.ts');
+    expect(sharedUi).toHaveLength(7);
+    expect(sharedUi).toContainEqual({
+      file: 'shared-ui.spec.ts',
+      title: 'select opens a themed popup with keyboard selection and dismissal',
+    });
+    for (const { title } of sharedUi) {
+      expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+      expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+    }
+  });
+
   it('requires every billing matrix and failure journey without omissions or skips', () => {
     const billing = requiredTests.filter(({ file }) => file.startsWith('billing-'));
     expect(billing).toHaveLength(48);

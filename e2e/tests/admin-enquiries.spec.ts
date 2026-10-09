@@ -103,10 +103,11 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
     await expect(page).toHaveURL(/\/admin\/enquiries\?status=open&page=2&limit=10/);
     await expect(page.getByText('Page 2 of 2 · 12 enquiries')).toBeVisible();
 
-    await page.getByRole('combobox', { name: 'Rows per page' }).selectOption('25');
+    await page.getByRole('combobox', { name: 'Rows per page' }).click();
+    await page.getByRole('option', { name: '25 / page', exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/enquiries\?status=open&page=1&limit=25/);
     await expect(page.getByText('Page 1 of 1 · 12 enquiries')).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Rows per page' })).toHaveValue('25');
+    await expect(page.getByRole('combobox', { name: 'Rows per page' })).toHaveText('25 / page');
     await expect(page.getByRole('heading', { level: 2 })).toHaveCount(12);
 
     await page.getByRole('link', { name: 'Closed 7' }).click();
@@ -153,7 +154,7 @@ test('admin enquiries filter and paginate while non-admin accounts stay denied',
 
     await mobileNav.getByRole('button', { name: 'Close navigation' }).click();
     await page.goto('/admin/enquiries?status=open&page=1&limit=13');
-    await expect(page.getByRole('combobox', { name: 'Rows per page' })).toHaveValue('13');
+    await expect(page.getByRole('combobox', { name: 'Rows per page' })).toHaveText('13 / page');
     await expect(page.getByText('Page 1 of 1 · 12 enquiries')).toBeVisible();
 
     const visitorPage = await visitorContext.newPage();

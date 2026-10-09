@@ -42,14 +42,16 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
     ).toBeTruthy();
     await visitor.goto(`/d/${profile.slug}#tickif-reviews`);
     await expect(visitor.getByRole('heading', { name: 'Tickif community reviews' })).toBeVisible();
-    await visitor.getByLabel('Your rating').selectOption('4');
+    await visitor.getByLabel('Your rating').click();
+    await visitor.getByRole('option', { name: '4 stars', exact: true }).click();
     await visitor.getByLabel('Your experience (optional)').fill(reviewText);
     await visitor.getByRole('button', { name: 'Submit review' }).click();
     await expect(visitor.getByRole('status')).toContainText('awaiting moderation');
     await visitor.reload();
     await expect(visitor.getByRole('region', { name: 'Your review' })).toContainText('pending');
     await visitor.getByRole('button', { name: 'Edit your review' }).click();
-    await visitor.getByLabel('Your rating').selectOption('5');
+    await visitor.getByLabel('Your rating').click();
+    await visitor.getByRole('option', { name: '5 stars', exact: true }).click();
     await visitor.getByRole('button', { name: 'Save review changes' }).click();
     await expect(visitor.getByRole('status')).toContainText('awaiting moderation');
     await moderator.goto('/review-moderation?status=pending');
@@ -119,7 +121,8 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
     });
     await signIn(visitorContext, rejectedAuthor.phoneNumber);
     await visitor.goto(`/d/${profile.slug}#tickif-reviews`);
-    await visitor.getByLabel('Your rating').selectOption('2');
+    await visitor.getByLabel('Your rating').click();
+    await visitor.getByRole('option', { name: '2 stars', exact: true }).click();
     await visitor
       .getByLabel('Your experience (optional)')
       .fill('Synthetic rejection branch for an incorrectly attributed project.');

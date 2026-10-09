@@ -15,7 +15,13 @@ export function Pagination({ className, ...props }: ComponentProps<'nav'>) {
 }
 
 export function PaginationContent({ className, ...props }: ComponentProps<'ul'>) {
-  return <ul data-slot="pagination-content" className={cn('flex flex-row items-center', className)} {...props} />;
+  return (
+    <ul
+      data-slot="pagination-content"
+      className={cn('flex flex-row items-center gap-1', className)}
+      {...props}
+    />
+  );
 }
 
 export function PaginationItem({ className, ...props }: ComponentProps<'li'>) {
@@ -38,8 +44,8 @@ export function PaginationLink({
       data-slot="pagination-link"
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'inline-flex h-8 min-w-10 items-center justify-center border border-border bg-background px-3 text-[13px] leading-none font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-        isActive && 'bg-muted text-foreground',
+        'inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-transparent bg-background px-3 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none',
+        isActive && 'border-primary/25 bg-secondary text-secondary-foreground',
         className,
       )}
       {...props}
@@ -52,7 +58,10 @@ export function PaginationEllipsis({ className, ...props }: ComponentProps<'span
     <span
       data-slot="pagination-ellipsis"
       aria-hidden="true"
-      className={cn('inline-flex h-8 min-w-10 items-center justify-center border-y border-border bg-background px-3 text-muted-foreground', className)}
+      className={cn(
+        'inline-flex h-9 min-w-9 items-center justify-center px-3 text-muted-foreground',
+        className,
+      )}
       {...props}
     >
       ...

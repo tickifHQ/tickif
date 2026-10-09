@@ -1,0 +1,462 @@
+{
+  "fileKey": "WJhOguDptAwt2735BS2WMG",
+  "frame": "15885:2549",
+  "capturedOn": "2026-10-07",
+  "status": "Shared runtime palette and component variants reviewed and approved for phase PR publication on 2026-10-07. Footer/mobile context and component binding audit remain pending for the profile phase.",
+  "tokens": [
+    {
+      "name": "--background",
+      "value": "#ffffff",
+      "basis": "figma",
+      "sourceNodeId": "15885:2551"
+    },
+    {
+      "name": "--foreground",
+      "value": "#171612",
+      "basis": "figma",
+      "sourceNodeId": "15885:2610"
+    },
+    {
+      "name": "--card",
+      "value": "#ffffff",
+      "basis": "figma",
+      "sourceNodeId": "15885:3525"
+    },
+    {
+      "name": "--card-foreground",
+      "value": "#171612",
+      "basis": "figma",
+      "sourceNodeId": "15885:2610"
+    },
+    {
+      "name": "--popover",
+      "value": "#ffffff",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--popover-foreground",
+      "value": "#171612",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--primary",
+      "value": "#1e7a55",
+      "basis": "figma",
+      "sourceNodeId": "15885:2653"
+    },
+    {
+      "name": "--primary-foreground",
+      "value": "#ffffff",
+      "basis": "figma",
+      "sourceNodeId": "15885:2655"
+    },
+    {
+      "name": "--secondary",
+      "value": "#e2ece4",
+      "basis": "figma",
+      "sourceNodeId": "15885:2579"
+    },
+    {
+      "name": "--secondary-foreground",
+      "value": "#0f3326",
+      "basis": "figma",
+      "sourceNodeId": "15885:2581"
+    },
+    {
+      "name": "--muted",
+      "value": "#f6f6f4",
+      "basis": "figma",
+      "sourceNodeId": "15885:3492"
+    },
+    {
+      "name": "--muted-foreground",
+      "value": "#6b675c",
+      "basis": "figma",
+      "sourceNodeId": "15885:2612"
+    },
+    {
+      "name": "--accent",
+      "value": "#e2ece4",
+      "basis": "figma",
+      "sourceNodeId": "15885:3883"
+    },
+    {
+      "name": "--accent-foreground",
+      "value": "#0f3326",
+      "basis": "figma",
+      "sourceNodeId": "15885:2581"
+    },
+    {
+      "name": "--foreground-disabled",
+      "value": "#b5b2a8",
+      "basis": "inferred",
+      "sourceNodeId": "15885:4010"
+    },
+    {
+      "name": "--surface-subtle",
+      "value": "#e2ece4",
+      "basis": "figma",
+      "sourceNodeId": "15885:3883"
+    },
+    {
+      "name": "--surface-subtle-border",
+      "value": "rgba(15,51,38,0.12)",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--surface-inverse",
+      "value": "#0f3326",
+      "basis": "figma",
+      "sourceNodeId": "15885:3959"
+    },
+    {
+      "name": "--surface-inverse-foreground",
+      "value": "#f4f0e8",
+      "basis": "figma",
+      "sourceNodeId": "15885:3969"
+    },
+    {
+      "name": "--border",
+      "value": "rgba(23,22,18,0.14)",
+      "basis": "figma",
+      "sourceNodeId": "15885:3380"
+    },
+    {
+      "name": "--border-strong",
+      "value": "rgba(23,22,18,0.20)",
+      "basis": "figma",
+      "sourceNodeId": "15885:2656"
+    },
+    {
+      "name": "--input",
+      "value": "rgba(23,22,18,0.48)",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--ring",
+      "value": "#1e7a55",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--button-neutral",
+      "value": "#f6f6f4",
+      "basis": "figma",
+      "sourceNodeId": "15885:2901"
+    },
+    {
+      "name": "--button-neutral-foreground",
+      "value": "#171612",
+      "basis": "figma",
+      "sourceNodeId": "15885:2903"
+    },
+    {
+      "name": "--button-neutral-hover",
+      "value": "#e2ece4",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--button-inverted",
+      "value": "#171612",
+      "basis": "figma",
+      "sourceNodeId": "15885:3954"
+    },
+    {
+      "name": "--button-inverted-foreground",
+      "value": "#f4f0e8",
+      "basis": "figma",
+      "sourceNodeId": "15885:3955"
+    },
+    {
+      "name": "--button-inverted-hover",
+      "value": "#2e2c26",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--rating",
+      "value": "#e8a317",
+      "basis": "figma",
+      "sourceNodeId": "15885:3494"
+    },
+    {
+      "name": "--foreground-secondary",
+      "value": "#4a473f",
+      "basis": "figma",
+      "sourceNodeId": "15885:2599",
+      "newToken": true
+    },
+    {
+      "name": "--foreground-subtle",
+      "value": "#8a867a",
+      "basis": "figma",
+      "sourceNodeId": "15885:2606",
+      "newToken": true
+    },
+    {
+      "name": "--primary-soft",
+      "value": "#8fd8b4",
+      "basis": "figma",
+      "sourceNodeId": "15885:3974",
+      "newToken": true
+    },
+    {
+      "name": "--primary-soft-foreground",
+      "value": "#0f3326",
+      "basis": "figma",
+      "sourceNodeId": "15885:3975",
+      "newToken": true
+    },
+    {
+      "name": "--radius",
+      "value": "0.75rem",
+      "basis": "inferred",
+      "sourceNodeId": null
+    },
+    {
+      "name": "--radius-card",
+      "value": "1.375rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:3525",
+      "newToken": true
+    },
+    {
+      "name": "--radius-feature",
+      "value": "2.25rem",
+      "basis": "figma",
+      "sourceNodeId": "15885:3883",
+      "newToken": true
+    },
+    {
+      "name": "--shadow-button-primary",
+      "value": "0 14px 30px -14px rgba(30,122,85,0.7)",
+      "basis": "figma",
+      "sourceNodeId": "15885:2654",
+      "newToken": true
+    },
+    {
+      "name": "--shadow-location-card",
+      "value": "0 30px 60px -44px rgba(15,51,38,0.4)",
+      "basis": "figma",
+      "sourceNodeId": "15885:3525",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-verified",
+      "value": "#6e5fc0",
+      "basis": "figma",
+      "sourceNodeId": "15885:2962",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-top-performer",
+      "value": "#b88418",
+      "basis": "figma",
+      "sourceNodeId": "15885:3019",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-client-favourite",
+      "value": "#c2603a",
+      "basis": "figma",
+      "sourceNodeId": "15885:3076",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-established",
+      "value": "#0f3326",
+      "basis": "figma",
+      "sourceNodeId": "15885:3132",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-projects-published",
+      "value": "#1e7a55",
+      "basis": "figma",
+      "sourceNodeId": "15885:3188",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-fast-reply",
+      "value": "#b8507a",
+      "basis": "figma",
+      "sourceNodeId": "15885:3245",
+      "newToken": true
+    },
+    {
+      "name": "--recognition-new",
+      "value": "#6e5fc0",
+      "basis": "inferred",
+      "sourceNodeId": null,
+      "newToken": true
+    }
+  ],
+  "darkMode": {
+    "basis": "inferred",
+    "values": {
+      "--background": "#111c17",
+      "--foreground": "#f4f0e8",
+      "--card": "#18261f",
+      "--card-foreground": "#f4f0e8",
+      "--popover": "#18261f",
+      "--popover-foreground": "#f4f0e8",
+      "--primary": "#8fd8b4",
+      "--primary-foreground": "#0f3326",
+      "--muted": "#25382e",
+      "--muted-foreground": "#bbb6a8",
+      "--border": "rgba(244,240,232,0.16)",
+      "--ring": "#8fd8b4"
+    }
+  },
+  "typography": {
+    "display": {
+      "figma": "Helvetica Neue Medium",
+      "implementation": "Inter 500 via existing next/font loader until an approved Helvetica Neue webfont is supplied",
+      "basis": "inferred fallback"
+    },
+    "body": {
+      "family": "Inter",
+      "weights": [400, 500, 600],
+      "basis": "figma"
+    },
+    "metadata": {
+      "family": "JetBrains Mono",
+      "weights": [400, 500],
+      "basis": "figma"
+    },
+    "roles": [
+      {
+        "role": "profileHero",
+        "sizePx": 94,
+        "lineHeightPx": 86.24,
+        "letterSpacingPx": -4.687,
+        "nodeId": "15885:2597"
+      },
+      {
+        "role": "sectionHeading",
+        "sizePx": 32,
+        "letterSpacingPx": -0.96,
+        "nodeId": "15885:3257"
+      },
+      {
+        "role": "quote",
+        "sizePx": 32,
+        "lineHeightPx": 40,
+        "letterSpacingPx": -0.8,
+        "nodeId": "15885:3366"
+      },
+      {
+        "role": "metric",
+        "sizePx": 44,
+        "lineHeightPx": 44,
+        "letterSpacingPx": -1.76,
+        "nodeId": "15885:2610"
+      },
+      {
+        "role": "sharingHeading",
+        "sizePx": 66,
+        "lineHeightPx": 61.4,
+        "letterSpacingPx": -2.939,
+        "nodeId": "15885:3950"
+      },
+      {
+        "role": "consultationHeading",
+        "sizePx": 108,
+        "lineHeightPx": 95.8,
+        "letterSpacingPx": -4.899,
+        "nodeId": "15885:3969"
+      },
+      {
+        "role": "body",
+        "sizePx": 18,
+        "lineHeightPx": 27.9,
+        "nodeId": "15885:2599"
+      },
+      {
+        "role": "metadata",
+        "sizePx": 10,
+        "letterSpacingPx": 1.2,
+        "nodeId": "15885:2595"
+      }
+    ]
+  },
+  "geometry": {
+    "desktopWidthPx": 1512,
+    "contentMaxPx": 1328,
+    "sectionPaddingPx": 56,
+    "sectionTopGapPx": 128,
+    "featurePaddingPx": 72,
+    "heroGapPx": 75.6,
+    "recognitionAssetPx": {
+      "width": 150,
+      "height": 132
+    },
+    "buttons": {
+      "primary": {
+        "heightPx": 50,
+        "paddingX": 24,
+        "paddingY": 15,
+        "fontSizePx": 16,
+        "radius": "pill",
+        "nodeId": "15885:2653"
+      },
+      "inverseCta": {
+        "heightPx": 64,
+        "paddingX": 32,
+        "paddingY": 20,
+        "fontSizePx": 16,
+        "nodeId": "15885:3974"
+      },
+      "locationPill": {
+        "heightPx": 34,
+        "fontSizePx": 14,
+        "nodeId": "15885:3770"
+      },
+      "share": {
+        "fontSizePx": 13,
+        "paddingX": 16,
+        "paddingY": 10,
+        "nodeId": "15885:2901"
+      }
+    },
+    "mobile": {
+      "frame": "15885:4109",
+      "widthPx": 390,
+      "status": "Discovered; detailed context and screenshot still required"
+    }
+  },
+  "motion": {
+    "nodeId": "15885:3736",
+    "basis": "planning-turn get_motion_context; fresh call blocked by MCP limit",
+    "periodSeconds": 2.2,
+    "easing": "linear",
+    "repeat": "infinite",
+    "widthHeightPx": [16, 80, 16],
+    "fillOpacity": [0.32, 0, 0.32],
+    "reducedMotion": "Static marker; omit pulse"
+  },
+  "notes": [
+    "Semantic association of observed values is a design decision, even when basis is figma. No CSS variables should be claimed bound unless binding metadata is retrieved.",
+    "Map illustration colors and glyph-specific fonts are not global design-system tokens.",
+    "Default radius and form-control geometry are inferred; do not apply giant display sizes or pill shapes to dense tables and multiline fields.",
+    "Preserve portfolioAccentStyle's scoped primary, foreground, hover, shadow and ring overrides. Custom rings mix the accent with the current readable foreground to remain visible for black/white accents."
+  ],
+  "implementation": {
+    "theme": "packages/ui/src/styles/themes/tickif.css",
+    "bridge": "packages/ui/src/styles/globals.css",
+    "gallery": "apps/web/app/design-system/page.tsx",
+    "tokenAliases": {
+      "--radius-card": "--card-radius",
+      "--radius-feature": "--feature-radius",
+      "--shadow-button-primary": "--button-primary-shadow",
+      "--shadow-location-card": "--location-card-shadow"
+    },
+    "recognition": "Artwork hues remain in exact SVG exports, not intent-token aliases.",
+    "intent": "Intent meanings preserved; success/destructive/info pairs strengthened for contrast. See current theme for runtime values."
+  }
+}

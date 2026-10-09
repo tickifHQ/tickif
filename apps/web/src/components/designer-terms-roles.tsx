@@ -806,7 +806,7 @@ export function DesignerTermsRoles({
                 value={role}
                 placeholder="Select a role"
                 options={assignableRoles}
-                className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
                 disabled={isPending}
                 onValueChange={(value) => setRole(value as AssignableRole)}
               />

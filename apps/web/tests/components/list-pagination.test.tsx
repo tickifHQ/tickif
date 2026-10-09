@@ -64,4 +64,15 @@ describe('ListPagination', () => {
 
     expect(screen.getByText('Page 1 of 2 · 12 enquiries')).toBeInTheDocument();
   });
+
+  it('changes page size through the shared popup and resets the URL page while preserving filters', async () => {
+    const user = userEvent.setup();
+    render(<UrlListPagination page={2} totalPages={4} total={64} limit={20} />);
+
+    const trigger = screen.getByRole('combobox', { name: 'Rows per page' });
+    expect(trigger).toHaveTextContent('20 / page');
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: '24 / page' }));
+    expect(navigation.replace).toHaveBeenCalledWith('/moderation?status=published&page=1&limit=24');
+  });
 });

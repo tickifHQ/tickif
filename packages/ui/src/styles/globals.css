@@ -22,9 +22,21 @@
   --font-display: var(--font-heading);
   --font-mono: var(--font-code);
   --text-2xs: 0.5625rem;
+  --text-display: var(--type-display-size);
+  --text-display--line-height: var(--type-display-leading);
+  --text-display--letter-spacing: var(--type-display-tracking);
+  --text-section: var(--type-section-size);
+  --text-section--line-height: var(--type-section-leading);
+  --text-section--letter-spacing: var(--type-section-tracking);
+  --text-metadata: var(--type-metadata-size);
+  --text-metadata--line-height: var(--type-metadata-leading);
+  --text-metadata--letter-spacing: var(--type-metadata-tracking);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-overlay: var(--overlay);
   --color-profile-completion-background: var(--profile-completion-background);
   --color-foreground-disabled: var(--foreground-disabled);
   --color-surface-subtle: var(--surface-subtle);
@@ -43,6 +55,9 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -88,6 +103,14 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-card: var(--card-radius);
+  --radius-feature: var(--feature-radius);
+  --radius-popover: var(--popover-radius);
+  --radius-checkbox: var(--checkbox-radius);
+  --shadow-button-primary: var(--button-primary-shadow);
+  --shadow-card: var(--card-shadow);
+  --shadow-popover: var(--popover-shadow);
+  --shadow-location-card: var(--location-card-shadow);
 }
 
 /* Warm umber-tinted shadows instead of Tailwind's neutral black. */
@@ -122,7 +145,8 @@
   h5,
   h6 {
     font-family: var(--font-heading);
-    letter-spacing: -0.01em;
+    font-weight: 500;
+    letter-spacing: -0.03em;
   }
   ::selection {
     background: var(--primary);

@@ -180,8 +180,12 @@ test('Corporate branch management enforces roles and preserves operational data'
     );
 
     const adminAssignment = section(adminPage, 'Assign a member to a branch');
-    await adminAssignment.getByLabel('Member').selectOption(member.id);
-    await adminAssignment.getByLabel('Branch').selectOption(removableTeam.id);
+    await adminAssignment.getByLabel('Member').click();
+    await adminPage
+      .getByRole('option', { name: `${member.name} (${member.email})`, exact: true })
+      .click();
+    await adminAssignment.getByLabel('Branch').click();
+    await adminPage.getByRole('option', { name: removableTeam.name, exact: true }).click();
     await adminAssignment.getByRole('button', { name: 'Assign', exact: true }).click();
     await expect(adminPage.getByRole('status')).toContainText(
       `${member.name} assigned to the branch.`,
@@ -252,7 +256,8 @@ test('Corporate branch management enforces roles and preserves operational data'
     await page.reload();
     await page.getByRole('button', { name: `Remove branch ${removableTeam.name}` }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Move projects to').selectOption(primaryTeam.id);
+    await dialog.getByLabel('Move projects to').click();
+    await page.getByRole('option', { name: primaryTeam.name, exact: true }).click();
     await dialog.getByRole('button', { name: 'Confirm removal', exact: true }).click();
     await expect(page.getByRole('status')).toContainText(
       `Branch ${removableTeam.name} removed. 1 project moved.`,

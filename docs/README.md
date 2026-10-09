@@ -37,6 +37,10 @@ ADRs explicit about decisions and their history, and guides/runbooks procedural.
 Update the relevant documents in the same change as implementation changes.
 Keep reusable package and infrastructure instructions in their local READMEs.
 
+The ongoing UI refresh is tracked in the [phased handoff](./guides/ui-refresh-handoff.md),
+[component review guide](./guides/shared-ui-review.md), and
+[Figma specification](./architecture/ui-refresh/README.md).
+
 Commit media only when a maintained document or the application references it.
 Generated screenshots, recordings, traces and reports belong in ignored output
 directories and CI artifacts. Commercial proposals stay outside the repository.

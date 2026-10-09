@@ -68,7 +68,7 @@ export function AnalyticsBranchControl() {
       placeholder="Organization roll-up"
       allowEmpty
       options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
-      className="w-52 space-y-0 [&_label]:sr-only [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+      className="w-52 space-y-0 [&_label]:sr-only [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
       disabled={isPending}
       onValueChange={selectBranch}
     />

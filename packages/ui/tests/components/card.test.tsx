@@ -25,7 +25,7 @@ describe('Card', () => {
     expect(screen.getByText('Details')).toBeInTheDocument();
   });
 
-  it('supports shared container variants without changing the default radius', () => {
+  it('supports shared container variants and explicit radius overrides', () => {
     render(
       <div>
         <Card data-testid="default-card">Default</Card>
@@ -35,7 +35,7 @@ describe('Card', () => {
       </div>,
     );
 
-    expect(screen.getByTestId('default-card')).toHaveClass('rounded-xl');
+    expect(screen.getByTestId('default-card')).toHaveClass('rounded-card');
     expect(screen.getByTestId('accent-card')).toHaveClass('bg-primary/5', 'rounded-2xl');
   });
 });
