@@ -157,7 +157,7 @@ export function TickifReviews({
                   histogram={page.histogram}
                 />
               ) : null
-            ) : (
+            ) : showOverallRating ? (
               <div className="flex flex-col gap-6 rounded-card border p-7 md:flex-row md:items-center md:gap-10">
                 <p className="text-lg">
                   <strong>
@@ -183,7 +183,7 @@ export function TickifReviews({
                   ))}
                 </dl>
               </div>
-            )}
+            ) : null}
             {embedded && page.items.length > 0 ? (
               <div className="profile-review-caption">
                 <span>Client reviews</span>

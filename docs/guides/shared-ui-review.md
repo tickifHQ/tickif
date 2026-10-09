@@ -70,6 +70,9 @@ Loaded font variables live on the root HTML element so the theme resolves Inter
 and JetBrains Mono correctly. Buttons and status badges use centered single-line
 labels across sizes. The month field uses editable text with YYYY-MM validation
 and one component picker; it does not also launch a native browser month picker.
+The project editor also validates completion months against the shared contract
+before creating or saving a draft, since its buttons do not submit a native form.
+Invalid or incomplete month text produces a correction message without a request.
 This gallery verifies the shared foundation; full designer-profile layout,
 mobile/footer extraction, production recognition mapping, and role-page
 migrations remain in the [phased handoff](./ui-refresh-handoff.md).

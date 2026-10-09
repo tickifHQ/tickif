@@ -27,6 +27,9 @@ cached reviews and is labelled as a sample when fewer than the aggregate count
 are available. Existing Tickif review writing/editing, moderation and pagination
 remain available through booking links and legacy #tickif-reviews links, which
 open the explicit review=tickif entry.
+That entry respects the portfolio's Tickif overall-rating visibility setting:
+disabling the summary hides its aggregate and histogram while review cards and
+review actions remain available.
 
 Centres use floating 34px Figma controls with unchanged exported active/inactive
 pins over a real Google map, beside a 400px details panel. Mobile maps are 400px
