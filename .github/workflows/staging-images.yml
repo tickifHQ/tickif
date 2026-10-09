@@ -38,6 +38,7 @@ on:
       - 'apps/web/src/lib/logger*'
       - 'infra/observability/**'
       - '.github/workflows/staging-images.yml'
+      - '.github/workflows/staging-deploy.yml'
 concurrency:
   group: staging-images-${{ github.ref }}
   cancel-in-progress: true
