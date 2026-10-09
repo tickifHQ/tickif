@@ -171,14 +171,30 @@ for (const phone of [false, true]) {
         await first.focus();
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');
+        // Active state precedes dnd-kit's measurement of the initial drop target.
+        await expect(page.getByText('Move to position 1 of 3.', { exact: true })).toBeAttached();
         await page.keyboard.press('ArrowRight');
         await expect(page.getByText('Move to position 2 of 3.', { exact: true })).toBeAttached();
         await page.keyboard.press('Escape');
         await expect(first).not.toHaveAttribute('aria-pressed', 'true');
         expect(await readOrder()).toEqual(reordered);
+        // Cancellation restores the order before the cards finish moving back.
+        // Start the next keyboard drag only once its target geometry is stable.
+        await expect
+          .poll(() =>
+            grid
+              .getByRole('listitem')
+              .evaluateAll((items) =>
+                items.every((item) =>
+                  item.getAnimations().every((animation) => animation.playState !== 'running'),
+                ),
+              ),
+          )
+          .toBe(true);
         await first.focus();
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByText('Move to position 1 of 3.', { exact: true })).toBeAttached();
         await page.keyboard.press('ArrowRight');
         await expect(page.getByText('Move to position 2 of 3.', { exact: true })).toBeAttached();
         await page.keyboard.press('Space');
