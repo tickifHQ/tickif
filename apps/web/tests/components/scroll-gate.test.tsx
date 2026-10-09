@@ -124,6 +124,16 @@ describe('ScrollGate', () => {
     vi.unstubAllGlobals();
   });
 
+  it('leaves landing photography undimmed until the login panel enters the viewport', () => {
+    pathnameState.value = '/';
+    render(<ScrollGate />);
+    scrollTo(200);
+    expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ opacity: '0' });
+    scrollTo(1_000);
+    expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ opacity: '0.6' });
+    expect(screen.getByRole('dialog', { name: 'Sign in required' })).toBeVisible();
+  });
+
   it('does not render on a viewport-height page and activates after enough content is added', () => {
     Object.defineProperty(document.documentElement, 'scrollHeight', {
       configurable: true,
@@ -226,11 +236,13 @@ describe('ScrollGate', () => {
     });
     render(<ScrollGate />);
     expect(screen.getByTestId('scroll-signup-gate')).toBeInTheDocument();
+    const loginCard = screen.getByTestId('login-card');
 
     measuredCardHeight = 500;
     act(() => window.dispatchEvent(new Event('resize')));
     expect(screen.queryByTestId('scroll-signup-gate')).not.toBeInTheDocument();
     expect(screen.getByTestId('scroll-signup-measurement')).toBeInTheDocument();
+    expect(screen.getByTestId('login-card')).toBe(loginCard);
 
     Object.defineProperty(document.documentElement, 'scrollHeight', {
       configurable: true,
@@ -238,6 +250,7 @@ describe('ScrollGate', () => {
     });
     act(notifyResizeObservers);
     expect(screen.getByTestId('scroll-signup-gate')).toBeInTheDocument();
+    expect(screen.getByTestId('login-card')).toBe(loginCard);
   });
 
   it('keeps an active form visible when the viewport changes', () => {

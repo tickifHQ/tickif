@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { PublicHeader } from '@/components/public-header';
-import { PublicFooter } from '@/components/public-footer';
+import { PublicShell } from '@/components/public-shell';
 import { getServerSession } from '@/lib/auth-guard';
 import { ScrollGate } from '@/components/scroll-gate';
+import { LandingProjectPreviewProvider } from '@/components/landing-project-preview';
 
 /**
  * Public-facing chrome: discovery nav + footer wrapped around the content.
@@ -16,11 +16,11 @@ export default async function PublicLayout({ children }: { children: ReactNode }
   const isAuthenticated = !!session;
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <PublicHeader isAuthenticated={isAuthenticated} userRole={session?.user.role ?? null} />
-      <main className="flex-1">{children}</main>
-      <PublicFooter />
+    <LandingProjectPreviewProvider>
+      <PublicShell isAuthenticated={isAuthenticated} userRole={session?.user.role ?? null}>
+        {children}
+      </PublicShell>
       {!isAuthenticated && <ScrollGate />}
-    </div>
+    </LandingProjectPreviewProvider>
   );
 }

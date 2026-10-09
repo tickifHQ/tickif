@@ -9,6 +9,7 @@ import {
   type SubscriptionState,
 } from '@repo/contracts';
 import { and, db, eq, schema, sql } from '@repo/db';
+import { effectivePlanTier } from '@repo/db';
 
 const DEFAULT_PLAN: { tier: PlanTier; state: SubscriptionState } = {
   tier: 'hobby',
@@ -33,7 +34,7 @@ export const BRANCH_ENTITLEMENT_ERROR = {
 async function organizationPlan(organizationId: string) {
   const [row] = await db
     .select({
-      tier: schema.subscription.planTier,
+      tier: effectivePlanTier(),
       state: schema.subscription.subscriptionState,
     })
     .from(schema.subscription)

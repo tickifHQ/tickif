@@ -10,10 +10,13 @@ import {
   platformRoleSchema,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
+import { getBillingCatalog } from '@/lib/billing-catalog';
 import { getServerLogger } from '@/lib/logger.server';
-import { HomeHero, type HomeShortcut } from '@/components/home-hero';
+import { HomeHero } from '@/components/home-hero';
+import { landingShortcuts } from '@/lib/landing-categories';
+import { fetchLandingCommunity } from '@/lib/landing-community';
 import { HomeSearchBar } from '@/components/home-search-bar';
-import { TrustStrip } from '@/components/trust-strip';
+import { LandingDirectory, LandingDesignerCallout } from '@/components/landing-directory';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
 import { getServerSession } from '@/lib/auth-guard';
@@ -82,40 +85,16 @@ async function fetchFeedSafely(
   try {
     return await fetchHomeFeedPage(request, page, options);
   } catch (error) {
-    getServerLogger().error({ event: 'web.feed.failed', error, component: 'HomePage' }, 'Home feed fetch failed');
+    getServerLogger().error(
+      { event: 'web.feed.failed', error, component: 'HomePage' },
+      'Home feed fetch failed',
+    );
     return emptyHomeFeedPage(page);
   }
 }
 
 function hasFilters(filters: FeedFilterState): boolean {
   return FEED_FILTER_KEYS.some((key) => filters[key].length > 0);
-}
-
-function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
-  // "Projects in X" keeps the broader positioning (interiors and construction
-  // projects, not only homes) while pointing at the same city filter.
-  const city = (options.city ?? []).slice(0, 4).map((option) => ({
-    href: `/?city=${encodeURIComponent(option.slug)}`,
-    label: `Projects in ${option.label}`,
-  }));
-  const room = (options.room ?? []).slice(0, 4).map((option) => ({
-    href: `/?room=${encodeURIComponent(option.slug)}`,
-    label: `${option.label} ideas`,
-  }));
-  const shortcuts: HomeShortcut[] = [];
-
-  for (let index = 0; index < Math.max(city.length, room.length); index += 1) {
-    const cityShortcut = city[index];
-    const roomShortcut = room[index];
-    if (cityShortcut) shortcuts.push(cityShortcut);
-    if (roomShortcut) shortcuts.push(roomShortcut);
-  }
-
-  // Surface the professionals behind the projects via the existing public
-  // designer directory — no new search capability is introduced.
-  shortcuts.push({ href: '/designers', label: 'Browse professionals' });
-
-  return shortcuts;
 }
 
 export async function generateMetadata({
@@ -167,10 +146,12 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
     ? fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
     : Promise.resolve(emptyHomeFeedPage(1));
 
-  const [taxonomyOptions, initialPage, featuredPage] = await Promise.all([
+  const [taxonomyOptions, initialPage, featuredPage, catalog, community] = await Promise.all([
     taxonomyOptionsPromise,
     initialPagePromise,
     featuredPagePromise,
+    isDefaultFeed ? getBillingCatalog() : Promise.resolve(null),
+    isDefaultFeed ? fetchLandingCommunity() : Promise.resolve(null),
   ]);
   const labelMaps = searchLabelMaps(taxonomyOptions);
   const displayFacetOptions: FeedFacetOptions = {
@@ -199,14 +180,23 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
     <>
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
-      <TrustStrip />
-      {isDefaultFeed ? <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} /> : null}
+      {isDefaultFeed ? (
+        <HomeHero
+          shortcuts={landingShortcuts(taxonomyOptions)}
+          projects={featuredPage.items.length ? featuredPage.items : initialPage.items}
+          cities={taxonomyOptions.city}
+          community={community}
+        />
+      ) : null}
 
-      <div className="bg-home-hero-gradient-to">
+      <div>
         {isDefaultFeed ? (
           <>
-            <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="featured-projects">
-              <div className="flex items-end justify-between gap-4">
+            <section
+              className="w-full px-5 pb-12 pt-16 sm:px-8 lg:px-12"
+              aria-labelledby="featured-projects"
+            >
+              <div className="sr-only focus-within:not-sr-only">
                 <div>
                   <h2
                     id="featured-projects"
@@ -227,48 +217,57 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
                 </Link>
               </div>
 
-              <div className="mt-4">
+              <div>
                 <FeedFilters
+                  presentation="landing"
                   options={displayFacetOptions}
                   facetDistribution={initialPage.facetDistribution}
                 />
               </div>
 
-              <div className="mt-3">
-                <ProjectFeed
-                  initialPage={{ ...featuredPage, hasMore: false }}
-                  request={{ filters, query: '', sort: 'featured' }}
-                  infinite={false}
-                  filterSuggestions={filterSuggestions}
-                  filterCardPlacementSeed={feedFilterCardPlacementSeed()}
-                />
-              </div>
+              {featuredPage.items.length > 0 ? (
+                <div className="mt-9">
+                  <ProjectFeed
+                    initialPage={{
+                      ...featuredPage,
+                      items: featuredPage.items.slice(0, 12),
+                      hasMore: false,
+                    }}
+                    request={{ filters, query: '', sort: 'featured' }}
+                    infinite={false}
+                    presentation="landing"
+                    showTryFilter={false}
+                  />
+                </div>
+              ) : null}
             </section>
 
             <section
               id={RECENT_FEED_SECTION_ID}
-              className="w-full scroll-mt-24 px-5 pb-6 sm:px-6"
+              className="w-full scroll-mt-24 px-5 pb-16 sm:px-8 lg:px-12"
               aria-labelledby="recent-projects"
             >
               <h2 id="recent-projects" className="font-display text-3xl font-medium tracking-tight">
-                Recently published
+                Fresh from the <span className="text-primary">review desk</span>
               </h2>
-              <p className="mt-1 text-base text-muted-foreground">
-                Every project published by Tickif designers, newest first
-              </p>
+              <p className="sr-only">Every project published by Tickif designers, newest first</p>
 
-              <div className="mt-3">
+              <div className="mt-9">
                 <ProjectFeed
                   initialPage={initialPage}
                   request={request}
                   showTryFilter={false}
+                  presentation="landing"
+                  autoLoad={false}
                   paginationParams={paginationParams}
                 />
               </div>
             </section>
+            <LandingDesignerCallout catalog={catalog} />
+            <LandingDirectory options={taxonomyOptions} />
           </>
         ) : (
-          <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="project-results">
+          <section className="w-full px-5 py-8 sm:px-8 lg:px-12" aria-labelledby="project-results">
             <div className="mb-5 max-w-3xl">
               <HomeSearchBar initialQuery={query} />
             </div>
@@ -285,6 +284,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
             <div className="mt-4">
               <FeedFilters
+                presentation="landing"
                 options={displayFacetOptions}
                 facetDistribution={initialPage.facetDistribution}
               />
@@ -295,6 +295,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
                 initialPage={initialPage}
                 request={request}
                 infinite
+                presentation="landing"
                 filterSuggestions={filterSuggestions}
                 filterCardPlacementSeed={feedFilterCardPlacementSeed()}
                 paginationParams={paginationParams}

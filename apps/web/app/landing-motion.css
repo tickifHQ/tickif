@@ -1,0 +1,104 @@
+/* Motion adapted from the supplied Anika Spaces portfolio. */
+@keyframes landing-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes landing-hanging {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+@keyframes landing-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.45) rotate(-18deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.97) rotate(2deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-landing='true'] .landing-marquee-track {
+    animation: landing-marquee 38s linear infinite;
+  }
+  [data-landing='true']:has(.landing-motion-control) .landing-hanging,
+  [data-landing='true']:has(.landing-motion-control) .landing-stamp {
+    transform-origin: 50% 0;
+    animation: landing-hanging 3.6s ease-in-out infinite;
+  }
+  [data-landing='true'] .landing-marquee:is(:hover, :focus-within) .landing-marquee-track,
+  [data-landing='true']:has([data-motion-paused='true'])
+    :is(.landing-marquee-track, .landing-hanging, .landing-stamp) {
+    animation-play-state: paused;
+  }
+  [data-landing='true'] .landing-enter {
+    animation-name: landing-enter;
+    animation-duration: 750ms;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+    animation-fill-mode: backwards;
+  }
+  [data-landing='true'] .landing-lift {
+    transition:
+      transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      background-color 200ms;
+  }
+  [data-landing='true'] .landing-lift:is(:hover, :focus-visible) {
+    transform: translateY(-3px);
+  }
+  [data-landing='true'] .landing-photo {
+    transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  [data-landing='true'] .group:is(:hover, :focus-within) .landing-photo {
+    transform: scale(1.04);
+  }
+
+  /* Progressive enhancement: unsupported browsers show the content immediately. */
+  @supports (animation-timeline: view()) {
+    [data-landing='true'] .landing-reveal {
+      animation: landing-enter linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 35%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-motion-control {
+    display: none;
+  }
+  .landing-marquee-track {
+    width: 100%;
+  }
+  .landing-marquee-track > div:first-child {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    padding: 12px 20px;
+    gap: 12px 24px;
+  }
+  .landing-marquee-track > div + div {
+    display: none;
+  }
+}

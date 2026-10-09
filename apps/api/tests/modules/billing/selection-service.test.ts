@@ -78,6 +78,33 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe('billing selection and signed consent', () => {
+  it('blocks checkout while a no-card trial is active without reading the provider', async () => {
+    mocks.find.mockResolvedValue({
+      ...active,
+      razorpaySubscriptionId: null,
+      earlyBirdTier: 'professional_plus',
+      earlyBirdStartedAt: new Date('2026-09-01'),
+      earlyBirdEndsAt: new Date('2026-12-01'),
+    });
+    const result = await billingSelectionService.context(caller);
+    expect(result.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetTier: 'professional_plus', action: 'current' }),
+        expect.objectContaining({
+          targetTier: 'corporate',
+          action: 'blocked',
+          reason: 'early_bird_trial_active',
+        }),
+        expect.objectContaining({
+          targetTier: 'hobby',
+          action: 'blocked',
+          reason: 'early_bird_trial_active',
+        }),
+      ]),
+    );
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.plan).not.toHaveBeenCalled();
+  });
   it('reconciles a lost cancellation after a terminal webhook cleared the local ID', async () => {
     mocks.find.mockResolvedValue({ ...active, planTier: 'hobby', razorpaySubscriptionId: null });
     mocks.pending.mockResolvedValue({

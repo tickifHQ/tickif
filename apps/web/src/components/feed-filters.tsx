@@ -11,6 +11,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
+import { landingCategories } from '@/lib/landing-categories';
 import { X, Funnel } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
@@ -35,6 +36,7 @@ type FeedFilterTag = {
   slug: string;
   label: string;
   count?: number;
+  image?: string;
 };
 
 function stableTagOrder(tag: Pick<FeedFilterTag, 'facet' | 'slug'>) {
@@ -61,6 +63,7 @@ function emptyFilterState(): FeedFilterState {
 }
 
 type FeedFiltersProps = {
+  presentation?: 'default' | 'landing';
   options?: FeedFacetOptions;
   facetDistribution?: FeedFacetDistribution;
 };
@@ -77,7 +80,11 @@ function hrefFor(pathname: string, state: FeedFilterState, current: URLSearchPar
 }
 
 /** Taxonomy-driven filter controls with shareable URL state and applied chips. */
-export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFiltersProps) {
+export function FeedFilters({
+  options = {},
+  facetDistribution = {},
+  presentation = 'default',
+}: FeedFiltersProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -98,6 +105,7 @@ export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFilter
   );
 
   const suggestedTags = useMemo<FeedFilterTag[]>(() => {
+    if (presentation === 'landing') return landingCategories(options);
     const candidates = FEED_FACET_DEFINITIONS.flatMap((facet) => {
       const distribution = facetDistribution[facet.apiKey];
       return (options[facet.key] ?? []).map((option) => ({
@@ -116,7 +124,7 @@ export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFilter
       )
       .slice(0, 10)
       .map(({ facet, slug, label, count }) => ({ facet, slug, label, count }));
-  }, [facetDistribution, options]);
+  }, [facetDistribution, options, presentation]);
 
   function update(next: FeedFilterState) {
     router.push(hrefFor(pathname, next, currentParams));
@@ -192,7 +200,7 @@ export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFilter
 
   return (
     <div className="min-w-0 max-w-full space-y-3">
-      <div className="flex min-w-0 max-w-full items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <DropdownMenu
           open={isOpen}
           onOpenChange={(nextOpen) => {
@@ -203,9 +211,13 @@ export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFilter
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className={`inline-flex shrink-0 items-center gap-1.5 border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${presentation === 'landing' ? 'order-last sticky right-0 z-10 ml-auto h-[38px] rounded-full bg-card !text-sm' : 'rounded-md py-1'}`}
             >
-              <Funnel className="size-3.5" aria-hidden />
+              {presentation === 'landing' ? (
+                <img src="/images/landing/filter-adjustments.svg" alt="" />
+              ) : (
+                <Funnel className="size-3.5" aria-hidden />
+              )}
               Filters
               {applied.length > 0 ? ` (${applied.length})` : null}
             </button>
@@ -276,15 +288,19 @@ export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFilter
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="h-6 w-px shrink-0 bg-border" aria-hidden />
+        {presentation !== 'landing' ? (
+          <span className="h-6 w-px shrink-0 bg-border" aria-hidden />
+        ) : null}
         <button
           type="button"
           aria-pressed={applied.length === 0}
           onClick={clearAll}
-          className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs transition-colors ${
+          className={`inline-flex shrink-0 items-center rounded-full border px-3 text-xs transition-colors ${presentation === 'landing' ? 'h-[38px] px-4 !text-sm font-medium' : 'py-1'} ${
             applied.length === 0
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+              ? presentation === 'landing'
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-primary bg-primary text-primary-foreground'
+              : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
           }`}
         >
           All
@@ -297,12 +313,21 @@ export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFilter
               type="button"
               aria-pressed={isSelected}
               onClick={() => selectSuggestion(tag)}
-              className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs transition-colors ${
+              className={`inline-flex shrink-0 items-center rounded-full border px-3 text-xs transition-colors ${presentation === 'landing' ? 'h-[38px] gap-2 pl-1 pr-4 !text-sm font-medium' : 'py-1'} ${
                 isSelected
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+                  : 'border-border bg-card text-foreground hover:bg-accent'
               }`}
             >
+              {tag.image ? (
+                <img
+                  src={`/images/landing/${tag.image}`}
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="size-7 rounded-full object-cover"
+                />
+              ) : null}
               {tag.label}
             </button>
           );

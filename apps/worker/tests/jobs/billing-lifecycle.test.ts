@@ -6,7 +6,10 @@ const replacements = vi.hoisted(() => ({
   reconcile: vi.fn(),
   refund: vi.fn(),
 }));
+const trials = vi.hoisted(() => ({ expired: vi.fn(), expire: vi.fn() }));
 vi.mock('@repo/billing', () => ({
+  earlyBirdRepository: { expired: trials.expired },
+  expireEarlyBird: trials.expire,
   replacementRepository: replacements,
   reconcileReplacement: replacements.reconcile,
   refundAbandonedReplacement: replacements.refund,
@@ -40,6 +43,8 @@ const { processBillingLifecycleSweep } = await import('../../src/jobs/billing-li
 describe('processBillingLifecycleSweep failure reporting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    trials.expired.mockResolvedValue([]);
+    trials.expire.mockResolvedValue(false);
     replacements.candidates.mockResolvedValue([]);
     replacements.abandonedOrders.mockResolvedValue([]);
     recovery.processBillingRecoverySweep.mockResolvedValue({ reconciled: 0, failed: 0 });
@@ -48,6 +53,23 @@ describe('processBillingLifecycleSweep failure reporting', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('expires trials and isolates failures without skipping the other billing sweeps', async () => {
+    trials.expired.mockResolvedValue([{ organizationId: 'failed' }, { organizationId: 'expired' }]);
+    trials.expire.mockRejectedValueOnce(new Error('row unavailable')).mockResolvedValueOnce(true);
+    repository.findGraceExpired.mockResolvedValue([]);
+    repository.findLockedExpired.mockResolvedValue([]);
+    sharedDb.sweepOrgExpirations.mockResolvedValue({ invitations: 0, transfers: 0 });
+    retention.processOrganizationRetentionSweep.mockResolvedValue({
+      archived: 0,
+      purged: 0,
+      failed: 0,
+    });
+    const result = await processBillingLifecycleSweep(new Date('2027-01-01'));
+    expect(result).toMatchObject({ earlyBirdExpired: 1, earlyBirdFailures: 1 });
+    expect(cache.invalidateEntitlementCache).toHaveBeenCalledWith('expired');
+    expect(repository.findGraceExpired).toHaveBeenCalledOnce();
   });
 
   it('rotates failed replacements and invalidates any local boundary change before continuing', async () => {
@@ -112,6 +134,8 @@ describe('processBillingLifecycleSweep failure reporting', () => {
       recoveryFailures: 0,
       replacementFailures: 0,
       refundFailures: 0,
+      earlyBirdExpired: 0,
+      earlyBirdFailures: 0,
     });
     expect(repository.transitionGraceToLocked).toHaveBeenCalledTimes(2);
     expect(repository.transitionLockedToDowngraded).toHaveBeenCalledTimes(2);

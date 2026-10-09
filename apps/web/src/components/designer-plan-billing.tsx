@@ -43,6 +43,7 @@ import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { subscriptionResponseSchema, type BillingSelectionContext } from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
+import { EarlyBirdActive } from '@/components/early-bird-trial';
 
 interface DesignerPlanBillingProps extends BillingSelectionScope {
   billing: BillingState;
@@ -805,6 +806,18 @@ function ScopedDesignerPlanBilling({
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
     setSubscribeOpen(next);
   }, []);
+
+  if (billing.earlyBirdTrial)
+    return (
+      <div className="p-8">
+        <EarlyBirdActive trial={billing.earlyBirdTrial} />
+        {refreshError ? (
+          <p role="status" className="mt-4 text-sm text-muted-foreground">
+            {refreshError}
+          </p>
+        ) : null}
+      </div>
+    );
 
   const showPaymentDueCard =
     billing.tier !== 'hobby' &&

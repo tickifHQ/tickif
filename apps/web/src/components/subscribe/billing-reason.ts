@@ -1,5 +1,7 @@
 export function reasonLabel(reason: string | null) {
   switch (reason) {
+    case 'early_bird_trial_active':
+      return 'Your no-card trial is active. You can choose a paid subscription after it ends.';
     case 'replacement_pending':
       return 'Your plan change is in progress. Resume its checkout or check the scheduled change.';
     case 'billing_period_unverified':

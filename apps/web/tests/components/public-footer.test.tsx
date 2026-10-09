@@ -3,6 +3,20 @@ import { render, screen, within } from '@testing-library/react';
 import { PublicFooter } from '../../src/components/public-footer';
 
 describe('PublicFooter', () => {
+  it('renders the landing footer destinations and does not fabricate legal links', () => {
+    render(<PublicFooter landing />);
+    expect(screen.getByRole('link', { name: 'Pricing' })).toHaveAttribute(
+      'href',
+      '/#for-designers',
+    );
+    expect(screen.getByRole('link', { name: 'Verification' })).toHaveAttribute(
+      'href',
+      '/designer/verification',
+    );
+    expect(screen.getByRole('heading', { name: 'Company' })).toBeInTheDocument();
+    expect(screen.getByText('Terms & privacy')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByRole('link', { name: 'Terms & privacy' })).toBeNull();
+  });
   it('renders inside a contentinfo landmark with the current copyright year', () => {
     render(<PublicFooter />);
 

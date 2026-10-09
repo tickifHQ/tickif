@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="sparkles" clip-path="url(#clip0_0_69)">
+<path id="Vector" d="M2.84378 2.74401L2.97366 2.78698L2.84378 2.83092L2.79983 2.96276L2.75589 2.83092L2.62503 2.78698L2.75589 2.74401L2.79885 2.61119L2.84378 2.74401Z" stroke="#8FE0C4" stroke-width="1.5"/>
+<path id="Vector_2" d="M9.24378 9.14401L9.37366 9.18698L9.24378 9.23092L9.19983 9.36276L9.15589 9.23092L9.02503 9.18698L9.15589 9.14401L9.19885 9.01119L9.24378 9.14401Z" stroke="#8FE0C4" stroke-width="1.5"/>
+<path id="Vector_3" d="M3.8667 5.80944L4.52164 7.46561L6.17782 8.12055L4.52164 8.77548L3.8667 10.4317L3.21177 8.77548L1.55559 8.12055L3.21177 7.46561L3.8667 5.80944Z" stroke="#8FE0C4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_4" d="M8.1334 1.54279L8.78834 3.19896L10.4445 3.8539L8.78834 4.50883L8.1334 6.16501L7.47847 4.50883L5.82229 3.8539L7.47847 3.19896L8.1334 1.54279Z" stroke="#8FE0C4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0_0_69">
+<rect width="12" height="12" fill="white"/>
+</clipPath>
+</defs>
+</svg>

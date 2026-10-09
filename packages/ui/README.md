@@ -11,6 +11,12 @@ using the [component review guide](../../docs/guides/shared-ui-review.md).
 
 ## Token architecture
 
+`Reveal` is an optional scroll entrance wrapper. It keeps server-rendered content
+visible, enhances with IntersectionObserver, and fades once on viewport entry.
+Use `delay` (milliseconds, capped at 400) for short staggered groups. It respects
+live reduced-motion changes, shows keyboard-focused content immediately, and
+disconnects observers on entry/unmount. Its styles are included by `globals.css`.
+
 Three layers, each swappable without touching the one below:
 
 1. **Theme values** — `src/styles/themes/*.css`. Each theme defines semantic CSS variables (`--primary`, `--font-body`, `--radius`, …) scoped to `[data-theme='<name>']`, with dark-mode overrides under `.dark`. The default theme (`tickif`) is also bound to `:root`.

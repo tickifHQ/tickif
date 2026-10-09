@@ -1496,6 +1496,9 @@ export const subscription = pgTable(
     lockedAt: timestamp('locked_at', { withTimezone: true }),
     downgradedAt: timestamp('downgraded_at', { withTimezone: true }),
     preLapseTier: planTierEnum('pre_lapse_tier'),
+    earlyBirdTier: planTierEnum('early_bird_tier'),
+    earlyBirdStartedAt: timestamp('early_bird_started_at', { withTimezone: true }),
+    earlyBirdEndsAt: timestamp('early_bird_ends_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
@@ -1504,6 +1507,19 @@ export const subscription = pgTable(
   },
   (t) => [
     // Sweep indexes for the lifecycle worker (E-239):
+    index('subscription_early_bird_expiry_idx')
+      .on(t.earlyBirdEndsAt)
+      .where(
+        sql`${t.earlyBirdEndsAt} is not null and ${t.razorpaySubscriptionId} is null and ${t.planTier} <> 'hobby'`,
+      ),
+    check(
+      'subscription_early_bird_check',
+      sql`
+      (${t.earlyBirdTier} is null and ${t.earlyBirdStartedAt} is null and ${t.earlyBirdEndsAt} is null)
+      or (${t.earlyBirdTier} is not null and ${t.earlyBirdTier} in ('professional_plus', 'corporate')
+        and ${t.earlyBirdStartedAt} is not null and ${t.earlyBirdEndsAt} is not null
+        and ${t.earlyBirdEndsAt} > ${t.earlyBirdStartedAt})`,
+    ),
     // Find grace-period subscriptions past their window
     index('subscription_grace_sweep_idx')
       .on(t.subscriptionState, t.graceStartedAt)

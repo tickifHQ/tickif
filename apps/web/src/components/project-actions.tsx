@@ -14,10 +14,12 @@ export function ProjectActions({
   projectId,
   loginHref,
   canonicalUrl,
+  presentation = 'default',
 }: {
   projectId: string;
   loginHref: string;
   canonicalUrl: string;
+  presentation?: 'default' | 'save';
 }) {
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const hydrated = useHydrated();
@@ -30,6 +32,17 @@ export function ProjectActions({
   const sessionUserId = session?.user.id ?? null;
   const saveStateKey = sessionUserId ? `${sessionUserId}:${projectId}` : null;
   const isSaveStateLoading = saveStateKey !== null && loadedSaveStateKey !== saveStateKey;
+
+  // A project may appear in both the featured and recent landing feeds.
+  useEffect(() => {
+    const onSaved = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail?.userId !== sessionUserId) return;
+      const parsed = savedProjectStateSchema.safeParse(event.detail?.project);
+      if (parsed.success && parsed.data.projectId === projectId) setIsSaved(parsed.data.saved);
+    };
+    window.addEventListener('tickif:project-saved', onSaved);
+    return () => window.removeEventListener('tickif:project-saved', onSaved);
+  }, [projectId, sessionUserId]);
 
   useEffect(() => {
     if (!sessionUserId || !saveStateKey) {
@@ -73,6 +86,11 @@ export function ProjectActions({
       const parsed = savedProjectStateSchema.safeParse(await response.json());
       if (!parsed.success) throw new Error('Invalid saved project response.');
       setIsSaved(parsed.data.saved);
+      window.dispatchEvent(
+        new CustomEvent('tickif:project-saved', {
+          detail: { userId: sessionUserId, project: parsed.data },
+        }),
+      );
     } catch {
       setSaveError('Could not update saved project. Please try again.');
     } finally {
@@ -100,6 +118,51 @@ export function ProjectActions({
   }
 
   const saveLabel = isSaved ? 'Remove saved project' : 'Save project';
+
+  if (presentation === 'save')
+    return (
+      <div className="relative">
+        <Button
+          type="button"
+          variant={isSaved ? 'default' : 'neutral'}
+          size="icon"
+          className="size-9 rounded-full bg-card text-foreground shadow-sm"
+          aria-label={
+            !hydrated || isSessionPending
+              ? 'Save project'
+              : !session
+                ? 'Sign in to save project'
+                : saveLabel
+          }
+          aria-pressed={isSaved}
+          disabled={!hydrated || isSessionPending || isSaveStateLoading || isSaving}
+          onClick={() => (session ? void toggleSaved() : setLoginOpen(true))}
+        >
+          <img
+            src="/images/landing/bookmarks.svg"
+            alt=""
+            className="dark:brightness-0 dark:invert"
+          />
+          {isSaved ? (
+            <span className="absolute -right-1 -top-1 size-3 rounded-full bg-primary" aria-hidden />
+          ) : null}
+        </Button>
+        {saveError ? (
+          <p
+            role="status"
+            className="absolute right-0 top-full z-10 mt-2 w-48 rounded-lg bg-card p-3 text-xs text-destructive shadow-sm"
+          >
+            {saveError}
+          </p>
+        ) : null}
+        <ActionLoginDialog
+          open={loginOpen}
+          onOpenChange={setLoginOpen}
+          loginHref={loginHref}
+          presentation="landing"
+        />
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-2">

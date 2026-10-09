@@ -26,8 +26,18 @@ volume is node-local. The stateful label pins Postgres, Redis, and Typesense to
 the node that owns their named volumes. Release and restore scripts require one
 manager; multi-node storage and health verification need a separate design.
 
-Log the manager into GHCR with a read-only token so `docker stack deploy
---with-registry-auth` can distribute private images:
+The automated deploy uses its short-lived `GITHUB_TOKEN` with `packages: read`.
+CI publishes the four packages from this repository; retain this repository's
+Actions read access on each package if package permissions change. The token is
+streamed over SSH stdin to `docker login --password-stdin`, and a private temporary
+`DOCKER_CONFIG` is inherited by image pulls and `--with-registry-auth` Swarm calls.
+The config is removed on success or failure without changing the manager's saved
+login. Registry authentication fails before traffic closes. Job tokens expire when
+the workflow ends, so later manual pulls, recovery, and rescheduling onto an empty
+image cache require a fresh login and refreshed Swarm registry auth.
+
+For manual operations, log the manager into GHCR with a read-only token so
+`docker stack deploy --with-registry-auth` can distribute private images:
 
 ```bash
 printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io -u GITHUB_USER --password-stdin

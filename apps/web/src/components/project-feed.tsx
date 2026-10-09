@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { SearchX } from 'lucide-react';
 import { EmptyState } from '@repo/ui/components/empty-state';
 import { Button } from '@repo/ui/components/button';
+import { Reveal } from '@repo/ui/components/reveal';
 import { FeedPagination } from '@/components/feed-pagination';
 import { ShowcaseCard } from '@/components/showcase-card';
 import { TryFilterCard, type FeedFilterSuggestion } from '@/components/try-filter-card';
@@ -32,7 +33,9 @@ const FILTER_LABELS: Record<string, string> = {
 type ProjectFeedProps = {
   initialPage: HomeFeedPage;
   request: HomeFeedRequest;
+  presentation?: 'default' | 'landing';
   infinite?: boolean;
+  autoLoad?: boolean;
   showTryFilter?: boolean;
   filterSuggestions?: FeedFilterSuggestion[];
   /**
@@ -123,7 +126,11 @@ function estimatedEntryHeight(entry: FeedEntry): number {
   return width !== null && width > 0 && height !== null && height > 0 ? height / width : 1.25;
 }
 
-function distributeEntries(entries: FeedEntry[], columnCount: number): FeedEntry[][] {
+function distributeEntries(
+  entries: FeedEntry[],
+  columnCount: number,
+  uniformCards = false,
+): FeedEntry[][] {
   const columns = Array.from({ length: columnCount }, () => [] as FeedEntry[]);
   const columnHeights = Array.from({ length: columnCount }, () => 0);
   const filterCardColumns = new Set<number>();
@@ -138,7 +145,8 @@ function distributeEntries(entries: FeedEntry[], columnCount: number): FeedEntry
       if (columnHeights[index]! < columnHeights[shortestColumn]!) shortestColumn = index;
     }
     columns[shortestColumn]!.push(entry);
-    columnHeights[shortestColumn]! += estimatedEntryHeight(entry);
+    columnHeights[shortestColumn]! +=
+      uniformCards && entry.kind === 'project' ? 1 : estimatedEntryHeight(entry);
     if (entry.kind === 'try-filter') filterCardColumns.add(shortestColumn);
   }
 
@@ -148,28 +156,44 @@ function distributeEntries(entries: FeedEntry[], columnCount: number): FeedEntry
 function FeedEntryCard({
   entry,
   hasActiveCriteria,
+  presentation = 'default',
 }: {
   entry: FeedEntry;
   hasActiveCriteria: boolean;
+  presentation?: 'default' | 'landing';
 }) {
   return entry.kind === 'try-filter' ? (
     <TryFilterCard suggestions={entry.suggestions} hasActiveCriteria={hasActiveCriteria} />
+  ) : presentation === 'landing' ? (
+    <Reveal delay={entriesDelay(entry)}>
+      <div data-feed-page={entry.page} className="w-full max-w-80 break-inside-avoid">
+        <ShowcaseCard project={entry.project} priority={entry.priority} presentation="landing" />
+      </div>
+    </Reveal>
   ) : (
     <div data-feed-page={entry.page} className="break-inside-avoid">
-      <ShowcaseCard project={entry.project} priority={entry.priority} />
+      <ShowcaseCard project={entry.project} priority={entry.priority} presentation={presentation} />
     </div>
   );
+}
+
+function entriesDelay(entry: Extract<FeedEntry, { kind: 'project' }>): number {
+  // Stable across refreshes and independent of image dimensions or masonry placement.
+  return (entry.project.id.charCodeAt(entry.project.id.length - 1) % 4) * 80;
 }
 
 function StableMasonry({
   entries,
   hasActiveCriteria,
+  presentation = 'default',
 }: {
   entries: FeedEntry[];
   hasActiveCriteria: boolean;
+  presentation?: 'default' | 'landing';
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState<number | null>(null);
+  const columnCountClasses = `${MASONRY_COLUMN_COUNT_CLASS_NAME} ${presentation === 'landing' ? 'min-[90rem]:[--masonry-columns:6]' : ''}`;
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -189,11 +213,20 @@ function StableMasonry({
     const observer = new ResizeObserver(updateColumnCount);
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [presentation]);
 
+  const visibleColumnCount =
+    columnCount === null
+      ? null
+      : presentation === 'landing'
+        ? Math.min(columnCount, Math.max(1, entries.length))
+        : columnCount;
   const columns = useMemo(
-    () => (columnCount === null ? null : distributeEntries(entries, columnCount)),
-    [columnCount, entries],
+    () =>
+      visibleColumnCount === null
+        ? null
+        : distributeEntries(entries, visibleColumnCount, presentation === 'landing'),
+    [visibleColumnCount, entries, presentation],
   );
 
   if (columns === null) {
@@ -201,13 +234,14 @@ function StableMasonry({
       <div
         ref={containerRef}
         data-masonry-feed
-        className={`${MASONRY_FALLBACK_CLASS_NAME} ${MASONRY_COLUMN_COUNT_CLASS_NAME}`}
+        className={`${MASONRY_FALLBACK_CLASS_NAME} ${presentation === 'landing' ? 'min-[90rem]:columns-6' : ''} ${columnCountClasses}`}
       >
         {entries.map((entry) => (
           <FeedEntryCard
             key={entry.kind === 'try-filter' ? entry.id : entry.project.id}
             entry={entry}
             hasActiveCriteria={hasActiveCriteria}
+            presentation={presentation}
           />
         ))}
       </div>
@@ -219,8 +253,10 @@ function StableMasonry({
       ref={containerRef}
       data-masonry-feed
       data-masonry-mode="stable"
-      className={`grid gap-x-4 ${MASONRY_COLUMN_COUNT_CLASS_NAME}`}
-      style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+      className={`grid gap-x-4 ${columnCountClasses}`}
+      style={{
+        gridTemplateColumns: `repeat(${visibleColumnCount}, minmax(0, ${presentation === 'landing' ? '20rem' : '1fr'}))`,
+      }}
     >
       {columns.map((column, columnIndex) => (
         <div key={columnIndex} data-feed-column={columnIndex} className="min-w-0">
@@ -229,6 +265,7 @@ function StableMasonry({
               key={entry.kind === 'try-filter' ? entry.id : entry.project.id}
               entry={entry}
               hasActiveCriteria={hasActiveCriteria}
+              presentation={presentation}
             />
           ))}
         </div>
@@ -288,7 +325,9 @@ export function ProjectFeed(props: ProjectFeedProps) {
 function ProjectFeedResults({
   initialPage,
   request,
+  presentation = 'default',
   infinite = true,
+  autoLoad = true,
   showTryFilter = true,
   filterSuggestions = [],
   filterCardPlacementSeed = 0,
@@ -364,7 +403,7 @@ function ProjectFeedResults({
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel || !canLoadMore || typeof IntersectionObserver === 'undefined') {
+    if (!autoLoad || !sentinel || !canLoadMore || typeof IntersectionObserver === 'undefined') {
       return;
     }
 
@@ -379,7 +418,7 @@ function ProjectFeedResults({
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [canLoadMore, loadNextPage]);
+  }, [autoLoad, canLoadMore, loadNextPage]);
 
   if (renderedPages.every((renderedPage) => renderedPage.items.length === 0)) {
     return (
@@ -448,7 +487,11 @@ function ProjectFeedResults({
         </p>
       ) : null}
 
-      <StableMasonry entries={entries} hasActiveCriteria={hasActiveCriteria} />
+      <StableMasonry
+        entries={entries}
+        hasActiveCriteria={hasActiveCriteria}
+        presentation={presentation}
+      />
 
       {canLoadMore ? (
         <div

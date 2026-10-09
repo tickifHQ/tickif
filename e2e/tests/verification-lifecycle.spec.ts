@@ -1,4 +1,4 @@
-import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl, environment } from '../lib/environment';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, test } from '@playwright/test';
@@ -70,7 +70,8 @@ test('verification lifecycle: rejected documents are resubmitted, approved and r
     const popupPromise = admin.waitForEvent('popup');
     await admin.getByRole('button', { name: 'View MSME/Udyam registration', exact: true }).click();
     const documentPreview = await popupPromise;
-    await documentPreview.waitForURL((url) => url.hostname === 'localhost' && url.port === '9000');
+    const storageOrigin = new URL(environment.R2_ENDPOINT!).origin;
+    await documentPreview.waitForURL((url) => url.origin === storageOrigin);
     const signedUrl = new URL(documentPreview.url());
     expect(signedUrl.searchParams.get('X-Amz-Expires')).toBe('60');
     const privateObject = await adminContext.request.get(signedUrl.toString());

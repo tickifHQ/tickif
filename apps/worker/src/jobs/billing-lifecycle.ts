@@ -14,6 +14,8 @@ import {
   replacementRepository,
   reconcileReplacement,
   refundAbandonedReplacement,
+  earlyBirdRepository,
+  expireEarlyBird,
 } from '@repo/billing';
 
 /** Cap the fan-out of one sweep tick so a backlog can't run unbounded. */
@@ -34,6 +36,8 @@ export type BillingLifecycleSweepResult = {
   recoveryFailures: number;
   replacementFailures: number;
   refundFailures: number;
+  earlyBirdExpired: number;
+  earlyBirdFailures: number;
 };
 
 /**
@@ -64,6 +68,31 @@ export async function processBillingLifecycleSweep(
   let orgExpiryFailures = 0;
   let replacementFailures = 0;
   let refundFailures = 0;
+  let earlyBirdExpired = 0;
+  let earlyBirdFailures = 0;
+
+  try {
+    for (const candidate of await earlyBirdRepository.expired(now)) {
+      try {
+        if (await expireEarlyBird(candidate.organizationId, now)) {
+          earlyBirdExpired += 1;
+          await invalidateEntitlementCache(candidate.organizationId);
+        }
+      } catch (error) {
+        earlyBirdFailures += 1;
+        logger.error(
+          { event: 'billing.early_bird_expiry_failed', err: error },
+          'Early-bird expiry failed',
+        );
+      }
+    }
+  } catch (error) {
+    earlyBirdFailures += 1;
+    logger.error(
+      { event: 'billing.early_bird_sweep_failed', err: error },
+      'Early-bird sweep failed',
+    );
+  }
 
   for (const candidate of await replacementRepository.candidates()) {
     try {
@@ -183,5 +212,7 @@ export async function processBillingLifecycleSweep(
     recoveryFailures: recovery.failed,
     replacementFailures,
     refundFailures,
+    earlyBirdExpired,
+    earlyBirdFailures,
   };
 }

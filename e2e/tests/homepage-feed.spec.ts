@@ -58,7 +58,7 @@ test.describe('homepage search feed', () => {
 
   test('searches from suggestions and loads the next result page', async ({ page }) => {
     await page.goto('/');
-    const search = page.getByRole('search');
+    const search = page.getByRole('main').getByRole('search');
     const searchbox = search.getByRole('searchbox', { name: 'Search homes' });
 
     await searchbox.fill(SEARCH_TERM);
@@ -75,7 +75,7 @@ test.describe('homepage search feed', () => {
         url.searchParams.get('page') === '2'
       );
     });
-    await search.getByRole('button', { name: 'Explore' }).click();
+    await search.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
     await expect(page.getByRole('heading', { name: `Results for “${SEARCH_TERM}”` })).toBeVisible();
 
@@ -112,7 +112,7 @@ test.describe('homepage search feed', () => {
       await page.setViewportSize(viewport);
       await page.goto(`/?q=${SEARCH_TERM}`);
 
-      const searchbox = page.getByRole('searchbox', { name: 'Search homes' });
+      const searchbox = page.getByRole('main').getByRole('searchbox', { name: 'Search homes' });
       await searchbox.fill('Pondicherry');
       const suggestions = page.getByRole('group', { name: 'Search suggestions' });
       await expect(suggestions.getByText('E208 Playwright Studio · Pondicherry')).toBeVisible();
@@ -124,10 +124,11 @@ test.describe('homepage search feed', () => {
       const customCityCard = page.getByRole('article').filter({
         has: page.getByText('E208Playwright Project 01', { exact: true }),
       });
-      await expect(customCityCard.getByText('Pondicherry', { exact: true })).toBeVisible();
+      const city = customCityCard.getByText(/^(?:· )?Pondicherry$/);
+      await expect(city).toBeVisible();
       if (viewport.name === 'mobile') {
         const budget = await customCityCard.getByText(/15.*35/).boundingBox();
-        const location = await customCityCard.getByText('Pondicherry', { exact: true }).boundingBox();
+        const location = await city.boundingBox();
         expect(budget).not.toBeNull();
         expect(location).not.toBeNull();
         expect(budget!.y + budget!.height).toBeLessThan(location!.y);
@@ -138,7 +139,10 @@ test.describe('homepage search feed', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
-      await page.screenshot({ path: testInfo.outputPath('custom-city-results.png'), fullPage: true });
+      await page.screenshot({
+        path: testInfo.outputPath('custom-city-results.png'),
+        fullPage: true,
+      });
       expect(pageErrors).toEqual([]);
     });
   }

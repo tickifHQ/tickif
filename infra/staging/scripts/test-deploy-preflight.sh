@@ -2,6 +2,7 @@
 # Prove missing provider secrets abort before the release closes traffic.
 set -Eeuo pipefail
 cd "$(dirname "$0")/../../.."
+bash infra/staging/scripts/test-deploy-registry-auth.sh
 fixture=$(mktemp -d)
 trap 'rm -rf -- "$fixture"' EXIT
 cp infra/staging/.env.example "$fixture/env"

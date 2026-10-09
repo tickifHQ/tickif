@@ -1,4 +1,5 @@
 @import '@repo/ui/globals.css';
+@import './landing-motion.css';
 
 @keyframes review-marquee {
   to {

@@ -28,6 +28,13 @@ vi.mock('@/lib/auth-client', () => ({
 }));
 
 describe('LoginCard', () => {
+  it('keeps the landing login connected to OTP without invented counts or reviews', () => {
+    render(<LoginCard presentation="landing" />);
+    expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
+    expect(screen.queryByText(/12,400|1.5k|4.9/)).toBeNull();
+    expect(screen.getByRole('heading', { name: /Don’t lose the homes/ })).toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });

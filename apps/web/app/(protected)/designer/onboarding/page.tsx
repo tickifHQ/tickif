@@ -6,6 +6,7 @@ import {
   PLATFORM_ROLE,
   accountStatusSchema,
   platformRoleSchema,
+  earlyBirdTierSchema,
   type OnboardingDraftResponse,
 } from '@repo/contracts';
 import { DesignerOnboarding } from '@/components/designer-onboarding';
@@ -17,7 +18,11 @@ export const metadata = {
   title: 'Designer onboarding · Tickif',
 };
 
-export default async function DesignerOnboardingPage() {
+export default async function DesignerOnboardingPage({
+  searchParams,
+}: { searchParams?: Promise<{ earlyBird?: string }> } = {}) {
+  const selected = earlyBirdTierSchema.safeParse((await searchParams)?.earlyBird);
+  const earlyBirdTier = selected.success ? selected.data : undefined;
   const session = await getServerSession({ disableCookieCache: true });
   const userRole = session?.user.role ?? null;
 
@@ -27,7 +32,11 @@ export default async function DesignerOnboardingPage() {
 
   if (rolePassesCheck(userRole, PLATFORM_ROLE.DESIGNER)) {
     redirect(
-      session?.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
+      session?.session.activeOrganizationId
+        ? earlyBirdTier
+          ? `/designer/early-bird?plan=${earlyBirdTier}`
+          : '/designer/dashboard'
+        : '/designer/select-studio',
     );
   }
 
@@ -56,7 +65,14 @@ export default async function DesignerOnboardingPage() {
             <AlertTitle>Could not load your saved progress</AlertTitle>
             <AlertDescription>
               <p>Please try again to continue your setup.</p>
-              <a href="/designer/onboarding" className="underline underline-offset-4">
+              <a
+                href={
+                  earlyBirdTier
+                    ? `/designer/onboarding?earlyBird=${earlyBirdTier}`
+                    : '/designer/onboarding'
+                }
+                className="underline underline-offset-4"
+              >
                 Try again
               </a>
             </AlertDescription>
@@ -71,6 +87,7 @@ export default async function DesignerOnboardingPage() {
       signedInAs={session?.user.email ?? null}
       signedInName={session?.user.name ?? null}
       initialDraft={initialDraft}
+      earlyBirdTier={earlyBirdTier}
     />
   );
 }

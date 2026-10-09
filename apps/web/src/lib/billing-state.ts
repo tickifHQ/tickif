@@ -28,6 +28,7 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
   const price = PLAN_TIER_PRICES[sub.tier];
 
   return {
+    ...(sub.earlyBirdTrial ? { earlyBirdTrial: sub.earlyBirdTrial } : {}),
     lifecycle: sub.lifecycleState,
     tier: sub.tier,
     razorpayStatus: sub.razorpayStatus,
@@ -50,7 +51,7 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
       },
     },
     billing:
-      sub.tier !== 'hobby'
+      sub.tier !== 'hobby' && !sub.earlyBirdTrial
         ? {
             nextBillingDate: sub.currentPeriodEnd,
             billingCycle: 'monthly',

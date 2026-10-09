@@ -1,3 +1,6 @@
+vi.mock('@/components/project-actions', () => ({
+  ProjectActions: () => <button aria-label="Save project" />,
+}));
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { DesignerProjectCard, DiscoveryCard, FeedProject } from '@repo/contracts';
@@ -54,6 +57,15 @@ const discoveryProject: DiscoveryCard = {
 };
 
 describe('ShowcaseCard', () => {
+  it('shows API metadata below landing photography without unsupported trust claims', () => {
+    render(<ShowcaseCard project={feedProject} presentation="landing" />);
+    expect(screen.getByText('3 BHK')).toBeInTheDocument();
+    expect(screen.getByText('Studio A')).toBeInTheDocument();
+    expect(screen.getByText('· Bandra, Mumbai')).toBeInTheDocument();
+    expect(screen.getByText('SA')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: feedProject.title })).toBeInTheDocument();
+    expect(screen.queryByText(/verified|sponsored/i)).toBeNull();
+  });
   it('links feed image cards to the cover image detail page', () => {
     render(<ShowcaseCard project={feedProject} />);
 

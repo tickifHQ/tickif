@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './motion.css';
 
 /* Consuming apps resolve this package through node_modules, which Tailwind's
  * auto content detection skips — without this, utilities used only inside
@@ -45,6 +46,7 @@
   --color-home-hero-gradient-to: var(--home-hero-gradient-to);
   --color-home-search-background: var(--home-search-background);
   --color-home-search-border: var(--home-search-border);
+  --color-home-heading-accent: var(--home-heading-accent);
   --color-home-search-foreground-disabled: var(--home-search-foreground-disabled);
   --color-surface-inverse: var(--surface-inverse);
   --color-surface-inverse-foreground: var(--surface-inverse-foreground);

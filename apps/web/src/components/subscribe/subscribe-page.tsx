@@ -16,6 +16,7 @@ import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { usePaymentMethod } from './use-payment-method';
+import { EarlyBirdActive } from '@/components/early-bird-trial';
 
 /**
  * E-120 Subscribe page client component.
@@ -114,6 +115,12 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
   }
 
   const { tier, lifecycleState } = subscription;
+  if (subscription.earlyBirdTrial)
+    return (
+      <div className="p-8">
+        <EarlyBirdActive trial={subscription.earlyBirdTrial} />
+      </div>
+    );
   const suppressPlanActions =
     !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
   const needsPaymentRecovery =

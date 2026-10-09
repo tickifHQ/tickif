@@ -19,7 +19,7 @@ export type Replacement = typeof schema.billingReplacement.$inferSelect;
 export type NewReplacement = typeof schema.billingReplacement.$inferInsert;
 const open = notInArray(schema.billingReplacement.status, ['completed', 'failed']);
 
-function queries(tx: DbTransaction) {
+export function billingQueries(tx: DbTransaction) {
   return {
     async finishCancellation(row: Replacement) {
       const pending = await tx
@@ -64,7 +64,10 @@ function queries(tx: DbTransaction) {
           .limit(1)
       )[0];
     },
-    async apply(row: Replacement, values: Partial<typeof schema.subscription.$inferInsert>) {
+    async apply(
+      row: Pick<Replacement, 'organizationId'>,
+      values: Partial<typeof schema.subscription.$inferInsert>,
+    ) {
       const local = await this.subscription(row.organizationId);
       if (!local) return;
       const changes = Object.entries(values).some(([key, value]) => {
@@ -175,7 +178,7 @@ export const replacementRepository = {
     );
   },
   async update(id: string, values: Partial<NewReplacement>) {
-    return db.transaction((tx) => queries(tx).update(id, values));
+    return db.transaction((tx) => billingQueries(tx).update(id, values));
   },
   async insert(values: NewReplacement) {
     await db.insert(schema.billingReplacement).values(values);
@@ -238,7 +241,7 @@ export const replacementRepository = {
   },
   async locked<T>(
     org: string,
-    work: (row: Replacement | undefined, repo: ReturnType<typeof queries>) => Promise<T>,
+    work: (row: Replacement | undefined, repo: ReturnType<typeof billingQueries>) => Promise<T>,
   ) {
     return db.transaction(async (tx) => {
       await tx.execute(
@@ -267,7 +270,7 @@ export const replacementRepository = {
         .from(schema.billingReplacement)
         .where(and(eq(schema.billingReplacement.organizationId, org), open))
         .limit(1);
-      return work(row, queries(tx));
+      return work(row, billingQueries(tx));
     });
   },
 };

@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HomeSearchBar } from '../../src/components/home-search-bar';
+import { HomeSearchBar, LandingHeaderSearch } from '../../src/components/home-search-bar';
 
 const mock = vi.hoisted(() => ({
   params: new URLSearchParams(),
   push: vi.fn(),
   suggestGet: vi.fn(),
+  taxonomyGet: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -16,6 +17,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     api: {
+      taxonomy: { terms: { $get: mock.taxonomyGet } },
       search: {
         suggest: { $get: mock.suggestGet },
       },
@@ -54,11 +56,34 @@ const suggestions = {
 };
 
 describe('HomeSearchBar', () => {
+  it('submits the selected API city together with the query and preserves other filters', async () => {
+    vi.useRealTimers();
+    mock.params = new URLSearchParams('room=kitchen&page=3');
+    render(<HomeSearchBar variant="hero" cities={[{ slug: 'chennai', label: 'Chennai' }]} />);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Search city' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Chennai' }));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'teak' } });
+    fireEvent.submit(screen.getByRole('search'));
+    expect(mock.push).toHaveBeenCalledWith('/?room=kitchen&city=chennai&q=teak');
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     mock.params = new URLSearchParams();
     window.localStorage.clear();
+    mock.taxonomyGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        terms: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            slug: 'chennai',
+            label: 'Chennai',
+            parentId: null,
+          },
+        ],
+      }),
+    });
     mock.suggestGet.mockResolvedValue({
       ok: true,
       status: 200,
@@ -68,6 +93,28 @@ describe('HomeSearchBar', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('loads header cities from taxonomy and supports keyboard search with the selected city', async () => {
+    vi.useRealTimers();
+    mock.params = new URLSearchParams('city=chennai&room=kitchen&page=3');
+    render(<LandingHeaderSearch />);
+    expect(
+      screen.queryByRole('button', { name: 'Focus search (Control or Command K)' }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Header search city' })).toHaveTextContent(
+      'Chennai',
+    );
+    expect(mock.taxonomyGet).toHaveBeenCalledWith(
+      { query: { kind: 'city' } },
+      { init: { signal: expect.any(AbortSignal) } },
+    );
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const input = screen.getByRole('searchbox');
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: 'teak' } });
+    fireEvent.submit(screen.getByRole('search'));
+    expect(mock.push).toHaveBeenCalledWith('/?city=chennai&room=kitchen&q=teak');
   });
 
   it('shows blended suggestions after the 150 ms debounce', async () => {
@@ -93,6 +140,20 @@ describe('HomeSearchBar', () => {
     expect(input).not.toHaveAttribute('aria-autocomplete');
     expect(input).not.toHaveAttribute('aria-controls');
   });
+
+  it.each(['city=mumbai,chennai', 'city=mumbai&city=chennai'])(
+    'preserves multiple city filters in header searches: %s',
+    (cityParams) => {
+      mock.params = new URLSearchParams(`${cityParams}&page=3`);
+      render(<HomeSearchBar variant="header" cities={[{ slug: 'chennai', label: 'Chennai' }]} />);
+      expect(screen.getByRole('combobox')).toHaveTextContent('Multiple cities');
+      fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'teak' } });
+      fireEvent.submit(screen.getByRole('search'));
+      const expected = new URLSearchParams(cityParams);
+      expected.set('q', 'teak');
+      expect(mock.push).toHaveBeenCalledWith(`/?${expected.toString()}`);
+    },
+  );
 
   it('shows a custom city on project suggestions when no taxonomy city exists', async () => {
     mock.suggestGet.mockResolvedValueOnce({

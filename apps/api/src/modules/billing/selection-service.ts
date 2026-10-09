@@ -16,6 +16,7 @@ import { recoveryService } from './recovery-service.js';
 import { subscribeRepository } from './subscribe-repository.js';
 import { getPlanChangeTiming } from './plan-change-policy.js';
 import { replacementRepository, reconcileReplacement, upgradeAmount } from '@repo/billing';
+import { activeEarlyBirdTrial } from '@repo/billing';
 import {
   fetchSubscription,
   fetchScheduledChanges,
@@ -99,6 +100,7 @@ async function snapshot(caller: BillingCaller, reader: Reader = subscribeReposit
     )
       return result('blocked', 'subscription_refresh_required');
     if (targetTier === currentTier && !terminal) return result('current');
+    if (activeEarlyBirdTrial(local ?? null)) return result('blocked', 'early_bird_trial_active');
     if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET)
       return result('blocked', 'billing_not_configured');
     if (targetTier !== 'hobby' && !resolveRazorpayPlanId(targetTier))

@@ -10,7 +10,9 @@ const API_URL = stackApiUrl;
 test('home page renders', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'tickif' }).first()).toBeVisible();
-  await expect(page.getByRole('searchbox', { name: 'Search homes' })).toBeVisible();
+  await expect(
+    page.getByRole('main').getByRole('searchbox', { name: 'Search homes' }),
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Featured projects' })).toBeVisible();
 });
 
