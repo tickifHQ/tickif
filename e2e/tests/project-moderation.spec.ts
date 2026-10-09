@@ -242,11 +242,17 @@ test('project moderation lifecycle: admin paginates, claims, comments, resolves 
     await page.getByRole('button', { name: 'Next page', exact: true }).click();
     await expect(page).toHaveURL(/status=submitted&page=2/);
     await expect(page.getByText(target.title, { exact: true })).toBeVisible();
-    await page.reload();
-    await expect(page.getByText(target.title, { exact: true })).toBeVisible();
+    // Exercise history after an interactive navigation. Server-rendered rows
+    // after reload do not establish that the router has hydrated its listeners.
     await page.goBack();
+    await expect(page).toHaveURL(/\/moderation(?:\?status=submitted&page=1)?$/);
     await expect(page.getByText(fixture.projects[0]!.title, { exact: true })).toBeVisible();
     await page.goForward();
+    await expect(page).toHaveURL(/status=submitted&page=2/);
+    await expect(page.getByText(target.title, { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page).toHaveURL(/status=submitted&page=2/);
+    await expect(page.getByText(target.title, { exact: true })).toBeVisible();
     await open(target.title);
     await page.getByRole('button', { name: 'Start review', exact: true }).click();
     await expect.poll(async () => (await readDetail(target.id)).project.status).toBe('in_review');
