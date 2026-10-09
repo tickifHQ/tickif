@@ -53,7 +53,8 @@ buffer in memory. Existing ready images retain their old variants until queued
 for reprocessing. The source original must still exist for that operation.
 
 Public derivatives also carry an embedded image token derived from the stored
-image ID. The original stays untouched. Given a downloaded derivative and a
+image ID. [ADR 0005](../adr/0005-tickif-image-signatures.md) records its acceptance
+instead of the originally planned SynthID integration. The original stays untouched. Given a downloaded derivative and a
 candidate image ID, run
 `pnpm --filter @repo/worker media:identify -- <image-path> <image-id>` to
 check for a match. Without an ID, the command prints the recovered token.

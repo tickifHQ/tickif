@@ -39,6 +39,11 @@ and hero Share action are removed; there is no designer save/like API. The share
 card and footer social links remain. The token specification now contains 68
 entries, including the source location-control shadow.
 
+The feedback follow-up preserves that composition while making each experience
+centre's state group visible in the map selector. The hero includes a supplied
+positive office count; absent and zero counts do not create a public location
+claim. Counts come from profile data, independently of experience-centre entries.
+
 ### Supplied HTML motion reference
 
 The user supplied Anika Spaces Portfolio (4).html on 8 October 2026. Its SHA-256

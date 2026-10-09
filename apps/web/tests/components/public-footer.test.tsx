@@ -3,6 +3,13 @@ import { render, screen, within } from '@testing-library/react';
 import { PublicFooter } from '../../src/components/public-footer';
 
 describe('PublicFooter', () => {
+  it.each([false, true])('offers WhatsApp support with landing=%s', (landing) => {
+    render(<PublicFooter landing={landing} />);
+    expect(screen.getByRole('link', { name: 'Report a problem' })).toHaveAttribute(
+      'href',
+      'https://wa.me/919994645911',
+    );
+  });
   it('renders the landing footer destinations and does not fabricate legal links', () => {
     render(<PublicFooter landing />);
     expect(screen.getByRole('link', { name: 'Pricing' })).toHaveAttribute(

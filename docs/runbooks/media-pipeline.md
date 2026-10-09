@@ -99,6 +99,10 @@ For derivative sizing and embedded-token limitations, read
 
 ### SynthID boundary
 
+The product owner accepted the Tickif signature instead of SynthID; see
+[ADR 0005](../adr/0005-tickif-image-signatures.md). SynthID is not pending work for
+the existing upload pipeline.
+
 SynthID is embedded by supported Google generation models when AI media is created. This
 pipeline accepts existing designer uploads and Google does not provide it as a generic
 post-processing watermark for arbitrary images, so the worker cannot add SynthID after

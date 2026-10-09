@@ -42,6 +42,11 @@ designer/admin routing and other public pages retain their existing behavior.
   “Explore”, not “Popular”, because taxonomy is not a popularity measure.
 - The scroll login gate retains OTP/Google authentication and dismissal behavior.
   Its landing presentation omits unsourced usage counts, ratings and avatars.
+  Standalone login and the default trust strip also use descriptive copy without
+  invented counts, ratings or customer avatars. Designer copy promises enquiries
+  under ADR 0003. Both public footer presentations expose the canonical WhatsApp
+  support destination through Report a problem; unimplemented legal pages remain
+  disabled rather than linking to unrelated routes.
   A small context shares server-fetched project previews with the sibling gate;
   it makes no additional request and clears previews when leaving the homepage.
   Its backdrop begins fading only when the panel enters the viewport, so the

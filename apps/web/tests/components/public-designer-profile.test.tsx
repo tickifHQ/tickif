@@ -6,6 +6,55 @@ import { PublicDesignerProfile } from '../../src/components/public-designer-prof
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
 describe('Figma review corrections', () => {
+  it('shows the supplied office count without inferring it from centres', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{ ...portfolio, stats: { ...portfolio.stats, officeCount: 4 } }}
+      />,
+    );
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    expect(hero.getByText('Offices')).toBeInTheDocument();
+    expect(hero.getByText('4', { exact: true })).toBeInTheDocument();
+  });
+
+  it('labels experience centre groups by state and keeps centre selection usable', async () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          experienceCenterGroups: [
+            {
+              state: 'Tamil Nadu',
+              centers: [
+                {
+                  name: 'Chennai Studio',
+                  city: 'Chennai',
+                  state: 'Tamil Nadu',
+                  address: 'Anna Nagar',
+                },
+              ],
+            },
+            {
+              state: 'Karnataka',
+              centers: [
+                {
+                  name: 'Bengaluru Studio',
+                  city: 'Bengaluru',
+                  state: 'Karnataka',
+                  address: 'Whitefield',
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+    const centres = within(screen.getByRole('region', { name: 'Experience centres' }));
+    expect(centres.getByRole('group', { name: 'Tamil Nadu' })).toBeInTheDocument();
+    const group = within(centres.getByRole('group', { name: 'Karnataka' }));
+    await userEvent.setup().click(group.getByRole('tab', { name: 'Bengaluru Studio' }));
+    expect(centres.getByRole('heading', { name: 'Bengaluru Studio' })).toBeInTheDocument();
+  });
   it('shows Google client ratings without source tabs or Tickif review cards', () => {
     render(
       <PublicDesignerProfile

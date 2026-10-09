@@ -39,14 +39,10 @@ describe('LoginCard', () => {
     vi.clearAllMocks();
   });
 
-  it('renders trusted-by badge, welcome title, and phone input', () => {
+  it('renders truthful standalone copy, welcome title, and phone input', () => {
     render(<LoginCard />);
-    // E-305: login uses the canonical "12,400+ verified homes" stat (matches the
-    // homepage TrustStrip), not the old conflicting "5000+ homeowners".
-    expect(screen.getByText('Trusted by 12,400+ verified homes')).toBeInTheDocument();
-    expect(screen.getByText('12,400+ verified homes')).toBeInTheDocument();
-    expect(screen.queryByText(/5000\+/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/homeowners/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/12,400|5000\+|1.5k|4.9/)).not.toBeInTheDocument();
+    expect(screen.getByText('Discover real homes and their designers')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Get OTP' })).toHaveClass(
@@ -74,7 +70,7 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
-    expect(screen.getByTestId('feature-get-bookings-from-home-owners')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-get-enquiries-from-homeowners')).toBeInTheDocument();
     expect(screen.getByTestId('feature-turn-visitors-into-clients')).toBeInTheDocument();
   });
 

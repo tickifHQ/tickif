@@ -956,6 +956,7 @@ describe('projectsService.getPublicImageDetail', () => {
         cityName: 'Pondicherry',
         localitySlug: null,
         coverImageId: activeImageId,
+        sizeSqft: 1200,
       }),
       designer: {
         id: 'designer-1',
@@ -1019,7 +1020,7 @@ describe('projectsService.getPublicImageDetail', () => {
 
     const result = await projectsService.getPublicImageDetail(activeImageId);
 
-    expect(result.project).toMatchObject({ city: 'Pondicherry', locality: null });
+    expect(result.project).toMatchObject({ city: 'Pondicherry', locality: null, sizeSqft: 1200 });
   });
 
   it('returns 404 when the active image cannot be signed into the gallery', async () => {

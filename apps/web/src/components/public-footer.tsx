@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 const links = [
   { href: '/', label: 'Browse' },
   { href: '/blog', label: 'Blog' },
   { href: '/', label: 'About' },
   { href: '/', label: 'Privacy' },
+  { href: SUPPORT_WHATSAPP_URL, label: 'Report a problem' },
 ];
 
 export function PublicFooter({ landing = false }: { landing?: boolean }) {
@@ -78,19 +80,27 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
                 Company
               </h2>
               <ul className="space-y-2 text-sm">
-                {['About', 'Report a problem', 'Takedown policy', 'Terms & privacy'].map(
-                  (label) => (
-                    <li key={label}>
-                      <span
-                        aria-disabled="true"
-                        title="Coming soon"
-                        className="cursor-not-allowed text-muted-foreground"
-                      >
-                        {label}
-                      </span>
-                    </li>
-                  ),
-                )}
+                <li>
+                  <a
+                    href={SUPPORT_WHATSAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Report a problem
+                  </a>
+                </li>
+                {['About', 'Takedown policy', 'Terms & privacy'].map((label) => (
+                  <li key={label}>
+                    <span
+                      aria-disabled="true"
+                      title="Coming soon"
+                      className="cursor-not-allowed text-muted-foreground"
+                    >
+                      {label}
+                    </span>
+                  </li>
+                ))}
               </ul>
             </div>
           </nav>

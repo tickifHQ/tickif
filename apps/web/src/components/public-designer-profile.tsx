@@ -429,6 +429,15 @@ function HeroSection({ portfolio, view }: SectionProps) {
           },
         ]
       : []),
+    ...(stats.officeCount != null && stats.officeCount > 0
+      ? [
+          {
+            value: String(stats.officeCount),
+            label: stats.officeCount === 1 ? 'Office' : 'Offices',
+            detail: 'Studio locations',
+          },
+        ]
+      : []),
   ];
 
   return (
