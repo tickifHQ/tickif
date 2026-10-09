@@ -78,6 +78,48 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe('billing selection and signed consent', () => {
+  it.each([null, 0])(
+    'preserves paid recovery when the provider start is missing (%s)',
+    async (current_start) => {
+      mocks.find.mockResolvedValue(active);
+      mocks.fetch.mockResolvedValue({ ...remote, current_start });
+      expect(
+        await billingSelectionService.preview(caller, { targetTier: 'corporate' }),
+      ).toMatchObject({
+        action: 'recover',
+        reason: 'billing_period_unverified',
+        confirmationAllowed: true,
+        effectiveAt: new Date(remote.current_end * 1000).toISOString(),
+        nextEligibleAt: new Date(remote.current_end * 1000).toISOString(),
+        adjustmentAmount: 0,
+      });
+      expect(await billingSelectionService.preview(caller, { targetTier: 'hobby' })).toMatchObject({
+        action: 'cancel',
+        confirmationAllowed: true,
+        effectiveAt: new Date(remote.current_end * 1000).toISOString(),
+      });
+    },
+  );
+  it.each([null, 0])(
+    'preserves paid recovery but blocks undated cancellation when the end is missing (%s)',
+    async (current_end) => {
+      mocks.find.mockResolvedValue(active);
+      mocks.fetch.mockResolvedValue({ ...remote, current_end });
+      expect(
+        await billingSelectionService.preview(caller, { targetTier: 'corporate' }),
+      ).toMatchObject({
+        action: 'recover',
+        confirmationAllowed: true,
+        effectiveAt: null,
+        adjustmentAmount: 0,
+      });
+      expect(await billingSelectionService.preview(caller, { targetTier: 'hobby' })).toMatchObject({
+        action: 'blocked',
+        confirmationAllowed: false,
+        effectiveAt: null,
+      });
+    },
+  );
   it.each(['corporate', 'hobby'] as const)(
     'rejects a %s quote when its paid period expires before confirmation',
     async (targetTier) => {

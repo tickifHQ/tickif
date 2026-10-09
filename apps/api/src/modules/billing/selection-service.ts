@@ -78,14 +78,28 @@ async function snapshot(
   }
   const currentTier = local?.planTier ?? 'hobby';
   const terminal = !!remote && ['cancelled', 'expired', 'completed'].includes(remote.status);
+  const observedAt = Math.floor(Date.now() / 1000);
+  // Razorpay uses zero as well as null for an unavailable cycle timestamp.
+  const periodMissing =
+    remote?.current_start == null ||
+    remote.current_start === 0 ||
+    remote?.current_end == null ||
+    remote.current_end === 0;
   const periodVerified =
     validTimestamp(remote?.current_start) &&
     validTimestamp(remote?.current_end) &&
     remote.current_start <= quotedAt &&
     quotedAt < remote.current_end &&
-    Math.floor(Date.now() / 1000) < remote.current_end;
+    observedAt < remote.current_end;
+  const currentEndVerified =
+    validTimestamp(remote?.current_end) &&
+    quotedAt < remote.current_end &&
+    observedAt < remote.current_end;
+  const invalidKnownPeriod = !periodMissing && !periodVerified;
   const effectiveAt =
-    remote?.status === 'active' && !periodVerified ? null : iso(remote?.current_end);
+    remote?.status === 'active' && (!currentEndVerified || invalidKnownPeriod)
+      ? null
+      : iso(remote?.current_end);
   const checkout =
     remote && ['created', 'authenticated'].includes(remote.status)
       ? {
@@ -129,18 +143,16 @@ async function snapshot(
       return result('blocked', 'payment_recovery_required');
     // An active status alone does not establish a paid period. Never quote a
     // past cancellation date or pass stale/malformed timestamps to proration.
-    if (
-      !periodVerified &&
-      (targetTier === 'hobby' || (remote.current_start != null && remote.current_end != null))
-    )
-      return result('blocked', 'billing_period_unverified');
-    if (targetTier === 'hobby')
+    if (targetTier === 'hobby') {
+      if (!currentEndVerified || invalidKnownPeriod)
+        return result('blocked', 'billing_period_unverified');
       return result(
         'cancel',
         local?.cancelAtPeriodEnd || remote.cancel_at_cycle_end ? 'cancellation_scheduled' : null,
       );
-    if (!remote.current_start || !remote.current_end)
-      return result('recover', 'billing_period_unverified');
+    }
+    if (periodMissing) return result('recover', 'billing_period_unverified');
+    if (!periodVerified) return result('blocked', 'billing_period_unverified');
     return result('change_plan');
   });
   const context: BillingSelectionContext = {
@@ -158,7 +170,7 @@ async function snapshot(
     context,
     local,
     remote,
-    periodVerified,
+    effectiveAt,
     revision: sign(JSON.stringify({ local, remote, actions, scheduledChange })),
   };
 }
@@ -288,9 +300,7 @@ async function buildPreview(
           ? new Date(quotedAt * 1000).toISOString()
           : action.effectiveAt,
     nextRenewalAt:
-      state.remote?.status === 'active' && !state.periodVerified
-        ? null
-        : iso(state.remote?.current_end),
+      state.remote?.status === 'active' ? state.effectiveAt : iso(state.remote?.current_end),
     nextEligibleAction: action.action === 'recover' ? 'subscribe' : null,
     nextEligibleAt: action.action === 'recover' ? action.effectiveAt : null,
     reason: action.reason,
