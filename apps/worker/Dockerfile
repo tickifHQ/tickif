@@ -22,7 +22,7 @@ FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95ea
 WORKDIR /app
 # sharp renders SVG watermark text through Fontconfig. Build its configuration
 # and font cache into the image so the read-only non-root runtime can use them.
-RUN apt-get update && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core \
+RUN apt-get update && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-jetbrains-mono \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1001 app

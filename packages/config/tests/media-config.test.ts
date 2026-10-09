@@ -11,6 +11,16 @@ const environment = {
 };
 
 describe('watermark configuration', () => {
+  it('defaults to the image-page watermark and a new cache revision', () => {
+    expect(parseConfig({ ...environment, NODE_ENV: 'test' })).toMatchObject({
+      WATERMARK_ENABLED: true,
+      WATERMARK_TEXT: 'TICKIF',
+      WATERMARK_OPACITY: 0.32,
+      WATERMARK_SCALE: 0.09,
+      WATERMARK_REVISION: 'wm-v5',
+    });
+  });
+
   it.each(['0.21', '0.3'])('accepts the previously supported scale %s', (WATERMARK_SCALE) => {
     expect(parseConfig({ ...environment, NODE_ENV: 'test', WATERMARK_SCALE }).WATERMARK_SCALE).toBe(
       Number(WATERMARK_SCALE),

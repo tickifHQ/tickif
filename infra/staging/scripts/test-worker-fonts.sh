@@ -13,9 +13,11 @@ import { execFileSync } from "node:child_process";
 import sharp from "sharp";
 assert.equal(process.getuid(), 1001, "Smoke must run as the application user");
 assert.ok(existsSync("/etc/fonts/fonts.conf"), "Runtime font configuration is missing");
-const font = execFileSync("fc-match", ["Arial,Helvetica,sans-serif", "--format=%{file}"], { encoding: "utf8" });
+const font = execFileSync("fc-match", ["JetBrains Mono:style=Medium", "--format=%{file}"], { encoding: "utf8" });
 assert.ok(font.startsWith("/usr/share/fonts/") && existsSync(font), "Watermark font must resolve to an installed font");
-const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="100"><text x="20" y="60" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="40" fill="white">tickif</text></svg>`);
+const family = execFileSync("fc-match", ["JetBrains Mono:style=Medium", "--format=%{family}"], { encoding: "utf8" });
+assert.ok(family.split(",").includes("JetBrains Mono"), "Watermarks must use the design font, not a fallback");
+const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="100"><text x="20" y="60" font-family="JetBrains Mono, monospace" font-weight="500" font-size="40" fill="white">TICKIF</text></svg>`);
 for (const format of ["webp", "avif"]) {
   const output = await sharp({ create: { width: 320, height: 100, channels: 3, background: "blue" } })
     .composite([{ input: svg }]).toFormat(format).toBuffer();

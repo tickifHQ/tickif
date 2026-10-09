@@ -21,34 +21,29 @@ function escapeXml(s: string): string {
   );
 }
 
-/** One restrained mark for public preview derivatives. */
+/** The image-page design uses the same white wordmark at center and bottom right. */
 export function buildWatermarkSvg(
   imageWidth: number,
   imageHeight: number,
   cfg: WatermarkConfig,
 ): Buffer {
   const text = escapeXml(cfg.text);
-  const markWidth = Math.max(36, Math.round(imageWidth * cfg.scale));
-  const fontSize = Math.max(11, Math.round(markWidth / Math.max(cfg.text.length * 0.7, 1)));
-  const margin = Math.max(10, Math.round(Math.min(imageWidth, imageHeight) * 0.025));
-  const horizontalPadding = Math.max(7, Math.round(fontSize * 0.45));
-  const verticalPadding = Math.max(4, Math.round(fontSize * 0.25));
-  const badgeWidth = Math.max(
-    markWidth,
-    Math.round(cfg.text.length * fontSize * 0.58 + horizontalPadding * 2),
+  // JetBrains Mono glyphs are 0.6em wide, with the design's 0.06em tracking.
+  const textWidthEm = cfg.text.length * 0.6 + Math.max(0, cfg.text.length - 1) * 0.06;
+  const fontSize = Math.min(
+    Math.max(8, Math.round((imageWidth * cfg.scale) / textWidthEm)),
+    imageWidth / (textWidthEm + 2),
+    imageHeight / 4,
   );
-  const badgeHeight = fontSize + verticalPadding * 2;
-  const badgeX = Math.round((imageWidth - badgeWidth) / 2);
-  const badgeY = imageHeight - margin - badgeHeight;
-  const textY = Math.round(badgeY + verticalPadding + fontSize * 0.8);
-  const badgeOpacity = Number(Math.min(0.6, cfg.opacity * 0.75).toFixed(3));
+  const margin = Math.max(fontSize + 1, Math.min(imageWidth, imageHeight) * (32 / 760));
+  const baselineOffset = fontSize * 0.35;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${imageWidth}" height="${imageHeight}" viewBox="0 0 ${imageWidth} ${imageHeight}">
-  <rect x="${badgeX}" y="${badgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="${Math.round(badgeHeight / 2)}"
-    fill="#000000" fill-opacity="${badgeOpacity}" />
-  <text x="${Math.round(imageWidth / 2)}" y="${textY}" text-anchor="middle"
-    font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="500"
-    fill="#ffffff" fill-opacity="${cfg.opacity}">${text}</text>
+  <g font-family="JetBrains Mono, monospace" font-size="${fontSize}" font-weight="500"
+    letter-spacing="${fontSize * 0.06}" fill="#ffffff" fill-opacity="${cfg.opacity}">
+    <text x="${imageWidth / 2}" y="${imageHeight / 2 + baselineOffset}" text-anchor="middle">${text}</text>
+    <text x="${imageWidth - margin}" y="${imageHeight - margin + baselineOffset}" text-anchor="end">${text}</text>
+  </g>
 </svg>`;
   return Buffer.from(svg);
 }

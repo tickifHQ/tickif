@@ -47,6 +47,14 @@ prefer the xlarge derivative (2560px), then large (1600px). Sharp never enlarges
 the original, so a low-resolution or out-of-focus upload cannot be made sharp
 by this pipeline.
 
+Public derivatives carry two white `TICKIF` wordmarks, centered and bottom right,
+matching the [Figma image page](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=16134-30046).
+They use JetBrains Mono Medium at 32% opacity, with no badge background.
+The mark scales with the derivative dimensions, with bounds for small and extreme
+aspect ratios. It is composited into the image bytes, not added as a browser overlay.
+The `wm-v5` revision gives this treatment new immutable URLs. Originals stay private
+and unchanged; the embedded identifier below is independent of the visible marks.
+
 New uploads produce both WebP and AVIF variants at the updated encoding quality.
 The worker writes derivatives one at a time to avoid retaining every high-density
 buffer in memory. Existing ready images retain their old variants until queued
