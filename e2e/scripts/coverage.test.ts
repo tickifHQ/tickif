@@ -33,6 +33,12 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires the public profile mobile rating regression without omission or skip', () => {
+    const title = 'Google rating summary and review carousel fit narrow profile screens';
+    expect(requiredTests).toContainEqual({ file: 'public-profile-ratings-mobile.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+    expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+  });
   it('requires all shared UI journeys without omissions or skips', () => {
     const sharedUi = requiredTests.filter(({ file }) => file === 'shared-ui.spec.ts');
     expect(sharedUi).toHaveLength(7);

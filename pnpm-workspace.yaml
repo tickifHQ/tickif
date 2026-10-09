@@ -110,7 +110,7 @@ catalog:
   typesense: ^3.0.6
 
   # Frontend
-  next: ^16.3.6
+  next: 16.3.8
   react: ^19.3.0
   react-dom: ^19.3.0
   '@types/react': ^19.3.0

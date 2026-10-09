@@ -40,33 +40,19 @@ describe('PublicProjectGallery', () => {
     fetchDesignerProjects.mockReset();
   });
 
-  it('shows six projects initially and smoothly reveals the rest of the loaded page', () => {
+  it('keeps every project page bounded to six items and supports returning to the first page', () => {
     renderGallery();
 
     expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(6);
     expect(screen.getByTestId('project-count')).toHaveTextContent('6 of 9 projects');
-    const additionalProjects = screen.getByTestId('additional-projects');
-    expect(additionalProjects).toHaveAttribute('aria-hidden', 'true');
-    expect(additionalProjects).toHaveAttribute('inert');
-    expect(additionalProjects.firstElementChild).toHaveClass('hidden');
-
-    fireEvent.click(screen.getByRole('button', { name: 'View all projects' }));
-
-    expect(screen.getByTestId('project-count')).toHaveTextContent('9 of 9 projects');
-    expect(screen.getByRole('button', { name: 'Show fewer projects' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(additionalProjects).toHaveAttribute('aria-hidden', 'false');
-    expect(additionalProjects).not.toHaveAttribute('inert');
-    expect(additionalProjects.firstElementChild).not.toHaveClass('hidden');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show fewer projects' }));
-
+    expect(screen.getAllByRole('article')).toHaveLength(6);
+    fireEvent.click(screen.getByRole('button', { name: 'Next projects' }));
+    expect(screen.getAllByRole('article')).toHaveLength(3);
+    expect(screen.getByText('Project 6')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next projects' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous projects' }));
     expect(screen.getByTestId('project-count')).toHaveTextContent('6 of 9 projects');
-    expect(additionalProjects).toHaveAttribute('aria-hidden', 'true');
-    expect(additionalProjects).toHaveAttribute('inert');
-    expect(additionalProjects.firstElementChild).toHaveClass('hidden');
+    expect(screen.getAllByRole('article')).toHaveLength(6);
   });
 
   it('sorts on the fields the API returns and filters by property type', () => {
@@ -87,6 +73,22 @@ describe('PublicProjectGallery', () => {
 
     expect(screen.getByTestId('project-count')).toHaveTextContent('2 of 2 projects');
     expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('returns to page one when sorting or filtering from a later page', () => {
+    renderGallery(makeProjects(15));
+    fireEvent.click(screen.getByRole('button', { name: 'Next projects' }));
+    expect(screen.queryByText('Project 0')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Newest' }));
+    expect(
+      within(screen.getByTestId('visible-projects')).getAllByRole('heading')[0],
+    ).toHaveTextContent('Project 14');
+    expect(screen.getByRole('button', { name: 'Previous projects' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next projects' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apartment' }));
+    expect(screen.getAllByRole('article')).toHaveLength(6);
+    expect(screen.getByRole('button', { name: 'Previous projects' })).toBeDisabled();
   });
 
   it('derives filter options from the loaded projects', () => {
@@ -117,28 +119,39 @@ describe('PublicProjectGallery', () => {
       hasMore: false,
     });
 
-    renderGallery(makeProjects(9), { hasMore: true });
+    renderGallery(makeProjects(6), { hasMore: true });
 
-    fireEvent.click(screen.getByRole('button', { name: 'View all projects' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next projects' }));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('project-count')).toHaveTextContent('10 of 10 projects'),
-    );
+    await waitFor(() => expect(screen.getByText('Second Page Home')).toBeInTheDocument());
     expect(fetchDesignerProjects).toHaveBeenCalledWith(PROFILE_ID, { page: 2, limit: 30 });
     expect(screen.getByText('Second Page Home')).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
   it('keeps loaded projects on screen and explains a failed page fetch', async () => {
     fetchDesignerProjects.mockRejectedValue(new Error('offline'));
 
-    renderGallery(makeProjects(9), { hasMore: true });
+    renderGallery(makeProjects(6), { hasMore: true });
 
-    fireEvent.click(screen.getByRole('button', { name: 'View all projects' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next projects' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Could not load more projects. Please try again.',
     );
-    expect(screen.getByTestId('project-count')).toHaveTextContent('9 of 9 projects');
+    expect(screen.getByTestId('project-count')).toHaveTextContent('6 of 6 projects');
+    expect(screen.getAllByRole('article')).toHaveLength(6);
+    fetchDesignerProjects.mockResolvedValue({
+      projects: [makeProject({ id: 'retry', title: 'Retry home' })],
+      page: 2,
+      limit: 30,
+      hasMore: false,
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Next projects' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Next projects' }));
+    expect(await screen.findByText('Retry home')).toBeInTheDocument();
   });
 
   it('shows the empty message when the designer has published nothing', () => {

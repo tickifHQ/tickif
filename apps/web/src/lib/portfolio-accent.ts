@@ -20,6 +20,9 @@ export function portfolioAccentStyle(value: string): CSSProperties {
   const darkForeground = luminance > Math.sqrt(0.05 * 1.05) - 0.05;
   return {
     '--primary': hex,
+    // Display text sits on the page surface, unlike a filled button. Extreme
+    // custom accents need the page foreground to remain readable in both themes.
+    '--profile-heading-accent': luminance > 0.35 || luminance < 0.02 ? 'var(--foreground)' : hex,
     '--primary-foreground': darkForeground
       ? 'var(--portfolio-accent-on-light)'
       : 'var(--portfolio-accent-on-dark)',

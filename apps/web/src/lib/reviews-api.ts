@@ -11,9 +11,9 @@ import {
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
 
-export async function fetchTickifReviews(designerProfileId: string, page = 1) {
+export async function fetchTickifReviews(designerProfileId: string, page = 1, limit = 10) {
   const response = await api.api.reviews.$get(
-    { query: { designerProfileId, page: String(page), limit: '10' } },
+    { query: { designerProfileId, page: String(page), limit: String(limit) } },
     { init: { cache: 'no-store' } },
   );
   return handleApiResponse(

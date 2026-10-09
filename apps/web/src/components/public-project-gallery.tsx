@@ -1,9 +1,16 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { ArrowDown, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, SlidersHorizontal } from 'lucide-react';
 import type { DesignerProjectCard, DesignerProjectsResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationEllipsis,
+} from '@repo/ui/components/pagination';
 import { cn } from '@repo/ui/lib/utils';
 import { PublicProjectCard } from '@/components/public-project-card';
 import { fetchDesignerProjects } from '@/lib/public-portfolio-api';
@@ -43,10 +50,8 @@ function sortProjects(projects: DesignerProjectCard[], sort: SortOption): Design
  * The public portfolio project grid.
  *
  * Renders the first page delivered with the portfolio payload, then fetches
- * further pages from `/api/profiles/{id}/projects` when the visitor asks for
- * more. Sorting and filtering apply to what is loaded — the API's 30-per-page
- * ceiling means that is the full portfolio for all but the largest studios, and
- * "View all projects" keeps loading until it is.
+ * further API pages on demand. Every displayed page contains at most six
+ * cards; sorting and filtering apply to the loaded projects.
  */
 export function PublicProjectGallery({
   profileId,
@@ -68,7 +73,7 @@ export function PublicProjectGallery({
   const [sort, setSort] = useState<SortOption>('Featured');
   const [filter, setFilter] = useState<string>(ALL_FILTER);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [displayPage, setDisplayPage] = useState(0);
 
   // Filtering only helps once the portfolio spans more than one property type.
   const facets = useMemo(() => projectFilters(projects), [projects]);
@@ -83,17 +88,16 @@ export function PublicProjectGallery({
     return sortProjects(matching, sort);
   }, [filter, projects, sort]);
 
-  const visibleProjects = filteredProjects.slice(0, INITIAL_VISIBLE_COUNT);
-  const additionalProjects = filteredProjects.slice(INITIAL_VISIBLE_COUNT);
-  const visibleCount = showAll ? filteredProjects.length : visibleProjects.length;
+  const offset = displayPage * INITIAL_VISIBLE_COUNT;
+  const visibleProjects = filteredProjects.slice(offset, offset + INITIAL_VISIBLE_COUNT);
+  const visibleCount = visibleProjects.length;
+  const canAdvance = offset + INITIAL_VISIBLE_COUNT < filteredProjects.length || hasMore;
 
-  /** Reveal the rest of what's loaded, pulling the next page first when there is one. */
-  function handleViewAll() {
-    if (showAll) {
-      setShowAll(false);
+  function handleNext() {
+    if (offset + INITIAL_VISIBLE_COUNT < filteredProjects.length) {
+      setDisplayPage((current) => current + 1);
       return;
     }
-    setShowAll(true);
     if (!hasMore || isPending) return;
 
     startTransition(async () => {
@@ -106,6 +110,12 @@ export function PublicProjectGallery({
         setPage(next.page);
         setHasMore(next.hasMore);
         setLoadError(null);
+        const addedMatches = next.projects.filter(
+          (project) => filter === ALL_FILTER || project.propertyType?.includes(filter),
+        ).length;
+        if (filteredProjects.length + addedMatches > offset + INITIAL_VISIBLE_COUNT) {
+          setDisplayPage((current) => current + 1);
+        }
       } catch {
         // Already-loaded projects stay on screen; only the extra page is missing.
         setLoadError('Could not load more projects. Please try again.');
@@ -123,8 +133,12 @@ export function PublicProjectGallery({
 
   return (
     <>
-      <div className="mt-9 flex flex-wrap items-center justify-between gap-3 border-b py-3">
-        <p className="text-sm font-medium" data-testid="project-count" aria-live="polite">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 py-2">
+        <p
+          className="font-mono text-metadata uppercase text-muted-foreground"
+          data-testid="project-count"
+          aria-live="polite"
+        >
           {visibleCount}{' '}
           <span className="font-normal text-muted-foreground">
             of {filteredProjects.length} projects
@@ -138,9 +152,13 @@ export function PublicProjectGallery({
                 type="button"
                 variant={sort === option ? 'emphasis' : 'ghost'}
                 size="sm"
-                className="h-8 cursor-pointer"
+                className="h-8 cursor-pointer text-xs"
                 aria-pressed={sort === option}
-                onClick={() => setSort(option)}
+                disabled={isPending}
+                onClick={() => {
+                  setSort(option);
+                  setDisplayPage(0);
+                }}
               >
                 {option}
               </Button>
@@ -152,6 +170,7 @@ export function PublicProjectGallery({
               variant="outline"
               className="h-8 cursor-pointer px-3"
               aria-expanded={filtersOpen}
+              disabled={isPending}
               onClick={() => setFiltersOpen((open) => !open)}
             >
               <SlidersHorizontal className="size-3" />
@@ -180,9 +199,10 @@ export function PublicProjectGallery({
                   size="sm"
                   className="h-8 cursor-pointer"
                   aria-pressed={filter === option}
+                  disabled={isPending}
                   onClick={() => {
                     setFilter(option);
-                    setShowAll(false);
+                    setDisplayPage(0);
                   }}
                 >
                   {option}
@@ -195,29 +215,11 @@ export function PublicProjectGallery({
 
       <div
         data-testid="visible-projects"
-        className="mt-8 grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-3"
+        className="mt-5 grid gap-x-6 gap-y-10 md:grid-cols-2 lg:grid-cols-3"
       >
         {visibleProjects.map((project) => (
           <PublicProjectCard key={project.id} project={project} studioName={studioName} />
         ))}
-      </div>
-
-      <div
-        data-testid="additional-projects"
-        className={cn(
-          'grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none',
-          showAll ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-        )}
-        aria-hidden={!showAll}
-        inert={!showAll}
-      >
-        <div className={cn('min-h-0 overflow-hidden', !showAll && 'hidden')}>
-          <div className="grid gap-x-6 gap-y-7 pt-7 sm:grid-cols-2 lg:grid-cols-3">
-            {additionalProjects.map((project) => (
-              <PublicProjectCard key={project.id} project={project} studioName={studioName} />
-            ))}
-          </div>
-        </div>
       </div>
 
       {loadError ? (
@@ -226,29 +228,57 @@ export function PublicProjectGallery({
         </p>
       ) : null}
 
-      {additionalProjects.length > 0 || hasMore ? (
-        <div className="mt-12 flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 cursor-pointer gap-1 px-5 shadow-sm"
-            aria-expanded={showAll}
-            disabled={isPending}
-            onClick={handleViewAll}
-          >
-            {isPending
-              ? 'Loading projects…'
-              : showAll
-                ? 'Show fewer projects'
-                : 'View all projects'}
-            <ArrowDown
-              className={cn(
-                'size-3 transition-transform duration-300 motion-reduce:transition-none',
-                showAll ? 'rotate-180' : 'rotate-0',
-              )}
-            />
-          </Button>
-        </div>
+      {filteredProjects.length > INITIAL_VISIBLE_COUNT || hasMore ? (
+        <Pagination aria-label="Project pages" className="mt-8">
+          <PaginationContent className="flex-wrap justify-center">
+            <PaginationItem>
+              <PaginationLink asChild className="has-disabled:opacity-40">
+                <button
+                  type="button"
+                  disabled={isPending || displayPage === 0}
+                  onClick={() => setDisplayPage((current) => current - 1)}
+                >
+                  <ArrowLeft className="size-3" /> Previous projects
+                </button>
+              </PaginationLink>
+            </PaginationItem>
+            {Array.from(
+              { length: Math.max(1, Math.ceil(filteredProjects.length / INITIAL_VISIBLE_COUNT)) },
+              (_, index) => index,
+            )
+              .filter(
+                (index) =>
+                  index === 0 ||
+                  index === Math.ceil(filteredProjects.length / INITIAL_VISIBLE_COUNT) - 1 ||
+                  Math.abs(index - displayPage) <= 1,
+              )
+              .map((index, itemIndex, items) => (
+                <PaginationItem key={index} className="flex">
+                  {itemIndex > 0 && index - items[itemIndex - 1]! > 1 ? (
+                    <PaginationEllipsis />
+                  ) : null}
+                  <PaginationLink asChild isActive={index === displayPage}>
+                    <button
+                      type="button"
+                      aria-label={`Go to project page ${index + 1}`}
+                      disabled={isPending}
+                      onClick={() => setDisplayPage(index)}
+                    >
+                      {index + 1}
+                    </button>
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+            <PaginationItem>
+              <PaginationLink asChild className="has-disabled:opacity-40">
+                <button type="button" disabled={isPending || !canAdvance} onClick={handleNext}>
+                  {isPending ? 'Loading projects…' : 'Next projects'}
+                  <ArrowRight className="size-3" />
+                </button>
+              </PaginationLink>
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       ) : null}
     </>
   );

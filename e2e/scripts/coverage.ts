@@ -26,6 +26,10 @@ const requiredEntries: [file: string, title: string][] = [
   ['shared-ui.spec.ts', 'a select inside a dialog keeps both focus scopes usable'],
   ['shared-ui.spec.ts', 'month selection can be cleared with a pointer and selected again'],
   ['shared-ui.spec.ts', 'shared overlays respect reduced motion and preserve keyboard dismissal'],
+  [
+    'public-profile-ratings-mobile.spec.ts',
+    'Google rating summary and review carousel fit narrow profile screens',
+  ],
   ['project-photo-reorder.spec.ts', 'photo ordering persists with desktop mouse and keyboard'],
   ['project-photo-reorder.spec.ts', 'photo ordering persists with phone touch'],
   [

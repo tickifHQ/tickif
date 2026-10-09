@@ -810,6 +810,16 @@
       "internalConsumers": []
     },
     {
+      "component": "google-map-embed",
+      "source": "packages/ui/src/components/google-map-embed.tsx",
+      "exports": ["GoogleMapEmbed", "googleMapEmbedUrl"],
+      "internalDependencies": [],
+      "sourceCallers": ["apps/web/src/components/public-designer-profile.tsx"],
+      "testCallers": ["packages/ui/tests/google-map-embed.test.tsx"],
+      "overrideExamples": [],
+      "internalConsumers": []
+    },
+    {
       "component": "input",
       "source": "packages/ui/src/components/input.tsx",
       "exports": ["Input"],

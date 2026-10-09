@@ -176,6 +176,17 @@ for (const phone of [false, true]) {
         await page.keyboard.press('Escape');
         await expect(first).not.toHaveAttribute('aria-pressed', 'true');
         expect(await readOrder()).toEqual(reordered);
+        // Cancellation restores the order before the cards finish moving back.
+        // Start the next keyboard drag only once its target geometry is stable.
+        await expect
+          .poll(() =>
+            grid.getByRole('listitem').evaluateAll((items) =>
+              items.every((item) =>
+                item.getAnimations().every((animation) => animation.playState !== 'running'),
+              ),
+            ),
+          )
+          .toBe(true);
         await first.focus();
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');

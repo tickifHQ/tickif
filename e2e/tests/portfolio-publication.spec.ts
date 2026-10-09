@@ -521,7 +521,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         .locator('xpath=ancestor::button')
         .click();
       await page.getByRole('button', { name: 'Add experience center' }).click();
-      await page.getByLabel('Name').fill('Whitefield Experience Center');
+      await page.getByLabel('Name', { exact: true }).fill('Whitefield Experience Center');
       await page.getByLabel('Address').fill('12, 1st Main Road, Whitefield');
       await page.getByLabel('City').fill('Bengaluru');
       await page.getByLabel('State', { exact: true }).click();
@@ -533,7 +533,7 @@ test.describe('E-278 portfolio publication readiness', () => {
         .fill('https://maps.google.com/?q=Whitefield');
       await page.getByRole('button', { name: 'Add center' }).click();
       await page.getByRole('button', { name: 'Add experience center' }).click();
-      await page.getByLabel('Name').fill('Powai Studio');
+      await page.getByLabel('Name', { exact: true }).fill('Powai Studio');
       await page.getByLabel('Address').fill('4, Hiranandani Gardens, Powai');
       await page.getByLabel('City').fill('Mumbai');
       await page.getByLabel('State', { exact: true }).click();
@@ -543,23 +543,26 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
       await page.goto(`/d/${seed.portfolioSlug}`);
-      const centers = page.getByRole('region', { name: 'Experience centers' });
+      const centers = page.getByRole('region', { name: 'Experience centres' });
       await expect(centers).toBeVisible();
       await expect(
         centers.getByRole('heading', { name: 'Whitefield Experience Center' }),
       ).toBeVisible();
-      await expect(centers.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
-      await expect(centers.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
+      const details = centers.getByRole('complementary', { name: 'Selected experience centre' });
+      await expect(details.getByText('12, 1st Main Road, Whitefield')).toBeVisible();
       await expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeVisible();
-      await expect(centers.getByText('Mumbai, Maharashtra')).toBeVisible();
       await expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
         'href',
         'tel:+919994645911',
       );
-      await expect(centers.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
+      await expect(details.getByRole('link', { name: 'Open in Maps' })).toHaveAttribute(
         'rel',
         'noopener noreferrer nofollow',
       );
+      await centers.getByRole('tab', { name: 'Powai Studio', exact: true }).click();
+      await expect(details.getByRole('heading', { name: 'Powai Studio' })).toBeVisible();
+      await expect(details.getByText('Mumbai, Maharashtra', { exact: true })).toBeVisible();
+      await centers.getByRole('tab', { name: 'Whitefield Experience Center', exact: true }).click();
       await centers.screenshot({
         path: testInfo.outputPath('experience-centers-desktop.png'),
         animations: 'disabled',
@@ -804,8 +807,9 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(portfolioCover).toHaveAttribute('loading', 'eager');
       // This studio has no founding year or legacy experience, so omit the unknown value.
       await expect(page.getByText('Years experience')).toHaveCount(0);
-      await expect(page.getByText('Projects', { exact: true })).toBeVisible();
-      await expect(page.getByText('Cities present')).toBeVisible();
+      const hero = page.getByRole('region', { name: 'Portfolio hero' });
+      await expect(hero.getByText('Projects', { exact: true })).toBeVisible();
+      await expect(hero.getByRole('heading', { level: 1 })).toContainText(seed.organization.name);
       await expect(
         page.getByRole('button', { name: 'Send enquiry', exact: true }).first(),
       ).toBeVisible();

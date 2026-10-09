@@ -1166,7 +1166,7 @@ describe('DesignerPortfolioSettings', () => {
     const sections = [
       {
         name: 'Trust & credentials',
-        getContent: () => screen.getByAltText('Identity verified'),
+        getContent: () => screen.getByText('Identity verified', { exact: true }),
       },
       {
         name: 'Featured testimonial',

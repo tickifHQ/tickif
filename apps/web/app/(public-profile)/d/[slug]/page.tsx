@@ -4,12 +4,13 @@ import { cache, Suspense } from 'react';
 import { createReviewSchema, listPublishedReviewsQuerySchema } from '@repo/contracts';
 import { TickifReviewsSection } from '@/components/tickif-reviews-section';
 import { PublicDesignerProfile } from '@/components/public-designer-profile';
+import { LegacyProfileReviewEntry } from '@/components/legacy-profile-review-entry';
 import { fetchPublicPortfolio } from '@/lib/public-portfolio-api';
 import { strapline, studioLocation, studioType } from '@/lib/public-portfolio-view';
 
 type PublicDesignerProfilePageProps = {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ bookingId?: string; reviewsPage?: string }>;
+  searchParams?: Promise<{ bookingId?: string; reviewsPage?: string; review?: string }>;
 };
 
 /**
@@ -98,25 +99,36 @@ export default async function PublicDesignerProfilePage({
     designerProfileId: portfolio.profileId,
     page: query?.reviewsPage,
   });
+  const showTickifReview = (booking.success && Boolean(booking.data)) || query?.review === 'tickif';
   return (
-    <PublicDesignerProfile
-      portfolio={portfolio}
-      tickifReviews={
-        <Suspense
-          fallback={
-            <p role="status" className="p-5">
-              Loading Tickif reviews…
-            </p>
-          }
-        >
-          <TickifReviewsSection
-            designerProfileId={portfolio.profileId}
-            slug={slug}
-            bookingId={booking.success ? (booking.data ?? undefined) : undefined}
-            page={pagination.success ? pagination.data.page : 1}
-          />
-        </Suspense>
-      }
-    />
+    <>
+      {!showTickifReview ? <LegacyProfileReviewEntry /> : null}
+      <PublicDesignerProfile
+        portfolio={portfolio}
+        tickifReviews={
+          showTickifReview ? (
+            <Suspense
+              fallback={
+                <p role="status" className="p-5">
+                  Loading Tickif reviews…
+                </p>
+              }
+            >
+              <TickifReviewsSection
+                designerProfileId={portfolio.profileId}
+                embedded={false}
+                showOverallRating={
+                  portfolio.sections.overallRating &&
+                  portfolio.reviewVisibility.tickif.overallRating
+                }
+                slug={slug}
+                bookingId={booking.success ? (booking.data ?? undefined) : undefined}
+                page={pagination.success ? pagination.data.page : 1}
+              />
+            </Suspense>
+          ) : undefined
+        }
+      />
+    </>
   );
 }

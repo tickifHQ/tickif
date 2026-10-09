@@ -92,9 +92,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await expect(
       page.getByRole('heading', { name: organization.name, exact: true }).first(),
     ).toBeVisible();
-    await expect(
-      page.getByRole('heading', { name: 'What it’s like to work with us.' }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Client ratings' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Tickif community reviews' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Selected projects/i })).toHaveCount(0);
 

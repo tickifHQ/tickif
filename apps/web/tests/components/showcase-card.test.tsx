@@ -166,11 +166,10 @@ describe('PublicProjectCard', () => {
     expect(screen.getByText('₹15–35L')).toBeInTheDocument();
   });
 
-  it('keeps the established portfolio year badge typography', () => {
+  it('keeps the real portfolio year inside the project link', () => {
     render(<PublicProjectCard project={designerProject} studioName="Studio A" />);
 
-    expect(screen.getByText('2025')).toHaveClass('font-mono', 'text-xs/none', 'font-semibold');
-    expect(screen.getByText('2025')).not.toHaveClass('text-2xs/none');
+    expect(screen.getByRole('link')).toContainElement(screen.getByText('2025'));
   });
 
   it('does not display an unrated project as trusted', () => {
