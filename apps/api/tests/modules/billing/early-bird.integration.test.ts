@@ -7,6 +7,34 @@ import { EARLY_BIRD_DEADLINE } from '@repo/contracts';
 const start = new Date('2026-10-31T10:00:00.000Z');
 
 describe('no-card early-bird trials', () => {
+  it.each(['requested', 'processing', 'reconciliation_pending'] as const)(
+    'blocks a trial while a paid checkout is %s, even without a persisted provider ID',
+    async (status) => {
+      const org = await makeOrganization();
+      const operationId = '77777777-7777-4777-8777-777777777777';
+      await db.insert(schema.billingOperation).values({
+        operationId,
+        organizationId: org.id,
+        targetTier: 'professional_plus',
+        kind: 'subscribe',
+        stateRevision: 'checkout-before-provider-response',
+        status,
+      });
+
+      expect(await earlyBirdStatus(org.id, start)).toEqual({ eligible: false, trial: null });
+      expect(await claimEarlyBird(org.id, 'corporate', start)).toBeNull();
+      expect(await db.select().from(schema.subscription)).toHaveLength(0);
+
+      // A definitive rejection makes a fresh organization eligible again.
+      await db
+        .update(schema.billingOperation)
+        .set({ status: 'failed' })
+        .where(eq(schema.billingOperation.operationId, operationId));
+      expect(await earlyBirdStatus(org.id, start)).toEqual({ eligible: true, trial: null });
+      expect(await claimEarlyBird(org.id, 'corporate', start)).toMatchObject({ tier: 'corporate' });
+    },
+  );
+
   it('grants the selected tier exactly once under concurrent requests, without a provider subscription', async () => {
     const org = await makeOrganization();
     const results = await Promise.all([

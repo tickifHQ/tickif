@@ -58,7 +58,10 @@ designer/admin routing and other public pages retain their existing behavior.
   first-time designer onboarding. The completion link opens
   `/designer/early-bird?plan=…`; an explicit authenticated confirmation then claims
   the no-card trial. Active visitor accounts retain the existing separate-account
-  policy. See
+  policy. Open billing operations also make an organization ineligible, including
+  provider checkouts whose outcome is still being reconciled and whose provider ID
+  has not been saved. Claims recheck this condition under the organization billing
+  lock; a definitive failed operation releases that block. See
   [ADR 0004](../adr/0004-early-bird-trials.md) for eligibility and expiry policy.
 
 ## Content boundaries

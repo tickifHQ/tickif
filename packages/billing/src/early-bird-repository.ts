@@ -1,9 +1,33 @@
-import { db, schema, eq, and, sql, asc } from '@repo/db';
+import { db, schema, eq, and, sql, asc, inArray } from '@repo/db';
 import type { EarlyBirdTier } from '@repo/contracts';
 import { billingQueries } from './repository.js';
 type Subscription = typeof schema.subscription.$inferSelect;
 
+async function hasOpenOperation(
+  connection: Pick<typeof db, 'select'>,
+  organizationId: string,
+): Promise<boolean> {
+  const rows = await connection
+    .select({ id: schema.billingOperation.operationId })
+    .from(schema.billingOperation)
+    .where(
+      and(
+        eq(schema.billingOperation.organizationId, organizationId),
+        inArray(schema.billingOperation.status, [
+          'requested',
+          'processing',
+          'reconciliation_pending',
+        ]),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
 export const earlyBirdRepository = {
+  hasOpenOperation(organizationId: string) {
+    return hasOpenOperation(db, organizationId);
+  },
   async find(organizationId: string): Promise<Subscription | null> {
     return (
       (
@@ -33,6 +57,7 @@ export const earlyBirdRepository = {
     organizationId: string,
     work: (repository: {
       find: () => Promise<Subscription | null>;
+      hasOpenOperation: () => Promise<boolean>;
       grant: (tier: EarlyBirdTier, start: Date, end: Date) => Promise<void>;
       expire: () => Promise<void>;
     }) => Promise<T>,
@@ -58,6 +83,7 @@ export const earlyBirdRepository = {
       const repo = billingQueries(tx);
       return work({
         find: async () => (await repo.subscription(organizationId)) ?? null,
+        hasOpenOperation: () => hasOpenOperation(tx, organizationId),
         grant: async (tier, start, end) => {
           await tx
             .insert(schema.subscription)
