@@ -674,6 +674,28 @@ describe('DesignerOnboarding', () => {
     expect(mock.router.push).toHaveBeenCalledWith('/designer/portfolio');
   });
 
+  it('preserves the selected trial after onboarding without activating it automatically', async () => {
+    const submit = vi.fn().mockResolvedValue(companyOnboardingResult);
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        earlyBirdTier="corporate"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'New Studio', foundedYear: '2020' },
+        }}
+        onSubmitOnboarding={submit}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('link', { name: 'Continue to your trial' })).toHaveAttribute(
+      'href',
+      '/designer/early-bird?plan=corporate',
+    );
+    expect(mock.router.push).not.toHaveBeenCalled();
+  });
+
   it('restores an older founding year and submits it without truncation', async () => {
     const submit = vi.fn();
     render(

@@ -6,7 +6,7 @@ import {
   type SubscriptionResponse,
 } from '@repo/contracts';
 import { config } from '@repo/config';
-import { applyReplacementSchedule } from '@repo/billing';
+import { applyReplacementSchedule, expireEarlyBird, activeEarlyBirdTrial } from '@repo/billing';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
 import { getCachedEntitlement, setCachedEntitlement } from '../../lib/redis.js';
 import { entitlementRepository } from './entitlement-repository.js';
@@ -63,6 +63,8 @@ export const entitlementService = {
     }
 
     // Check Redis cache
+    if (await expireEarlyBird(caller.activeOrgId))
+      await invalidateEntitlementCache(caller.activeOrgId);
     if (await applyReplacementSchedule(caller.activeOrgId))
       await invalidateEntitlementCache(caller.activeOrgId);
     const cached = await getCachedEntitlement(caller.activeOrgId);
@@ -94,6 +96,7 @@ export const entitlementService = {
 
     const now = new Date();
     const response: SubscriptionResponse = {
+      earlyBirdTrial: activeEarlyBirdTrial(subscription),
       tier,
       lifecycleState: state,
       preLapseTier: subscription.preLapseTier as PlanTier | null,

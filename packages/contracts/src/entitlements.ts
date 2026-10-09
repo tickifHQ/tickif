@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { earlyBirdTrialSchema } from './early-bird';
 import {
   type PlanTier,
   type SubscriptionState,
@@ -180,6 +181,7 @@ export type FrozenResource = z.infer<typeof frozenResourceSchema>;
 
 export const subscriptionResponseSchema = z
   .object({
+    earlyBirdTrial: earlyBirdTrialSchema.nullable().optional(),
     tier: planTierSchema,
     lifecycleState: subscriptionStateSchema,
     preLapseTier: planTierSchema.nullable(),

@@ -199,3 +199,27 @@
   --chart-4: oklch(0.78 0.15 60);
   --chart-5: oklch(0.66 0.125 320);
 }
+
+/* Landing frame 16095:51371. Scope new art direction to the public homepage. */
+[data-landing='true'] {
+  --card-radius: 28px;
+  --background: #faf9f6;
+  --primary: #1a9b7a;
+  --primary-hover: #168266;
+  --primary-soft: #8fe0c4;
+  --secondary: #e0f2ec;
+  --secondary-foreground: #0c3b2e;
+  --border: rgba(23, 22, 18, 0.08);
+  --home-search-shadow: 0 18px 40px -12px rgba(13, 64, 46, 0.1), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --font-heading: 'Helvetica Neue', var(--font-sans-base, ui-sans-serif, system-ui, sans-serif);
+  --home-heading-accent: #c2613b;
+}
+
+.dark [data-landing='true'] {
+  --background: #141a17;
+  --primary: #70c7a1;
+  --primary-hover: #8fd8b4;
+  --secondary: #203d30;
+  --secondary-foreground: #bce5cc;
+  --border: rgba(228, 237, 230, 0.16);
+}

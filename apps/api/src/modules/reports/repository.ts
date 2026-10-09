@@ -1,3 +1,4 @@
+import { effectivePlanTier } from '@repo/db';
 import { inArray } from 'drizzle-orm';
 import { and, db, desc, eq, gte, lte, schema, sql } from '@repo/db';
 import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
@@ -104,7 +105,7 @@ export const reportsRepository = {
         memberId: schema.member.id,
         role: schema.member.role,
         frozen: schema.member.frozen,
-        tier: schema.subscription.planTier,
+        tier: effectivePlanTier(),
         lifecycleState: schema.subscription.subscriptionState,
         currentPeriodEnd: schema.subscription.currentPeriodEnd,
       })

@@ -1,3 +1,4 @@
+import { effectivePlanTier } from '@repo/db';
 import { and, asc, desc, eq, exists, inArray, lte, max, sql } from 'drizzle-orm';
 import {
   db,
@@ -43,10 +44,7 @@ export const OWNERSHIP_TRANSFER_RESULT = {
 } as const;
 
 export const orgsRepository = {
-  async hasActiveRetention(
-    organizationId: string,
-    tx?: DbTransaction,
-  ): Promise<boolean> {
+  async hasActiveRetention(organizationId: string, tx?: DbTransaction): Promise<boolean> {
     const executor = tx ?? db;
     const [row] = await executor
       .select({ organizationId: schema.organizationRetention.organizationId })
@@ -204,7 +202,7 @@ export const orgsRepository = {
     const executor = tx ?? db;
     const [row] = await executor
       .select({
-        tier: schema.subscription.planTier,
+        tier: effectivePlanTier(),
         state: schema.subscription.subscriptionState,
       })
       .from(schema.subscription)

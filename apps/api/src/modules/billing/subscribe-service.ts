@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { replacementRepository, reconcileReplacement } from '@repo/billing';
+import { activeEarlyBirdTrial, expireEarlyBird } from '@repo/billing';
 import { subscribeRepository, type SubscriptionUpdate } from './subscribe-repository.js';
 import {
   ORGANIZATION_CAPABILITY,
@@ -149,6 +150,9 @@ export const subscribeService = {
     }
 
     // Server-side plan resolution — never trust client
+    const localTrial = await subscribeRepository.find(caller.activeOrgId!);
+    if (localTrial?.earlyBirdEndsAt && (await expireEarlyBird(caller.activeOrgId!)))
+      await invalidateEntitlementCache(caller.activeOrgId!);
     const razorpayPlanId = resolveRazorpayPlanId(params.targetTier);
     if (!razorpayPlanId) {
       throw AppError.unprocessable(`Razorpay plan not configured for tier: ${params.targetTier}`);
@@ -180,6 +184,11 @@ export const subscribeService = {
           });
       }
       const existing = await repository.find(caller.activeOrgId!);
+      if (activeEarlyBirdTrial(existing ?? null)) {
+        throw AppError.conflict(
+          'Your early-bird trial is active. Choose a paid plan after it ends; no automatic charge is scheduled.',
+        );
+      }
 
       // Never infer abandonment from local status. In particular, Razorpay's
       // `authenticated` status means the authorization transaction completed and

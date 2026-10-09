@@ -18,6 +18,8 @@ read the documents and [ADRs](../adr/README.md) relevant to the domain.
 | [Observability](./observability.md)            | Structured logs, telemetry, privacy and deferred coverage        |
 | [UI refresh](./ui-refresh/README.md)           | Figma provenance, tokens, artwork and shared component decisions |
 
+See [Public landing page](./landing-page.md) for homepage design, API sources and content boundaries.
+
 Use [coding guidelines](../coding-guidelines/README.md) for enforced conventions,
 [guides](../guides/README.md) for development procedures and
 [runbooks](../runbooks/README.md) for operator commands. Package API details stay in

@@ -130,6 +130,48 @@ describe('DesignerPlanBilling', () => {
       .mockImplementation(async () => Response.json({ items: [], nextOffset: null }));
   });
 
+  it('shows no payment action during a trial and refreshes to Hobby when the server expires it', async () => {
+    const earlyBirdTrial = {
+      tier: 'professional_plus' as const,
+      startedAt: '2026-10-01T00:00:00.000Z',
+      endsAt: '2027-01-01T00:00:00.000Z',
+    };
+    let expired = false;
+    apiMocks.getSubscription.mockImplementation(async () =>
+      Response.json({
+        tier: expired ? 'hobby' : 'professional_plus',
+        lifecycleState: 'active',
+        earlyBirdTrial: expired ? null : earlyBirdTrial,
+        preLapseTier: null,
+        razorpayStatus: null,
+        currentPeriodEnd: expired ? null : earlyBirdTrial.endsAt,
+        cancellationScheduled: false,
+        seatUsage: 1,
+        branchUsage: 1,
+        graceDaysRemaining: null,
+        lockedDaysRemaining: null,
+        frozenResources: [],
+        entitlements: resolveEntitlements(expired ? 'hobby' : 'professional_plus', 'active'),
+      }),
+    );
+    render(
+      <DesignerPlanBilling
+        billing={makeBilling({ earlyBirdTrial, razorpayStatus: null, billing: null })}
+      />,
+    );
+    expect(screen.getByText('Early-bird trial active')).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.getSubscription).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /upgrade|subscribe/i })).not.toBeInTheDocument();
+    expired = true;
+    await act(async () => {
+      fireEvent.focus(window);
+    });
+    await waitFor(() =>
+      expect(screen.queryByText('Early-bird trial active')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('Plan & Billing')).toBeInTheDocument();
+  });
+
   it('automatically reconciles pending activation without losing the open checkout or selected target', async () => {
     sessionStorage.clear();
     let active = false;

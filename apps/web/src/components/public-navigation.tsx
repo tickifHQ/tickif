@@ -17,9 +17,24 @@ const mobileNavigationItems = navigationItems.slice(0, 3);
 const itemClassName =
   'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors';
 
-export function PublicNavigation({ mobile = false }: { mobile?: boolean }) {
+export function PublicNavigation({
+  mobile = false,
+  landing = false,
+}: {
+  mobile?: boolean;
+  landing?: boolean;
+}) {
   const pathname = usePathname();
-  const items = mobile ? mobileNavigationItems : navigationItems;
+  const items = landing
+    ? [
+        { href: '/', label: 'Explore' },
+        { href: '/#browse-by-room', label: 'Rooms' },
+        { href: '/#browse-by-city', label: 'Cities' },
+        { href: '/designers', label: 'Designers' },
+      ]
+    : mobile
+      ? mobileNavigationItems
+      : navigationItems;
 
   return (
     <nav
@@ -34,7 +49,10 @@ export function PublicNavigation({ mobile = false }: { mobile?: boolean }) {
             <span
               key={item.label}
               aria-current="page"
-              className={cn(itemClassName, 'bg-accent text-foreground')}
+              className={cn(
+                itemClassName,
+                landing ? 'bg-foreground/6 text-foreground' : 'bg-accent text-foreground',
+              )}
             >
               {item.label}
             </span>

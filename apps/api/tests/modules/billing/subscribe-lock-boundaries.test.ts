@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@repo/billing', () => ({
+  activeEarlyBirdTrial: vi.fn().mockReturnValue(null),
+  expireEarlyBird: vi.fn().mockResolvedValue(false),
   replacementRepository: { current: vi.fn().mockResolvedValue(undefined) },
 }));
 

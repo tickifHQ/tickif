@@ -50,6 +50,44 @@ function response(body: unknown, status = 200) {
 }
 
 describe('ProjectActions', () => {
+  it('opens sign-in for the anonymous landing bookmark without showing other actions', () => {
+    render(
+      <ProjectActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        loginHref="/login"
+        canonicalUrl="/projects/p1"
+        presentation="save"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to save project' }));
+    expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share project' })).toBeNull();
+    expect(mocks.saveProject).not.toHaveBeenCalled();
+  });
+
+  it('saves through the API and synchronizes repeated landing cards', async () => {
+    mocks.session = { user: { id: 'user-1' } };
+    const props = {
+      projectId: '11111111-1111-4111-8111-111111111111',
+      loginHref: '/login',
+      canonicalUrl: '/projects/p1',
+      presentation: 'save' as const,
+    };
+    render(
+      <>
+        <ProjectActions {...props} />
+        <ProjectActions {...props} />
+      </>,
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Save project' })[0]).toBeEnabled(),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save project' })[0]!);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Remove saved project' })).toHaveLength(2),
+    );
+    expect(mocks.saveProject).toHaveBeenCalledWith({ param: { projectId: props.projectId } });
+  });
   beforeEach(() => {
     mocks.session = null;
     mocks.isPending = false;
@@ -63,14 +101,20 @@ describe('ProjectActions', () => {
     );
   });
 
-  it.each(['anonymous', 'authenticated'] as const)(
-    'hydrates pending server markup with a cached %s session',
-    async (identity) => {
+  it.each([
+    ['anonymous', 'default'],
+    ['authenticated', 'default'],
+    ['anonymous', 'save'],
+    ['authenticated', 'save'],
+  ] as const)(
+    'hydrates pending server markup with a cached %s session in the %s presentation',
+    async (identity, presentation) => {
       const view = (
         <ProjectActions
           projectId="11111111-1111-4111-8111-111111111111"
           loginHref="/login"
           canonicalUrl="https://tickif.com/projects/example"
+          presentation={presentation}
         />
       );
       mocks.isPending = true;

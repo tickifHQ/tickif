@@ -27,6 +27,8 @@ import { visitorsRoutes } from './modules/visitors/routes.js';
 import { personalAccountRoutes } from './modules/personal-account/routes.js';
 import { adminVerificationsRoutes, verificationsRoutes } from './modules/verifications/routes.js';
 import { subscribeRoutes } from './modules/billing/subscribe-routes.js';
+import { catalogRoutes } from './modules/billing/catalog-routes.js';
+import { earlyBirdRoutes } from './modules/billing/early-bird-routes.js';
 import { webhookRoutes } from './modules/billing/webhook-routes.js';
 import { entitlementRoutes } from './modules/billing/entitlement-routes.js';
 import { recoveryRoutes } from './modules/billing/recovery-routes.js';
@@ -45,7 +47,8 @@ const corsOrigins = isProduction
   : [config.NEXT_PUBLIC_API_URL, 'http://localhost:3000', ...config.TRUSTED_ORIGINS];
 const applicationCors = cors({ origin: corsOrigins, credentials: true });
 const telemetryCors = cors({
-  origin: (origin) => config.TELEMETRY_BROWSER_ALLOWED_ORIGINS.includes(origin) ? origin : undefined,
+  origin: (origin) =>
+    config.TELEMETRY_BROWSER_ALLOWED_ORIGINS.includes(origin) ? origin : undefined,
   credentials: false,
   allowMethods: ['POST'],
   allowHeaders: ['Content-Type'],
@@ -59,7 +62,9 @@ const telemetryCors = cors({
  * each domain module is mounted under /api. New modules (designers, media,
  * leads, search, billing, ...) plug in with a single `.route()` call.
  */
-const base = new OpenAPIHono<{ Variables: AuthVariables & RequestTelemetryVariables }>({ defaultHook: validationHook });
+const base = new OpenAPIHono<{ Variables: AuthVariables & RequestTelemetryVariables }>({
+  defaultHook: validationHook,
+});
 
 base.onError(onError);
 
@@ -121,6 +126,8 @@ export const app = base
   .route('/api/discovery', discoveryRoutes)
   .route('/api/search', searchRoutes)
   .route('/api/billing', subscribeRoutes)
+  .route('/api/billing', catalogRoutes)
+  .route('/api/billing', earlyBirdRoutes)
   .route('/api/billing', webhookRoutes)
   .route('/api/billing', recoveryRoutes)
   .route('/api/billing', entitlementRoutes);

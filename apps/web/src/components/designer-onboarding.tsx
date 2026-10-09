@@ -3,6 +3,7 @@
 import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BriefcaseBusiness, ChevronRight, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
 import {
@@ -19,6 +20,7 @@ import {
   type OnboardingDraftResponse,
   type OnboardingStep,
   type TaxonomyTerm,
+  type EarlyBirdTier,
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
@@ -45,10 +47,7 @@ import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/pho
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
-import {
-  SocialProfileInput,
-  socialProfileError,
-} from '@/components/social-profile-confirmation';
+import { SocialProfileInput, socialProfileError } from '@/components/social-profile-confirmation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 type EntityType = OnboardDesignerInput['entityType'];
@@ -58,6 +57,7 @@ type SubmitOnboarding = (
 ) => Promise<{ data: OnboardDesignerResponse; created: boolean }>;
 
 type DesignerOnboardingProps = {
+  earlyBirdTier?: EarlyBirdTier;
   signedInName?: string | null;
   signedInAs?: string | null;
   /** E-298: server-side saved progress used to resume the wizard on mount. */
@@ -204,6 +204,7 @@ async function signOutToLogin() {
 }
 
 export function DesignerOnboarding({
+  earlyBirdTier,
   signedInName,
   signedInAs,
   initialDraft,
@@ -549,6 +550,22 @@ export function DesignerOnboarding({
   }
 
   if (result) {
+    if (earlyBirdTier)
+      return (
+        <OnboardingShell signedInAs={displayEmail}>
+          <div className="space-y-5">
+            <h1 className="font-display text-3xl">Your studio is ready</h1>
+            <p className="text-muted-foreground">
+              Continue to review and confirm your three-month trial. No card is needed.
+            </p>
+            <Button asChild>
+              <Link href={`/designer/early-bird?plan=${earlyBirdTier}`}>
+                Continue to your trial
+              </Link>
+            </Button>
+          </div>
+        </OnboardingShell>
+      );
     return (
       <OnboardingShell signedInAs={displayEmail}>
         <CompletionStep

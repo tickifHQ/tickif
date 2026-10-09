@@ -22,10 +22,10 @@ const filters: FeedFilterState = {
   propertyType: [],
   scope: [],
   budgetBand: [],
-      room: [],
-      theme: [],
-      material: [],
-      tag: [],
+  room: [],
+  theme: [],
+  material: [],
+  tag: [],
 };
 
 function card(id: string, title: string): DiscoveryCard {
@@ -122,6 +122,32 @@ describe('ProjectFeed', () => {
 
     expect(screen.getAllByRole('article')).toHaveLength(26);
     expect(screen.queryByRole('button', { name: 'Load more projects' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the landing footer reachable while allowing explicit pagination', async () => {
+    const initialPage: HomeFeedPage = {
+      items: [card('project-1', 'First Project')],
+      page: 1,
+      hasMore: true,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+    mock.fetchHomeFeedPage.mockResolvedValue({
+      ...initialPage,
+      items: [card('project-2', 'Second Project')],
+      page: 2,
+      hasMore: false,
+    });
+    render(
+      <ProjectFeed initialPage={initialPage} request={{ filters, query: '' }} autoLoad={false} />,
+    );
+
+    expect(mock.observerOptions).not.toContainEqual({ rootMargin: '600px 0px' });
+    expect(mock.fetchHomeFeedPage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    expect(await screen.findByText('Second Project')).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(2);
   });
 
   it('keeps appended cards when presigned image URLs rotate during a server refresh', async () => {
@@ -300,6 +326,59 @@ describe('ProjectFeed', () => {
       '2',
     );
     expect(document.querySelectorAll('[data-masonry-feed]')).toHaveLength(1);
+  });
+
+  it('fills the landing row without empty columns when the API returns fewer projects', () => {
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockReturnValue({ getPropertyValue: () => '6' } as unknown as CSSStyleDeclaration);
+    render(
+      <ProjectFeed
+        presentation="landing"
+        initialPage={{
+          items: [card('one', 'First'), card('two', 'Second')],
+          page: 1,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+      />,
+    );
+    expect(document.querySelectorAll('[data-feed-column]')).toHaveLength(2);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    style.mockRestore();
+  });
+
+  it('balances equal-height landing cards independently of source image proportions', () => {
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockReturnValue({ getPropertyValue: () => '3' } as unknown as CSSStyleDeclaration);
+    const items = Array.from({ length: 6 }, (_, index) => ({
+      ...card(`card-${index}`, `Card ${index}`),
+      imageHeight: index === 0 ? 3000 : 200,
+    }));
+    render(
+      <ProjectFeed
+        presentation="landing"
+        initialPage={{
+          items,
+          page: 1,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+      />,
+    );
+    expect(
+      Array.from(document.querySelectorAll('[data-feed-column]')).map(
+        (column) => column.querySelectorAll('article').length,
+      ),
+    ).toEqual([2, 2, 2]);
+    style.mockRestore();
   });
 
   it('keeps existing cards in their masonry columns when another page is appended', async () => {

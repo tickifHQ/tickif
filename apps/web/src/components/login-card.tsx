@@ -32,10 +32,12 @@ import {
   type Country,
 } from '@/components/phone-number-input';
 import { DESIGNER_AUTH_CONTINUE_PATH, VISITOR_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
+import { useLandingProjectPreviews } from '@/components/landing-project-preview';
 
 type LoginMode = 'browsing' | 'designer';
 
 interface LoginCardProps {
+  presentation?: 'default' | 'landing';
   initialMode?: LoginMode;
   callbackPath?: string;
   onSuccess?: () => void;
@@ -106,11 +108,13 @@ const trustAvatars = [
 ] as const;
 
 export function LoginCard({
+  presentation = 'default',
   initialMode = 'browsing',
   callbackPath,
   onSuccess,
   onClose,
 }: LoginCardProps) {
+  const previewProjects = useLandingProjectPreviews();
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -374,64 +378,122 @@ export function LoginCard({
     return (
       <div className="flex flex-col overflow-hidden md:flex-row">
         {/* Left: Brand / Promo Panel */}
-        <div className="flex w-full flex-col justify-between rounded-xl px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0 [background-image:radial-gradient(circle_at_top_left,rgba(26,155,122,0.28),transparent_55%),linear-gradient(170deg,#17271f_0%,#0e1814_100%)]">
-          <div className="flex flex-col gap-5">
-            <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
-              <Users className="size-3.5 text-success" aria-hidden="true" />
-              <span className="text-xs font-medium text-success">
-                Trusted by 12,400+ verified homes
-              </span>
+        {presentation === 'landing' ? (
+          <div className="relative flex flex-col justify-between gap-4 overflow-hidden rounded-card bg-linear-to-br from-surface-inverse to-secondary-foreground p-6 text-surface-inverse-foreground sm:gap-5 sm:px-8 sm:pb-7 sm:pt-8 md:w-[42%] md:shrink-0 lg:w-[404px]">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-48 left-40 size-[420px] rounded-full bg-primary/10"
+            />
+            <p className="relative flex w-fit items-center gap-2 rounded-full bg-primary/15 px-3 py-2 text-[13px] text-primary-soft">
+              <Bookmark className="size-3.5" aria-hidden /> Keep your favourite homes close
+            </p>
+            <h2 className="relative font-display text-2xl leading-7 tracking-tight sm:text-[32px] sm:leading-[38px]">
+              Don’t lose the homes you lingered on
+            </h2>
+            {previewProjects?.length ? (
+              <div
+                className="relative hidden gap-2 sm:flex"
+                aria-label="Explore these published homes"
+              >
+                {previewProjects.map((project) => (
+                  <img
+                    key={project.id}
+                    src={project.coverImageUrl!}
+                    alt={project.title}
+                    width={80}
+                    height={100}
+                    loading="lazy"
+                    className="h-[100px] min-w-0 flex-1 rounded-lg object-cover"
+                  />
+                ))}
+              </div>
+            ) : null}
+            <p className="relative text-sm leading-[21px] text-surface-inverse-foreground/75">
+              Save homes you love and connect with their designers. Your next idea is worth keeping.
+            </p>
+            <div className="relative hidden border-t border-primary-soft/25 pt-3 font-mono text-[10px] uppercase tracking-wider text-primary-soft md:block">
+              Save your favourites · Find your designer
             </div>
-            <div className="flex flex-col gap-2">
-              <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
-              <p className="text-xs text-white/60">{promoSubtitle}</p>
-              <div className="mt-6 flex flex-col gap-3">
-                {features.map((f) => {
-                  const Icon = f.icon;
-                  return (
-                    <div
-                      key={f.title}
-                      data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="flex items-center gap-2.5"
+          </div>
+        ) : (
+          <div className="flex w-full flex-col justify-between rounded-xl px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0 [background-image:radial-gradient(circle_at_top_left,rgba(26,155,122,0.28),transparent_55%),linear-gradient(170deg,#17271f_0%,#0e1814_100%)]">
+            <div className="flex flex-col gap-5">
+              <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
+                <Users className="size-3.5 text-success" aria-hidden="true" />
+                <span className="text-xs font-medium text-success">
+                  Trusted by 12,400+ verified homes
+                </span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
+                <p className="text-xs text-white/60">{promoSubtitle}</p>
+                <div className="mt-6 flex flex-col gap-3">
+                  {features.map((f) => {
+                    const Icon = f.icon;
+                    return (
+                      <div
+                        key={f.title}
+                        data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
+                        className="flex items-center gap-2.5"
+                      >
+                        <Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
+                        <p className="text-sm text-white">{f.title}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex items-center gap-3">
+              <div className="flex -space-x-2">
+                {trustAvatars.map((a) => (
+                  <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
+                    <AvatarFallback
+                      className={cn('text-[9px] font-semibold text-white', a.className)}
                     >
-                      <Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
-                      <p className="text-sm text-white">{f.title}</p>
-                    </div>
-                  );
-                })}
+                      {a.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-white">12,400+ verified homes</p>
+                <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
+                  on Tickif
+                  <span className="inline-flex items-center gap-1">
+                    <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
+                    4.9 (1.5k)
+                  </span>
+                </p>
               </div>
             </div>
           </div>
-          <div className="mt-6 flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {trustAvatars.map((a) => (
-                <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
-                  <AvatarFallback
-                    className={cn('text-[9px] font-semibold text-white', a.className)}
-                  >
-                    {a.initials}
-                  </AvatarFallback>
-                </Avatar>
-              ))}
-            </div>
-            <div>
-              <p className="text-xs font-medium text-white">12,400+ verified homes</p>
-              <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
-                on Tickif
-                <span className="inline-flex items-center gap-1">
-                  <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
-                  4.9 (1.5k)
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Right: Form Panel */}
-        <div className="flex w-full min-w-0 flex-col px-6 py-8 md:flex-1">
+        <div
+          className={cn(
+            'flex w-full min-w-0 flex-col py-8 md:flex-1',
+            presentation === 'landing' ? 'px-6 sm:px-8 md:min-h-[460px]' : 'px-6',
+          )}
+        >
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-base font-medium text-foreground">Login to continue</h3>
+              <div>
+                <h3
+                  className={cn(
+                    'font-medium text-foreground',
+                    presentation === 'landing' ? 'text-lg' : 'text-base',
+                  )}
+                >
+                  {presentation === 'landing' ? 'Log in to keep exploring' : 'Login to continue'}
+                </h3>
+                {presentation === 'landing' ? (
+                  <p className="mt-2 text-sm leading-5 text-muted-foreground">
+                    Free for homeowners. Just your mobile number.
+                  </p>
+                ) : null}
+              </div>
               <Button
                 onClick={handleClose}
                 aria-label="Close"
@@ -450,7 +512,12 @@ export function LoginCard({
                 className="w-full"
                 onValueChange={(val) => setLoginMode(val as LoginMode)}
               >
-                <TabsList className="w-full">
+                <TabsList
+                  className={cn(
+                    'w-full',
+                    presentation === 'landing' && 'h-11 rounded-lg [&>button]:rounded-md',
+                  )}
+                >
                   <TabsTrigger value="browsing" className="flex-1 gap-1.5">
                     <House className="size-4" aria-hidden="true" />
                     I'm browsing
@@ -489,18 +556,21 @@ export function LoginCard({
                             setError('');
                           }}
                           onEnter={handleSendOtp}
-                          placeholder="9123456789"
+                          placeholder={presentation === 'landing' ? 'Mobile number' : '9123456789'}
                           disabled={loading}
                         />
                       </div>
 
                       <Button
                         type="button"
-                        variant="fancy"
+                        variant={presentation === 'landing' ? 'default' : 'fancy'}
                         size="fancy"
                         onClick={handleSendOtp}
                         disabled={loading || !toE164PhoneNumber(selectedCountry, phone)}
-                        className="w-full cursor-pointer"
+                        className={cn(
+                          'w-full cursor-pointer',
+                          presentation === 'landing' && 'h-12 rounded-full',
+                        )}
                       >
                         {loading ? 'Sending…' : 'Get OTP'}
                       </Button>
@@ -659,7 +729,11 @@ export function LoginCard({
     <Card
       className={cn(
         'mx-auto w-full overflow-hidden',
-        step === 'otp' ? 'max-w-[33.8125rem] shadow-xl' : 'max-w-[760px]',
+        step === 'otp'
+          ? 'max-w-[33.8125rem] shadow-xl'
+          : presentation === 'landing'
+            ? 'max-w-[862px] rounded-card p-2 shadow-floating-card'
+            : 'max-w-[760px]',
       )}
     >
       {step === 'otp' ? renderOtpStep() : renderPhoneStep()}

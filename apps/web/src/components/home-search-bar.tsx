@@ -7,12 +7,21 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, History, Search, X } from 'lucide-react';
 import {
   recentSearchesSchema,
+  listTaxonomyResponseSchema,
   searchSuggestResponseSchema,
   type SearchSuggestResponse,
 } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@repo/ui/components/select';
+import type { FeedFacetOption } from '@/components/feed-filters';
 import { api } from '@/lib/api';
-import { parseFeedParams } from '@/lib/feed-params';
+import { parseFeedParams, parseFeedQuery } from '@/lib/feed-params';
 
 const EMPTY_SUGGESTIONS: SearchSuggestResponse = {
   projects: [],
@@ -22,6 +31,33 @@ const EMPTY_SUGGESTIONS: SearchSuggestResponse = {
 };
 const RECENT_SEARCHES_STORAGE_KEY = 'tickif.homeSearchRecents.v1';
 const MAX_RECENT_SEARCHES = 5;
+const MULTIPLE_CITIES = '__multiple_cities';
+
+export function LandingHeaderSearch() {
+  const params = useSearchParams();
+  const [cities, setCities] = useState<FeedFacetOption[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.api.taxonomy.terms
+      .$get({ query: { kind: 'city' } }, { init: { signal: controller.signal } })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const parsed = listTaxonomyResponseSchema.safeParse(await response.json());
+        if (parsed.success && !controller.signal.aborted) {
+          setCities(parsed.data.terms.map(({ slug, label }) => ({ slug, label })));
+        }
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+  return (
+    <HomeSearchBar
+      variant="header"
+      cities={cities}
+      initialQuery={parseFeedQuery(params.get('q') ?? undefined)}
+    />
+  );
+}
 
 function readRecentSearches(): string[] {
   if (typeof window === 'undefined') return [];
@@ -47,13 +83,14 @@ function writeRecentSearches(searches: string[]) {
 
 type HomeSearchBarProps = {
   initialQuery?: string;
-  variant?: 'default' | 'hero';
+  variant?: 'default' | 'hero' | 'header';
   /**
    * Feed base the search navigates to. The shared bar also renders inside the
    * signed-in /home workspace, where searches must stay on /home instead of
    * round-tripping through the public homepage redirect.
    */
   basePath?: string;
+  cities?: FeedFacetOption[];
 };
 
 /** Homepage search entry with blended project/designer suggestions after a 150 ms debounce. */
@@ -61,6 +98,7 @@ export function HomeSearchBar({
   initialQuery = '',
   variant = 'default',
   basePath = '/',
+  cities = [],
 }: HomeSearchBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -68,11 +106,31 @@ export function HomeSearchBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(initialQuery);
+  const selectedCities = parseFeedParams(new URLSearchParams(searchParams.toString())).city;
+  const [city, setCity] = useState(
+    selectedCities.length > 1 ? MULTIPLE_CITIES : (selectedCities[0] ?? ''),
+  );
+  const cityParam = searchParams.getAll('city').join(',');
+  useEffect(() => {
+    const values = parseFeedParams(new URLSearchParams(cityParam ? { city: cityParam } : {})).city;
+    setCity(values.length > 1 ? MULTIPLE_CITIES : (values[0] ?? ''));
+  }, [cityParam]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<SearchSuggestResponse>(EMPTY_SUGGESTIONS);
   const [isFocused, setIsFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const trimmedQuery = query.trim();
+  useEffect(() => {
+    if (variant !== 'header') return;
+    const onShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, [variant]);
   const hasSuggestions =
     suggestions.projects.length + suggestions.designers.length + suggestions.filters.length > 0;
   const showRecentSearches = isFocused && trimmedQuery.length === 0 && recentSearches.length > 0;
@@ -135,6 +193,10 @@ export function HomeSearchBar({
     }
 
     const params = new URLSearchParams(searchParams.toString());
+    if (variant !== 'default' && cities.length > 0 && city !== MULTIPLE_CITIES) {
+      if (city) params.set('city', city);
+      else params.delete('city');
+    }
     if (normalizedQuery) params.set('q', normalizedQuery);
     else params.delete('q');
     params.delete('page');
@@ -149,6 +211,10 @@ export function HomeSearchBar({
 
   function applyFilter(filter: SearchSuggestResponse['filters'][number]) {
     const params = new URLSearchParams(searchParams.toString());
+    if (variant !== 'default' && cities.length > 0 && city !== MULTIPLE_CITIES) {
+      if (city) params.set('city', city);
+      else params.delete('city');
+    }
     params.delete('q');
     params.delete('page');
     const selected = new Set(parseFeedParams(params)[filter.filterKey]);
@@ -203,8 +269,10 @@ export function HomeSearchBar({
 
   const shellClassName =
     variant === 'hero'
-      ? 'border-home-search-border bg-home-search-background shadow-home-search'
-      : 'border-border bg-background shadow-home-search';
+      ? 'min-h-[72px] rounded-full border-border bg-card shadow-home-search sm:pl-6'
+      : variant === 'header'
+        ? 'h-[42px] rounded-full border-transparent bg-foreground/5 pl-1.5'
+        : 'border-border bg-background shadow-home-search';
 
   return (
     <form
@@ -217,9 +285,25 @@ export function HomeSearchBar({
       }}
     >
       <div
-        className={`flex items-center gap-3 rounded-xl border py-1.5 pl-4 pr-1.5 ${shellClassName}`}
+        className={`flex items-center gap-3 border py-1.5 pr-1.5 ${variant === 'header' ? '' : 'pl-4'} ${variant === 'default' ? 'rounded-xl' : 'rounded-full'} ${shellClassName}`}
       >
-        <Search className="size-4 shrink-0 text-primary" aria-hidden />
+        {variant === 'hero' ? (
+          <img
+            src="/images/landing/search.svg"
+            alt=""
+            className="hidden shrink-0 sm:block dark:brightness-0 dark:invert"
+          />
+        ) : variant === 'header' ? (
+          <button type="submit" aria-label="Search from header" className="shrink-0 rounded-full">
+            <img
+              src="/images/landing/header-search.svg"
+              alt=""
+              className="dark:brightness-0 dark:invert"
+            />
+          </button>
+        ) : (
+          <Search className="size-4 shrink-0 text-primary" aria-hidden />
+        )}
         <input
           ref={inputRef}
           type="search"
@@ -243,9 +327,15 @@ export function HomeSearchBar({
               handleDropdownKeys(event);
             }
           }}
-          placeholder="Search interiors, construction, a style, or a city…"
+          placeholder={
+            variant === 'header'
+              ? 'Kitchens, 3BHK, studios…'
+              : variant === 'hero'
+                ? 'Kitchens, 3BHK, teak pooja units…'
+                : 'Search interiors, construction, a style, or a city…'
+          }
           aria-label="Search homes"
-          className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+          className={`h-9 min-w-0 flex-1 appearance-none bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${variant === 'hero' ? 'text-base sm:text-lg' : 'text-sm'}`}
         />
         {query.length > 0 ? (
           <Button
@@ -264,11 +354,72 @@ export function HomeSearchBar({
             <X className="size-3.5" aria-hidden />
           </Button>
         ) : null}
+        {variant !== 'default' && cities.length > 0 ? (
+          <Select
+            value={city || '__all_cities'}
+            onValueChange={(value) => setCity(value === '__all_cities' ? '' : value)}
+          >
+            <SelectTrigger
+              aria-label={variant === 'header' ? 'Header search city' : 'Search city'}
+              className={
+                variant === 'header'
+                  ? 'order-first h-[30px] max-w-36 shrink-0 gap-1.5 rounded-full border-0 bg-card px-2.5 text-sm shadow-sm [&>svg]:hidden'
+                  : 'h-7 max-w-28 shrink-0 gap-2 rounded-none border-0 border-l border-border bg-transparent px-2 shadow-none sm:max-w-44 sm:px-4 sm:text-base [&>svg]:hidden'
+              }
+            >
+              {variant === 'header' ? (
+                <img
+                  src="/images/landing/map-pin.svg"
+                  alt=""
+                  className="dark:brightness-0 dark:invert"
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="hidden size-2 shrink-0 rounded-full bg-primary sm:block"
+                />
+              )}
+              <SelectValue />
+              <img
+                src={`/images/landing/${variant === 'header' ? 'chevron-down' : 'chevrons-up-down'}.svg`}
+                alt=""
+                className="ml-auto shrink-0 dark:brightness-0 dark:invert"
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all_cities">All cities</SelectItem>
+              {city === MULTIPLE_CITIES ? (
+                <SelectItem value={MULTIPLE_CITIES} disabled>
+                  Multiple cities
+                </SelectItem>
+              ) : null}
+              {cities.map((option) => (
+                <SelectItem key={option.slug} value={option.slug}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
         {variant === 'hero' ? (
-          <Button type="submit" variant="fancy" size="fancy" className="shrink-0">
-            Explore
-            <ArrowRight className="size-4" aria-hidden />
+          <Button
+            type="submit"
+            size="lg"
+            className="landing-lift h-[54px] shrink-0 gap-2 rounded-full px-4 sm:px-6"
+            aria-label="Search"
+          >
+            <img src="/images/landing/search-light.svg" alt="" className="dark:brightness-0" />
+            <span className="hidden sm:inline">Search</span>
           </Button>
+        ) : variant === 'header' ? (
+          <button
+            type="button"
+            aria-label="Focus search (Control or Command K)"
+            onClick={() => inputRef.current?.focus()}
+            className="shrink-0 rounded-md bg-card px-1.5 py-1 font-mono text-[10px] text-muted-foreground"
+          >
+            ⌘K
+          </button>
         ) : (
           <Button type="submit" variant="emphasis" size="compact" className="shrink-0">
             Explore
@@ -431,7 +582,7 @@ export function HomeSearchBar({
             <p className="px-3 py-4 text-center text-sm text-muted-foreground">Searching…</p>
           ) : !showRecentSearches && !hasSuggestions ? (
             <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-              No suggestions found. Press Explore to search all projects.
+              No suggestions found. Press Enter to search all projects.
             </p>
           ) : null}
         </div>

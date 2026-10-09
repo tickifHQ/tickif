@@ -1,5 +1,6 @@
 import type { PlanTier, SubscriptionState } from '@repo/contracts';
 import { PLAN_MAP } from './plan-config';
+import type { EarlyBirdTrial } from '@repo/contracts';
 
 export type { PlanTier };
 export type BillingLifecycleState = SubscriptionState;
@@ -54,6 +55,7 @@ export type FrozenResource = {
 };
 
 export type BillingState = {
+  earlyBirdTrial?: EarlyBirdTrial | null;
   lifecycle: BillingLifecycleState;
   tier: PlanTier;
   /** Razorpay's raw subscription status (e.g., 'active', 'cancelled', 'created'). */

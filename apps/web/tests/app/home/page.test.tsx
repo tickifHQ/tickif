@@ -1,3 +1,6 @@
+vi.mock('@/components/project-actions', () => ({
+  ProjectActions: () => <button aria-label="Save project" />,
+}));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
@@ -56,6 +59,22 @@ function mockApi({
 } = {}) {
   (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.includes('/api/billing/plans')) {
+      return response({
+        earlyBird: null,
+        plans: [
+          {
+            tier: 'hobby',
+            name: 'Hobby from catalog',
+            description: 'Independent designers',
+            amountPaise: 0,
+            currency: 'INR',
+            interval: 'monthly',
+            features: ['1 seat'],
+          },
+        ],
+      });
+    }
     if (url.includes('/api/taxonomy/terms')) {
       const kind = new URL(url).searchParams.get('kind');
       if (kind === 'city') {
@@ -183,25 +202,26 @@ describe('HomePage', () => {
   it('renders the featured strip and the reachable recent feed for logged-out visitors', async () => {
     render(await HomePage());
 
-    expect(screen.getByText('No commissions · No middlemen')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Real Indian homes/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Featured projects' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recently published' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Fresh from the review desk' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Hobby from catalog' })).toBeInTheDocument();
     // Featured strip plus the recent feed — the recent items now render somewhere.
-    expect(screen.getAllByText('Test Project')).toHaveLength(2);
+    expect(screen.getAllByRole('heading', { name: 'Test Project' })).toHaveLength(2);
     expect(
       screen
         .getByRole('button', { name: 'Filters' })
-        .compareDocumentPosition(screen.getAllByText('Test Project')[0]!),
+        .compareDocumentPosition(screen.getAllByRole('heading', { name: 'Test Project' })[0]!),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByRole('link', { name: 'Projects in Mumbai' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Mumbai' })).toHaveAttribute(
       'href',
       '/?city=mumbai',
     );
-    expect(screen.getByRole('link', { name: 'Living Room ideas' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Cosy living room' })).toHaveAttribute(
       'href',
       '/?room=living-room',
     );
-    expect(screen.getByRole('link', { name: 'Browse professionals' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Discover them/ })).toHaveAttribute(
       'href',
       '/designers',
     );
@@ -225,7 +245,7 @@ describe('HomePage', () => {
     expect(
       document
         .getElementById('recent-projects-feed')
-        ?.contains(screen.getAllByText('Test Project')[1] ?? null),
+        ?.contains(screen.getAllByRole('heading', { name: 'Test Project' })[1] ?? null),
     ).toBe(true);
   });
 
@@ -248,7 +268,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('button', { name: 'Load more projects' })).toBeInTheDocument();
   });
 
-  it('renders multi-category taxonomy-driven suggestions in the logged-out feed', async () => {
+  it('renders taxonomy-driven browse links without inserting filter cards in the landing feed', async () => {
     const items = Array.from({ length: 14 }, (_, index) => ({
       ...discoveryCard,
       id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
@@ -259,19 +279,22 @@ describe('HomePage', () => {
 
     render(await HomePage());
 
-    expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '₹15–35L' })).toHaveAttribute(
+    expect(screen.queryByRole('heading', { name: 'Try a filter' })).toBeNull();
+    expect(screen.getByRole('link', { name: '₹15L - ₹35L' })).toHaveAttribute(
       'href',
       '/?budgetBand=upscale',
     );
-    expect(screen.getByRole('link', { name: 'Modern' })).toHaveAttribute('href', '/?theme=modern');
-    expect(screen.getByRole('link', { name: 'Living Room' })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: 'Modern' })[0]).toHaveAttribute(
+      'href',
+      '/?theme=modern',
+    );
+    expect(screen.getAllByRole('link', { name: 'Living Room' })[0]).toHaveAttribute(
       'href',
       '/?room=living-room',
     );
   });
 
-  it('does not suggest a budget band with no live matching projects', async () => {
+  it('does not insert a budget suggestion with no live matching projects', async () => {
     const items = Array.from({ length: 14 }, (_, index) => ({
       ...discoveryCard,
       id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
@@ -282,9 +305,9 @@ describe('HomePage', () => {
 
     render(await HomePage());
 
-    expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Try a filter' })).toBeNull();
     expect(screen.queryByRole('link', { name: '₹15–35L' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Modern' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Modern' })[0]).toBeInTheDocument();
   });
 
   it('renders a useful zero-result state', async () => {
@@ -307,7 +330,7 @@ describe('HomePage', () => {
     render(await HomePage());
 
     // Featured strip and recent feed both degrade to the empty state.
-    expect(screen.getAllByText('No projects found')).toHaveLength(2);
+    expect(screen.getAllByText('No projects found')).toHaveLength(1);
   });
 
   it('redirects a logged-in visitor to their personalized home before loading discovery data', async () => {
@@ -389,7 +412,7 @@ describe('HomePage', () => {
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
     expect(screen.getAllByRole('search')).toHaveLength(1);
-    expect(screen.queryByText(/Inspire from real homes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Real Indian homes/)).not.toBeInTheDocument();
     // E-303: the discovery card shows the budget pill (not tags) in its hover UI.
     expect(within(screen.getByRole('article')).getByText('₹15–35L')).toBeInTheDocument();
   });
@@ -474,7 +497,7 @@ describe('HomePage', () => {
 
     expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '₹15–35L' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Modern' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Modern' })[0]).toBeInTheDocument();
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

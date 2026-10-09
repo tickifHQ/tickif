@@ -30,6 +30,21 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
+function backdropOpacity(
+  landing: boolean,
+  progress: number,
+  panelOffset: number,
+  cardHeight: number,
+) {
+  // The centered card enters the viewport only after this translation distance.
+  // Keep the landing photos untouched while the prompt is still below the fold.
+  const entryDistance = (window.innerHeight + cardHeight) / 2;
+  const visibleProgress = landing
+    ? clamp(1 - panelOffset / Math.max(entryDistance, 1), 0, 1)
+    : progress;
+  return visibleProgress * BACKDROP_MAX_OPACITY;
+}
+
 type GateGeometry = {
   eligible: boolean;
   hasScrollRange: boolean;
@@ -143,13 +158,15 @@ export function ScrollGate() {
     if (!interactive) setDialogActive(false);
     gate.dataset.scrollProgress = progress.toFixed(3);
     gate.setAttribute('aria-hidden', String(!interactive));
-    backdrop.style.opacity = String(visualProgress * BACKDROP_MAX_OPACITY);
+    backdrop.style.opacity = String(
+      backdropOpacity(pathname === '/', visualProgress, panelOffset, cardHeightRef.current),
+    );
     backdrop.style.pointerEvents = interactive ? 'auto' : 'none';
     panel.inert = !interactive;
     panel.style.pointerEvents = interactive ? 'auto' : 'none';
     panel.style.transform = `translate3d(0, ${panelOffset}px, 0)`;
     if (interactive) setDialogActive(true);
-  }, [setDialogActive]);
+  }, [pathname, setDialogActive]);
 
   const schedulePaint = useCallback(() => {
     if (animationFrameRef.current !== null) return;
@@ -353,12 +370,16 @@ export function ScrollGate() {
     return createPortal(
       <div
         data-testid="scroll-signup-measurement"
+        data-landing={pathname === '/' || undefined}
         className="invisible pointer-events-none fixed inset-0 flex items-center justify-center p-4 sm:p-8"
         aria-hidden="true"
         inert
       >
-        <div ref={panelRef} className="w-full max-w-3xl">
-          <LoginCard onClose={dismiss} />
+        <div
+          ref={panelRef}
+          className={pathname === '/' ? 'w-full max-w-[862px]' : 'w-full max-w-3xl'}
+        >
+          <LoginCard onClose={dismiss} presentation={pathname === '/' ? 'landing' : 'default'} />
         </div>
       </div>,
       document.body,
@@ -378,6 +399,7 @@ export function ScrollGate() {
     <div
       ref={gateRef}
       data-testid="scroll-signup-gate"
+      data-landing={pathname === '/' || undefined}
       data-scroll-progress={progress.toFixed(3)}
       className="pointer-events-none fixed inset-0 z-50"
       aria-hidden={!interactive}
@@ -385,9 +407,14 @@ export function ScrollGate() {
       <div
         ref={backdropRef}
         data-testid="scroll-signup-backdrop"
-        className="absolute inset-0 bg-foreground will-change-opacity"
+        className={`absolute inset-0 will-change-opacity ${pathname === '/' ? 'bg-background/95 backdrop-blur-sm' : 'bg-foreground'}`}
         style={{
-          opacity: visualProgress * BACKDROP_MAX_OPACITY,
+          opacity: backdropOpacity(
+            pathname === '/',
+            visualProgress,
+            panelOffset,
+            cardHeightRef.current,
+          ),
           pointerEvents: interactive ? 'auto' : 'none',
         }}
       />
@@ -399,13 +426,13 @@ export function ScrollGate() {
           aria-modal={interactive}
           inert={!interactive}
           tabIndex={-1}
-          className="my-auto w-full max-w-3xl will-change-transform"
+          className={`my-auto w-full will-change-transform ${pathname === '/' ? 'max-w-[862px]' : 'max-w-3xl'}`}
           style={{
             pointerEvents: interactive ? 'auto' : 'none',
             transform: `translate3d(0, ${panelOffset}px, 0)`,
           }}
         >
-          <LoginCard onClose={dismiss} />
+          <LoginCard onClose={dismiss} presentation={pathname === '/' ? 'landing' : 'default'} />
         </div>
       </div>
     </div>,

@@ -35,6 +35,9 @@ const intent: RecoveryRecord = {
   updatedAt: now,
 };
 const local: RecoverySubscription = {
+  earlyBirdTier: null,
+  earlyBirdStartedAt: null,
+  earlyBirdEndsAt: null,
   id: 'local',
   organizationId: 'org',
   planTier: 'professional_plus',

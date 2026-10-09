@@ -14,6 +14,26 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('FeedFilters', () => {
+  it('keeps landing room categories in design order with thumbnails, even when empty', () => {
+    render(
+      <FeedFilters
+        presentation="landing"
+        options={{
+          room: [
+            { slug: 'modular-kitchen', label: 'Modular Kitchen' },
+            { slug: 'living-room', label: 'Living Room' },
+          ],
+          material: [{ slug: 'wood', label: 'Wood' }],
+        }}
+        facetDistribution={{ rooms: {}, materials: { wood: 20 } }}
+      />,
+    );
+    const living = screen.getByRole('button', { name: 'Living rooms' });
+    expect(living.querySelector('img')).toHaveAttribute('src', '/images/landing/filter-living.png');
+    expect(screen.queryByRole('button', { name: 'Wood' })).toBeNull();
+    fireEvent.click(living);
+    expect(mock.push).toHaveBeenCalledWith('/?room=living-room');
+  });
   beforeEach(() => {
     mock.params = new URLSearchParams();
     vi.clearAllMocks();

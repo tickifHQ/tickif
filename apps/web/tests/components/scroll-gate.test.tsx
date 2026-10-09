@@ -124,6 +124,16 @@ describe('ScrollGate', () => {
     vi.unstubAllGlobals();
   });
 
+  it('leaves landing photography undimmed until the login panel enters the viewport', () => {
+    pathnameState.value = '/';
+    render(<ScrollGate />);
+    scrollTo(200);
+    expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ opacity: '0' });
+    scrollTo(1_000);
+    expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ opacity: '0.6' });
+    expect(screen.getByRole('dialog', { name: 'Sign in required' })).toBeVisible();
+  });
+
   it('does not render on a viewport-height page and activates after enough content is added', () => {
     Object.defineProperty(document.documentElement, 'scrollHeight', {
       configurable: true,

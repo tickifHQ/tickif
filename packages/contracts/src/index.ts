@@ -22,6 +22,8 @@ export * from './project-likes';
 export * from './visitors';
 export * from './verifications';
 export * from './billing';
+export * from './billing-catalog';
+export * from './early-bird';
 export * from './billing-recovery';
 export * from './razorpay';
 export * from './entitlements';
