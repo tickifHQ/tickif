@@ -1,3 +1,5 @@
+// @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
+
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
@@ -262,8 +264,22 @@ describe('PublicDesignerProfile', () => {
     expect(container.querySelector('img[src="/ui/profile/hero-vector.svg"]')).toBeInTheDocument();
     expect(container.querySelector('img[src="/ui/profile/hero-vector3.svg"]')).toBeInTheDocument();
     expect(
+      container.querySelector('.profile-seal-established textPath[href$="-bottom"]'),
+    ).toHaveTextContent('SINCE 2018');
+    expect(
       container.querySelector('img[src="/ui/profile/hero-vector6.svg"]'),
     ).not.toBeInTheDocument();
+  });
+
+  it('uses the Tickif logo in the portfolio attribution', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+    expect(
+      within(screen.getByRole('link', { name: 'Tickif home' })).getByText('Tickif'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tickif home' }).querySelector('img')).toHaveAttribute(
+      'src',
+      '/icon.svg',
+    );
   });
 
   it('uses live proof data in the circular text and respects hidden ratings and verification', () => {
@@ -805,6 +821,7 @@ describe('PublicDesignerProfile', () => {
       centers.queryByRole('heading', { name: 'Powai Studio', level: 3 }),
     ).not.toBeInTheDocument();
     expect(centers.getByText('Bengaluru, Karnataka · 560066')).toBeInTheDocument();
+    expect(centers.getByTitle('Google Maps — Whitefield Experience Center')).toBeInTheDocument();
     expect(centers.getAllByText('12, 1st Main Road, Whitefield').length).toBeGreaterThan(0);
     expect(centers.getByRole('link', { name: '+91 99946-45911' })).toHaveAttribute(
       'href',
@@ -820,6 +837,10 @@ describe('PublicDesignerProfile', () => {
     );
     await userEvent.setup().click(centers.getByRole('tab', { name: 'Powai Studio' }));
     expect(centers.getByRole('heading', { name: 'Powai Studio', level: 3 })).toBeInTheDocument();
+    const map = centers.getByTitle('Google Maps — Powai Studio');
+    expect(new URL(map.getAttribute('src')!).searchParams.get('q')).toBe(
+      '4, Hiranandani Gardens, Powai, Mumbai, Maharashtra',
+    );
     expect(centers.getAllByText('4, Hiranandani Gardens, Powai').length).toBeGreaterThan(0);
     expect(centers.queryByRole('link', { name: 'Open in Maps' })).not.toBeInTheDocument();
   });

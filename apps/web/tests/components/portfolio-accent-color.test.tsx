@@ -55,7 +55,7 @@ describe('PortfolioAccentColor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('preserves all eight presets and replaces a custom draft when a preset is chosen', async () => {
+  it('adds Tickif green alongside the eight presets and replaces a draft with a preset', async () => {
     function Harness() {
       const [value, setValue] = useState('#234567');
       return <PortfolioAccentColor value={value} onChange={setValue} />;
@@ -63,7 +63,8 @@ describe('PortfolioAccentColor', () => {
     const user = userEvent.setup();
     render(<Harness />);
     await user.click(screen.getByRole('button', { name: 'Accent colour preset' }));
-    expect(screen.getAllByRole('menuitem')).toHaveLength(8);
+    expect(screen.getAllByRole('menuitem')).toHaveLength(9);
+    expect(screen.getByRole('menuitem', { name: /Tickif green/ })).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: /Forest green/ }));
     expect(screen.getByLabelText('Custom accent hex')).toHaveValue('#2D8659');
     fireEvent.change(screen.getByLabelText('Custom accent hex'), { target: { value: '#ABCDEF' } });

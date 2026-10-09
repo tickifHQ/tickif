@@ -486,6 +486,12 @@
   top: 50%;
   transform: translate(-50%, -50%);
 }
+.designer-profile .profile-accent-artwork {
+  display: inline-block;
+  background: var(--profile-accent-foreground, var(--primary));
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
 .designer-profile .profile-seal-value {
   position: absolute;
   inset: 25px 0 auto;
@@ -494,17 +500,15 @@
   line-height: 1;
   font-weight: 700;
 }
-.designer-profile .profile-seal-letters {
-  font-size: 6.5px;
-  line-height: 1;
-  font-weight: 700;
-  text-align: center;
-}
-.designer-profile .profile-seal-letters > span {
+.designer-profile .profile-seal-text {
   position: absolute;
-}
-.designer-profile .profile-seal-bottom {
-  font-size: 5.8px;
+  inset: 0;
+  width: 65px;
+  height: 65px;
+  fill: currentColor;
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
 }
 .designer-profile .profile-ticket {
   display: inline-flex;
@@ -761,10 +765,35 @@
 }
 .designer-profile .profile-centre-selector > button[data-state='active'] {
   background: var(--surface-inverse);
-  color: var(--primary-foreground);
+  color: var(--surface-inverse-foreground);
 }
-.designer-profile .profile-centre-selector > button > img {
+.designer-profile .profile-centre-pin {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  background: var(--profile-accent-foreground, var(--primary));
+  mask: url('/ui/profile/centres-svg1.svg') center / contain no-repeat;
   flex-shrink: 0;
+}
+.designer-profile .profile-centre-pin::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 5.5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--card);
+}
+.designer-profile
+  .profile-centre-selector
+  > button[data-state='active']
+  .profile-centre-pin::after {
+  background: var(--surface-inverse);
+}
+.designer-profile .profile-centre-selector > button[data-state='active'] .profile-centre-pin {
+  background: var(--primary-soft);
+  mask-image: url('/ui/profile/centres-svg.svg');
 }
 .designer-profile .profile-centre-map-panel {
   flex: 1;
@@ -780,17 +809,6 @@
   height: auto;
   aspect-ratio: auto;
   min-height: 540px;
-}
-.designer-profile .profile-centre-map-empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  padding: 28px;
-  text-align: center;
-  overflow-wrap: anywhere;
 }
 .designer-profile .profile-centre-details {
   min-width: 0;
@@ -814,7 +832,7 @@
   padding: 18px 22px 16px;
 }
 .designer-profile .profile-centre-heading h3 {
-  font: 22px/1.2 var(--font-heading);
+  font: 500 22px/1.2 var(--font-heading);
   letter-spacing: -0.025em;
   overflow-wrap: anywhere;
 }
@@ -837,8 +855,12 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.designer-profile .profile-centre-detail-row > img {
+.designer-profile .profile-centre-detail-row > svg {
+  color: var(--profile-accent-foreground, var(--primary));
   flex-shrink: 0;
+}
+.designer-profile .profile-centre-content :is(a, button[data-state='active']) {
+  color: var(--profile-accent-foreground, var(--primary));
 }
 .designer-profile .profile-share {
   position: relative;
@@ -862,6 +884,8 @@
   background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 .designer-profile .profile-share-card {
+  container: profile-share-card / inline-size;
+  min-width: 0;
   position: relative;
   padding: 22px;
   border: 0;
@@ -916,7 +940,14 @@
   flex-direction: column;
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: solid var(--border);
+  border-width: 0 1px 1px 0;
+}
+.designer-profile .profile-share-stats > div:nth-child(odd) {
+  border-left-width: 1px;
+}
+.designer-profile .profile-share-stats > div:nth-child(-n + 2) {
+  border-top-width: 1px;
 }
 .designer-profile .profile-share-stats dt {
   order: 2;
@@ -932,7 +963,31 @@
   font-size: 28px;
   line-height: 1.1;
   margin-bottom: 6px;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+}
+/* Keep dates and budgets together when the preview card narrows, including
+ * tablet layouts where the surrounding section still has two columns. */
+@container profile-share-card (max-width: 360px) {
+  .designer-profile .profile-share-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .designer-profile .profile-share-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .designer-profile .profile-share-stats > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+@container profile-share-card (width < 220px) {
+  .designer-profile .profile-share-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .designer-profile .profile-share-stats > div {
+    border-left-width: 1px;
+  }
+  .designer-profile .profile-share-stats > div:nth-child(n + 2) {
+    border-top-width: 0;
+  }
 }
 .designer-profile .profile-share-photo {
   position: relative;

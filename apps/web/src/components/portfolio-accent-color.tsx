@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 import { ChevronsUpDown } from 'lucide-react';
+import { DEFAULT_PORTFOLIO_ACCENT } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import { Label } from '@repo/ui/components/label';
 import { portfolioAccentStyle, validPortfolioAccent } from '@/lib/portfolio-accent';
 
 const accentColors = [
+  { name: 'Tickif green', hex: DEFAULT_PORTFOLIO_ACCENT },
   { name: 'Coral red', hex: '#FF8F73' },
   { name: 'Ocean blue', hex: '#4A90D9' },
   { name: 'Forest green', hex: '#2D8659' },
