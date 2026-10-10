@@ -7,6 +7,7 @@ these records preserve decision context and consequences.
 
 | ADR                                                                          | Status            | Date                                        | Topic and applicability                                                  |
 | ---------------------------------------------------------------------------- | ----------------- | ------------------------------------------- | ------------------------------------------------------------------------ |
+| [0006 — Feedback identity and logo fallbacks](./0006-feedback-card-identity-and-logo-fallbacks.md) | Accepted | 2026-10-10 | Current feedback takes precedence over sample card text; identifiable apartment logos with initials fallback |
 | [0005 — Tickif image signatures](./0005-tickif-image-signatures.md)          | Accepted          | Original date unknown; confirmed 2026-10-09 | Tickif signature replaces the planned SynthID integration                |
 | [0004 — No-card early-bird trials](./0004-early-bird-trials.md)              | Accepted          | 2026-10-09                                  | Campaign deadline, claim eligibility, expiry and payment consent         |
 | [0001 — RBAC role and organization model](./0001-rbac-role-and-org-model.md) | Accepted; amended | 2026-06-09; amended 2026-08-27              | Platform/org roles, membership, permissions and downgrade behavior       |

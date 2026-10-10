@@ -57,6 +57,21 @@ describe('Figma review corrections', () => {
     await userEvent.setup().click(group.getByRole('tab', { name: 'Bengaluru Studio' }));
     expect(centres.getByRole('heading', { name: 'Bengaluru Studio' })).toBeInTheDocument();
   });
+
+  it('shows the studio name once across the navigation and hero', () => {
+    const portfolio = makePublicPortfolio({ heroCoverUrl: 'https://cdn.example.test/cover.webp' });
+    const { container } = render(<PublicDesignerProfile portfolio={portfolio} />);
+    const navigation = container.querySelector('.profile-navigation')!;
+    expect(navigation).not.toHaveTextContent(portfolio.displayName);
+    const hero = screen.getByRole('region', { name: 'Portfolio hero' });
+    expect(within(hero).getByRole('heading', { name: portfolio.displayName })).toBeVisible();
+    expect(hero.querySelector('.profile-card-name')).toHaveTextContent('Selected work');
+    expect(
+      within(navigation as HTMLElement).getByRole('link', {
+        name: `${portfolio.displayName} portfolio`,
+      }),
+    ).toHaveAttribute('href', '#profile-top');
+  });
   it('shows Google client ratings without source tabs or Tickif review cards', () => {
     render(
       <PublicDesignerProfile

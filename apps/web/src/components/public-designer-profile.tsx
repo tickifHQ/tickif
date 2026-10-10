@@ -310,7 +310,7 @@ function HeroIdentityCard({ portfolio, view }: SectionProps) {
           </div>
         ) : null}
         <p className="profile-card-name profile-highlight flex items-center gap-2">
-          <span className="min-w-0 break-words">{portfolio.displayName}</span>
+          <span className="min-w-0 break-words">Selected work</span>
           {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
             <BadgeCheck
               aria-label="Verified studio"
@@ -936,7 +936,6 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
             sizePx={40}
           />
           <div className="min-w-0">
-            <p className="truncate font-display text-base font-bold">{portfolio.displayName}</p>
             <p className="truncate text-xs text-muted-foreground">
               {view.type}
               {view.location ? ` · ${view.location}` : ''}
