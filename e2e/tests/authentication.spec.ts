@@ -135,27 +135,30 @@ test('visitor personal settings keep client validation local and persist details
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(page).toHaveURL(/\/home\?feed=custom$/);
     await page.goto('/home/settings');
+    const settingsForm = page.getByRole('form', { name: 'Personal settings', exact: true });
 
     // Two raw characters satisfy the native minimum while the trimmed name remains invalid.
-    await page.getByLabel('Display name').fill(' A');
-    await page.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
-    await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByRole('form', { name: 'Personal settings' }).getByRole('alert')).toContainText(
+    await settingsForm.getByLabel('Display name').fill(' A');
+    await settingsForm.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
+    await settingsForm.getByRole('button', { name: 'Save changes' }).click();
+    await expect(settingsForm.getByRole('alert')).toContainText(
       'Enter a name between 2 and 100 characters',
     );
-    await expect(page.getByLabel('Display name')).toHaveAttribute('aria-invalid', 'true');
+    await expect(settingsForm.getByLabel('Display name')).toHaveAttribute('aria-invalid', 'true');
     await expect(page).toHaveURL(/\/home\/settings$/);
 
-    await page.getByLabel('Display name').fill('Reload Visitor');
-    await page.getByLabel('Personal address (optional)').fill('Khar West, Mumbai');
-    await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByRole('status')).toContainText('Personal settings saved.');
+    await settingsForm.getByLabel('Display name').fill('Reload Visitor');
+    await settingsForm.getByLabel('Personal address (optional)').fill('Khar West, Mumbai');
+    await settingsForm.getByRole('button', { name: 'Save changes' }).click();
+    await expect(settingsForm.getByRole('status')).toContainText('Personal settings saved.');
 
     await page.goto('/home/settings');
     await page.reload();
-    await expect(page.getByLabel('Display name')).toHaveValue('Reload Visitor');
-    await expect(page.getByLabel('Personal address (optional)')).toHaveValue('Khar West, Mumbai');
-    await expect(page.getByLabel('WhatsApp number (optional)')).toHaveValue(phoneNumber);
+    await expect(settingsForm.getByLabel('Display name')).toHaveValue('Reload Visitor');
+    await expect(settingsForm.getByLabel('Personal address (optional)')).toHaveValue(
+      'Khar West, Mumbai',
+    );
+    await expect(settingsForm.getByLabel('WhatsApp number (optional)')).toHaveValue(phoneNumber);
   } finally {
     await removeSyntheticUserByPhone(phoneNumber);
   }
