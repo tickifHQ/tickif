@@ -45,7 +45,7 @@ function ProjectDetailsCard({
         side="bottom"
         align="start"
         collisionPadding={12}
-        className="w-80 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-tooltip-content-available-height)] overflow-y-auto border border-border bg-popover p-0 text-left text-popover-foreground shadow-lg"
+        className="w-75 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-tooltip-content-available-height)] overflow-y-auto border border-border bg-popover p-0 text-left text-popover-foreground shadow-lg"
       >
         {children}
       </TooltipContent>
@@ -68,7 +68,7 @@ export function ProjectPreview({
       className="flex w-full min-w-0 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       trigger={
         <>
-          <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+          <span className="flex h-10 w-13 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
             {project.coverImageUrl ? (
               <img src={project.coverImageUrl} alt="" className="h-full w-full object-cover" />
             ) : (

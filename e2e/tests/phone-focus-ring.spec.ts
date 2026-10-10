@@ -39,6 +39,16 @@ async function expectCompositeFocus(control: Locator, group: Locator) {
   }
 }
 
+async function expectSectionFocus(control: Locator) {
+  // Enter keyboard modality even when the previous interaction was a pointer click.
+  await control.press('Tab');
+  await control.focus();
+  await expect(control).toBeFocused();
+  await expect
+    .poll(() => control.evaluate((element) => getComputedStyle(element).boxShadow))
+    .toMatch(/0px 0px 0px [24]px/);
+}
+
 test('composite fields show one visible focus indicator across login and designer workflows', async ({
   page,
   context,
@@ -124,6 +134,17 @@ test('composite fields show one visible focus indicator across login and designe
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/designer/portfolio');
     await expect(page.getByRole('heading', { name: 'Portfolio', exact: true })).toBeVisible();
+    // Both accordion triggers must expose the same semantic keyboard ring as form controls.
+    for (const control of [
+      page.getByRole('button', { name: 'Trust & credentials Showcase your trust signals here' }),
+      page.getByRole('button', { name: 'Toggle Trust & credentials details' }),
+    ]) {
+      await expectSectionFocus(control);
+    }
+    await page.screenshot({
+      path: testInfo.outputPath('designer-portfolio-section-focus.png'),
+      animations: 'disabled',
+    });
     const socialToggle = page.getByRole('button', { name: 'Toggle Social links details' });
     await socialToggle.click();
     await expect(socialToggle).toHaveAttribute('aria-expanded', 'true');
@@ -245,6 +266,12 @@ test('composite fields show one visible focus indicator across login and designe
     await page.setViewportSize({ width: 1280, height: 900 });
     await expect(page.getByRole('button', { name: /Step 4 Project images/ })).toBeVisible();
     await page.getByRole('button', { name: /Step 4 Project images/ }).click();
+    for (const control of [
+      page.getByRole('button', { name: 'Kitchen No photos yet', exact: true }),
+      page.getByRole('button', { name: 'Toggle Kitchen', exact: true }),
+    ]) {
+      await expectSectionFocus(control);
+    }
     const projectUpload = page.locator('input[type="file"]').first();
     await expectCompositeFocus(projectUpload, projectUpload.locator('xpath=..'));
     await projectUpload

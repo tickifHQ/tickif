@@ -74,6 +74,29 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await expect(row.getByText('Pending changes · Submitted')).toBeVisible();
     const preview = row.getByRole('button', { name: 'Preview ' + pendingTitle });
     const card = page.locator('[data-slot="tooltip-content"]');
+    // Figma designer table 14737:7634: compact body-font header and landscape cover.
+    const header = page.getByRole('columnheader', { name: 'Project', exact: true });
+    await expect(header).toHaveCSS('height', '36px');
+    await expect(header).toHaveCSS('font-size', '13px');
+    await expect(page.getByRole('columnheader', { name: 'Last updated' })).toHaveCSS(
+      'white-space',
+      'nowrap',
+    );
+    await expect(header).toHaveCSS(
+      'font-family',
+      await page
+        .getByPlaceholder('Search', { exact: true })
+        .evaluate((element) => getComputedStyle(element).fontFamily),
+    );
+    const thumbnail = preview.locator(':scope > span').first();
+    await expect(thumbnail).toHaveCSS('width', '52px');
+    await expect(thumbnail).toHaveCSS('height', '40px');
+    expect(
+      (await page.getByRole('columnheader', { name: 'Status', exact: true }).boundingBox())!.width,
+    ).toBeGreaterThanOrEqual(175);
+    expect(
+      (await row.getByText('Pending changes · Submitted').boundingBox())!.height,
+    ).toBeLessThanOrEqual(32);
     // A click is replayed across hydration; an early pointer hover is not.
     // Establish the interactive preview before checking each input modality.
     await preview.click();
@@ -91,6 +114,8 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     const status = row.getByRole('button', { name: 'Submitted details' });
     await status.focus();
     await expect(card).toBeVisible();
+    // Feedback card 14740:3734 retains the measured width with live status copy.
+    await expect(card).toHaveCSS('width', '300px');
     await expect(card).toContainText('Your published version is still live.');
     await expect(card).toContainText('waiting for review');
     await capture('pending-status-keyboard-desktop', page);
@@ -110,6 +135,12 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await status.scrollIntoViewIfNeeded();
     await status.tap();
     await expect(card).toContainText('Your published version is still live.');
+    // Wait for the entry scale animation before checking rendered bounds.
+    await expect.poll(async () => (await card.boundingBox())?.width).toBe(300);
+    const statusBounds = await card.boundingBox();
+    expect(statusBounds).not.toBeNull();
+    expect(statusBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(statusBounds!.x + statusBounds!.width).toBeLessThanOrEqual(390);
     await capture('pending-status-mobile-touch', page);
     await page.keyboard.press('Escape');
     await expect(card).toHaveCount(0);
