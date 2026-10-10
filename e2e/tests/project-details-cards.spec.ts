@@ -78,6 +78,10 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     const header = page.getByRole('columnheader', { name: 'Project', exact: true });
     await expect(header).toHaveCSS('height', '36px');
     await expect(header).toHaveCSS('font-size', '13px');
+    await expect(page.getByRole('columnheader', { name: 'Last updated' })).toHaveCSS(
+      'white-space',
+      'nowrap',
+    );
     await expect(header).toHaveCSS(
       'font-family',
       await page
