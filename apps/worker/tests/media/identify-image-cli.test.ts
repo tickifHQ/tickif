@@ -18,7 +18,7 @@ it('identifies a downloaded derivative through the CLI and rejects incorrect can
   const [derivative] = await generateDerivatives(photo, {
     variants: [{ variant: 'thumb', width: 320 }],
     formats: ['webp'],
-    watermark: { text: 'TICKIF', opacity: 0.32, scale: 0.09 },
+    watermark: { opacity: 1, scale: 0.0432 },
     signatureId: imageId,
   });
   const directory = await mkdtemp(join(tmpdir(), 'tickif-identify-'));

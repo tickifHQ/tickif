@@ -104,7 +104,7 @@ describe('generateDerivatives', () => {
       const [derivative] = await generateDerivatives(photo, {
         variants: [{ variant: 'thumb', width: 320 }],
         formats: [format],
-        watermark: { text: 'TICKIF', opacity: 0.32, scale: 0.09 },
+        watermark: { opacity: 1, scale: 0.0432 },
         signatureId: imageId,
       });
 
@@ -133,7 +133,7 @@ describe('generateDerivatives', () => {
       const [derivative] = await generateDerivatives(input, {
         variants: [{ variant: 'preview', width }],
         formats: [format],
-        watermark: { text: 'TICKIF', opacity: 0.32, scale: 0.09 },
+        watermark: { opacity: 1, scale: 0.0432 },
         signatureId: 'image-two',
       });
 

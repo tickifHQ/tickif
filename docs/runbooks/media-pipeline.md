@@ -81,8 +81,8 @@ previous visible watermark in immutable CDN caches.
 Before reprocessing existing images in an environment:
 
 1. Deploy the new worker and API together.
-2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v5`) in that environment.
-   Set `WATERMARK_TEXT=TICKIF`, `WATERMARK_OPACITY=0.32` and `WATERMARK_SCALE=0.09`
+2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v6`) in that environment.
+   Set `WATERMARK_OPACITY=1` and `WATERMARK_SCALE=0.0432`
    if the deployment overrides the defaults. An older explicit value takes precedence
    over the new code defaults. This prevents immutable caches from continuing to serve
    the old badge and keeps new uploads on the same visual settings.

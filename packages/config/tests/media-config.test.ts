@@ -14,10 +14,9 @@ describe('watermark configuration', () => {
   it('defaults to the image-page watermark and a new cache revision', () => {
     expect(parseConfig({ ...environment, NODE_ENV: 'test' })).toMatchObject({
       WATERMARK_ENABLED: true,
-      WATERMARK_TEXT: 'TICKIF',
-      WATERMARK_OPACITY: 0.32,
-      WATERMARK_SCALE: 0.09,
-      WATERMARK_REVISION: 'wm-v5',
+      WATERMARK_OPACITY: 1,
+      WATERMARK_SCALE: 0.0432,
+      WATERMARK_REVISION: 'wm-v6',
     });
   });
 

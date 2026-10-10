@@ -223,14 +223,14 @@ const envSchema = z.object({
 
   // Watermark on public derivatives only (E-109); originals stay clean.
   WATERMARK_ENABLED: z.stringbool().optional().default(true),
-  WATERMARK_TEXT: z.string().trim().min(1).default('TICKIF'),
-  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.32),
-  // Preserve the previously supported upper bound so existing environments still boot.
-  WATERMARK_SCALE: z.coerce.number().min(0.04).max(0.3).default(0.09),
+  // Multiplier over the supplied SVG logo opacity.
+  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(1),
+  // Symbol width relative to image width.
+  WATERMARK_SCALE: z.coerce.number().min(0.04).max(0.3).default(0.0432),
   WATERMARK_REVISION: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
-    .default('wm-v5'),
+    .default('wm-v6'),
 
   // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
   // Action on a duplicate: reject (status=failed) or flag for moderation.

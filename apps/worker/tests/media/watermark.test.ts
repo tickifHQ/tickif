@@ -4,9 +4,8 @@ import { buildWatermarkSvg, type WatermarkConfig } from '../../src/media/waterma
 import { generateDerivatives } from '../../src/media/derivatives.js';
 
 const wm: WatermarkConfig = {
-  text: 'TICKIF',
-  opacity: 0.32,
-  scale: 0.09,
+  opacity: 1,
+  scale: 0.0432,
 };
 
 async function meanStdev(buffer: Buffer): Promise<number> {
@@ -22,36 +21,47 @@ beforeAll(async () => {
 });
 
 describe('buildWatermarkSvg', () => {
-  it('renders two translucent white marks without a badge', async () => {
-    const svg = buildWatermarkSvg(880, 760, wm);
-    const text = svg.toString();
-    expect(text).not.toContain('<rect');
-    expect(text.match(/<text /g)).toHaveLength(2);
-    expect(text).toContain('font-family="JetBrains Mono, monospace"');
-    expect(text).toContain('fill-opacity="0.32"');
-
+  it('renders the supplied logo at top left, center and bottom right', async () => {
+    const svg = buildWatermarkSvg(278, 379, wm);
+    expect(svg.toString()).not.toContain('<text');
     const { data, info } = await sharp(svg)
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
-    const regions = { center: 0, corner: 0, elsewhere: 0 };
+    const regions = { header: 0, center: 0, corner: 0, elsewhere: 0 };
     for (let y = 0; y < info.height; y++) {
       for (let x = 0; x < info.width; x++) {
-        const offset = (y * info.width + x) * 4;
-        const alpha = data[offset + 3]!;
+        const alpha = data[(y * info.width + x) * 4 + 3]!;
         if (!alpha) continue;
-        expect(alpha).toBeLessThanOrEqual(82);
-        expect(data[offset]).toBe(255);
-        expect(data[offset + 1]).toBe(255);
-        expect(data[offset + 2]).toBe(255);
-        if (x >= 395 && x <= 485 && y >= 368 && y <= 390) regions.center++;
-        else if (x >= 760 && x <= 850 && y >= 718 && y <= 740) regions.corner++;
+        expect(alpha).toBeLessThanOrEqual(111);
+        if (x >= 14 && x <= 61 && y >= 13 && y <= 32) regions.header++;
+        else if (x >= 128 && x <= 149 && y >= 178 && y <= 201) regions.center++;
+        else if (x >= 249 && x <= 271 && y >= 350 && y <= 373) regions.corner++;
         else regions.elsewhere++;
       }
     }
-    expect(regions.center).toBeGreaterThan(100);
-    expect(regions.corner).toBeGreaterThan(100);
+    expect(regions.header).toBeGreaterThan(50);
+    expect(regions.center).toBeGreaterThan(20);
+    expect(regions.corner).toBeGreaterThan(20);
     expect(regions.elsewhere).toBe(0);
+  });
+
+  it('can reduce or hide the complete logo treatment', async () => {
+    const full = await sharp(buildWatermarkSvg(278, 379, wm))
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    const faded = await sharp(buildWatermarkSvg(278, 379, { ...wm, opacity: 0.5 }))
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    const hidden = await sharp(buildWatermarkSvg(278, 379, { ...wm, opacity: 0 }))
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    const alpha = (buffer: Buffer) => buffer.filter((_, index) => index % 4 === 3);
+    expect(Math.max(...alpha(faded))).toBeLessThan(Math.max(...alpha(full)));
+    expect(Math.max(...alpha(hidden))).toBe(0);
   });
 
   it.each([
@@ -80,16 +90,11 @@ describe('buildWatermarkSvg', () => {
     }
     expect(visible).toBeGreaterThan(0);
   });
-
-  it('escapes XML-significant characters in the text', () => {
-    const svg = buildWatermarkSvg(800, 600, { ...wm, text: 'A & B <x>' }).toString();
-    expect(svg).toContain('A &amp; B &lt;x&gt;');
-  });
 });
 
 describe('generateDerivatives with watermark', () => {
   it.each(['webp', 'avif'] as const)(
-    'marks both regions in %s public derivatives',
+    'marks all three regions in %s public derivatives',
     async (format) => {
       const [marked] = await generateDerivatives(solid, {
         variants: [{ variant: 'large', width: 800 }],
@@ -97,8 +102,9 @@ describe('generateDerivatives with watermark', () => {
         watermark: wm,
       });
       for (const region of [
+        { left: 40, top: 35, width: 145, height: 65 },
         { left: 350, top: 280, width: 100, height: 40 },
-        { left: 690, top: 550, width: 100, height: 45 },
+        { left: 710, top: 515, width: 80, height: 75 },
       ]) {
         const pixels = await sharp(marked!.buffer).extract(region).raw().toBuffer();
         expect(Math.max(...pixels.filter((_, index) => index % 3 === 0))).toBeGreaterThan(30);

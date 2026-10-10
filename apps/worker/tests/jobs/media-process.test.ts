@@ -10,10 +10,9 @@ vi.mock('@repo/config', () => ({
     MEDIA_MAX_UPLOAD_BYTES: 15_000_000,
     MEDIA_MAX_IMAGE_DIMENSION: 12_000,
     WATERMARK_ENABLED: true,
-    WATERMARK_TEXT: 'TICKIF',
-    WATERMARK_OPACITY: 0.32,
-    WATERMARK_SCALE: 0.09,
-    WATERMARK_REVISION: 'wm-v5',
+    WATERMARK_OPACITY: 1,
+    WATERMARK_SCALE: 0.0432,
+    WATERMARK_REVISION: 'wm-v6',
   },
   isProduction: false,
   isDevelopment: false,
@@ -158,7 +157,7 @@ describe('processMedia', () => {
         (['webp', 'avif'] as const).map((format) => ({
           variant,
           format,
-          key: `derivatives/proj-1/img-1/${variant}-wm-v5-sig-v1.${format}`,
+          key: `derivatives/proj-1/img-1/${variant}-wm-v6-sig-v1.${format}`,
           width: 320,
           height: 240,
         })),
@@ -176,7 +175,7 @@ describe('processMedia', () => {
       expect(warn).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'media.reprocess_revision_unchanged',
-          watermark_revision: 'wm-v5',
+          watermark_revision: 'wm-v6',
         }),
         expect.any(String),
       );
