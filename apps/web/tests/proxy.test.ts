@@ -33,6 +33,15 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/blog-private')).toBe(false);
   });
 
+  it('allows anonymous company document reading without opening similarly prefixed routes', async () => {
+    for (const slug of ['about', 'report-a-problem', 'takedown-policy', 'terms', 'privacy']) {
+      const path = `/company/${slug}`;
+      expect(isPublicPath(path)).toBe(true);
+      expect((await proxy(new NextRequest(`https://tickif.test${path}`))).status).toBe(200);
+    }
+    expect(isPublicPath('/company-private')).toBe(false);
+  });
+
   it('allows public designer profile routes', () => {
     expect(isPublicPath('/d/anika-spaces')).toBe(true);
   });

@@ -1,3 +1,4 @@
+import { typography } from '@repo/ui/lib/typography';
 import type { Metadata } from 'next';
 import { HOME_SOCIAL_COPY, publicMetadata } from '@/lib/social-metadata';
 import Link from 'next/link';
@@ -198,10 +199,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
             >
               <div className="sr-only focus-within:not-sr-only">
                 <div>
-                  <h2
-                    id="featured-projects"
-                    className="font-display text-3xl font-medium tracking-tight"
-                  >
+                  <h2 id="featured-projects" className={typography.headingH2}>
                     Featured projects
                   </h2>
                   <p className="mt-1 text-base text-muted-foreground">
@@ -247,7 +245,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
               className="w-full scroll-mt-24 px-5 pb-16 sm:px-8 lg:px-12"
               aria-labelledby="recent-projects"
             >
-              <h2 id="recent-projects" className="font-display text-3xl font-medium tracking-tight">
+              <h2 id="recent-projects" className={typography.headingH2}>
                 Fresh from the <span className="text-primary">review desk</span>
               </h2>
               <p className="sr-only">Every project published by Tickif designers, newest first</p>
@@ -272,7 +270,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
               <HomeSearchBar initialQuery={query} />
             </div>
             <div>
-              <h2 id="project-results" className="font-display text-3xl font-medium tracking-tight">
+              <h2 id="project-results" className={typography.headingH2}>
                 {query ? `Results for “${query}”` : 'Projects'}
               </h2>
               <p className="mt-1 text-base text-muted-foreground">

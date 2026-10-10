@@ -28,6 +28,9 @@ Three layers, each swappable without touching the one below:
 - **Surfaces:** `background`, `card`, `popover` (+ `-foreground`)
 - **Intent:** `primary`, `secondary`, `muted`, `accent`, `destructive`, `success`, `warning`, `info`, `feature` (+ `-foreground` where needed, plus lighter state surfaces)
 - **Chrome:** `border`, `input`, `ring`, `radius`
+- **Sign-in:** `auth-field-border`, `auth-field-divider`, `--auth-field-shadow`,
+  `bg-auth-welcome` preserve the login-specific Figma field treatment and original
+  dark green welcome gradient without changing the shared input boundary.
 - **Control geometry:** `rounded-lg` (12px), `rounded-card` (22px),
   `rounded-feature` (36px), `rounded-popover` (16px), `rounded-checkbox` (5px)
 - **Typography:** `text-display` (responsive display), `text-section` (32px),
@@ -37,6 +40,12 @@ Three layers, each swappable without touching the one below:
 - **Buttons:** `button-neutral`, `button-inverted`, `button-fancy` (+ foreground, hover, shadow tokens)
 - **Charts:** `chart-1` … `chart-5`
 - **Fonts:** `--font-body` → `font-sans`, `--font-heading` → `font-display`, `--font-code` → `font-mono`
+
+Homepage and sign-in text styles are composed from `@repo/ui/lib/typography`,
+measured from Figma home frame `16095:51371`. These classes include the semantic
+family, weight, size, line height and tracking together. Figma percent tracking is
+converted to em (for example, 6% is `0.06em`); pixel tracking remains in pixels.
+Responsive compositions may override size/leading while preserving the font role.
 
 ## Switching the theme
 

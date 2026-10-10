@@ -1,3 +1,5 @@
+import { typography } from '@repo/ui/lib/typography';
+import { cn } from '@repo/ui/lib/utils';
 import Link from 'next/link';
 import type { FeedProject } from '@repo/contracts';
 import { HomeSearchBar } from '@/components/home-search-bar';
@@ -29,13 +31,18 @@ export function HomeHero({
     <section className="px-5 pt-9 sm:px-8 lg:px-12" aria-labelledby="home-heading">
       <LandingProjectPreviewData projects={projects} />
       <div className="flex flex-col items-center text-center">
-        <p className="landing-enter flex items-center gap-2 rounded-full bg-secondary px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary-foreground">
+        <p
+          className={cn(
+            typography.monoXs,
+            'landing-enter flex items-center gap-2 rounded-full bg-secondary px-3.5 py-1.5 uppercase text-secondary-foreground',
+          )}
+        >
           <span className="size-[7px] rounded-full bg-primary" aria-hidden />
           Real projects · Reviewed by our team
         </p>
         <h1
           id="home-heading"
-          className="landing-enter mt-6 font-display text-[clamp(2.5rem,5.82vw,5.5rem)] font-medium leading-[1.09] tracking-[-0.045em] [animation-delay:80ms]"
+          className={cn(typography.homeHero, 'landing-enter mt-6 [animation-delay:80ms]')}
         >
           <span className="flex flex-wrap items-center justify-center gap-x-3 sm:gap-x-5">
             <span>Real </span>
@@ -69,7 +76,12 @@ export function HomeHero({
             </span>
           </span>
         </h1>
-        <p className="landing-enter mt-6 max-w-[620px] text-base leading-7 text-muted-foreground sm:text-lg [animation-delay:160ms]">
+        <p
+          className={cn(
+            typography.bodyLg,
+            'landing-enter mt-6 max-w-[620px] text-base sm:text-lg text-muted-foreground [animation-delay:160ms]',
+          )}
+        >
           Real interiors from Indian designers. Explore their spaces, their budgets and the people
           who made them.
         </p>
@@ -78,14 +90,17 @@ export function HomeHero({
         </div>
         {shortcuts.length > 0 ? (
           <div className="landing-enter mt-4 flex max-w-full flex-wrap items-center justify-center gap-2 [animation-delay:280ms]">
-            <span className="mr-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            <span className={cn(typography.monoSm, 'mr-1 uppercase text-muted-foreground')}>
               Try
             </span>
             {shortcuts.slice(0, 4).map((shortcut) => (
               <Link
                 key={shortcut.href}
                 href={shortcut.href}
-                className="landing-lift inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-3.5 text-sm font-medium hover:bg-accent"
+                className={cn(
+                  typography.labelMd,
+                  'landing-lift inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-3.5 hover:bg-accent',
+                )}
               >
                 {shortcut.image ? (
                   <img
@@ -117,12 +132,12 @@ export function HomeHero({
               <img src="/images/landing/badge-check.svg" alt="" />
             </span>
             <div className="relative">
-              <p className="font-display text-[44px] leading-[48px] tracking-tight">
+              <p className={typography.headingH1}>
                 {community?.projectCount != null
                   ? community.projectCount.toLocaleString('en-IN')
                   : 'Real spaces.'}
               </p>
-              <p className="mt-1.5 text-sm leading-[21px]">
+              <p className={cn(typography.bodySm, 'mt-1.5')}>
                 {community?.projectCount != null
                   ? 'Published projects, with budgets shared by their designers.'
                   : 'Explore projects and the budgets behind them.'}
@@ -148,18 +163,18 @@ export function HomeHero({
                 ))}
               </span>
             ) : (
-              <span className="font-mono text-[10px] uppercase tracking-wider">
+              <span className={cn(typography.monoXs, 'uppercase')}>
                 The people behind the spaces
               </span>
             )}
             <div>
-              <p className="font-display text-[44px] leading-[48px] tracking-tight">
+              <p className={typography.headingH1}>
                 {community?.designers
                   ? community.designers.estimatedTotalHits.toLocaleString('en-IN')
                   : 'Meet your designer.'}
               </p>
               {community?.designers ? (
-                <p className="mt-1.5 text-sm leading-[21px]">
+                <p className={cn(typography.bodySm, 'mt-1.5')}>
                   {community.designers.estimatedTotalHits === 1
                     ? 'A designer to bring'
                     : 'Designers to bring'}
@@ -167,7 +182,7 @@ export function HomeHero({
                   your next home to life.
                 </p>
               ) : null}
-              <span className="mt-3 flex items-center gap-2 text-[13px]">
+              <span className={cn(typography.labelSm, 'mt-3 flex items-center gap-2')}>
                 Discover them{' '}
                 <img
                   src="/images/landing/arrow-right.svg"
@@ -207,8 +222,8 @@ function HeroProject({
           className="landing-photo h-full w-full object-cover"
         />
         <div className="absolute bottom-3 left-3.5 right-3.5 w-fit max-w-[calc(100%-1.75rem)] rounded-lg bg-card/95 px-3 py-2.5 shadow-sm">
-          <p className="truncate text-sm font-medium">{project.title}</p>
-          <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-wider text-primary">
+          <p className={cn(typography.labelMd, 'truncate')}>{project.title}</p>
+          <p className={cn(typography.monoXs, 'mt-1 truncate uppercase text-primary')}>
             {[
               project.locality ?? project.city,
               project.budget ? formatCompactBudgetLabel(project.budget) : null,
@@ -219,7 +234,12 @@ function HeroProject({
         </div>
       </Link>
       {stamp ? (
-        <span className="landing-stamp pointer-events-none absolute -top-3 left-[22px] inline-flex rotate-5 items-center gap-1.5 rounded-lg bg-primary-soft py-[7px] pl-2.5 pr-3 font-mono text-[10px] uppercase tracking-wider text-primary-soft-foreground shadow-sm">
+        <span
+          className={cn(
+            typography.monoXs,
+            'landing-stamp pointer-events-none absolute -top-3 left-[22px] inline-flex rotate-5 items-center gap-1.5 rounded-lg bg-primary-soft py-[7px] pl-2.5 pr-3 uppercase text-primary-soft-foreground shadow-sm',
+          )}
+        >
           <img src="/images/landing/stamp-check.svg" alt="" />
           Reviewed by Tickif
         </span>

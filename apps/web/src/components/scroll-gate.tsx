@@ -14,7 +14,8 @@ import { env } from '@/env';
  * card can still begin below the first viewport before it scrolls into view.
  * The card begins below the viewport at a document-relative offset, so normal
  * page scrolling carries it upward at the same speed. Once centered, it pins
- * in place. Upward scrolling reverses the same path.
+ * in place and locks background scrolling. Before it is fully revealed, upward
+ * scrolling reverses the same path.
  * An explicit dismissal hides the prompt immediately and starts one shared
  * cooldown for every public route and browser tab on this origin.
  */
@@ -97,6 +98,7 @@ export function ScrollGate() {
   const gateRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
   const cardHeightRef = useRef(0);
   const distanceRef = useRef(0);
   const revealDistanceRef = useRef(0);
@@ -165,6 +167,7 @@ export function ScrollGate() {
     panel.inert = !interactive;
     panel.style.pointerEvents = interactive ? 'auto' : 'none';
     panel.style.transform = `translate3d(0, ${panelOffset}px, 0)`;
+    if (scrollerRef.current) scrollerRef.current.style.overflowY = interactive ? 'auto' : 'hidden';
     if (interactive) setDialogActive(true);
   }, [pathname, setDialogActive]);
 
@@ -235,7 +238,7 @@ export function ScrollGate() {
     dismissedUntilRef.current = Math.max(dismissedUntilRef.current, readDismissedUntil(now));
 
     const limit = env.NEXT_PUBLIC_SCROLL_GATE_LIMIT;
-    if (limit === 0) {
+    if (limit === 0 || pathname === '/login' || pathname.startsWith('/company/')) {
       setSuppressed(true);
       return;
     }
@@ -253,6 +256,9 @@ export function ScrollGate() {
       const delta = currentY - lastScrollYRef.current;
       lastScrollYRef.current = currentY;
 
+      // A fully open modal stays pinned even if a programmatic scroll occurs.
+      // Dismissal or navigation releases the CSS scroll lock.
+      if (dialogActiveRef.current) return;
       if (Date.now() < dismissedUntilRef.current || delta === 0) return;
 
       setSuppressed(false);
@@ -260,8 +266,6 @@ export function ScrollGate() {
 
       revealDistanceLockedRef.current = true;
 
-      // Preserve distance beyond the reveal threshold so the card remains
-      // pinned until upward scrolling crosses the same reveal boundary.
       distanceRef.current = Math.max(distanceRef.current + delta, 0);
       schedulePaint();
     }
@@ -370,6 +374,7 @@ export function ScrollGate() {
   return createPortal(
     <div
       ref={gateRef}
+      data-scroll-signup-gate
       data-testid={geometryEligible ? 'scroll-signup-gate' : 'scroll-signup-measurement'}
       data-landing={pathname === '/' || undefined}
       data-scroll-progress={progress.toFixed(3)}
@@ -392,7 +397,12 @@ export function ScrollGate() {
         }}
       />
       {/* Keep measurement and reveal geometry identical across responsive changes. */}
-      <div className="absolute inset-0 flex items-start justify-center overflow-y-auto p-4 [scrollbar-gutter:stable] sm:p-8">
+      <div
+        ref={scrollerRef}
+        data-slot="scroll-gate-scroller"
+        className="absolute inset-0 flex items-start justify-center overflow-x-hidden overscroll-contain p-4 sm:p-8"
+        style={{ overflowY: interactive ? 'auto' : 'hidden' }}
+      >
         <div
           ref={panelRef}
           role={geometryEligible ? 'dialog' : undefined}

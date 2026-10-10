@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { cn } from '@repo/ui/lib/utils';
+import { typography } from '@repo/ui/lib/typography';
 import type { FeedProject } from '@repo/contracts';
 import { ProjectActions } from '@/components/project-actions';
 import { formatCompactBudgetLabel } from '../lib/format-budget-label';
@@ -84,7 +86,10 @@ export function ShowcaseCard({
             <span
               className={
                 presentation === 'landing'
-                  ? 'absolute bottom-2.5 left-2.5 rounded-full bg-card/95 px-2 py-1 font-mono text-[10px] leading-3 text-foreground'
+                  ? cn(
+                      typography.monoXs,
+                      'absolute bottom-2.5 left-2.5 rounded-full bg-card/95 px-2 py-1 text-foreground',
+                    )
                   : 'absolute top-3 left-3 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] font-medium leading-[1.1] text-foreground transition-opacity sm:top-auto sm:bottom-3 sm:opacity-100 sm:group-hover:opacity-0'
               }
             >
@@ -94,10 +99,15 @@ export function ShowcaseCard({
         </div>
         {presentation === 'landing' ? (
           <div className="mt-2 space-y-1 px-0.5">
-            <h3 className="truncate text-xs font-medium leading-[18px] @min-[14rem]:text-sm">
+            <h3 className={cn(typography.labelMd, 'truncate text-xs @min-[14rem]:text-sm')}>
               {project.title}
             </h3>
-            <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+            <div
+              className={cn(
+                typography.body2xs,
+                'flex min-w-0 items-center gap-1.5 text-muted-foreground',
+              )}
+            >
               {location ? (
                 <span className="truncate text-foreground-subtle">{location}</span>
               ) : null}

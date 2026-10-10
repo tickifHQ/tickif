@@ -5,15 +5,16 @@ These documents explain how to work on Tickif. Before implementation, follow
 [architecture](../architecture/README.md), [ADRs](../adr/README.md) and
 [coding guidelines](../coding-guidelines/README.md).
 
-| Guide                                                   | Purpose                                                           |
-| ------------------------------------------------------- | ----------------------------------------------------------------- |
-| [Getting started](./getting-started.md)                 | Dependencies, local environment, services and smoke checks        |
-| [Adding a module](./adding-a-module.md)                 | Schema, contracts, repository, service, routes and tests          |
-| [Database and migrations](./database-and-migrations.md) | Schema-change workflow, migration warnings and repository queries |
-| [Testing](./testing.md)                                 | Vitest, isolated integration targets and Playwright               |
-| [Troubleshooting](./troubleshooting.md)                 | Configuration, dependencies, framework typing and builds          |
-| [Shared UI review](./shared-ui-review.md)               | Component gallery, states, behavior and approval checklist        |
-| [UI refresh handoff](./ui-refresh-handoff.md)           | Phased rollout, current progress and delivery constraints         |
+| Guide                                                   | Purpose                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Getting started](./getting-started.md)                 | Dependencies, local environment, services and smoke checks               |
+| [Adding a module](./adding-a-module.md)                 | Schema, contracts, repository, service, routes and tests                 |
+| [Database and migrations](./database-and-migrations.md) | Schema-change workflow, migration warnings and repository queries        |
+| [Testing](./testing.md)                                 | Vitest, isolated integration targets and Playwright                      |
+| [Troubleshooting](./troubleshooting.md)                 | Configuration, dependencies, framework typing and builds                 |
+| [Shared UI review](./shared-ui-review.md)               | Component gallery, states, behavior and approval checklist               |
+| [Company content](./company-content.md)                 | Maintain researched policy drafts, sample About content and public links |
+| [UI refresh handoff](./ui-refresh-handoff.md)           | Phased rollout, current progress and delivery constraints                |
 
 See [visitor welcome form integration](./visitor-feed-preferences.md) for saving
 home/location preferences and applying them to the public discovery feed.

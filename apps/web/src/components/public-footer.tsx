@@ -1,13 +1,15 @@
+import { typography } from '@repo/ui/lib/typography';
+import { cn } from '@repo/ui/lib/utils';
 import Link from 'next/link';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
+import { companyPages } from '@/lib/company-pages';
 
 const links = [
   { href: '/', label: 'Browse' },
   { href: '/blog', label: 'Blog' },
-  { href: '/', label: 'About' },
-  { href: '/', label: 'Privacy' },
-  { href: SUPPORT_WHATSAPP_URL, label: 'Report a problem' },
+  ...companyPages.map(({ slug, title }) => ({ href: `/company/${slug}`, label: title })),
+  { href: SUPPORT_WHATSAPP_URL, label: 'WhatsApp support' },
 ];
 
 export function PublicFooter({ landing = false }: { landing?: boolean }) {
@@ -30,7 +32,7 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
                 className="dark:brightness-0 dark:invert"
               />
             </Link>
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">
+            <p className={cn(typography.bodySm, 'mt-4 text-muted-foreground')}>
               Real Indian homes, reviewed by people,
               <br />
               and the designers who made them.
@@ -38,10 +40,10 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-3 sm:gap-[72px]">
             <div>
-              <h2 className="mb-3 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              <h2 className={cn(typography.monoMd, 'mb-3 uppercase text-muted-foreground')}>
                 Explore
               </h2>
-              <ul className="space-y-2 text-sm">
+              <ul className={cn(typography.labelMd, 'space-y-2')}>
                 <li>
                   <Link href="/#browse-by-room">Rooms</Link>
                 </li>
@@ -57,10 +59,10 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
               </ul>
             </div>
             <div>
-              <h2 className="mb-3 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              <h2 className={cn(typography.monoMd, 'mb-3 uppercase text-muted-foreground')}>
                 For designers
               </h2>
-              <ul className="space-y-2 text-sm">
+              <ul className={cn(typography.labelMd, 'space-y-2')}>
                 <li>
                   <Link href="/login?mode=designer">List your projects</Link>
                 </li>
@@ -76,10 +78,17 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
               </ul>
             </div>
             <div>
-              <h2 className="mb-3 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              <h2 className={cn(typography.monoMd, 'mb-3 uppercase text-muted-foreground')}>
                 Company
               </h2>
-              <ul className="space-y-2 text-sm">
+              <ul className={cn(typography.labelMd, 'space-y-2')}>
+                {companyPages.map(({ slug, title }) => (
+                  <li key={slug}>
+                    <Link href={`/company/${slug}`} className="hover:underline underline-offset-4">
+                      {title}
+                    </Link>
+                  </li>
+                ))}
                 <li>
                   <a
                     href={SUPPORT_WHATSAPP_URL}
@@ -87,25 +96,19 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
                     rel="noopener noreferrer"
                     className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    Report a problem
+                    WhatsApp support
                   </a>
                 </li>
-                {['About', 'Takedown policy', 'Terms & privacy'].map((label) => (
-                  <li key={label}>
-                    <span
-                      aria-disabled="true"
-                      title="Coming soon"
-                      className="cursor-not-allowed text-muted-foreground"
-                    >
-                      {label}
-                    </span>
-                  </li>
-                ))}
               </ul>
             </div>
           </nav>
         </div>
-        <div className="mt-10 flex flex-wrap justify-between gap-4 border-t border-border pt-5 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+        <div
+          className={cn(
+            typography.monoMd,
+            'mt-10 flex flex-wrap justify-between gap-4 border-t border-border pt-5 uppercase text-muted-foreground',
+          )}
+        >
           <span>© {year} Tickif · Photos watermarked and protected</span>
           <span>Made in Chennai</span>
         </div>

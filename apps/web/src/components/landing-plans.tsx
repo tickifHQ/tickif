@@ -1,3 +1,5 @@
+import { typography } from '@repo/ui/lib/typography';
+import { cn } from '@repo/ui/lib/utils';
 import Link from 'next/link';
 import type { BillingCatalogResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
@@ -44,11 +46,9 @@ export function LandingPlans({ catalog }: { catalog: BillingCatalogResponse | nu
                 ) : null}
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-display text-2xl font-medium tracking-tight">
-                      {plan.name}
-                    </h3>
+                    <h3 className={typography.headingH3}>{plan.name}</h3>
                     <p
-                      className={`mt-1 text-sm ${highlighted ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}
+                      className={`mt-1 ${typography.bodySm} ${highlighted ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}
                     >
                       {plan.description}
                     </p>
@@ -66,17 +66,15 @@ export function LandingPlans({ catalog }: { catalog: BillingCatalogResponse | nu
                   </Link>
                 </div>
                 <p className="mt-9 flex flex-wrap items-baseline gap-2">
-                  <span className="font-display text-[clamp(2.75rem,4.23vw,4rem)] font-medium leading-none tracking-tight">
-                    {formatCurrency(plan.amountPaise / 100)}
-                  </span>
+                  <span className={typography.price}>{formatCurrency(plan.amountPaise / 100)}</span>
                   <span
-                    className={`text-base ${highlighted ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}
+                    className={`${typography.bodyMd} ${highlighted ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}
                   >
                     / month
                   </span>
                 </p>
                 <p
-                  className={`mt-4 flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${highlighted ? 'bg-primary-foreground/15' : 'bg-card text-secondary-foreground'}`}
+                  className={`mt-4 flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 ${typography.labelMd} ${highlighted ? 'bg-primary-foreground/15' : 'bg-card text-secondary-foreground'}`}
                 >
                   <img
                     src={`/images/landing/pricing-sparkles${highlighted ? '-light' : ''}.svg`}
@@ -90,7 +88,7 @@ export function LandingPlans({ catalog }: { catalog: BillingCatalogResponse | nu
                 </p>
                 <ul className="my-7 flex-1 space-y-3">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-sm leading-5">
+                    <li key={feature} className={cn(typography.bodySm, 'flex items-start gap-2.5')}>
                       <span
                         className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full ${highlighted ? 'bg-primary-foreground/20' : 'bg-card'}`}
                       >
@@ -106,7 +104,7 @@ export function LandingPlans({ catalog }: { catalog: BillingCatalogResponse | nu
                 <Button
                   asChild
                   variant={highlighted ? 'secondary' : 'emphasis'}
-                  className={`mt-3 h-12 justify-between pl-5 pr-1.5 shadow-none ${highlighted ? 'bg-card text-secondary-foreground hover:bg-card/90' : ''}`}
+                  className={`mt-3 h-12 justify-between pl-5 pr-1.5 shadow-none ${typography.labelMd} ${highlighted ? 'bg-card text-secondary-foreground hover:bg-card/90' : ''}`}
                 >
                   <Link href={href}>
                     {offer

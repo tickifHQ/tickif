@@ -92,6 +92,8 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-input: var(--input);
+  --color-auth-field-border: var(--auth-field-border);
+  --color-auth-field-divider: var(--auth-field-divider);
   --color-ring: var(--ring);
   --color-button-neutral: var(--button-neutral);
   --color-button-neutral-foreground: var(--button-neutral-foreground);
@@ -110,6 +112,7 @@
   --color-chart-5: var(--chart-5);
 
   --background-image-verification-hero: var(--verification-hero-background);
+  --background-image-auth-welcome: var(--auth-welcome-background);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

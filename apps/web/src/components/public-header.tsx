@@ -1,5 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
+import { cn } from '@repo/ui/lib/utils';
+import { typography } from '@repo/ui/lib/typography';
 import { PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
@@ -62,7 +64,7 @@ export function PublicHeader({
               asChild
               variant={landing ? 'ghost' : 'neutral'}
               size={landing ? 'sm' : 'xs'}
-              className="hidden sm:inline-flex"
+              className={cn('hidden sm:inline-flex', landing && typography.labelMd)}
             >
               <Link href={listYourWorkHref}>
                 {!landing ? <ListChevronsUpDown className="size-4" aria-hidden /> : null}
@@ -77,6 +79,7 @@ export function PublicHeader({
               asChild
               variant={landing ? 'default' : 'inverted'}
               size={landing ? 'sm' : 'compact'}
+              className={landing ? typography.labelMd : undefined}
             >
               <Link href="/login">
                 {!landing ? <UserRound className="size-4" aria-hidden /> : null}

@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { BlogBody } from '../../src/components/blog-body';
 
 describe('BlogBody', () => {
+  it('gives document headings unique section targets while keeping Markdown links safe', () => {
+    render(<BlogBody content={'## First\n\n## First'} sectionIds />);
+    expect(screen.getAllByRole('heading', { name: 'First' }).map((heading) => heading.id)).toEqual([
+      'section-1',
+      'section-3',
+    ]);
+  });
   it('contains long Markdown tokens and code blocks on narrow screens', () => {
     const { container } = render(
       <BlogBody

@@ -1,7 +1,9 @@
 'use client';
 
+import { typography } from '@repo/ui/lib/typography';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Asterisk, Bookmark, Calendar, House, Mail, MessageSquare, Users, X } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { Button } from '@repo/ui/components/button';
@@ -51,7 +53,11 @@ function GoogleSignInButton({
   return (
     <Button
       variant="outline"
-      className="w-full cursor-pointer"
+      shape="rounded"
+      className={cn(
+        typography.labelLg,
+        'h-12 w-full cursor-pointer border-auth-field-border bg-card text-base shadow-(--auth-field-shadow) md:h-10 md:text-sm md:leading-[18px] md:tracking-[-0.002em]',
+      )}
       disabled={loading}
       onClick={onClick}
     >
@@ -65,7 +71,12 @@ function OrSeparator({ className }: { className?: string }) {
   return (
     <div className={cn('relative', className)}>
       <Separator />
-      <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+      <span
+        className={cn(
+          typography.bodyXs,
+          'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-muted-foreground',
+        )}
+      >
         OR
       </span>
     </div>
@@ -361,23 +372,33 @@ export function LoginCard({
 
   function renderPhoneStep() {
     return (
-      <div className="flex flex-col overflow-hidden md:flex-row">
+      <div className="relative flex flex-col overflow-hidden md:flex-row">
         {/* Left: Brand / Promo Panel */}
         {presentation === 'landing' ? (
-          <div className="relative flex flex-col justify-between gap-4 overflow-hidden rounded-card bg-linear-to-br from-surface-inverse to-secondary-foreground p-6 text-surface-inverse-foreground sm:gap-5 sm:px-8 sm:pb-7 sm:pt-8 md:w-[42%] md:shrink-0 lg:w-[404px]">
+          <div className="relative flex flex-col justify-between gap-3 overflow-hidden rounded-card bg-linear-to-br from-surface-inverse to-secondary-foreground p-5 text-surface-inverse-foreground md:w-[42%] md:shrink-0 md:gap-5 md:px-8 md:pb-7 md:pt-8 lg:w-[404px]">
             <span
               aria-hidden
               className="pointer-events-none absolute -top-48 left-40 size-[420px] rounded-full bg-primary/10"
             />
-            <p className="relative flex w-fit items-center gap-2 rounded-full bg-primary/15 px-3 py-2 text-[13px] text-primary-soft">
+            <p
+              className={cn(
+                typography.labelSm,
+                'relative flex w-fit items-center gap-2 rounded-full bg-primary/15 px-3 py-2 text-primary-soft',
+              )}
+            >
               <Bookmark className="size-3.5" aria-hidden /> Keep your favourite homes close
             </p>
-            <h2 className="relative font-display text-2xl leading-7 tracking-tight sm:text-[32px] sm:leading-[38px]">
+            <h2
+              className={cn(
+                typography.headingH2,
+                'relative text-2xl leading-7 md:text-[32px] md:leading-[38px]',
+              )}
+            >
               Don’t lose the homes you lingered on
             </h2>
             {previewProjects?.length ? (
               <div
-                className="relative hidden gap-2 sm:flex"
+                className="relative hidden gap-2 md:flex"
                 aria-label="Explore these published homes"
               >
                 {previewProjects.map((project) => (
@@ -393,26 +414,50 @@ export function LoginCard({
                 ))}
               </div>
             ) : null}
-            <p className="relative text-sm leading-[21px] text-surface-inverse-foreground/75">
+            <p className={cn(typography.bodySm, 'relative text-surface-inverse-foreground/75')}>
               Save homes you love and connect with their designers. Your next idea is worth keeping.
             </p>
-            <div className="relative hidden border-t border-primary-soft/25 pt-3 font-mono text-[10px] uppercase tracking-wider text-primary-soft md:block">
+            <div
+              className={cn(
+                typography.monoXs,
+                'relative hidden border-t border-primary-soft/25 pt-3 uppercase text-primary-soft md:block',
+              )}
+            >
               Save your favourites · Find your designer
             </div>
           </div>
         ) : (
-          <div className="flex w-full flex-col justify-between rounded-xl px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0 [background-image:radial-gradient(circle_at_top_left,rgba(26,155,122,0.28),transparent_55%),linear-gradient(170deg,#17271f_0%,#0e1814_100%)]">
-            <div className="flex flex-col gap-5">
-              <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
-                <Users className="size-3.5 text-success" aria-hidden="true" />
-                <span className="text-xs font-medium text-success">
-                  Discover real homes and their designers
-                </span>
+          <div className="flex w-full flex-col justify-between gap-4 rounded-xl bg-auth-welcome px-5 py-5 text-surface-inverse-foreground md:my-1 md:ml-1 md:w-[315px] md:shrink-0 md:px-6 md:py-8">
+            <div className="flex flex-col gap-3 md:gap-5">
+              <div className="order-last flex w-fit items-center gap-1.5 text-primary-soft md:order-none md:rounded md:bg-success/10 md:px-2 md:py-0.5">
+                <Users className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className={typography.labelSm}>Discover real homes and their designers</span>
               </div>
               <div className="flex flex-col gap-2">
-                <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
-                <p className="text-xs text-white/60">{promoSubtitle}</p>
-                <div className="mt-6 flex flex-col gap-3">
+                <h2
+                  className={cn(
+                    typography.headingH2,
+                    'pr-10 text-[28px] leading-8 md:pr-0 md:text-[32px] md:leading-[38px]',
+                  )}
+                >
+                  Welcome to Tickif
+                </h2>
+                <p
+                  className={cn(typography.bodySm, 'text-surface-inverse-foreground/75 md:hidden')}
+                >
+                  {loginMode === 'designer'
+                    ? 'Your work deserves to be discovered.'
+                    : 'Keep your favourite homes close.'}
+                </p>
+                <p
+                  className={cn(
+                    typography.bodySm,
+                    'hidden text-surface-inverse-foreground/75 md:block',
+                  )}
+                >
+                  {promoSubtitle}
+                </p>
+                <div className="mt-6 hidden flex-col gap-3 md:flex">
                   {features.map((f) => {
                     const Icon = f.icon;
                     return (
@@ -421,15 +466,20 @@ export function LoginCard({
                         data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
                         className="flex items-center gap-2.5"
                       >
-                        <Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
-                        <p className="text-sm text-white">{f.title}</p>
+                        <Icon className="size-4 shrink-0 text-primary-soft" aria-hidden="true" />
+                        <p className={typography.labelMd}>{f.title}</p>
                       </div>
                     );
                   })}
                 </div>
               </div>
             </div>
-            <p className="mt-6 text-xs text-white/60">
+            <p
+              className={cn(
+                typography.body2xs,
+                'mt-6 hidden text-surface-inverse-foreground/75 md:block',
+              )}
+            >
               Explore published projects · Connect with designers
             </p>
           </div>
@@ -438,23 +488,18 @@ export function LoginCard({
         {/* Right: Form Panel */}
         <div
           className={cn(
-            'flex w-full min-w-0 flex-col py-8 md:flex-1',
-            presentation === 'landing' ? 'px-6 sm:px-8 md:min-h-[460px]' : 'px-6',
+            'flex w-full min-w-0 flex-col px-5 py-5 md:flex-1 md:py-8',
+            presentation === 'landing' ? 'md:px-8 md:min-h-[460px]' : 'md:px-6',
           )}
         >
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3
-                  className={cn(
-                    'font-medium text-foreground',
-                    presentation === 'landing' ? 'text-lg' : 'text-base',
-                  )}
-                >
+                <h3 className={cn(typography.headingH4, 'text-foreground')}>
                   {presentation === 'landing' ? 'Log in to keep exploring' : 'Login to continue'}
                 </h3>
                 {presentation === 'landing' ? (
-                  <p className="mt-2 text-sm leading-5 text-muted-foreground">
+                  <p className={cn(typography.bodySm, 'mt-2 text-muted-foreground')}>
                     Free for homeowners. Just your mobile number.
                   </p>
                 ) : null}
@@ -464,7 +509,11 @@ export function LoginCard({
                 aria-label="Close"
                 variant="ghost"
                 size="icon"
-                className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
+                className={cn(
+                  'size-11 shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground md:size-8',
+                  presentation === 'default' &&
+                    'absolute right-3 top-3 z-10 text-primary-soft hover:bg-surface-inverse hover:text-surface-inverse-foreground md:static md:z-auto md:text-muted-foreground md:hover:bg-accent md:hover:text-foreground',
+                )}
               >
                 <X className="size-4" aria-hidden="true" />
               </Button>
@@ -477,33 +526,38 @@ export function LoginCard({
                 className="w-full"
                 onValueChange={(val) => setLoginMode(val as LoginMode)}
               >
-                <TabsList
-                  className={cn(
-                    'w-full',
-                    presentation === 'landing' && 'h-11 rounded-lg [&>button]:rounded-md',
-                  )}
-                >
-                  <TabsTrigger value="browsing" className="flex-1 gap-1.5">
+                <TabsList className="h-14 w-full rounded-lg p-1.5 md:h-11 [&>button]:rounded-md">
+                  <TabsTrigger
+                    value="browsing"
+                    className={cn(
+                      typography.labelMd,
+                      'min-w-0 flex-1 flex-col gap-1 px-2 focus-visible:ring-inset focus-visible:ring-offset-0 md:flex-row md:gap-1.5',
+                    )}
+                  >
                     <House className="size-4" aria-hidden="true" />
                     I'm browsing
                   </TabsTrigger>
-                  <TabsTrigger value="designer" className="flex-1 gap-1.5">
+                  <TabsTrigger
+                    value="designer"
+                    className={cn(
+                      typography.labelMd,
+                      'min-w-0 flex-1 flex-col gap-1 px-2 focus-visible:ring-inset focus-visible:ring-offset-0 md:flex-row md:gap-1.5',
+                    )}
+                  >
                     <Asterisk className="size-4" aria-hidden="true" />
                     I'm a designer
                   </TabsTrigger>
                 </TabsList>
 
-                <div className="relative mt-4 w-full overflow-hidden">
-                  <div
-                    className="flex w-[200%] transition-transform duration-300 ease-in-out"
-                    style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-50%'})` }}
-                  >
+                <div className="relative mt-4 w-full">
+                  <div>
                     {/* ─── Browsing tab: Phone OTP ─── */}
                     <div
                       className={cn(
-                        'flex w-1/2 shrink-0 flex-col gap-3 transition-opacity duration-300',
-                        loginMode === 'browsing' ? 'opacity-100' : 'opacity-0',
+                        'w-full flex-col gap-3',
+                        loginMode === 'browsing' ? 'flex' : 'hidden',
                       )}
+                      hidden={loginMode !== 'browsing'}
                       inert={loginMode !== 'browsing'}
                       aria-hidden={loginMode !== 'browsing'}
                     >
@@ -523,6 +577,9 @@ export function LoginCard({
                           onEnter={handleSendOtp}
                           placeholder={presentation === 'landing' ? 'Mobile number' : '9123456789'}
                           disabled={loading}
+                          inputClassName={cn(typography.bodyMd, 'h-13 md:h-11 md:text-base')}
+                          wrapperClassName="rounded-lg border-auth-field-border bg-card shadow-(--auth-field-shadow)"
+                          countryButtonClassName="min-h-13 border-auth-field-divider bg-transparent text-base md:min-h-11 md:text-sm"
                         />
                       </div>
 
@@ -533,7 +590,8 @@ export function LoginCard({
                         onClick={handleSendOtp}
                         disabled={loading || !toE164PhoneNumber(selectedCountry, phone)}
                         className={cn(
-                          'w-full cursor-pointer',
+                          typography.labelLg,
+                          'h-12 w-full cursor-pointer md:h-10',
                           presentation === 'landing' && 'h-12 rounded-full',
                         )}
                       >
@@ -544,9 +602,10 @@ export function LoginCard({
                     {/* ─── Designer tab: Google SSO + Email OTP ─── */}
                     <div
                       className={cn(
-                        'flex w-1/2 shrink-0 flex-col gap-4 transition-opacity duration-300',
-                        loginMode === 'designer' ? 'opacity-100' : 'opacity-0',
+                        'w-full flex-col gap-4',
+                        loginMode === 'designer' ? 'flex' : 'hidden',
                       )}
+                      hidden={loginMode !== 'designer'}
                       inert={loginMode !== 'designer'}
                       aria-hidden={loginMode !== 'designer'}
                     >
@@ -579,7 +638,10 @@ export function LoginCard({
                                   if (e.key === 'Enter') handleEmailOtpSend();
                                 }}
                                 placeholder="you@example.com"
-                                className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
+                                className={cn(
+                                  typography.bodyMd,
+                                  'h-13 border-auth-field-border pl-10 shadow-(--auth-field-shadow) hover:border-border-strong focus-visible:ring-inset focus-visible:ring-offset-0 md:h-10 md:text-base',
+                                )}
                                 disabled={loading}
                                 autoComplete="email"
                               />
@@ -590,7 +652,10 @@ export function LoginCard({
                             type="button"
                             variant="fancy"
                             size="fancy"
-                            className="w-full cursor-pointer"
+                            className={cn(
+                              typography.labelLg,
+                              'h-12 w-full cursor-pointer text-base md:h-10 md:text-sm md:leading-[18px] md:tracking-[-0.002em]',
+                            )}
                             disabled={loading || !designerEmail.trim()}
                             onClick={handleEmailOtpSend}
                           >
@@ -619,7 +684,10 @@ export function LoginCard({
                             type="button"
                             variant="fancy"
                             size="fancy"
-                            className="w-full cursor-pointer"
+                            className={cn(
+                              typography.labelLg,
+                              'h-12 w-full cursor-pointer text-base md:h-10 md:text-sm md:leading-[18px] md:tracking-[-0.002em]',
+                            )}
                             disabled={loading || emailOtp.some((d) => !d)}
                             onClick={handleEmailOtpVerify}
                           >
@@ -657,8 +725,26 @@ export function LoginCard({
 
                   {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-                  <p className="mt-4 text-center text-xs text-muted-foreground">
-                    By continuing you agree to Tickif's Terms &amp; Privacy.
+                  <p className={cn(typography.bodyXs, 'mt-5 text-center text-muted-foreground')}>
+                    By continuing you agree to Tickif's{' '}
+                    <Link
+                      href="/company/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-foreground underline underline-offset-4"
+                    >
+                      Terms
+                    </Link>{' '}
+                    and acknowledge our{' '}
+                    <Link
+                      href="/company/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-foreground underline underline-offset-4"
+                    >
+                      Privacy
+                    </Link>{' '}
+                    notice.
                   </p>
                 </div>
               </Tabs>

@@ -1,6 +1,31 @@
 @import '@repo/ui/globals.css';
 @import './landing-motion.css';
 
+/* The scroll-revealed prompt becomes a modal once it reaches its final position.
+ * Lock both scrolling roots while preserving their current scroll offset. */
+html:has([data-scroll-signup-gate][aria-hidden='false']),
+body:has([data-scroll-signup-gate][aria-hidden='false']) {
+  overflow: hidden;
+}
+
+/* Move the reserved gutter from the root to the body during a Radix scroll lock.
+ * Page content keeps its width while fixed backdrops cover the full viewport. */
+@supports (scrollbar-gutter: stable) {
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  html:has(body[data-scroll-locked]) {
+    overflow: hidden;
+    scrollbar-gutter: auto;
+  }
+
+  html body[data-scroll-locked] {
+    scrollbar-gutter: stable;
+    margin-right: 0 !important;
+  }
+}
+
 @keyframes review-marquee {
   to {
     transform: translateX(-50%);

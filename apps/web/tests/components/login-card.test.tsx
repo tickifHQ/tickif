@@ -42,6 +42,18 @@ describe('LoginCard', () => {
     vi.clearAllMocks();
   });
 
+  it('provides Terms and Privacy destinations in both presentations', () => {
+    const { rerender } = render(<LoginCard />);
+    for (const presentation of ['default', 'landing'] as const) {
+      rerender(<LoginCard presentation={presentation} />);
+      expect(screen.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/company/terms');
+      expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute(
+        'href',
+        '/company/privacy',
+      );
+    }
+  });
+
   it('renders truthful standalone copy, welcome title, and phone input', () => {
     render(<LoginCard />);
     expect(screen.queryByText(/12,400|5000\+|1.5k|4.9/)).not.toBeInTheDocument();
@@ -59,6 +71,18 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     expect(screen.getByRole('tab', { name: /i'm browsing/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /i'm a designer/i })).toBeInTheDocument();
+  });
+
+  it('preserves entered phone and email values when switching modes', async () => {
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.type(screen.getByRole('textbox', { name: 'Phone number' }), '9123456789');
+    await user.click(screen.getByRole('tab', { name: "I'm a designer" }));
+    await user.type(screen.getByRole('textbox', { name: 'Email' }), 'designer@example.com');
+    await user.click(screen.getByRole('tab', { name: "I'm browsing" }));
+    expect(screen.getByRole('textbox', { name: 'Phone number' })).toHaveValue('9123456789');
+    await user.click(screen.getByRole('tab', { name: "I'm a designer" }));
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('designer@example.com');
   });
 
   it('shows browsing features by default', () => {
@@ -102,7 +126,9 @@ describe('LoginCard', () => {
       .closest('[aria-hidden="false"]');
     expect(browsingPanel).not.toBeNull();
     expect(within(browsingPanel as HTMLElement).queryByText('OR')).not.toBeInTheDocument();
-    expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
+    expect(screen.getByText(/By continuing you agree/)).toHaveTextContent(
+      "By continuing you agree to Tickif's Terms and acknowledge our Privacy notice.",
+    );
   });
 
   it('renders a close button and calls onClose when provided', async () => {

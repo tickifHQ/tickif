@@ -1,3 +1,5 @@
+import { typography } from '@repo/ui/lib/typography';
+import { cn } from '@repo/ui/lib/utils';
 import Link from 'next/link';
 import { Reveal } from '@repo/ui/components/reveal';
 import type { FeedFacetOptions } from '@/components/feed-filters';
@@ -21,13 +23,13 @@ export function LandingDirectory({ options }: { options: FeedFacetOptions }) {
       className="landing-reveal px-5 py-10 sm:px-8 lg:px-12"
       aria-labelledby="browse-heading"
     >
-      <h2 id="browse-heading" className="font-display text-3xl font-medium tracking-tight">
+      <h2 id="browse-heading" className={typography.headingH2}>
         Explore homes <span className="text-primary">across India</span>
       </h2>
       <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 xl:grid-cols-6">
         {available.map(({ key, label }) => (
           <nav id={`browse-by-${key}`} key={key} aria-label={label} className="scroll-mt-24">
-            <h3 className="mb-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            <h3 className={cn(typography.monoMd, 'mb-3 uppercase text-muted-foreground')}>
               {label}
             </h3>
             <ul className="space-y-2">
@@ -35,7 +37,10 @@ export function LandingDirectory({ options }: { options: FeedFacetOptions }) {
                 <li key={option.slug}>
                   <Link
                     href={`/?${key}=${encodeURIComponent(option.slug)}`}
-                    className="text-sm text-foreground-secondary hover:text-primary hover:underline"
+                    className={cn(
+                      typography.labelMd,
+                      'text-foreground-secondary hover:text-primary hover:underline',
+                    )}
                   >
                     {option.label}
                   </Link>
@@ -58,14 +63,19 @@ export function LandingDesignerCallout({ catalog }: { catalog: BillingCatalogRes
     >
       <EarlyBirdStrip offer={catalog?.earlyBird ?? null} />
       <div className="px-5 pt-20 sm:px-8 lg:px-12">
-        <p className="mx-auto flex w-fit items-center gap-2 rounded-full bg-secondary px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary-foreground">
+        <p
+          className={cn(
+            typography.monoXs,
+            'mx-auto flex w-fit items-center gap-2 rounded-full bg-secondary px-3.5 py-1.5 uppercase text-secondary-foreground',
+          )}
+        >
           <img src="/images/landing/pricing-dot.svg" alt="" />
           For designers &amp; studios
         </p>
         <Reveal>
           <h2
             id="designers-heading"
-            className="mx-auto mt-5 max-w-[1250px] font-display text-4xl font-medium leading-[1.04] tracking-[-0.03em] sm:text-5xl xl:text-[64px]"
+            className={cn(typography.designerHero, 'mx-auto mt-5 max-w-[1250px]')}
           >
             <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 sm:gap-x-4">
               <span>Your best</span>
@@ -110,7 +120,7 @@ export function LandingDesignerCallout({ catalog }: { catalog: BillingCatalogRes
             </span>
           </h2>
         </Reveal>
-        <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-muted-foreground">
+        <p className={cn(typography.bodyMd, 'mx-auto mt-6 max-w-xl text-muted-foreground')}>
           Share your projects, build your portfolio and connect with homeowners looking for their
           next designer.
         </p>

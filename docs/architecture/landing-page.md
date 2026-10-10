@@ -47,9 +47,9 @@ designer/admin routing and other public pages retain their existing behavior.
   Its landing presentation omits unsourced usage counts, ratings and avatars.
   Standalone login and the default trust strip also use descriptive copy without
   invented counts, ratings or customer avatars. Designer copy promises enquiries
-  under ADR 0003. Both public footer presentations expose the canonical WhatsApp
-  support destination through Report a problem; unimplemented legal pages remain
-  disabled rather than linking to unrelated routes.
+  under ADR 0003. Both public footer presentations link Company entries to Markdown
+  documents and retain the canonical WhatsApp support destination. The Report a
+  problem document also links this support channel.
   A small context shares server-fetched project previews with the sibling gate;
   it makes no additional request and clears previews when leaving the homepage.
   Its backdrop begins fading only when the panel enters the viewport, so the
@@ -57,6 +57,9 @@ designer/admin routing and other public pages retain their existing behavior.
   Measurement and display share one mounted form and the same scroll container,
   so responsive eligibility changes cannot repeatedly remount the authentication
   controls. The mobile navigation wraps at narrow widths to avoid page overflow.
+- Company footer destinations use the public Markdown-backed `/company/*` pages.
+  Their draft/sample status and the login agreement links are described in
+  [authentication architecture](./auth.md#public-sign-in-presentation).
 - `GET /api/billing/plans` supplies server-configured prices, tier features and the
   current promotion. The homepage validates this response and never invents prices
   on failure. Pricing cards use Hobby, Professional+ and Corporate; the design's
@@ -82,9 +85,9 @@ The approved early-bird offer has unlimited availability; no city scarcity or
 popularity badge is fabricated. The pricing sticker says “Recommended”, as approved
 by the product owner. The designer heading's Figma photo and three portraits are
 decorative editorial artwork, not customer identities or testimonials.
-Company/legal destinations absent from the app are not
-rendered as placeholder links; the Company column shows disabled labels until
-the product owner supplies their destinations.
+Company destinations link to Markdown documents: About remains a sample; Report, Terms, Privacy and Takedown are researched drafts with pending operator contacts. See the
+[content replacement guide](../guides/company-content.md) before publishing
+approved company and policy content.
 
 ## Design provenance
 
@@ -92,9 +95,15 @@ High-fidelity Figma contexts: header `16095:51372`, hero `16095:51374`, cards an
 filters `16095:51461`, sponsorship `16095:51533`, recent feed/login `16095:51539`,
 pricing `16095:51977`, directory `16095:52184`, footer `16095:52291`.
 
-The landing palette is scoped through `data-landing` in the Tickif theme. Display
-type uses Helvetica Neue where installed, otherwise the already loaded Inter;
-no font files are added. Responsive layouts adapt the supplied desktop frame.
+The landing palette is scoped through `data-landing` in the Tickif theme.
+Typography uses the measured roles in `@repo/ui/lib/typography`: Helvetica Neue
+Medium headings, Inter body/controls, and JetBrains Mono Medium metadata. The
+homepage and portalled login consume the same root `--font-heading` token;
+the homepage must not override the root display-font loader. No Helvetica Neue
+webfont is bundled, so the existing Helvetica/Arial system fallback remains until
+a licensed font is supplied. Inter and JetBrains Mono are self-hosted through
+`next/font`. Responsive layouts adapt the supplied desktop frame, retaining 16px
+mobile fields and at least 44px touch targets.
 
 Exact local SVG exports live in `apps/web/public/images/landing/`. Their intrinsic
 dimensions are preserved: logo mark 25.5177 × 25.9999; wordmark 63.2349 × 17.7841;
