@@ -7,8 +7,10 @@ const QUANTUM = 28;
 const MARKER = Buffer.from('TK');
 const SIGNATURE_BYTES = 12;
 const SIGNATURE_BITS = SIGNATURE_BYTES * 8;
+export const IMAGE_SIGNATURE_REVISION = 'sig-v2';
 // Repeat each bit across the image without processing every block of large derivatives.
-const MAX_BLOCKS = SIGNATURE_BITS * 6;
+const MAX_BLOCKS = SIGNATURE_BITS * 12;
+const LEGACY_MAX_BLOCKS = SIGNATURE_BITS * 6;
 const MAX_IDENTIFY_PIXELS = 40_000_000;
 
 // One low-frequency cosine coefficient survives WebP/AVIF encoding on ordinary photos.
@@ -55,11 +57,12 @@ function forEachSignatureBlock(
   width: number,
   height: number,
   visit: (x: number, y: number, index: number) => void,
+  maxBlocks = MAX_BLOCKS,
 ) {
   const columns = Math.floor(width / BLOCK_SIZE);
   const rows = Math.floor(height / BLOCK_SIZE);
   const available = columns * rows;
-  const selected = Math.min(available, MAX_BLOCKS);
+  const selected = Math.min(available, maxBlocks);
   for (let slot = 0; slot < selected; slot++) {
     const block = Math.floor(((slot + 0.5) * available) / selected);
     visit(block % columns, Math.floor(block / columns), slot);
@@ -102,19 +105,24 @@ export function embedImageSignature(
 }
 
 /** Returns an image token only when the marker and checksum survive image encoding. */
-export async function readImageSignature(input: Buffer): Promise<string | null> {
-  const { data, info } = await sharp(input, {
-    limitInputPixels: MAX_IDENTIFY_PIXELS,
-    failOn: 'error',
-  })
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+function readLayout(
+  data: Buffer,
+  width: number,
+  height: number,
+  channels: number,
+  maxBlocks: number,
+): string | null {
   const votes = new Int32Array(SIGNATURE_BITS);
-  const count = forEachSignatureBlock(info.width, info.height, (x, y, index) => {
-    const coefficient = blockCoefficient(data, info.width, info.channels, x, y);
-    const bit = Math.abs(Math.round(coefficient / QUANTUM)) % 2;
-    votes[index % SIGNATURE_BITS]! += bit ? 1 : -1;
-  });
+  const count = forEachSignatureBlock(
+    width,
+    height,
+    (x, y, index) => {
+      const coefficient = blockCoefficient(data, width, channels, x, y);
+      const bit = Math.abs(Math.round(coefficient / QUANTUM)) % 2;
+      votes[index % SIGNATURE_BITS]! += bit ? 1 : -1;
+    },
+    maxBlocks,
+  );
   if (count < SIGNATURE_BITS) return null;
   const bytes = Buffer.alloc(SIGNATURE_BYTES);
   for (let index = 0; index < SIGNATURE_BITS; index++) {
@@ -124,4 +132,18 @@ export async function readImageSignature(input: Buffer): Promise<string | null> 
   const token = bytes.subarray(2, 10);
   const checksum = createHash('sha256').update(token).digest().subarray(0, 2);
   return bytes.subarray(10).equals(checksum) ? token.toString('hex') : null;
+}
+
+/** Decode once and accept only a valid marker/checksum from the current or legacy layout. */
+export async function readImageSignature(input: Buffer): Promise<string | null> {
+  const { data, info } = await sharp(input, {
+    limitInputPixels: MAX_IDENTIFY_PIXELS,
+    failOn: 'error',
+  })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return (
+    readLayout(data, info.width, info.height, info.channels, MAX_BLOCKS) ??
+    readLayout(data, info.width, info.height, info.channels, LEGACY_MAX_BLOCKS)
+  );
 }
