@@ -17,6 +17,30 @@ Sources: [Razorpay payment retries and card changes](https://razorpay.com/docs/p
 
 The development-only `subscribe-demo` route remains inaccessible in production; all production billing actions use `CheckoutFlow` or the existing-subscription payment recovery flow.
 
+## Active subscriptions with an unverified period
+
+An active provider status does not establish a current paid period. Before quoting
+an upgrade or scheduling Hobby cancellation, selection checks that the provider
+period contains the quote timestamp and uses valid integer timestamps. An expired,
+reversed, future or malformed period blocks confirmation with
+`billing_period_unverified`; it does not fabricate a renewal date or change the
+current entitlement. Missing periods continue to use the existing paid-plan
+recovery flow, while cancellation remains blocked until its end date is verified.
+The shared server/client billing view model suppresses an expired or malformed
+active-period date without changing the tier, lifecycle or access. The overview
+shows that its renewal date is awaiting confirmation; historical dates in failed
+payment states remain available. Verify this display alongside the preview guard.
+
+On 9 October 2026, read-only checks of the staging QA designer found that both the
+local subscription and Razorpay Test Mode reported active status with a period
+ending on 8 October at 00:00 IST. Corporate preview raised `Invalid paid billing
+period`, and Hobby preview offered cancellation at that past date. Regression
+tests reproduce these boundaries. After deployment, repeat both previews: they
+must return a blocked review without a 500, charge, past effective date or past
+next-renewal promise. When Razorpay supplies a valid current period, existing
+proration and cancellation flows become available again. Provider lifecycle
+repair must use actual provider events/state; do not extend dates in the database.
+
 ## E-291: verified staging payment history
 
 The active Test Mode webhook `TZcMan7wCDwJ2S` targets

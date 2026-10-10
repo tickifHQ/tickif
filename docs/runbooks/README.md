@@ -11,7 +11,7 @@ on an environment. Keep credentials in the secret store.
 | [Staging deployment](./staging-deployment.md)                    | Docker Swarm, Traefik, release, backup and restore                             |
 | [Search](./search.md)                                            | Typesense credentials, collection bootstrap, reindexing and fallback diagnosis |
 | [Media pipeline](./media-pipeline.md)                            | Retry failures, regenerate derivatives and verify image quality                |
-| [Worker fonts](./worker-fonts.md)                                | Font configuration and validation in deployed workers                          |
+| [Worker media runtime](./worker-media.md)                     | Bundled logo assets and image validation in deployed workers                   |
 | [Observability](./observability.md)                              | Collectors, SigNoz secrets, deployment, alerts and rollback                    |
 | [Billing staging smoke](./billing-staging-smoke.md)              | Provider validation checklist and recorded Test Mode evidence                  |
 | [Billing checkout evidence](./assets/billing-checkout/README.md) | Desktop/mobile checkout coverage and recorded Razorpay Test Mode evidence      |

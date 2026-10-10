@@ -47,6 +47,17 @@ prefer the xlarge derivative (2560px), then large (1600px). Sharp never enlarges
 the original, so a low-resolution or out-of-focus upload cannot be made sharp
 by this pipeline.
 
+Public derivatives carry the supplied Tickif SVG logo at top left and the logo
+symbol at the center and bottom right, matching the
+[Figma watermark reference](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15817-7985).
+The assets retain the design's translucency and shadows. `WATERMARK_OPACITY=1`
+keeps those asset opacities; lower values fade the entire treatment.
+`WATERMARK_SCALE=0.0432` sets the symbol width relative to the image width.
+Marks remain bounded on small or extreme-aspect images. The worker bundles the
+SVG assets and composites them into image bytes without a runtime font dependency.
+The `wm-v6` revision gives this treatment new immutable URLs. Originals stay private
+and unchanged; the embedded identifier below is independent of the visible marks.
+
 New uploads produce both WebP and AVIF variants at the updated encoding quality.
 The worker writes derivatives one at a time to avoid retaining every high-density
 buffer in memory. Existing ready images retain their old variants until queued

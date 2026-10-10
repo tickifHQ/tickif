@@ -1,54 +1,47 @@
+import { readFileSync } from 'node:fs';
 import { config } from '@repo/config';
 
 export type WatermarkConfig = {
-  text: string;
+  /** Multiplier for the opacity already defined in the design assets. */
   opacity: number;
-  /** Single mark width as a fraction of the image width. */
+  /** Symbol width as a fraction of the image width. */
   scale: number;
 };
 
 export const defaultWatermarkConfig: WatermarkConfig | null = config.WATERMARK_ENABLED
-  ? {
-      text: config.WATERMARK_TEXT,
-      opacity: config.WATERMARK_OPACITY,
-      scale: config.WATERMARK_SCALE,
-    }
+  ? { opacity: config.WATERMARK_OPACITY, scale: config.WATERMARK_SCALE }
   : null;
 
-function escapeXml(s: string): string {
-  return s.replace(/[<>&'"]/g, (c) =>
-    c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c === "'" ? '&apos;' : '&quot;',
-  );
+function asset(name: string): string {
+  return `data:image/svg+xml;base64,${readFileSync(new URL(`./assets/${name}.svg`, import.meta.url)).toString('base64')}`;
 }
 
-/** One restrained mark for public preview derivatives. */
+const headerSymbol = asset('header-symbol');
+const headerWordmark = asset('header-wordmark');
+const centerSymbol = asset('center-symbol');
+const cornerSymbol = asset('corner-symbol');
+
+/** Native asset geometry comes from the 278px-wide Figma watermark reference. */
 export function buildWatermarkSvg(
   imageWidth: number,
   imageHeight: number,
   cfg: WatermarkConfig,
 ): Buffer {
-  const text = escapeXml(cfg.text);
-  const markWidth = Math.max(36, Math.round(imageWidth * cfg.scale));
-  const fontSize = Math.max(11, Math.round(markWidth / Math.max(cfg.text.length * 0.7, 1)));
-  const margin = Math.max(10, Math.round(Math.min(imageWidth, imageHeight) * 0.025));
-  const horizontalPadding = Math.max(7, Math.round(fontSize * 0.45));
-  const verticalPadding = Math.max(4, Math.round(fontSize * 0.25));
-  const badgeWidth = Math.max(
-    markWidth,
-    Math.round(cfg.text.length * fontSize * 0.58 + horizontalPadding * 2),
-  );
-  const badgeHeight = fontSize + verticalPadding * 2;
-  const badgeX = Math.round((imageWidth - badgeWidth) / 2);
-  const badgeY = imageHeight - margin - badgeHeight;
-  const textY = Math.round(badgeY + verticalPadding + fontSize * 0.8);
-  const badgeOpacity = Number(Math.min(0.6, cfg.opacity * 0.75).toFixed(3));
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${imageWidth}" height="${imageHeight}" viewBox="0 0 ${imageWidth} ${imageHeight}">
-  <rect x="${badgeX}" y="${badgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="${Math.round(badgeHeight / 2)}"
-    fill="#000000" fill-opacity="${badgeOpacity}" />
-  <text x="${Math.round(imageWidth / 2)}" y="${textY}" text-anchor="middle"
-    font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="500"
-    fill="#ffffff" fill-opacity="${cfg.opacity}">${text}</text>
+  const unit = Math.min((imageWidth * cfg.scale) / 12, imageWidth / 80, imageHeight / 64);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    width="${imageWidth}" height="${imageHeight}" viewBox="0 0 ${imageWidth} ${imageHeight}">
+  <g opacity="${cfg.opacity}">
+    <g transform="scale(${unit})">
+      <image x="14.798" y="13.848" width="17.3176" height="17.4937" xlink:href="${headerSymbol}"/>
+      <image x="28.863" y="15.348" width="31.0898" height="14.4937" opacity="0.5" xlink:href="${headerWordmark}"/>
+    </g>
+    <g transform="translate(${imageWidth / 2 - 10 * unit} ${imageHeight / 2 - 10.5 * unit}) scale(${unit})">
+      <image width="20" height="21" xlink:href="${centerSymbol}"/>
+    </g>
+    <g transform="translate(${imageWidth - 28 * unit} ${imageHeight - 28.1254 * unit}) scale(${unit})">
+      <image width="20" height="21" xlink:href="${cornerSymbol}"/>
+    </g>
+  </g>
 </svg>`;
   return Buffer.from(svg);
 }
