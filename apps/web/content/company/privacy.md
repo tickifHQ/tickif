@@ -19,7 +19,7 @@ A professional receiving your enquiry also handles it for their own client commu
 
 ## Information from using Tickif
 
-Session and request records can include IP address, browser or device information and timestamps. Tickif records interactions such as project or image views, likes, enquiry activity and searches to operate discovery and produce workspace metrics. A browser identifier can distinguish repeat image-page visits; it is pseudonymous, not guaranteed anonymous.
+Session and request records can include IP address, browser or device information and timestamps. Tickif records interactions such as project or image views, enquiry activity and searches to operate discovery and produce workspace metrics. A browser identifier can distinguish repeat image and project views; it is pseudonymous, not guaranteed anonymous.
 
 Technical logs and error reports help diagnose failures and abuse. The implementation sanitises logs and excludes sensitive authentication and request data from ordinary telemetry. Actual deployment settings and external telemetry destinations still require verification.
 
@@ -27,7 +27,7 @@ When a professional connects a Google business listing, selected business and ra
 
 ## Why we use information
 
-Relevant information supports accounts and authentication, permissions, authorised portfolio publishing, enquiries, saved or liked projects, billing and entitlements, service messages, moderation, fraud prevention and diagnosis of technical problems. Public project and profile information supports discovery; interaction records support aggregated or workspace-scoped reporting. Complaint and payment records support reconciliation, disputes and legal duties.
+Relevant information supports accounts and authentication, permissions, authorised portfolio publishing, enquiries, saved projects, billing and entitlements, service messages, moderation, fraud prevention and diagnosis of technical problems. Public project and profile information supports discovery; interaction records support aggregated or workspace-scoped reporting. Complaint and payment records support reconciliation, disputes and legal duties.
 
 A new purpose should be explained before use and consent obtained where required. Accepting the Terms does not authorise unrelated marketing. This draft does not assert that Tickif sells personal information, uses advertising trackers or trains general-purpose AI models on private enquiries. Introducing such practices would require fresh disclosure and appropriate permission or lawful basis.
 
