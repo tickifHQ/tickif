@@ -7,6 +7,9 @@ designer/admin routing and other public pages retain their existing behavior.
 
 ## Data and interactions
 
+- The visible hero uses “Inspire from real homes you’ll love.” and “Architecture ·
+  Construction · Interior.” The product owner restored the original feedback copy
+  over the newer Figma wording; see [ADR 0008](../adr/0008-homepage-feedback-copy.md).
 - The server loads taxonomy and the recent/featured discovery feeds concurrently
   through the typed Hono client, validating responses with `@repo/contracts`.
 - Hero project photography and captions use the first three featured projects with cover

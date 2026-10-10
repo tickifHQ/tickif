@@ -202,7 +202,7 @@ describe('HomePage', () => {
   it('renders the featured strip and the reachable recent feed for logged-out visitors', async () => {
     render(await HomePage());
 
-    expect(screen.getByRole('heading', { name: /Real Indian homes/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Inspire from real homes/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Featured projects' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fresh from the review desk' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Hobby from catalog' })).toBeInTheDocument();
@@ -412,7 +412,7 @@ describe('HomePage', () => {
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
     expect(screen.getAllByRole('search')).toHaveLength(1);
-    expect(screen.queryByText(/Real Indian homes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Inspire from real homes/)).not.toBeInTheDocument();
     // E-303: the discovery card shows the budget pill (not tags) in its hover UI.
     expect(within(screen.getByRole('article')).getByText('₹15–35L')).toBeInTheDocument();
   });

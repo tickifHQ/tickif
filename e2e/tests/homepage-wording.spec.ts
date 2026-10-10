@@ -18,10 +18,10 @@ for (const viewport of [
     await expect(page).toHaveTitle(/Tickif/i);
     const heading = page.getByRole('heading', {
       level: 1,
-      name: 'Real Indian homes, and what they cost.',
+      name: 'Inspire from real homes you’ll love.',
       exact: true,
     });
-    const eyebrow = page.getByText('Real projects · Reviewed by our team', { exact: true });
+    const eyebrow = page.getByText('Architecture · Construction · Interior.', { exact: true });
     const search = page.getByRole('main').getByRole('searchbox', { name: 'Search homes' });
     await expect(heading).toBeVisible();
     await expect(eyebrow).toBeVisible();

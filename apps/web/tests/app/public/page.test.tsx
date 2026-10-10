@@ -54,7 +54,7 @@ describe('PublicHomePage', () => {
       session: { id: 's1', token: 't', expiresAt: '2027-01-01T00:00:00.000Z' },
     });
     render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
-    expect(screen.getByRole('heading', { name: /Real Indian homes/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Inspire from real homes/i })).toBeInTheDocument();
     expect(mock.getServerSession).toHaveBeenCalledWith({ disableCookieCache: true });
     expect(mock.redirect).not.toHaveBeenCalled();
   });
@@ -139,7 +139,7 @@ describe('PublicHomePage', () => {
     });
 
     render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
-    expect(screen.getByRole('heading', { name: /Real Indian homes/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Inspire from real homes/i })).toBeInTheDocument();
     expect(mock.redirect).not.toHaveBeenCalled();
   });
 
@@ -200,6 +200,6 @@ describe('PublicHomePage', () => {
   it('still renders the visitor homepage for signed-out users', async () => {
     render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByRole('heading', { name: /Real Indian homes/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Inspire from real homes/i })).toBeInTheDocument();
   });
 });

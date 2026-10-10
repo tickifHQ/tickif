@@ -31,14 +31,14 @@ export function HomeHero({
       <div className="flex flex-col items-center text-center">
         <p className="landing-enter flex items-center gap-2 rounded-full bg-secondary px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary-foreground">
           <span className="size-[7px] rounded-full bg-primary" aria-hidden />
-          Real projects · Reviewed by our team
+          Architecture · Construction · Interior.
         </p>
         <h1
           id="home-heading"
           className="landing-enter mt-6 font-display text-[clamp(2.5rem,5.82vw,5.5rem)] font-medium leading-[1.09] tracking-[-0.045em] [animation-delay:80ms]"
         >
           <span className="flex flex-wrap items-center justify-center gap-x-3 sm:gap-x-5">
-            <span>Real </span>
+            <span>Inspire from </span>
             <span
               className="relative inline-block h-[1em] w-[1.95em] shrink-0 rotate-4 overflow-hidden rounded-full shadow-sm"
               aria-hidden
@@ -60,12 +60,12 @@ export function HomeHero({
                 className="absolute inset-0 size-full object-cover"
               />
             </span>
-            <span> Indian homes,</span>
+            <span> real homes</span>
           </span>
           <span className="block">
-            and what they{' '}
+            you’ll{' '}
             <span className="relative isolate whitespace-nowrap before:absolute before:inset-x-0 before:bottom-1 before:-z-10 before:h-[0.42em] before:-rotate-2 before:rounded-lg before:bg-primary-soft/60">
-              cost<span className="text-home-heading-accent">.</span>
+              love<span className="text-home-heading-accent">.</span>
             </span>
           </span>
         </h1>

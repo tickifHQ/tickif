@@ -73,7 +73,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await explore.click();
     await expect(page).toHaveURL('/');
     await expect(
-      page.getByRole('heading', { name: /Real Indian homes, and what they cost\./i }),
+      page.getByRole('heading', { name: /Inspire from real homes you’ll love\./i }),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeInViewport();
     await page.screenshot({
@@ -120,7 +120,7 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await mobileExplore.click();
     await expect(page).toHaveURL('/');
     await expect(
-      page.getByRole('heading', { name: /Real Indian homes, and what they cost\./i }),
+      page.getByRole('heading', { name: /Inspire from real homes you’ll love\./i }),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeInViewport();
     await page.screenshot({ path: test.info().outputPath('homepage-mobile.png'), fullPage: false });
@@ -206,7 +206,7 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
       await page.getByRole('link', { name: 'Explore Tickif' }).click();
       await expect(page).toHaveURL('/');
       await expect(
-        page.getByRole('heading', { name: /Real Indian homes, and what they cost\./i }),
+        page.getByRole('heading', { name: /Inspire from real homes you’ll love\./i }),
       ).toBeVisible();
 
       await page.goto('/designer/dashboard');
@@ -224,7 +224,7 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
         await drawer.getByRole('link', { name: 'Explore Tickif' }).click();
         await expect(page).toHaveURL('/');
         await expect(
-          page.getByRole('heading', { name: /Real Indian homes, and what they cost\./i }),
+          page.getByRole('heading', { name: /Inspire from real homes you’ll love\./i }),
         ).toBeVisible();
 
         await page.goto('/designer/dashboard');
