@@ -393,14 +393,15 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .getByRole('textbox', { name: 'OTP digit 1', exact: true })
       .fill(await phoneCode(visitorPhone));
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
-    // Confirm the interactive form is hydrated before filling text fields that
-    // React initializes from the server-provided onboarding state.
-    await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
-    await expect(visitor.getByLabel('WhatsApp number (Recommended)')).toBeDisabled();
+    await expect(visitor.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
+    await visitor.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(visitor).toHaveURL(`${webUrl}/home?feed=custom`);
+    await visitor.goto('/home/settings');
     await visitor.getByLabel(/^Display name/).fill(`Journey Visitor ${suffix}`);
-    await visitor.getByLabel('Address', { exact: true }).fill('Mumbai');
-    await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(visitor).toHaveURL(`${webUrl}/home`);
+    await visitor.getByLabel('Personal address (optional)').fill('Mumbai');
+    await visitor.getByLabel('WhatsApp number (optional)').fill(visitorPhone);
+    await visitor.getByRole('button', { name: 'Save changes' }).click();
+    await expect(visitor.getByRole('status')).toContainText('Personal settings saved.');
     const [persistedVisitor] = await db
       .select()
       .from(schema.user)

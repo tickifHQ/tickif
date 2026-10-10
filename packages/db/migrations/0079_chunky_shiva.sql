@@ -1,0 +1,1 @@
+ALTER TABLE "designer_portfolio" ALTER COLUMN "accent_color" SET DEFAULT '#1E7A55';

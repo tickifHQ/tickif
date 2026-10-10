@@ -20,6 +20,7 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   INTERACTION_EVENT_TYPE_VALUES,
+  DEFAULT_PORTFOLIO_ACCENT,
   PLAN_TIER_VALUES,
   SUBSCRIPTION_STATE_VALUES,
   TAXONOMY_KIND_VALUES,
@@ -1328,7 +1329,7 @@ export const designerPortfolio = pgTable(
     portfolioSlug: text('portfolio_slug').unique(),
 
     // Customizations
-    accentColor: text('accent_color').default('#FF8F73').notNull(),
+    accentColor: text('accent_color').default(DEFAULT_PORTFOLIO_ACCENT).notNull(),
 
     // Section visibility
     showHero: boolean('show_hero').default(true).notNull(),

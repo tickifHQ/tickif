@@ -3,7 +3,7 @@
 The signed-in welcome form asks for home type and location. The preferences API
 saves those answers and returns filters for the existing public feed. It does
 not add a second search engine or make the cached public feed depend on a session.
-Apply migration `0079_blue_blue_marvel.sql` before deploying the API and web app.
+Apply migration `0080_certain_wraith.sql` before deploying the API and web app.
 
 ## Web flow
 
@@ -11,6 +11,7 @@ New visitors see the welcome card inside their sign-in dialog after phone OTP.
 Direct sign-in and interrupted onboarding use `/onboarding`. Both paths save
 through the same API. Save and Skip refresh the session before continuing to
 an original callback page, if supplied, or the personalized feed.
+Name, address, and WhatsApp details are edited separately in `/home/settings`.
 
 Active visitors can edit their choices from **Personalize your feed** on `/home`.
 Opening bare `/home` loads their saved defaults and redirects to explicit filter

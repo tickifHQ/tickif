@@ -33,6 +33,16 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires visitor preference journeys without omissions or skips', () => {
+    const preferences = requiredTests.filter(
+      ({ file }) => file === 'visitor-feed-preferences.spec.ts',
+    );
+    expect(preferences).toHaveLength(4);
+    for (const { title } of preferences) {
+      expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+      expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+    }
+  });
   it('requires the public profile mobile rating regression without omission or skip', () => {
     const title = 'Google rating summary and review carousel fit narrow profile screens';
     expect(requiredTests).toContainEqual({ file: 'public-profile-ratings-mobile.spec.ts', title });

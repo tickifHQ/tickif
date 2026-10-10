@@ -48,6 +48,9 @@ coverage gate.
 - `authentication.spec.ts`: real phone/email OTP sessions, wrong-code rejection,
   Google callback account creation and denied consent; unfinished designer setup
   can be deferred, resumed and completed without granting premature workspace access.
+- `visitor-feed-preferences.spec.ts`: desktop and phone welcome forms, saved home
+  and location filters, reload and Clear all, editing, callback preservation and Skip.
+  Visitor contact details and local validation remain covered in personal settings.
 - `project-moderation.spec.ts`: authenticated claim, comments, approve, request
   changes, reject and unpublish with FIFO pagination.
 - `verification-lifecycle.spec.ts`: upload, private signed download, change request

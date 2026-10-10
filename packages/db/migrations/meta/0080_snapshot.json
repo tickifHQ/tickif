@@ -1,6 +1,6 @@
 {
-  "id": "12f27a9a-127c-4c69-b083-f742f3d35c99",
-  "prevId": "fcbf2983-0cf0-421e-bfe9-d5c5a7483be0",
+  "id": "3b2aca38-6483-4c7a-82a5-d7f855aaef6b",
+  "prevId": "12f27a9a-127c-4c69-b083-f742f3d35c99",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7304,6 +7304,12 @@
         "whatsapp_number": {
           "name": "whatsapp_number",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feed_preferences": {
+          "name": "feed_preferences",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
