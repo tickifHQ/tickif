@@ -30,12 +30,12 @@ function DesignerCard({
 
   return (
     <article aria-label={designer.displayName} className="min-w-0">
-      <Link
-        href={`/d/${encodeURIComponent(designer.slug)}`}
-        aria-label={`View ${designer.displayName} portfolio`}
-        className="group block h-full cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        <Card className="flex h-full min-w-0 flex-col gap-0 overflow-hidden rounded-xl py-0 transition-[transform,box-shadow,border-color] duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-lg group-focus-visible:border-primary/30 group-focus-visible:shadow-lg motion-reduce:group-hover:translate-y-0">
+      <Card className="flex h-full min-w-0 flex-col gap-0 overflow-hidden rounded-xl py-0 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg focus-within:border-primary/30 focus-within:shadow-lg motion-reduce:hover:translate-y-0">
+        <Link
+          href={`/d/${encodeURIComponent(designer.slug)}`}
+          aria-label={`View ${designer.displayName} portfolio`}
+          className="group flex flex-1 cursor-pointer flex-col rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
           <div className="relative aspect-[9/4] overflow-hidden bg-muted">
             {designer.heroUrl ? (
               <Image
@@ -89,15 +89,6 @@ function DesignerCard({
                   : ''}
                 {designer.projectCount} projects
               </p>
-              {designer.googleRating !== null && designer.googleRatingCount !== null ? (
-                <p className="flex items-center gap-1 text-2xs" aria-label="Google Business rating">
-                  <GoogleBrandIcon className="size-3.5 shrink-0" />
-                  <Star aria-hidden="true" className="size-3.5 fill-rating text-rating" />
-                  <span className="sr-only">Google </span>
-                  {designer.googleRating.toFixed(1)} · {designer.googleRatingCount}{' '}
-                  {designer.googleRatingCount === 1 ? 'rating' : 'ratings'}
-                </p>
-              ) : null}
               <div className="mt-auto flex min-w-0 flex-wrap items-center gap-2 pt-0.5">
                 {designer.scopeSlugs.length ? (
                   <p className="truncate text-2xs text-muted-foreground">
@@ -112,8 +103,20 @@ function DesignerCard({
               </div>
             </div>
           </CardContent>
-        </Card>
-      </Link>
+        </Link>
+        {designer.googleRating !== null && designer.googleRatingCount !== null ? (
+          <p
+            className="flex items-center gap-1 px-3 pb-3 text-2xs"
+            aria-label="Google Business rating"
+          >
+            <GoogleBrandIcon className="size-3.5 shrink-0" />
+            <Star aria-hidden="true" className="size-3.5 fill-rating text-rating" />
+            <span className="sr-only">Google </span>
+            {designer.googleRating.toFixed(1)} · {designer.googleRatingCount}{' '}
+            {designer.googleRatingCount === 1 ? 'rating' : 'ratings'}
+          </p>
+        ) : null}
+      </Card>
     </article>
   );
 }

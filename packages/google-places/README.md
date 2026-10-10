@@ -15,7 +15,7 @@ can resolve without a Text Search request.
 Link resolution permits only HTTPS on the explicit Google host allowlist, with
 no credentials or nonstandard port. It follows at most five redirects under one
 10-second timeout, rejects loops and off-list destinations, and never sends the
-Places API key to redirect hosts. Unsupported links return a typed input error;
+Places API key to redirect hosts. Unsupported Google links return a typed input error;
 network failures return a typed network error. Existing free-text lookup remains
 available.
 

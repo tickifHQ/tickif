@@ -74,6 +74,10 @@ designer/admin routing and other public pages retain their existing behavior.
 
 ## Content boundaries
 
+The designer directory shows a connected Google rating and count as passive text
+outside the portfolio navigation link. The photograph and studio details still
+open the portfolio; clicking the Google aggregate does not navigate.
+
 No Figma sample project, designer, price, testimonial or platform total is used as
 live content. The existing public contracts do not supply the sponsorship campaign,
 homeowner-verified cost status, or aggregate room totals. Those sections are omitted or replaced by factual
