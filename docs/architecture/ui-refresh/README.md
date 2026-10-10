@@ -39,6 +39,11 @@ and hero Share action are removed; there is no designer save/like API. The share
 card and footer social links remain. The token specification now contains 68
 entries, including the source location-control shadow.
 
+The feedback follow-up preserves that composition while making each experience
+centre's state group visible in the map selector. The hero includes a supplied
+positive office count; absent and zero counts do not create a public location
+claim. Counts come from profile data, independently of experience-centre entries.
+
 The 9 October staging corrections preserve official Google Maps embed URLs and
 fall back to a safely encoded address query for ordinary links, shortened
 `maps.app.goo.gl` links, or missing map URLs. Short links are navigation targets,

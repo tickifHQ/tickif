@@ -156,6 +156,22 @@ describe('ImageDetailView', () => {
 
   // --- Core rendering ---
 
+  it('shows locality, apartment type and floor area on the image entry point', () => {
+    renderComponent({
+      project: {
+        ...project,
+        sizeSqft: 1200,
+        specifications: {
+          ...project.specifications,
+          propertySubtype: { slug: 'apartment-flat', label: 'Apartment / flat' },
+        },
+      },
+    });
+    expect(screen.getByText('Apartment / flat')).toBeInTheDocument();
+    expect(screen.getByText('1,200 sq.ft')).toBeInTheDocument();
+    expect(screen.getByText(/Bandra, Mumbai/)).toBeInTheDocument();
+  });
+
   it('shows connected Google rating and count in the profile card without a link', () => {
     renderComponent({ designer: { ...designer, googleRating: { rating: 4.7, reviewCount: 58 } } });
     const rating = screen.getByLabelText('Google rating 4.7 out of 5 from 58 ratings');

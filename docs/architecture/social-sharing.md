@@ -16,7 +16,10 @@ Open Graph image and Twitter `summary_large_image` card. URLs use the configured
 | `/blog/{slug}`                                            | `/blog/{slug}/social-card`        | Published article title and description                       | Index while published                            |
 
 Image details deliberately have their own card, rather than sharing a parent
-project cover. Unknown/private projects, images, portfolios and articles return
+project cover. The image-view sidebar also displays the resolved property
+subtype (or type) and supplied positive floor area from its public API response.
+These facts do not require opening the full project. Unknown values stay absent.
+Unknown/private projects, images, portfolios and articles return
 404 from their card endpoint. Recoverable unavailable projects keep their existing
 noindex page but have no generated image. API failures remain failures; they do not
 silently turn private or stale data into shareable content.

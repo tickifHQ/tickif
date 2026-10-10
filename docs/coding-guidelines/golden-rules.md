@@ -24,3 +24,7 @@ Scope: **always**. These are cross-cutting and override generic habits.
    bug write the failing reproduction first. (Details: [testing.md](./testing.md).)
 8. **Verify before claiming done.** `pnpm typecheck && pnpm lint && pnpm test`
    (plus the relevant app) must pass before declaring a task complete.
+9. **Record major plan deviations.** Replacing, removing or deferring an agreed
+   capability, integration or product promise requires an ADR in the same change.
+   Record rationale, consequences and acceptance status; link it from the PR.
+   Follow [the ADR recording rule](../adr/README.md#recording-decisions).

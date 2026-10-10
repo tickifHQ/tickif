@@ -748,7 +748,7 @@
   border-radius: 0;
   background: transparent;
 }
-.designer-profile .profile-centre-selector > button {
+.designer-profile .profile-centre-selector [role='tab'] {
   flex: 0 1 auto;
   min-height: 34px;
   height: 34px;
@@ -763,7 +763,7 @@
   background: var(--card);
   box-shadow: var(--location-control-shadow);
 }
-.designer-profile .profile-centre-selector > button[data-state='active'] {
+.designer-profile .profile-centre-selector [role='tab'][data-state='active'] {
   background: var(--surface-inverse);
   color: var(--surface-inverse-foreground);
 }
@@ -787,11 +787,11 @@
 }
 .designer-profile
   .profile-centre-selector
-  > button[data-state='active']
+  [role='tab'][data-state='active']
   .profile-centre-pin::after {
   background: var(--surface-inverse);
 }
-.designer-profile .profile-centre-selector > button[data-state='active'] .profile-centre-pin {
+.designer-profile .profile-centre-selector [role='tab'][data-state='active'] .profile-centre-pin {
   background: var(--primary-soft);
   mask-image: url('/ui/profile/centres-svg.svg');
 }

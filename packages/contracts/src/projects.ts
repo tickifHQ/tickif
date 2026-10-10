@@ -753,6 +753,7 @@ export const publicImageDetailProjectSchema = feedProjectSchema
   .extend({
     description: z.string().nullable(),
     buildingName: z.string().nullable(),
+    sizeSqft: projectDetailResponseSchema.shape.sizeSqft.optional(),
     specifications: publicProjectSpecificationsSchema,
   })
   .meta({ id: 'PublicImageDetailProject' });

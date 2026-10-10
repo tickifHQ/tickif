@@ -141,6 +141,12 @@ export function ImageDetailView({
   }, [activeImageId]);
 
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
+  const projectFacts = [
+    project.specifications.propertySubtype?.label ?? project.specifications.propertyType?.label,
+    project.sizeSqft != null && project.sizeSqft > 0
+      ? `${project.sizeSqft.toLocaleString('en-IN')} sq.ft`
+      : null,
+  ].filter((fact): fact is string => Boolean(fact));
 
   const activeImageIndex = useMemo(() => {
     const selectedIndex = gallery.findIndex((image) => image.id === selectedImageId);
@@ -309,6 +315,16 @@ export function ImageDetailView({
                         <span>{project.tags[0]}</span>
                       </>
                     ) : null}
+                  </p>
+                ) : null}
+                {projectFacts.length > 0 ? (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    {projectFacts.map((fact, index) => (
+                      <span key={fact}>
+                        {index > 0 ? <span aria-hidden="true"> · </span> : null}
+                        <span>{fact}</span>
+                      </span>
+                    ))}
                   </p>
                 ) : null}
               </div>

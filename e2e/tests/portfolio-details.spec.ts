@@ -118,13 +118,16 @@ test('portfolio details persist from editor to public studio on desktop and mobi
     await expect(
       hero.getByLabel(String(new Date().getUTCFullYear() - 8), { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText('Offices', { exact: true })).toHaveCount(0);
+    await expect(hero.getByText('Offices', { exact: true })).toBeVisible();
+    await expect(hero.getByLabel('2', { exact: true })).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('portfolio-details-public-desktop.png'),
       fullPage: true,
       animations: 'disabled',
     });
     await page.setViewportSize({ width: 390, height: 844 });
+    await expect(hero.getByText('Offices', { exact: true })).toBeVisible();
+    await expect(hero.getByLabel('2', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

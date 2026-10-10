@@ -14,6 +14,7 @@ import { validateImageBytes } from '../media/validate.js';
 import { eachDerivative } from '../media/derivatives.js';
 import { defaultWatermarkConfig } from '../media/watermark.js';
 import { computePhash, findNearestDuplicate } from '../media/phash.js';
+import { IMAGE_SIGNATURE_REVISION } from '../media/signature.js';
 import {
   withMediaProcessingLease,
   type ProcessingImage,
@@ -41,7 +42,6 @@ type StoredDerivative = {
 
 // Revisioned derivative keys make immutable caching safe across watermark updates.
 const DERIVATIVE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
-const SIGNATURE_REVISION = 'sig-v1';
 
 /** Persist a permanent rejection and drop the now-orphaned original. Cleanup is best-effort. */
 async function failPermanently(
@@ -70,7 +70,7 @@ async function generateAndStoreDerivatives(
     const key = buildDerivativeKey(
       image.projectId,
       image.id,
-      `${derivative.variant}-${config.WATERMARK_REVISION}-${SIGNATURE_REVISION}`,
+      `${derivative.variant}-${config.WATERMARK_REVISION}-${IMAGE_SIGNATURE_REVISION}`,
       derivative.format,
     );
     // The high-density variant can be several MB. Persist each buffer before

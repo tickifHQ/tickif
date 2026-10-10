@@ -2108,6 +2108,7 @@ export const projectsService = {
         title: detail.title,
         description: detail.description,
         buildingName: detail.buildingName,
+        sizeSqft: detail.sizeSqft,
         studio: detail.designer.displayName,
         city: specifications.city?.label ?? specifications.cityName ?? null,
         locality: specifications.locality?.label ?? null,
