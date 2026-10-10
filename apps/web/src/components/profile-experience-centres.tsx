@@ -45,6 +45,7 @@ export function ProfileExperienceCentres({
     portfolio.heroCoverUrl ??
     portfolio.projects.projects.find((project) => project.coverImageUrl)?.coverImageUrl;
   const location = [centre.city, centre.state].filter(Boolean).join(', ');
+  const states = [...new Set(centres.map((item) => item.state))];
 
   return (
     <Tabs
@@ -55,20 +56,34 @@ export function ProfileExperienceCentres({
     >
       <div className="profile-centres-map">
         <TabsList aria-label="Experience centres" className="profile-centre-selector">
-          {centres.map((item, index) => (
-            <TabsTrigger
-              value={String(index)}
-              key={`${item.name}-${index}`}
-              aria-label={item.name}
-              title={item.name}
+          {states.map((state) => (
+            <div
+              key={state}
+              role="group"
+              aria-label={state}
+              className="flex flex-wrap items-center gap-1.5"
             >
-              <span className="profile-centre-pin" aria-hidden="true" />
-              <span className="truncate">
-                {centres.filter((entry) => entry.city === item.city).length > 1
-                  ? item.address.split(',')[0] || item.name
-                  : item.city}
+              <span className="rounded-lg bg-card px-2 py-1 font-mono text-xs text-card-foreground">
+                {state}
               </span>
-            </TabsTrigger>
+              {centres.map((item, index) =>
+                item.state === state ? (
+                  <TabsTrigger
+                    value={String(index)}
+                    key={`${item.name}-${index}`}
+                    aria-label={item.name}
+                    title={item.name}
+                  >
+                    <span className="profile-centre-pin" aria-hidden="true" />
+                    <span className="truncate">
+                      {centres.filter((entry) => entry.city === item.city).length > 1
+                        ? item.address.split(',')[0] || item.name
+                        : item.city}
+                    </span>
+                  </TabsTrigger>
+                ) : null,
+              )}
+            </div>
           ))}
         </TabsList>
         {centres.map((item, index) => (

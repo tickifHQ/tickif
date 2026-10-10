@@ -39,6 +39,11 @@ and hero Share action are removed; there is no designer save/like API. The share
 card and footer social links remain. The token specification now contains 68
 entries, including the source location-control shadow.
 
+The feedback follow-up preserves that composition while making each experience
+centre's state group visible in the map selector. The hero includes a supplied
+positive office count; absent and zero counts do not create a public location
+claim. Counts come from profile data, independently of experience-centre entries.
+
 The 9 October staging corrections preserve official Google Maps embed URLs and
 fall back to a safely encoded address query for ordinary links, shortened
 `maps.app.goo.gl` links, or missing map URLs. Short links are navigation targets,
@@ -316,6 +321,14 @@ See [the phased handoff](../../guides/ui-refresh-handoff.md) for delivery tracki
 completion gates, and subsequent role rollout.
 
 ## Portfolio configuration compatibility
+
+The owner Portfolio page passes the authenticated profile's published-project
+count and resolved experience into its live preview. Unknown profile data is
+omitted rather than rendered as a fabricated zero; a real zero count remains
+visible. In the public opening view, the main heading carries the studio name,
+navigation carries its logo/location, and the adjacent photo card says "Selected
+work". This feedback adjustment is recorded in
+[ADR 0006](../../adr/0006-feedback-card-identity-and-logo-fallbacks.md).
 
 The owner editor and public profile share recognition artwork through
 `apps/web/src/lib/portfolio-recognition.ts` and the UI package RecognitionBadge.

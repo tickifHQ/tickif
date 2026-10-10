@@ -1,3 +1,4 @@
+import { cp } from 'node:fs/promises';
 import { defineConfig } from 'tsup';
 
 // Inline workspace (@repo/*) packages; keep npm deps (bullmq, dotenv) external
@@ -12,4 +13,7 @@ export default defineConfig({
   noExternal: [/^@repo\//],
   clean: true,
   sourcemap: true,
+  onSuccess: async () => {
+    await cp('src/media/assets', 'dist/assets', { recursive: true });
+  },
 });

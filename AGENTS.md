@@ -18,6 +18,10 @@ Codex, …). This file is the common entry point; enforced conventions live in
 5. Keep affected architecture, guidelines, guides and runbooks synchronized with
    the implementation. Record a new architectural decision in `docs/adr/` using
    its template; preserve historical context and link any superseded decision.
+   Any major deviation from an agreed plan or feedback requirement must have an
+   ADR describing the original plan, alternative, rationale, consequences and
+   acceptance status. Follow [the ADR recording rule](./docs/adr/README.md#recording-decisions)
+   and reference the record in the implementing PR.
 
 These conventions are enforced, not suggestions. Nested agent instruction files,
 if added, must reference this startup procedure and add only scope-specific

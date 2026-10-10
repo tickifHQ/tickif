@@ -47,20 +47,37 @@ prefer the xlarge derivative (2560px), then large (1600px). Sharp never enlarges
 the original, so a low-resolution or out-of-focus upload cannot be made sharp
 by this pipeline.
 
+Public derivatives carry the supplied Tickif SVG logo at top left and the logo
+symbol at the center and bottom right, matching the
+[Figma watermark reference](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15817-7985).
+The assets retain the design's translucency and shadows. `WATERMARK_OPACITY=1`
+keeps those asset opacities; lower values fade the entire treatment.
+`WATERMARK_SCALE=0.0432` sets the symbol width relative to the image width.
+Marks remain bounded on small or extreme-aspect images. The worker bundles the
+SVG assets and composites them into image bytes without a runtime font dependency.
+The `wm-v6` revision gives this treatment new immutable URLs. Originals stay private
+and unchanged; the embedded identifier below is independent of the visible marks.
+
 New uploads produce both WebP and AVIF variants at the updated encoding quality.
 The worker writes derivatives one at a time to avoid retaining every high-density
 buffer in memory. Existing ready images retain their old variants until queued
 for reprocessing. The source original must still exist for that operation.
 
 Public derivatives also carry an embedded image token derived from the stored
-image ID. The original stays untouched. Given a downloaded derivative and a
+image ID. [ADR 0005](../adr/0005-tickif-image-signatures.md) records its acceptance
+instead of the originally planned SynthID integration. The original stays untouched. Given a downloaded derivative and a
 candidate image ID, run
 `pnpm --filter @repo/worker media:identify -- <image-path> <image-id>` to
 check for a match. Without an ID, the command prints the recovered token.
 This is a best-effort identifier, not proof of ownership: cropping, resizing,
 screenshots, and very small or flat images can remove or obscure it.
 The pixel changes can introduce low-level visual texture in smooth image areas.
-The `sig-v1` key suffix bypasses immutable caches for newly processed images.
+The `sig-v2` key suffix bypasses immutable caches for newly processed images.
+The encoder repeats each bit in up to twelve distributed blocks, retaining the
+same coefficient strength; the reader also accepts the older six-repeat `sig-v1`
+layout. Extra redundancy improves recovery across codecs without increasing the
+per-channel perturbation, but touches more blocks and does not remove the limits
+above. Recovery must be checked from encoded bytes, not inferred from a key suffix.
 Previously ready images need reprocessing before they gain the token.
 
 For retries, derivative regeneration and rollout checks, use the

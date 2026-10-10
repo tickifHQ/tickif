@@ -2,9 +2,7 @@
 
 import Link from 'next/link';
 import type { FeedProject } from '@repo/contracts';
-import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { ProjectActions } from '@/components/project-actions';
-import { studioInitials } from '@/lib/public-portfolio-view';
 import { formatCompactBudgetLabel } from '../lib/format-budget-label';
 
 const FALLBACK_WIDTH = 480;
@@ -96,33 +94,17 @@ export function ShowcaseCard({
         </div>
         {presentation === 'landing' ? (
           <div className="mt-2 space-y-1 px-0.5">
-            {project.tags.length > 0 ? (
-              <p className="truncate font-mono text-[10px] uppercase tracking-wider text-primary">
-                {project.tags.join(' · ')}
-              </p>
-            ) : null}
-            <h3 className="truncate text-sm font-medium leading-[18px]">{project.title}</h3>
+            <h3 className="truncate text-xs font-medium leading-[18px] @min-[14rem]:text-sm">
+              {project.title}
+            </h3>
             <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
-              {project.studio ? (
-                <>
-                  <Avatar aria-hidden className="size-[18px] border border-card">
-                    <AvatarFallback className="bg-secondary text-[9px] text-primary">
-                      {studioInitials(project.studio)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="shrink-0 max-w-[45%] truncate">{project.studio}</span>
-                </>
-              ) : null}
               {location ? (
-                <span className="truncate text-foreground-subtle">
-                  {project.studio ? '· ' : ''}
-                  {location}
-                </span>
+                <span className="truncate text-foreground-subtle">{location}</span>
               ) : null}
             </div>
           </div>
         ) : (
-          <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-3 opacity-100 transition-opacity @min-[14rem]:p-4 sm:opacity-0 sm:group-hover:opacity-100">
+          <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-3 opacity-100 transition-opacity @min-[14rem]:p-4 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
             <h3 className="truncate font-display text-xs leading-tight tracking-tight text-background @min-[14rem]:text-sm">
               {project.title}
             </h3>

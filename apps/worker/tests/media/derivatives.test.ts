@@ -104,7 +104,7 @@ describe('generateDerivatives', () => {
       const [derivative] = await generateDerivatives(photo, {
         variants: [{ variant: 'thumb', width: 320 }],
         formats: [format],
-        watermark: { text: 'tickif', opacity: 0.65, scale: 0.08 },
+        watermark: { opacity: 1, scale: 0.0432 },
         signatureId: imageId,
       });
 
@@ -124,6 +124,8 @@ describe('generateDerivatives', () => {
   it.each([
     { photo: 'bright-kitchen-living-room.jpg', width: 640, format: 'avif' as const },
     { photo: 'neutral-living-room.jpg', width: 1024, format: 'webp' as const },
+    { photo: 'neutral-living-room.jpg', width: 1600, format: 'avif' as const },
+    { photo: 'warm-pendant-living-room.jpg', width: 1600, format: 'avif' as const },
   ])(
     'retains the token with restrained perturbation: $photo $format',
     async ({ photo, width, format }) => {
@@ -133,7 +135,7 @@ describe('generateDerivatives', () => {
       const [derivative] = await generateDerivatives(input, {
         variants: [{ variant: 'preview', width }],
         formats: [format],
-        watermark: { text: 'tickif', opacity: 0.65, scale: 0.08 },
+        watermark: { opacity: 1, scale: 0.0432 },
         signatureId: 'image-two',
       });
 

@@ -81,8 +81,11 @@ previous visible watermark in immutable CDN caches.
 Before reprocessing existing images in an environment:
 
 1. Deploy the new worker and API together.
-2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v4`) in that environment.
-   This prevents immutable caches from continuing to serve old encoded bytes.
+2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v6`) in that environment.
+   Set `WATERMARK_OPACITY=1` and `WATERMARK_SCALE=0.0432`
+   if the deployment overrides the defaults. An older explicit value takes precedence
+   over the new code defaults. This prevents immutable caches from continuing to serve
+   the old badge and keeps new uploads on the same visual settings.
 3. Queue ready images in a controlled batch using
    `pnpm --filter @repo/worker media:reprocess -- <image-id>`, or use
    `pnpm --filter @repo/worker media:reprocess -- --all --confirm` only after
@@ -97,7 +100,29 @@ original at mobile and desktop sizes after the rollout.
 For derivative sizing and embedded-token limitations, read
 [media pipeline architecture](../architecture/media-pipeline.md).
 
+### Signature rollout verification
+
+After a signature revision change, deploy the matching encoder/reader and run
+the ready-image reprocessing command again. `sig-v2` uses additional repetitions
+and retains reader support for `sig-v1`. Download actual WebP and AVIF derivatives
+and use `media:identify` with their stored image IDs: a revisioned object key does
+not certify that compression preserved the token. Flat/small images and later
+edits remain best-effort cases.
+
+The 9 October staging rollout regenerated all 80 public ready images with
+`sig-v1` and high-density variants; 14 ready images in retained organizations
+were deliberately skipped. Ready/processing/failed counts stayed unchanged and
+the projection outbox drained. A photographic WebP matched its image ID, while
+its AVIF and a flat QA fixture failed identification. An isolated probe with the
+deployed Linux codec recovered the same photographic token in both formats using
+twelve repetitions and the existing visible watermark. This verifies the v2
+correction on that canary, not a completed v2 deployment or universal recovery.
+
 ### SynthID boundary
+
+The product owner accepted the Tickif signature instead of SynthID; see
+[ADR 0005](../adr/0005-tickif-image-signatures.md). SynthID is not pending work for
+the existing upload pipeline.
 
 SynthID is embedded by supported Google generation models when AI media is created. This
 pipeline accepts existing designer uploads and Google does not provide it as a generic

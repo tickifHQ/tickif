@@ -7,7 +7,7 @@ export type TrustStripItem = {
 };
 
 const defaultItems = [
-  { icon: Check, label: '12,400+ real homes, fully verified' },
+  { icon: Check, label: 'Explore real projects from designers' },
   { icon: Shield, label: 'Talk directly to the designers' },
   { icon: Sparkle, label: 'No commissions · No middlemen' },
 ] satisfies TrustStripItem[];

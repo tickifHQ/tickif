@@ -127,6 +127,13 @@ Create all secret objects named by the environment file:
 - A separate R2 access-key ID/secret restricted to the backup bucket; application
   services never receive these database-backup credentials.
 - Google OAuth client secret and Razorpay test-mode API/webhook secrets.
+- Optionally, a separate Google Places API (New) key for Google reviews. Create a
+  versioned Swarm secret and set `GOOGLE_PLACES_API_KEY_SECRET` to its object name.
+  `deploy.sh` preflights that secret and merges `google-reviews.yml`, mounting it
+  through `GOOGLE_PLACES_API_KEY_FILE` in the API and worker. OAuth credentials
+  cannot substitute for this key. Leave the name empty to keep reviews unavailable.
+  Configure the key for the enabled Places API (New) in the provider project;
+  follow [Google's setup and restriction guidance](https://developers.google.com/maps/documentation/places/web-service/get-api-key).
 - An age public recipient for backups; keep its private identity offline and mount it only for restores.
 
 Provision the search-only key in Typesense itself using its key-management API
@@ -159,6 +166,24 @@ a real Novu credential before selecting `SMS_PROVIDER=novu`.
 For R2, use a staging media bucket with browser CORS configured for the exact
 staging origin. Use a separate backup bucket and separate credentials restricted
 to that bucket. Apply retention/versioning policies appropriate for recovery.
+
+### Verifying Google reviews
+
+On 9 October 2026, the staging API and worker had no Places key configured, and
+the authenticated QA owner read of `/api/profiles/me/portfolio/google` returned
+`available: false`. Application UI tests cannot certify a live provider connection.
+After provisioning the restricted key and deploying the overlay, verify that both
+consumers mount the named secret and that the owner read reports `available: true`.
+In Portfolio settings, connect the studio's real Google listing and refresh it;
+check the resulting status, rating/reviews and attribution on the public portfolio.
+If the provider rejects the request, check API enablement/key restrictions and
+the application status without exposing the key in commands or logs.
+
+`python3 infra/staging/scripts/test-google-reviews.py` renders the base and enabled
+stack without deploying and checks that existing credentials/settings survive
+the merge. `test-deploy-preflight.sh` checks that an opted-in missing Places
+secret aborts before traffic closes. A non-empty secret name alone does not prove
+that the provider accepts its value or that an actual studio listing is connected.
 
 ### PostgreSQL password rotation
 

@@ -10,10 +10,15 @@ import { cn } from '@repo/ui/lib/utils';
 type ConfiguredApartment = {
   name: string;
   mark: string;
+  logoSrc?: string;
 };
 
 const configuredApartments = [
-  { name: 'Casagrand First City', mark: 'CF' },
+  {
+    name: 'Casagrand First City',
+    mark: 'CF',
+    logoSrc: '/images/apartments/casagrand-first-city.png',
+  },
   { name: 'Maitri Apartments', mark: 'MA' },
   { name: 'Prestige Lakeside', mark: 'PL' },
   { name: 'Sea View', mark: 'SV' },
@@ -23,7 +28,7 @@ function normalizeApartmentName(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 }
 
-function apartmentForName(value: string) {
+function apartmentForName(value: string): ConfiguredApartment | null {
   const normalizedValue = normalizeApartmentName(value);
   if (!normalizedValue) return null;
 
@@ -35,6 +40,19 @@ function apartmentForName(value: string) {
 }
 
 function ApartmentMark({ apartment }: { apartment: ConfiguredApartment }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (apartment.logoSrc && apartment.logoSrc !== failedSrc) {
+    return (
+      <img
+        src={apartment.logoSrc}
+        alt={`${apartment.name} logo`}
+        width={56}
+        height={28}
+        className="h-7 w-14 shrink-0 object-contain"
+        onError={() => setFailedSrc(apartment.logoSrc ?? null)}
+      />
+    );
+  }
   return (
     <span
       role="img"
@@ -142,7 +160,10 @@ export function ApartmentNameCombobox({
   function openMenu() {
     if (open) return;
     setActiveIndex(
-      Math.max(0, filteredApartments.findIndex((apartment) => apartment === selectedApartment)),
+      Math.max(
+        0,
+        filteredApartments.findIndex((apartment) => apartment === selectedApartment),
+      ),
     );
     setOpen(true);
   }
@@ -219,7 +240,10 @@ export function ApartmentNameCombobox({
           onClick={openMenu}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={cn('text-[13px] leading-[1.1]', selectedApartment ? 'pr-9 pl-11' : 'pr-9')}
+          className={cn(
+            'pr-9 text-[13px] leading-[1.1]',
+            selectedApartment && (selectedApartment.logoSrc ? 'pl-18' : 'pl-11'),
+          )}
         />
         <ChevronsUpDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
 

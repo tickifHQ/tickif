@@ -57,12 +57,12 @@ const discoveryProject: DiscoveryCard = {
 };
 
 describe('ShowcaseCard', () => {
-  it('shows API metadata below landing photography without unsupported trust claims', () => {
+  it('keeps landing metadata location-only, matching the compact discovery cards', () => {
     render(<ShowcaseCard project={feedProject} presentation="landing" />);
-    expect(screen.getByText('3 BHK')).toBeInTheDocument();
-    expect(screen.getByText('Studio A')).toBeInTheDocument();
-    expect(screen.getByText('· Bandra, Mumbai')).toBeInTheDocument();
-    expect(screen.getByText('SA')).toBeInTheDocument();
+    expect(screen.queryByText('3 BHK')).not.toBeInTheDocument();
+    expect(screen.queryByText('Studio A')).not.toBeInTheDocument();
+    expect(screen.getByText('Bandra, Mumbai')).toBeInTheDocument();
+    expect(screen.queryByText('SA')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: feedProject.title })).toBeInTheDocument();
     expect(screen.queryByText(/verified|sponsored/i)).toBeNull();
   });

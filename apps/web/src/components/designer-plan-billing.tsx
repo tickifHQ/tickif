@@ -196,6 +196,14 @@ function CurrentPlanCard({
                     : `Your plan renews on ${formatDate(billing.renewalDate)}`}
                 </p>
               )}
+            {!billing.renewalDate &&
+              billing.lifecycle === 'active' &&
+              billing.tier !== 'hobby' &&
+              !billing.earlyBirdTrial && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Renewal date is awaiting confirmation.
+                </p>
+              )}
             {checkoutTarget && (
               <p
                 role="status"
@@ -387,7 +395,7 @@ function BillingSummary({
                 {billing.cancellationScheduled ? 'Access until' : 'Next Billing Date'}
               </p>
               <p className="mt-0.5 text-base font-semibold text-foreground">
-                {formatDate(info.nextBillingDate)}
+                {info.nextBillingDate ? formatDate(info.nextBillingDate) : 'Awaiting confirmation'}
               </p>
             </div>
             <div>

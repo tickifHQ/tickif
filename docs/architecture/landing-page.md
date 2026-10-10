@@ -26,10 +26,13 @@ designer/admin routing and other public pages retain their existing behavior.
   1512px frame, capped at the number of real results. Landing cards have a maximum
   width of 320px, so sparse and filtered feeds stay compact and left aligned.
   Landing photographs use a consistent 285px crop (240px on mobile), with studio
-  initials and metadata below. Allocation uses equal card heights; other feeds
+  title and location below. Allocation uses equal card heights; other feeds
   retain their natural image ratios and existing breakpoints.
-- `ShowcaseCard` has a landing presentation with visible title, studio, location,
-  tags and budget. Other routes retain the existing overlay presentation.
+- `ShowcaseCard` has a landing presentation with a compact single-line title,
+  location and budget. Studio names and tags are omitted from both presentations
+  per feedback item 8; see [ADR 0006](../adr/0006-feedback-card-identity-and-logo-fallbacks.md).
+  Other routes retain the existing overlay presentation, visible on keyboard focus
+  as well as hover.
 - The hero and header city pickers use taxonomy options. The header fetches the
   public city taxonomy and supports Control/Command K without a visible shortcut
   button. The header forms a layer above the hero so suggestions remain unobscured.
@@ -42,6 +45,11 @@ designer/admin routing and other public pages retain their existing behavior.
   “Explore”, not “Popular”, because taxonomy is not a popularity measure.
 - The scroll login gate retains OTP/Google authentication and dismissal behavior.
   Its landing presentation omits unsourced usage counts, ratings and avatars.
+  Standalone login and the default trust strip also use descriptive copy without
+  invented counts, ratings or customer avatars. Designer copy promises enquiries
+  under ADR 0003. Both public footer presentations expose the canonical WhatsApp
+  support destination through Report a problem; unimplemented legal pages remain
+  disabled rather than linking to unrelated routes.
   A small context shares server-fetched project previews with the sibling gate;
   it makes no additional request and clears previews when leaving the homepage.
   Its backdrop begins fading only when the panel enters the viewport, so the

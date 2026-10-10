@@ -126,6 +126,8 @@ test.describe('homepage search feed', () => {
       });
       const city = customCityCard.getByText(/^(?:· )?Pondicherry$/);
       await expect(city).toBeVisible();
+      await expect(customCityCard.getByText('E208 Playwright Studio')).toHaveCount(0);
+      await expect(customCityCard.getByText('3 BHK', { exact: true })).toHaveCount(0);
       if (viewport.name === 'mobile') {
         const budget = await customCityCard.getByText(/15.*35/).boundingBox();
         const location = await city.boundingBox();

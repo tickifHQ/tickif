@@ -2,19 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Asterisk,
-  Bookmark,
-  Calendar,
-  House,
-  Mail,
-  MessageSquare,
-  Star,
-  Users,
-  X,
-} from 'lucide-react';
+import { Asterisk, Bookmark, Calendar, House, Mail, MessageSquare, Users, X } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
-import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
 import { Card } from '@repo/ui/components/card';
@@ -97,15 +86,8 @@ const browsingFeatures = [
 
 const designerFeatures = [
   { icon: Bookmark, title: 'Share your work anywhere' },
-  { icon: MessageSquare, title: 'Get bookings from home owners' },
+  { icon: MessageSquare, title: 'Get enquiries from homeowners' },
   { icon: Calendar, title: 'Turn visitors into clients' },
-] as const;
-
-const trustAvatars = [
-  { initials: 'PK', className: 'bg-[#1a9b7a]' },
-  { initials: 'RV', className: 'bg-[#3b5570]' },
-  { initials: 'AM', className: 'bg-[#a8741d]' },
-  { initials: 'SN', className: 'bg-[#5d4a6b]' },
 ] as const;
 
 export function LoginCard({
@@ -424,7 +406,7 @@ export function LoginCard({
               <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
                 <Users className="size-3.5 text-success" aria-hidden="true" />
                 <span className="text-xs font-medium text-success">
-                  Trusted by 12,400+ verified homes
+                  Discover real homes and their designers
                 </span>
               </div>
               <div className="flex flex-col gap-2">
@@ -447,29 +429,9 @@ export function LoginCard({
                 </div>
               </div>
             </div>
-            <div className="mt-6 flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {trustAvatars.map((a) => (
-                  <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
-                    <AvatarFallback
-                      className={cn('text-[9px] font-semibold text-white', a.className)}
-                    >
-                      {a.initials}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
-              <div>
-                <p className="text-xs font-medium text-white">12,400+ verified homes</p>
-                <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
-                  on Tickif
-                  <span className="inline-flex items-center gap-1">
-                    <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
-                    4.9 (1.5k)
-                  </span>
-                </p>
-              </div>
-            </div>
+            <p className="mt-6 text-xs text-white/60">
+              Explore published projects · Connect with designers
+            </p>
           </div>
         )}
 
