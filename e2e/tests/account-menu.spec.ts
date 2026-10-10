@@ -144,10 +144,19 @@ test('account menu uses real personal data, working destinations, and resilient 
     );
     await trigger.click();
     await expect(menu.getByLabel('saved count unavailable')).toBeVisible();
+    const accountStatus = menu.getByRole('status');
+    await expect(accountStatus).toHaveAttribute('aria-live', 'polite');
+    await expect(accountStatus).toHaveAttribute('aria-atomic', 'true');
+    await expect(accountStatus).toHaveText(
+      'Some account details could not load. Use Retry to try again.',
+    );
     failCounts = false;
     await menu.getByRole('menuitem', { name: 'Some details could not load. Retry' }).click();
     await expect(menu.getByLabel('saved count unavailable')).toHaveCount(0);
     await expect(menu.getByLabel('Your activity')).toHaveAttribute('aria-busy', 'false');
+    await expect(accountStatus).toHaveText(
+      'Account details loaded. Saved projects: 0. Enquiries: 0.',
+    );
     await page.keyboard.press('Escape');
     await expect(menu).toHaveCount(0);
     await page.unroute('**/api/saved-projects?**');

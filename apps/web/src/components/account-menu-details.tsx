@@ -30,7 +30,8 @@ export function AccountMenuDetails({
     null,
   );
   const [address, setAddress] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // null registers the empty live region before the first effect starts loading.
+  const [loading, setLoading] = useState<boolean | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -59,8 +60,33 @@ export function AccountMenuDetails({
   }, [attempt, canReadPersonal, showActivity]);
 
   const metadata = [maskedAccountPhone(phoneNumber), address].filter(Boolean).join(' · ');
+  const statusMessage =
+    loading === null
+      ? ''
+      : loading
+        ? 'Loading account details.'
+        : failed
+          ? 'Some account details could not load. Use Retry to try again.'
+          : [
+              'Account details loaded.',
+              showActivity && activity?.saved != null
+                ? `Saved projects: ${activity.saved.toLocaleString('en-IN')}.`
+                : null,
+              showActivity && activity?.enquiries != null
+                ? `Enquiries: ${activity.enquiries.toLocaleString('en-IN')}.`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' ');
   return (
     <>
+      {showActivity || canReadPersonal ? (
+        // Keep this live region mounted and outside aria-busy so updates can be
+        // announced without moving keyboard focus or changing the Retry item.
+        <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {statusMessage}
+        </p>
+      ) : null}
       <DropdownMenuLabel className="flex items-center gap-3 px-4 pb-3.5 pt-2.5 font-sans">
         <Avatar className="size-10">
           {image ? <AvatarImage src={image} alt="" /> : null}
@@ -83,7 +109,7 @@ export function AccountMenuDetails({
       {showActivity ? (
         <dl
           aria-label="Your activity"
-          aria-busy={loading}
+          aria-busy={loading !== false}
           className="grid grid-cols-2 gap-2 px-3 pb-3"
         >
           {(['saved', 'enquiries'] as const).map((key) => (
@@ -95,7 +121,7 @@ export function AccountMenuDetails({
                 {key}
               </dt>
               <dd className="text-sm font-medium leading-4.5 text-foreground">
-                {loading ? (
+                {loading !== false ? (
                   <Skeleton className="h-4.5 w-6" aria-label={`Loading ${key}`} />
                 ) : activity?.[key] != null ? (
                   activity[key].toLocaleString('en-IN')

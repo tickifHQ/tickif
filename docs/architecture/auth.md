@@ -26,6 +26,11 @@ authenticated user and refreshes its server-rendered list, counts and pagination
 without a full page reload. Failed mutations do not emit these events or remove
 cards. Removing the last item on a page reuses the server's page-bound correction.
 
+Account details have a persistent, visually hidden polite status region outside
+the busy activity area. Loading, partial or complete failures, and successful
+retry results are announced without moving keyboard focus. Retry remains a menu
+item; announcements contain activity counts, not personal contact details.
+
 Logout requires confirmation. By default, Better Auth `signOut` revokes the current
 session and clears its cookie. With all devices selected, `revokeOtherSessions`
 must succeed before `signOut` runs. Better Auth validates an authoritative session

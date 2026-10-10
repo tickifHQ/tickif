@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { DropdownMenu } from '@repo/ui/components/dropdown-menu';
+import { AccountMenuDetails } from '@/components/account-menu-details';
 import { AccountMenu } from '../../src/components/account-menu';
 
 const mock = vi.hoisted(() => ({
@@ -35,6 +38,29 @@ vi.mock('@/lib/account-menu-data', () => ({
 }));
 
 describe('AccountMenu', () => {
+  it('registers an empty status region before the first request starts', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(
+      <DropdownMenu>
+        <AccountMenuDetails
+          displayName="Alice"
+          avatarSeed="Alice"
+          image={null}
+          phoneNumber={null}
+          showActivity
+          canReadPersonal
+        />
+      </DropdownMenu>,
+    );
+    expect(container.querySelector('[role="status"]')).toBeEmptyDOMElement();
+    expect(container.querySelector('[aria-label="Your activity"]')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(mock.activity).not.toHaveBeenCalled();
+    expect(mock.address).not.toHaveBeenCalled();
+  });
+
   it.each(['+919876543210', '  +91 (98765) 43210  '])(
     'uses the safe account label instead of a phone-auth placeholder name: %s',
     async (name) => {
@@ -109,15 +135,87 @@ describe('AccountMenu', () => {
       session: { activeOrganizationId: null },
     };
     mock.activity.mockResolvedValueOnce({ saved: 2, enquiries: null });
+    let completeRetry: (value: { saved: number; enquiries: number }) => void = () => {
+      throw new Error('Not pending');
+    };
+    mock.activity.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeRetry = resolve;
+        }),
+    );
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu/i }));
     expect(await screen.findByLabelText('enquiries count unavailable')).toHaveTextContent('N/A');
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent(
+      'Some account details could not load. Use Retry to try again.',
+    );
     expect(screen.getByText('2')).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: 'Some details could not load. Retry' }));
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Loading account details.');
+    await act(async () => completeRetry({ saved: 24, enquiries: 3 }));
     expect(await screen.findByText('24')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Account details loaded. Saved projects: 24. Enquiries: 3.');
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
+
+  it('keeps a polite status region outside the busy activity area throughout loading and success', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    let complete: (value: { saved: number; enquiries: number }) => void = () => {
+      throw new Error('Not pending');
+    };
+    mock.activity.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveAttribute('aria-atomic', 'true');
+    expect(status).toHaveClass('sr-only');
+    expect(status).toHaveTextContent('Loading account details.');
+    expect(status.closest('[aria-busy="true"]')).toBeNull();
+    const settings = screen.getByRole('menuitem', { name: 'Settings' });
+    settings.focus();
+    await act(async () => complete({ saved: 0, enquiries: 0 }));
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Account details loaded. Saved projects: 0. Enquiries: 0.');
+    expect(settings).toHaveFocus();
+    expect(screen.queryByRole('menuitem', { name: /Retry/ })).not.toBeInTheDocument();
+  });
+
+  it.each(['activity', 'address'] as const)(
+    'announces rejected %s requests without hiding retry',
+    async (request) => {
+      mock.session = {
+        user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+        session: { activeOrganizationId: null },
+      };
+      mock[request].mockRejectedValueOnce(new Error('Unavailable'));
+      const user = userEvent.setup();
+      render(<AccountMenu />);
+      await user.click(screen.getByRole('button', { name: /open account menu/i }));
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Some account details could not load. Use Retry to try again.',
+        ),
+      );
+      expect(
+        screen.getByRole('menuitem', { name: 'Some details could not load. Retry' }),
+      ).toBeVisible();
+    },
+  );
 
   it.each(['admin', 'superadmin', 'pending', 'banned'])(
     'does not fetch customer information for %s accounts',
@@ -136,6 +234,7 @@ describe('AccountMenu', () => {
       await user.click(screen.getByRole('button', { name: /open account menu/i }));
       expect(mock.activity).not.toHaveBeenCalled();
       expect(mock.address).not.toHaveBeenCalled();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: 'Saved projects' })).not.toBeInTheDocument();
     },
   );
