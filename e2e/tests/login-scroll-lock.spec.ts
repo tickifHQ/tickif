@@ -15,41 +15,6 @@ for (const viewport of [
   { width: 1512, height: 982 },
   { width: 390, height: 480 },
 ]) {
-  test(`scroll-revealed login locks the page until dismissal at ${viewport.width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize(viewport);
-    await page.goto('/');
-    const gate = page.getByTestId('scroll-signup-gate');
-    await expect(gate).toBeAttached();
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    await expect(gate).toHaveAttribute('aria-hidden', 'false');
-    const dialog = page.getByRole('dialog', { name: 'Sign in required' });
-    const lockedY = await page.evaluate(() => window.scrollY);
-
-    await page.mouse.move(4, viewport.height / 2);
-    await page.mouse.wheel(0, -300);
-    await settleScroll(page);
-    expect(await page.evaluate(() => window.scrollY)).toBe(lockedY);
-    await expect(dialog).toHaveAttribute('aria-modal', 'true');
-
-    if (viewport.height === 480) {
-      await dialog.getByRole('tab', { name: "I'm a designer" }).click();
-      const scroller = gate.locator('[data-slot="scroll-gate-scroller"]');
-      await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
-      expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-      expect(await page.evaluate(() => window.scrollY)).toBe(lockedY);
-      await expect(dialog.getByRole('link', { name: 'Privacy', exact: true })).toBeInViewport();
-    }
-
-    await page.keyboard.press('Escape');
-    await expect(gate).toHaveCount(0);
-    expect(await page.evaluate(() => window.scrollY)).toBe(lockedY);
-    await page.mouse.move(4, viewport.height / 2);
-    await page.mouse.wheel(0, -300);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(lockedY);
-  });
-
   test(`explicit login locks the page and restores scrolling at ${viewport.width}px`, async ({
     page,
   }) => {

@@ -364,15 +364,9 @@ requiredEntries.push(
     'sign-in-modal.spec.ts',
     'a short mobile viewport scrolls only the dialog and preserves the underlying page position',
   ],
-  ...[1512, 390].flatMap((width): [string, string][] => [
-    [
-      'login-scroll-lock.spec.ts',
-      `scroll-revealed login locks the page until dismissal at ${width}px`,
-    ],
-    [
-      'login-scroll-lock.spec.ts',
-      `explicit login locks the page and restores scrolling at ${width}px`,
-    ],
+  ...[1512, 390].map((width): [string, string] => [
+    'login-scroll-lock.spec.ts',
+    `explicit login locks the page and restores scrolling at ${width}px`,
   ]),
   ['homepage-typography.spec.ts', 'homepage and sign-in use the measured Figma text styles'],
   [

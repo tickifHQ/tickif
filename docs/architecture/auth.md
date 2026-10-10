@@ -325,10 +325,13 @@ The active form wrapper allows control borders and shadows to paint outside thei
 boxes. Tabs reserve inset space and use an inner keyboard-focus ring, while the
 outer card still clips its rounded corners.
 
-The web stylesheet reserves the root scrollbar gutter while browsing, then moves
-the reservation to the body during a Radix scroll lock without adding Radix's margin
-compensation twice. Page content retains its width even on short pages while fixed
-backdrops cover the full viewport without a scrollbar strip.
+Anonymous public shells reserve the root scrollbar gutter while browsing, then move
+the reservation to the body during an explicit or scroll-triggered sign-in lock
+without adding Radix's margin compensation twice. Page content retains its width even
+on short pages while fixed
+backdrops cover the full viewport without a scrollbar strip. Authenticated public
+pages and private workspaces retain their native gutter and Radix compensation;
+the sign-in styling must not reserve an extra gutter in those layouts.
 Explicit dialogs lock page scrolling and only scroll
 internally when the content exceeds the available dynamic viewport height. The
 scroll-linked prompt clips its offscreen reveal and enables its own scrolling only

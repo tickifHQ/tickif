@@ -17,7 +17,11 @@ export function PublicShell({
 }) {
   const landing = usePathname() === '/';
   return (
-    <div data-landing={landing || undefined} className="flex min-h-screen flex-col bg-background">
+    <div
+      data-landing={landing || undefined}
+      data-auth-scroll-gutter={!isAuthenticated || undefined}
+      className="flex min-h-screen flex-col bg-background"
+    >
       <PublicHeader isAuthenticated={isAuthenticated} userRole={userRole} landing={landing} />
       <main className="flex-1">{children}</main>
       <PublicFooter landing={landing} />

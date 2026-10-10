@@ -17,12 +17,16 @@ test('every Company footer link opens its Markdown document with an honest publi
       `/company/${slug}`,
     );
   }
-  // Reaching the footer can activate the homepage's scroll-linked sign-up gate.
+  // The prompt can be disabled by the environment or ineligible on short pages.
+  // Exercise footer links both with and without an active scroll gate.
   await footer.scrollIntoViewIfNeeded();
-  const gate = page.getByRole('dialog', { name: 'Sign in required' });
-  await expect(gate).toBeVisible();
-  await gate.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(gate).not.toBeVisible();
+  if (await page.getByTestId('scroll-signup-gate').count()) {
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const gate = page.getByRole('dialog', { name: 'Sign in required' });
+    await expect(gate).toBeVisible();
+    await gate.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(gate).not.toBeVisible();
+  }
   await footer.getByRole('link', { name: 'About', exact: true }).click();
   await expect(page).toHaveURL(/\/company\/about$/);
   for (const title of ['About', 'Report a problem', 'Takedown policy', 'Terms', 'Privacy']) {

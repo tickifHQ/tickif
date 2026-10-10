@@ -163,6 +163,12 @@ commands, coverage gate and provider boundaries, and
 [verification lifecycle](../../e2e/verification-lifecycle.md) for that focused check.
 The E2E API defaults to port 3001; ordinary development defaults to 8008.
 
+The full-stack suite disables the automatic scroll sign-up gate so unrelated
+journeys can browse normally. CI separately runs
+`pnpm --filter @repo/e2e exec playwright test --config scroll-gate-evidence.config.ts`
+against the temporary component fixture with the gate enabled. This checks page
+scroll locking, dismissal and short-screen internal scrolling with native scrollbars.
+
 ```bash
 pnpm --filter @repo/e2e test:e2e:install
 pnpm test:e2e
