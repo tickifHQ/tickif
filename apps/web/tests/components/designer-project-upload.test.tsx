@@ -1746,6 +1746,26 @@ describe('DesignerProjectUpload batch recovery', () => {
     expect(screen.queryByText('second.jpg · Processing')).not.toBeInTheDocument();
   });
 
+  it('does not offer retry for a photo rejected by the upload size limit', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([]);
+    mock.uploadUrlPost.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({
+        error: {
+          code: 'file_too_large',
+          message: 'This photo exceeds the 50 MB limit. Choose a smaller file.',
+        },
+      }),
+    });
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+    await dropFiles([{ name: 'large.jpg' }]);
+    await screen.findByText('This photo exceeds the 50 MB limit. Choose a smaller file.');
+    expect(screen.queryByRole('button', { name: /retry upload/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Remove this photo and choose a smaller file.')).toBeInTheDocument();
+    expect(mock.commitPost).not.toHaveBeenCalled();
+  });
+
   it('retries a failed tile with its original file', async () => {
     mockSuccessfulLookups();
     mockTransferPipeline([false]);

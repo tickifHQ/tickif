@@ -212,7 +212,7 @@ const envSchema = z.object({
 
   // Media upload limits (E-107). MAX_IMAGE_PIXELS is the decompression-bomb
   // budget — checked from header dims before any pixel decode.
-  MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15_000_000),
+  MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(50_000_000),
   MEDIA_MAX_IMAGE_DIMENSION: z.coerce.number().int().positive().default(12_000),
   MEDIA_MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(40_000_000),
   // Concurrent media jobs per worker (E-112). Image work is CPU-heavy; cap it.

@@ -59,3 +59,15 @@ describe('production R2 endpoint', () => {
     ).toBe('http://localhost:9000');
   });
 });
+
+describe('media upload limit', () => {
+  it('defaults to 50 MB while preserving explicit deployment limits', () => {
+    expect(parseConfig({ ...environment, NODE_ENV: 'test' }).MEDIA_MAX_UPLOAD_BYTES).toBe(
+      50_000_000,
+    );
+    expect(
+      parseConfig({ ...environment, NODE_ENV: 'test', MEDIA_MAX_UPLOAD_BYTES: '20000000' })
+        .MEDIA_MAX_UPLOAD_BYTES,
+    ).toBe(20_000_000);
+  });
+});

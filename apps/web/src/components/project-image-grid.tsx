@@ -293,7 +293,7 @@ function SortablePhoto({
           <p role="status" className="text-destructive">
             {failureDetail}
           </p>
-          {image.file && !props.uploading ? (
+          {image.file && image.failureReason !== 'too_large' && !props.uploading ? (
             <Button
               type="button"
               variant="outline"
@@ -305,7 +305,9 @@ function SortablePhoto({
             </Button>
           ) : (
             <p className="text-muted-foreground">
-              Remove this photo and upload it again to recover.
+              {image.failureReason === 'too_large'
+                ? 'Remove this photo and choose a smaller file.'
+                : 'Remove this photo and upload it again to recover.'}
             </p>
           )}
         </div>

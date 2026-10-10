@@ -182,3 +182,12 @@ The worker serves `/livez` (process up) and `/readyz` (200, flips to 503 while
 draining) on `WORKER_HEALTH_PORT` (default 3002). On SIGTERM it stops accepting jobs,
 finishes in-flight work, closes the queues, then exits — wire `readyz` into your
 orchestrator so it stops routing before the drain.
+
+## Upload size limit
+
+The default `MEDIA_MAX_UPLOAD_BYTES` is `50000000` (50 MB). Deploy the API and
+worker together. If the environment explicitly sets the old `15000000` value,
+update it to `50000000` on both services; explicit values override code defaults.
+This shared setting also bounds verification document uploads and storage reads.
+Existing smaller limits for profile logos and covers still apply. No image
+reprocessing or database migration is needed for this change.

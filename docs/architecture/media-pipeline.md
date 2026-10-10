@@ -11,6 +11,10 @@ See [authentication](./auth.md), [branches](./branches.md) and
 
 ## How an upload flows (the media slice)
 
+The default upload limit is 50 MB per file, configured by `MEDIA_MAX_UPLOAD_BYTES`.
+The API, storage download guard and worker share this setting. The 12,000px
+dimension and 40-million-pixel decoding limits still apply.
+
 Image bytes never pass through the API — the client uploads straight to R2:
 
 ```

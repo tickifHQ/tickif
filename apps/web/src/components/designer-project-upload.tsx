@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  errorResponseSchema,
   legacyProjectBudgetBands,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
@@ -2814,6 +2815,7 @@ export function DesignerProjectUpload({
   }): Promise<SingleImageUploadResult> {
     const { roomClientId, projectId, roomId, room, file, previewId, previewUrl, sortOrder } = input;
     let reservedImageId: string | null = null;
+    let failureReason: ProjectImageDto['failureReason'] = null;
     try {
       const uploadResponse = await api.api.media['upload-url'].$post({
         json: {
@@ -2825,6 +2827,10 @@ export function DesignerProjectUpload({
       const uploadPayload = await uploadResponse.json();
 
       if (!uploadResponse.ok) {
+        const error = errorResponseSchema.safeParse(uploadPayload);
+        if (error.success && error.data.error.code === 'file_too_large') {
+          failureReason = 'too_large';
+        }
         throw new Error(
           extractApiMessage(uploadPayload, `Could not prepare upload for ${file.name}.`),
         );
@@ -2925,7 +2931,7 @@ export function DesignerProjectUpload({
         ...current,
         images: current.images.map((currentImage) =>
           currentImage.id === previewId
-            ? { ...currentImage, status: 'failed', transferError: message }
+            ? { ...currentImage, status: 'failed', failureReason, transferError: message }
             : currentImage,
         ),
       }));

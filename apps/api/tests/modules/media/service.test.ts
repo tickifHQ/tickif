@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.hoisted(() => vi.stubEnv('MEDIA_MAX_UPLOAD_BYTES', '50000000'));
+
 vi.mock('../../../src/modules/media/repository.js', () => ({
   mediaRepository: {
     findProjectOwner: vi.fn(),
@@ -67,6 +69,28 @@ describe('mediaService.createUploadUrl', () => {
       code: 'file_too_large',
     });
     expect(repo.findProjectOwner).not.toHaveBeenCalled();
+  });
+
+  it.each([15_000_001, 50_000_000])('accepts a photo of %i bytes', async (size) => {
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
+    repo.createProcessing.mockResolvedValue({
+      id: 'img-1',
+      originalKey: 'originals/p/uuid',
+    } as never);
+    await expect(mediaService.createUploadUrl({ ...input, size })).resolves.toMatchObject({
+      imageId: 'img-1',
+    });
+    expect(presignUpload).toHaveBeenCalledWith(expect.objectContaining({ contentLength: size }));
+  });
+
+  it('rejects a photo above 50 MB with an actionable message', async () => {
+    await expect(
+      mediaService.createUploadUrl({ ...input, size: 50_000_001 }),
+    ).rejects.toMatchObject({
+      code: 'file_too_large',
+      message: 'This photo exceeds the 50 MB limit. Choose a smaller file.',
+    });
+    expect(repo.createProcessing).not.toHaveBeenCalled();
   });
 
   it('404s when the project does not exist', async () => {

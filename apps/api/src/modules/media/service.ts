@@ -119,7 +119,7 @@ export const mediaService = {
     if (input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
       throw new AppError(
         'file_too_large',
-        `Declared size exceeds the ${config.MEDIA_MAX_UPLOAD_BYTES}-byte limit`,
+        `This photo exceeds the ${config.MEDIA_MAX_UPLOAD_BYTES / 1_000_000} MB limit. Choose a smaller file.`,
         422,
       );
     }

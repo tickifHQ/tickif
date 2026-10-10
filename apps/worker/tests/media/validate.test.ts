@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import sharp from 'sharp';
 import { validateImageBytes, type MediaLimits } from '../../src/media/validate.js';
+
+vi.hoisted(() => vi.stubEnv('MEDIA_MAX_UPLOAD_BYTES', '50000000'));
 
 const limits: MediaLimits = { maxBytes: 5_000_000, maxDimension: 100, maxPixels: 10_000 };
 
@@ -17,6 +19,28 @@ describe('validateImageBytes', () => {
   it('accepts a valid PNG and reports real format + dimensions', async () => {
     const res = await validateImageBytes(pngBuf, 'image/png', limits);
     expect(res).toEqual({ ok: true, format: 'image/png', width: 40, height: 30 });
+  });
+
+  it('accepts an actual image larger than the old 15 MB limit', async () => {
+    const photo = await sharp({
+      create: { width: 2500, height: 2200, channels: 3, background: 'red' },
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    expect(photo.byteLength).toBeGreaterThan(15_000_000);
+    await expect(validateImageBytes(photo, 'image/png')).resolves.toEqual({
+      ok: true,
+      format: 'image/png',
+      width: 2500,
+      height: 2200,
+    });
+  });
+
+  it('rejects bytes above the new 50 MB limit before decoding', async () => {
+    await expect(validateImageBytes(Buffer.alloc(50_000_001), 'image/png')).resolves.toEqual({
+      ok: false,
+      reason: 'too_large',
+    });
   });
 
   it('rejects an empty buffer', async () => {
