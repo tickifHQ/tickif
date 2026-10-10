@@ -31,8 +31,8 @@ That entry respects the portfolio's Tickif overall-rating visibility setting:
 disabling the summary hides its aggregate and histogram while review cards and
 review actions remain available.
 
-Centres use floating 34px Figma controls with unchanged exported active/inactive
-pins over a real Google map, beside a 400px details panel. Mobile maps are 400px
+Centres use floating 34px Figma controls with exported pin silhouettes recoloured
+to the portfolio accent over a real Google map, beside a 400px details panel. Mobile maps are 400px
 high. Overview/About tabs remain functional. Portfolio imagery is labelled as
 such; centre-specific media and hours are not invented. The extra Studio section
 and hero Share action are removed; there is no designer save/like API. The share
@@ -43,6 +43,23 @@ The feedback follow-up preserves that composition while making each experience
 centre's state group visible in the map selector. The hero includes a supplied
 positive office count; absent and zero counts do not create a public location
 claim. Counts come from profile data, independently of experience-centre entries.
+
+The 9 October staging corrections preserve official Google Maps embed URLs and
+fall back to a safely encoded address query for ordinary links, shortened
+`maps.app.goo.gl` links, or missing map URLs. Short links are navigation targets,
+not embeddable documents; previously they displayed only an address placeholder.
+Centre selection keeps the iframe and contact details together. Active centre
+tabs use the inverse surface foreground, independent of the button foreground
+chosen for the accent. Contact icons share one contrast-adjusted accent colour.
+
+Portfolio accents now control the soft/inverse surfaces, sharing and contact
+blocks, floating action, grid, orbit, highlights and shadows within the public
+page, including the green project seal and laurel silhouettes. Newly created portfolios default to Tickif green (`#1E7A55`); the migration
+changes only the database default and preserves saved choices. The editor offers
+Tickif green alongside the existing presets. Social-image fallback uses the same
+default. The footer attribution reuses the Tickif brand logo. Hero stamp text uses
+centred SVG text paths and complete dynamic captions instead of the Figma source's
+overlapping per-letter positions; the decorative seal exports remain unchanged.
 
 ### Supplied HTML motion reference
 
@@ -137,9 +154,21 @@ consultation block in the light reference as a full dark-mode specification.
 
 Figma uses Helvetica Neue Medium for display headings, Inter for body text,
 and JetBrains Mono for metadata. No Helvetica Neue webfont files were found in
-the repository. Display text uses Helvetica Neue/Helvetica/Arial, with the
-user's fallback approval on 8 October; body and metadata retain their loaded
-fonts. Exact Helvetica Neue metrics still require a licensed webfont.
+the repository. The initial display stack used Helvetica Neue/Helvetica/Arial,
+with the user's fallback approval on 8 October. On 9 October, browser inspection
+confirmed that portfolio headings rendered Arial on Windows; the user selected
+bundled Inter Medium for consistent portfolio headings instead. The
+`.designer-profile` theme scope now maps `--font-heading` to `--font-body`.
+Body text remains Inter and metadata remains JetBrains Mono. Other theme scopes
+retain their existing display stacks. This is an intentional substitution for
+the Figma font, not an exact Helvetica Neue match.
+
+The sharing card adapts its statistics/photo layout to its own available width,
+so years and budgets stay readable at tablet as well as mobile widths.
+The portfolio OG image reproduces this card with the same facts and fonts;
+see [public sharing metadata](../social-sharing.md) for rendering and media fallbacks.
+Hero seal captions follow concentric text paths inside the dotted ring, with
+separate top/bottom baseline radii to account for the direction of the lettering.
 
 Keep `--font-body`, `--font-heading`, and `--font-code` as the theme contracts.
 The app loads Inter and JetBrains Mono through `next/font`, with their font

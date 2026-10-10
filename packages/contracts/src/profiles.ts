@@ -5,6 +5,9 @@ import { designerProjectsResponseSchema } from './projects';
 import { taxonomyKindSchema } from './taxonomy';
 import { verificationEffectiveStatusSchema } from './verifications';
 
+/** Default for newly created portfolios; existing saved colours are preserved. */
+export const DEFAULT_PORTFOLIO_ACCENT = '#1E7A55';
+
 const instagramHandleSchema = socialProfileValueSchema('instagram');
 const linkedinHandleSchema = socialProfileValueSchema('linkedin');
 const youtubeHandleSchema = socialProfileValueSchema('youtube');

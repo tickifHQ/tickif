@@ -74,15 +74,7 @@ export function ProfileExperienceCentres({
                     aria-label={item.name}
                     title={item.name}
                   >
-                    <img
-                      src={
-                        selected === String(index)
-                          ? '/ui/profile/centres-svg.svg'
-                          : '/ui/profile/centres-svg1.svg'
-                      }
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <span className="profile-centre-pin" aria-hidden="true" />
                     <span className="truncate">
                       {centres.filter((entry) => entry.city === item.city).length > 1
                         ? item.address.split(',')[0] || item.name
@@ -96,31 +88,14 @@ export function ProfileExperienceCentres({
         </TabsList>
         {centres.map((item, index) => (
           <TabsContent key={index} value={String(index)} className="profile-centre-map-panel">
-            {googleMapEmbedUrl(item.mapsUrl) ? (
-              <GoogleMapEmbed
-                src={item.mapsUrl}
-                title={`Google Maps — ${item.name}`}
-                className="profile-centre-map"
-              />
-            ) : (
-              <div className="profile-centre-map-empty">
-                <MapPin className="size-6" aria-hidden="true" />
-                <p>{item.address}</p>
-                <p className="text-sm text-muted-foreground">
-                  {item.city}, {item.state}
-                </p>
-                {mapsHref ? (
-                  <a
-                    href={mapsHref}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="text-sm underline"
-                  >
-                    View map
-                  </a>
-                ) : null}
-              </div>
-            )}
+            <GoogleMapEmbed
+              src={item.mapsUrl}
+              query={[item.address, item.city, item.state, item.postalCode]
+                .filter(Boolean)
+                .join(', ')}
+              title={`Google Maps — ${item.name}`}
+              className="profile-centre-map"
+            />
           </TabsContent>
         ))}
       </div>
@@ -156,7 +131,7 @@ export function ProfileExperienceCentres({
           </TabsList>
           <TabsContent value="overview">
             <div className="profile-centre-detail-row">
-              <img src="/ui/profile/centres-svg3.svg" alt="" aria-hidden="true" />
+              <MapPin className="size-5 shrink-0" aria-hidden="true" />
               <address className="not-italic">
                 {centre.address}
                 {centre.postalCode ? <span className="block">{centre.postalCode}</span> : null}

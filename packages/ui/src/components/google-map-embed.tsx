@@ -23,14 +23,21 @@ export function googleMapEmbedUrl(value: string | null | undefined): string | nu
 
 export function GoogleMapEmbed({
   src,
+  query,
   title,
   className,
 }: {
   src: string | null | undefined;
+  /** Address fallback; never interpreted as an iframe URL. */
+  query?: string;
   title: string;
   className?: string;
 }) {
-  const embedUrl = googleMapEmbedUrl(src);
+  const embedUrl =
+    googleMapEmbedUrl(src) ??
+    (query?.trim()
+      ? `https://www.google.com/maps?${new URLSearchParams({ q: query.trim(), output: 'embed' })}`
+      : null);
   if (!embedUrl) return null;
   return (
     <iframe

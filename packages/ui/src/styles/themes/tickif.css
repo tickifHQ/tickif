@@ -239,6 +239,12 @@
   --chart-5: oklch(0.66 0.125 320);
 }
 
+/* Portfolio headings use the bundled Inter across platforms. The original
+ * Helvetica Neue reference otherwise falls back to Arial on Windows. */
+.designer-profile {
+  --font-heading: var(--font-body);
+}
+
 /* Landing frame 16095:51371. Scope new art direction to the public homepage. */
 [data-landing='true'] {
   --card-radius: 28px;

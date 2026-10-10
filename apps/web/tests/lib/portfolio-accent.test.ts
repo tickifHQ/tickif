@@ -4,6 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { portfolioAccentStyle, validPortfolioAccent } from '../../src/lib/portfolio-accent';
 
 describe('portfolio accent styles', () => {
+  it('themes the full portfolio palette from its chosen colour', () => {
+    const styles = portfolioAccentStyle('#4A90D9');
+    expect(styles).toMatchObject({ '--profile-accent': '#4A90D9' });
+    for (const token of [
+      '--surface-inverse',
+      '--surface-subtle',
+      '--primary-soft',
+      '--profile-grid-color',
+      '--profile-orbit-foreground',
+    ]) {
+      expect(styles[token as keyof typeof styles]).toContain('#4A90D9');
+    }
+  });
   it.each([
     ['#123456', '--portfolio-accent-on-light'],
     ['#F2D355', '--portfolio-accent-on-dark'],

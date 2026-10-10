@@ -31,6 +31,23 @@ derivatives to PNG before Satori embeds them. Broken/missing/unsupported media
 uses text or initials. Logos use proportional containment; stored crops are not
 rewritten. Expiring storage signatures never appear in metadata image URLs.
 
+Portfolio social images reproduce the page's sharing card, straightened for OG: a white grid
+surface, studio logo/name/type/location, two-column facts, arched portfolio cover,
+Tickif ticket and canonical portfolio address. The straight card fills the 1200×630
+canvas, with transparent rounded corners and no outer margins, backdrop, decoration
+or drop shadow. The card retains its accent details. Statistics cells draw each
+shared edge once, matching the page's single-pixel dividers.
+`portfolioShareFacts` supplies both renderers so rating precedence, optional facts
+and visibility flags stay identical. The OG renderer uses Satori-compatible flex
+layout at 1200×630; it does not include the adjacent sharing instructions or CTA.
+Both the logo and cover pass through the restricted media embedding helper.
+If either cannot be embedded, the card uses initials or expands the facts area.
+
+The portfolio image loads local OFL Inter and JetBrains Mono TTFs from
+`apps/web/src/assets/fonts/`, included explicitly in the standalone route trace.
+Inter includes the Latin Extended subset for the rupee glyph. These match the
+page's font families without a font-CDN dependency during image generation.
+
 Content cards and their API reads use `no-store`. API requests also send
 `Cache-Control: no-cache` to require intermediary revalidation of any previously
 cached public response. Edits, unpublishing and visibility changes therefore apply

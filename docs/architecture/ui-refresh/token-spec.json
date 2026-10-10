@@ -453,8 +453,8 @@
   "typography": {
     "display": {
       "figma": "Helvetica Neue Medium",
-      "implementation": "Helvetica Neue where installed, then Helvetica/Arial/sans-serif; existing Inter body and JetBrains Mono metadata loaders retained",
-      "basis": "System-font fallback accepted by the user on 2026-10-08; no licensed Helvetica Neue webfont is bundled."
+      "implementation": "Portfolio: bundled Inter Medium through --font-heading mapped to --font-body. Other scopes retain their existing display stacks. Inter body and JetBrains Mono metadata loaders retained.",
+      "basis": "The initial system-font fallback was accepted on 2026-10-08. On 2026-10-09 the user selected Inter Medium for portfolio headings after browser inspection confirmed Arial fallback on Windows. No licensed Helvetica Neue webfont is bundled."
     },
     "body": {
       "family": "Inter",

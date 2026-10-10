@@ -1,82 +1,69 @@
 import type { CSSProperties } from 'react';
-import { GoogleBrandIcon, TickifBrandIcon } from '@/components/brand-icons';
-import type { PublicPortfolioResponse } from '@repo/contracts';
-import { studioLocation, studioType } from '@/lib/public-portfolio-view';
-
-const DEFAULT_ACCENT = '#ff7a59';
-const MAX_CARD_NAME_LENGTH = 72;
-const MAX_CARD_TAGLINE_LENGTH = 140;
-
-function safeAccentColor(value: string): string {
-  return /^#[0-9a-f]{6}$/i.test(value) ? value : DEFAULT_ACCENT;
-}
-
-function ratingLabel(portfolio: PublicPortfolioResponse): string | null {
-  if (!portfolio.sections.overallRating) return null;
-  const source =
-    portfolio.stats.google && portfolio.stats.google.reviewCount > 0
-      ? portfolio.stats.google
-      : portfolio.stats.tickif;
-  if (!source || source.reviewCount < 1) return null;
-  return `${source.rating.toFixed(1)} rating · ${source.reviewCount} review${source.reviewCount === 1 ? '' : 's'}`;
-}
+import { DEFAULT_PORTFOLIO_ACCENT, type PublicPortfolioResponse } from '@repo/contracts';
+import { validPortfolioAccent } from '@/lib/portfolio-accent';
+import { portfolioShareFacts } from '@/lib/portfolio-share-card';
+import {
+  studioInitials,
+  studioLocation,
+  studioType,
+  websiteLabel,
+} from '@/lib/public-portfolio-view';
 
 function fitText(value: string, maxLength: number): string {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
-/** Static, Satori-compatible markup used by the dynamic portfolio social image. */
+/** Satori cannot resolve CSS variables; these are the light portfolio theme roles. */
+const ink = '#171612';
+const paper = '#ffffff';
+const muted = '#726e63';
+const border = 'rgba(23,22,18,0.16)';
+const mono: CSSProperties = { fontFamily: 'JetBrains Mono', fontWeight: 400 };
+
+/** The on-page sharing card, composed in the flex-only subset supported by Satori. */
 export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPortfolioResponse }) {
-  const projects = portfolio.projects.projects;
-  const location = studioLocation(portfolio, projects);
-  const rating = ratingLabel(portfolio);
-  const accent = safeAccentColor(portfolio.accentColor);
-  const displayName = fitText(portfolio.displayName, MAX_CARD_NAME_LENGTH);
-  const tagline = portfolio.tagline ? fitText(portfolio.tagline, MAX_CARD_TAGLINE_LENGTH) : null;
-  const titleFontSize = displayName.length > 60 ? 46 : displayName.length > 36 ? 56 : 68;
-  const taglineFontSize = tagline && tagline.length > 100 ? 25 : 29;
-  const initials = portfolio.displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('');
-  const rootStyle: CSSProperties = {
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    padding: '64px 72px',
-    color: '#f8fafc',
-    background: `linear-gradient(135deg, #07130f 0%, #10291f 70%, ${accent} 160%)`,
-    fontFamily: 'sans-serif',
-  };
+  const accent = validPortfolioAccent(portfolio.accentColor) ?? DEFAULT_PORTFOLIO_ACCENT;
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(accent.slice(offset, offset + 2), 16));
+  const backdrop = `rgb(${channels.map((value) => Math.round(value * 0.12 + 255 * 0.88)).join(',')})`;
+  const grid = `rgba(${channels.join(',')},0.07)`;
+  const facts = portfolioShareFacts(portfolio);
+  const location = studioLocation(portfolio, portfolio.projects.projects);
+  const verified = portfolio.sections.tickifBadge && portfolio.isKycVerified;
+  const name = fitText(portfolio.displayName, 72);
 
   return (
-    <div style={rootStyle}>
-      <TickifBrandIcon width={48} height={48} color="#f8fafc" role="img" aria-label="Tickif" />
-
-      <div style={{ display: 'flex', flexDirection: 'column', maxWidth: 940 }}>
-        <div style={{ display: 'flex', color: '#a7f3d0', fontSize: 24, marginBottom: 18 }}>
-          {studioType(portfolio)}
-          {location ? ` · ${location}` : ''}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: ink,
+        fontFamily: 'Inter',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%',
+          height: '100%',
+          padding: 48,
+          borderRadius: 40,
+          backgroundColor: paper,
+          backgroundImage: `linear-gradient(${grid} 1px, transparent 1px), linear-gradient(90deg, ${grid} 1px, transparent 1px)`,
+          backgroundSize: '40px 40px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 28, height: 96, flexShrink: 0 }}>
           {portfolio.logoUrl ? (
-            // Satori embeds the signed uploaded image into the generated PNG.
             <img
               src={portfolio.logoUrl}
               alt={`${portfolio.displayName} logo`}
               width={96}
               height={96}
-              style={{
-                objectFit: 'contain',
-                borderRadius: '50%',
-                backgroundColor: '#ffffff',
-                flexShrink: 0,
-              }}
+              style={{ objectFit: 'contain', borderRadius: 16, background: paper, flexShrink: 0 }}
             />
           ) : (
             <div
@@ -86,79 +73,148 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
                 justifyContent: 'center',
                 width: 96,
                 height: 96,
+                borderRadius: 16,
+                background: backdrop,
+                fontSize: 28,
+                fontWeight: 700,
                 flexShrink: 0,
-                borderRadius: '50%',
-                backgroundColor: accent,
-                color: '#07130f',
-                fontSize: 32,
               }}
             >
-              {initials || 'T'}
+              {studioInitials(portfolio.displayName)}
             </div>
           )}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: 8 }}>
+            <div
+              style={{
+                display: 'flex',
+                fontSize: name.length > 36 ? 32 : 42,
+                fontWeight: 700,
+                lineHeight: 1.12,
+                wordBreak: 'break-all',
+              }}
+            >
+              {name}
+            </div>
+            <div
+              style={{
+                ...mono,
+                display: 'flex',
+                fontSize: 18,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+                color: muted,
+              }}
+            >
+              {fitText(`${studioType(portfolio)}${location ? ` · ${location}` : ''}`, 76)}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 32, marginTop: 28, flex: 1 }}>
           <div
             style={{
               display: 'flex',
-              flex: 1,
-              fontSize: titleFontSize,
-              lineHeight: 1.05,
-              fontWeight: 800,
-              overflowWrap: 'anywhere',
-              wordBreak: 'break-all',
+              flexWrap: 'wrap',
+              alignContent: 'flex-start',
+              width: portfolio.heroCoverUrl ? 660 : 1104,
             }}
           >
-            {displayName}
+            {facts.map((fact, index) => (
+              <div
+                key={fact.label}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  gap: 12,
+                  width: '50%',
+                  height: 150,
+                  padding: '16px 22px',
+                  borderStyle: 'solid',
+                  borderColor: border,
+                  borderWidth: `${index < 2 ? 1 : 0}px 1px 1px ${index % 2 === 0 ? 1 : 0}px`,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    fontSize: fact.value.length > 12 ? 36 : 56,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {fact.value}
+                </div>
+                <div
+                  style={{
+                    ...mono,
+                    display: 'flex',
+                    fontSize: 15,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    color: muted,
+                  }}
+                >
+                  {fact.label}
+                </div>
+              </div>
+            ))}
           </div>
+          {portfolio.heroCoverUrl ? (
+            <img
+              src={portfolio.heroCoverUrl}
+              alt={`${portfolio.displayName} portfolio preview`}
+              width={412}
+              height={300}
+              style={{ objectFit: 'cover', borderRadius: '206px 206px 16px 16px', flexShrink: 0 }}
+            />
+          ) : null}
         </div>
-        {tagline ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 20,
+            marginTop: 18,
+          }}
+        >
           <div
             style={{
+              ...mono,
               display: 'flex',
-              marginTop: 24,
-              fontSize: taglineFontSize,
-              lineHeight: 1.35,
-              color: '#d1fae5',
-              overflowWrap: 'anywhere',
+              alignItems: 'center',
+              border: `1px solid ${accent}`,
+              borderRadius: 10,
+              height: 40,
+              fontSize: 16,
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ padding: '0 16px' }}>TICKIF</span>
+            <div
+              style={{
+                display: 'flex',
+                width: 32,
+                height: 40,
+                borderLeft: `1px solid ${accent}`,
+                borderRight: `1px solid ${accent}`,
+                backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 5px, ${accent} 5px, ${accent} 6px)`,
+              }}
+            />
+            <span style={{ padding: '0 16px' }}>{verified ? 'Verified' : 'Portfolio'}</span>
+          </div>
+          <div
+            style={{
+              ...mono,
+              display: 'flex',
+              fontSize: 14,
+              maxWidth: 560,
               wordBreak: 'break-all',
             }}
           >
-            {tagline}
+            {fitText(websiteLabel(portfolio.canonicalUrl), 90)}
           </div>
-        ) : null}
-      </div>
-
-      <div style={{ display: 'flex', gap: 34, color: '#d1d5db', fontSize: 23 }}>
-        <div style={{ display: 'flex' }}>
-          {portfolio.stats.projectCount} project{portfolio.stats.projectCount === 1 ? '' : 's'}
         </div>
-        {rating ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {portfolio.stats.google && portfolio.stats.google.reviewCount > 0 ? (
-              <GoogleBrandIcon
-                width={26}
-                height={26}
-                role="img"
-                aria-hidden={false}
-                aria-label="Google"
-              />
-            ) : (
-              <TickifBrandIcon
-                width={26}
-                height={26}
-                color="#f8fafc"
-                role="img"
-                aria-label="Tickif rating"
-              />
-            )}
-            <svg width={24} height={24} viewBox="0 0 24 24" fill="#fbbf24" aria-hidden="true">
-              <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" />
-            </svg>
-            <span>{rating}</span>
-          </div>
-        ) : null}
-        {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
-          <div style={{ display: 'flex' }}>Verified on Tickif</div>
-        ) : null}
       </div>
     </div>
   );

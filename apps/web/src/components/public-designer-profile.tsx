@@ -4,7 +4,9 @@ import { ProfileFloatingEnquiry } from '@/components/profile-floating-enquiry';
 import { ProfileMotion } from '@/components/profile-motion';
 import { profileSealLetterLayout } from '@/components/profile-seal-letter-layout';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+import { TickifBrandLogo } from '@/components/tickif-brand-logo';
 import { portfolioAccentStyle } from '@/lib/portfolio-accent';
+import { portfolioShareFacts } from '@/lib/portfolio-share-card';
 import { portfolioRecognitionArtwork } from '@/lib/portfolio-recognition';
 import type { ReactNode } from 'react';
 import { ArrowRight, BadgeCheck, Check, MessageSquare, Star } from 'lucide-react';
@@ -173,7 +175,27 @@ function ProfileTicket({
 }
 
 /** Intrinsic SVG dimensions are retained; each layer is a separate Figma export. */
-function ProfileArtwork({ name, className }: { name: string; className?: string }) {
+function ProfileArtwork({
+  name,
+  className,
+  accent = false,
+}: {
+  name: string;
+  className?: string;
+  accent?: boolean;
+}) {
+  const src = `/ui/profile/${name}`;
+  if (accent) {
+    return (
+      <span
+        className={`profile-accent-artwork ${className ?? ''}`}
+        style={{ maskImage: `url("${src}")` }}
+        aria-hidden="true"
+      >
+        <img src={src} alt="" className="invisible block max-w-none" />
+      </span>
+    );
+  }
   // Exact decorative SVGs retain their fractional intrinsic root dimensions.
   return (
     <img
@@ -311,7 +333,7 @@ function HeroIdentityCard({ portfolio, view }: SectionProps) {
               const caption =
                 badge === 'established'
                   ? portfolio.foundedYear != null
-                    ? `SINCE${portfolio.foundedYear}`
+                    ? `SINCE ${portfolio.foundedYear}`
                     : 'ON TICKIF'
                   : badge === 'top-performer'
                     ? ' ONTICKIF '
@@ -328,22 +350,25 @@ function HeroIdentityCard({ portfolio, view }: SectionProps) {
                       key={offset}
                       name={`hero-vector${seal.start + offset || ''}.svg`}
                       className="profile-seal-layer"
+                      accent={badge === 'projects-published'}
                     />
                   ))}
-                  <span aria-hidden="true" className="profile-seal-letters">
-                    {upper.map((letter) => (
-                      <span key={letter.nodeId} style={{ inset: letter.inset }}>
-                        {letter.letter}
-                      </span>
-                    ))}
-                  </span>
-                  <span aria-hidden="true" className="profile-seal-letters profile-seal-bottom">
-                    {lower.map((letter, index) => (
-                      <span key={letter.nodeId} style={{ inset: letter.inset }}>
-                        {caption[index] ?? ''}
-                      </span>
-                    ))}
-                  </span>
+                  <svg className="profile-seal-text" viewBox="0 0 65 65" aria-hidden="true">
+                    <defs>
+                      <path id={`seal-${badge}-top`} d="M 12 32.5 A 20.5 20.5 0 0 1 53 32.5" />
+                      <path id={`seal-${badge}-bottom`} d="M 8.5 32.5 A 24 24 0 0 0 56.5 32.5" />
+                    </defs>
+                    <text textAnchor="middle">
+                      <textPath href={`#seal-${badge}-top`} startOffset="50%">
+                        {upper.map((letter) => letter.letter).join('')}
+                      </textPath>
+                    </text>
+                    <text textAnchor="middle">
+                      <textPath href={`#seal-${badge}-bottom`} startOffset="50%">
+                        {caption.trim()}
+                      </textPath>
+                    </text>
+                  </svg>
                   <span aria-hidden="true" className="profile-seal-value">
                     {value}
                   </span>
@@ -595,7 +620,27 @@ function CredentialsSection({ portfolio }: SectionProps) {
             <li key={badge}>
               <RecognitionBadge
                 artwork={
-                  <Image src={portfolioRecognitionArtwork[badge]} alt="" width={150} height={132} />
+                  badge === 'projects-published' ? (
+                    <span
+                      className="profile-accent-artwork"
+                      style={{ maskImage: `url("${portfolioRecognitionArtwork[badge]}")` }}
+                    >
+                      <Image
+                        src={portfolioRecognitionArtwork[badge]}
+                        alt=""
+                        width={150}
+                        height={132}
+                        className="invisible"
+                      />
+                    </span>
+                  ) : (
+                    <Image
+                      src={portfolioRecognitionArtwork[badge]}
+                      alt=""
+                      width={150}
+                      height={132}
+                    />
+                  )
                 }
                 eyebrow="Tickif"
                 label={label}
@@ -735,17 +780,7 @@ function ExperienceCentersSection({ portfolio, view }: SectionProps) {
 }
 
 function ShareSection({ portfolio, view }: SectionProps) {
-  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
-  const facts = [
-    rating ? { label: 'Rating', value: formatRating(rating.rating) } : null,
-    { label: 'Projects', value: String(portfolio.stats.projectCount) },
-    portfolio.foundedYear != null
-      ? { label: 'Established', value: String(portfolio.foundedYear) }
-      : null,
-    portfolio.stats.startingBudget
-      ? { label: 'Starting at', value: formatCompactBudgetLabel(portfolio.stats.startingBudget) }
-      : null,
-  ].filter((fact): fact is NonNullable<typeof fact> => fact !== null);
+  const facts = portfolioShareFacts(portfolio);
   return (
     <section id="share" className="profile-shell profile-section">
       <div className="profile-share">
@@ -1035,9 +1070,10 @@ function ProfileFooter({ portfolio, view }: SectionProps) {
           Portfolio by{' '}
           <a
             href="/"
-            className="rounded-sm bg-surface-inverse px-2 py-1 text-surface-inverse-foreground"
+            aria-label="Tickif home"
+            className="rounded-sm bg-surface-inverse px-2 py-1 font-sans normal-case tracking-normal"
           >
-            Tickif
+            <TickifBrandLogo tone="inverse" />
           </a>
           <span>· Published studio portfolio</span>
         </p>
