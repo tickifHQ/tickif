@@ -117,7 +117,23 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   [
     'authentication.spec.ts',
-    'visitor onboarding keeps client validation local and persists details after reload',
+    'visitor personal settings keep client validation local and persist details after onboarding',
+  ],
+  [
+    'visitor-feed-preferences.spec.ts',
+    'visitor welcome saves matching feed, restores choices and clears filters on desktop',
+  ],
+  [
+    'visitor-feed-preferences.spec.ts',
+    'visitor welcome saves matching feed, restores choices and clears filters on mobile',
+  ],
+  [
+    'visitor-feed-preferences.spec.ts',
+    'direct onboarding Skip completes a pending account and returns to the original page',
+  ],
+  [
+    'visitor-feed-preferences.spec.ts',
+    'small phone can select Villa and reach every welcome control without horizontal scrolling',
   ],
   [
     'authentication.spec.ts',

@@ -48,20 +48,6 @@ function stableTagOrder(tag: Pick<FeedFilterTag, 'facet' | 'slug'>) {
   return hash >>> 0;
 }
 
-function emptyFilterState(): FeedFilterState {
-  return {
-    city: [],
-    bhk: [],
-    propertyType: [],
-    scope: [],
-    budgetBand: [],
-    room: [],
-    theme: [],
-    material: [],
-    tag: [],
-  };
-}
-
 type FeedFiltersProps = {
   presentation?: 'default' | 'landing';
   options?: FeedFacetOptions;
@@ -75,6 +61,7 @@ function optionLabel(options: FeedFacetOption[] | undefined, slug: string) {
 function hrefFor(pathname: string, state: FeedFilterState, current: URLSearchParams) {
   const params = serializeFeedParams(state, current);
   params.delete('page');
+  if (pathname === '/home') params.set('feed', 'custom');
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
@@ -153,7 +140,7 @@ export function FeedFilters({
 
   function clearAll() {
     setActiveSuggestion(null);
-    update(emptyFilterState());
+    update(parseFeedParams(new URLSearchParams()));
   }
 
   function selectSuggestion(tag: FeedFilterTag) {

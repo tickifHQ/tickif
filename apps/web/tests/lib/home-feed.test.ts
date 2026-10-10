@@ -16,6 +16,8 @@ import { fetchHomeFeedPage } from '../../src/lib/home-feed';
 
 const filters = {
   city: [],
+  locality: [],
+  propertySubtype: [],
   bhk: [],
   budgetBand: [],
   room: [],

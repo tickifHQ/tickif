@@ -20,39 +20,26 @@ vi.mock('@/lib/auth-guard', () => ({
   requireAuth: mock.requireAuth,
 }));
 
+vi.mock('@/lib/visitor-feed.server', () => ({
+  getVisitorFeedPreferences: async () => ({ preferences: null, filters: {} }),
+}));
+vi.mock('@/components/visitor-onboarding-form', () => ({
+  VisitorOnboardingForm: () => <div data-testid="welcome" />,
+}));
+
 describe('VisitorOnboardingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders the visitor onboarding profile setup for signed-in visitors', async () => {
+  it('renders saved preferences for signed-in visitors', async () => {
     mock.requireAuth.mockResolvedValue({
-      session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
-      user: {
-        id: 'u1',
-        name: '+919123456789',
-        email: 'mahi@test.com',
-        phoneNumber: '+919123456789',
-        role: 'visitor',
-        status: 'pending',
-      },
+      session: {},
+      user: { role: 'visitor', status: 'pending' },
     });
-
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
-    const page = await Page();
-    const { container } = render(page);
-
-    expect(screen.getByText("Let's set up your space on Tickif")).toBeInTheDocument();
-    expect(screen.getByLabelText(/display name/i)).toHaveValue('');
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('+919123456789');
-    expect(screen.getByLabelText(/^address$/i)).toHaveValue('');
-    expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
-    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
-    expect(container.querySelector('img[src*="onboarding-living-room.svg"]')).toHaveAttribute(
-      'height',
-      '189',
-    );
+    render(await Page());
+    expect(screen.getByTestId('welcome')).toBeInTheDocument();
   });
 
   it('redirects designers into the designer dashboard', async () => {
@@ -66,21 +53,14 @@ describe('VisitorOnboardingPage', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
   });
 
-  it('redirects completed visitors to My Tickif using server account state', async () => {
+  it('allows active visitors to edit their feed preferences', async () => {
     mock.requireAuth.mockResolvedValue({
-      session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
-      user: {
-        id: 'u1',
-        name: 'Mahi',
-        email: 'mahi@test.com',
-        role: 'visitor',
-        status: 'active',
-      },
+      session: {},
+      user: { role: 'visitor', status: 'active' },
     });
-
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/home');
+    render(await Page());
+    expect(screen.getByTestId('welcome')).toBeInTheDocument();
   });
 
   it.each([

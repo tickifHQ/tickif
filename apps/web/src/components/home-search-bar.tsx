@@ -200,6 +200,7 @@ export function HomeSearchBar({
     if (normalizedQuery) params.set('q', normalizedQuery);
     else params.delete('q');
     params.delete('page');
+    if (basePath === '/home') params.set('feed', 'custom');
     router.push(params.size > 0 ? `${basePath}?${params.toString()}` : basePath);
     setIsFocused(false);
   }
@@ -217,6 +218,7 @@ export function HomeSearchBar({
     }
     params.delete('q');
     params.delete('page');
+    if (basePath === '/home') params.set('feed', 'custom');
     const selected = new Set(parseFeedParams(params)[filter.filterKey]);
     selected.add(filter.slug);
     params.set(filter.filterKey, [...selected].join(','));

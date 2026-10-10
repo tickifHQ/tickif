@@ -33,6 +33,17 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires visitor preference journeys without omissions or skips', () => {
+    const preferences = requiredTests.filter(
+      ({ file }) => file === 'visitor-feed-preferences.spec.ts',
+    );
+    expect(preferences).toHaveLength(4);
+    for (const { title } of preferences) {
+      expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+      expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+    }
+  });
+
   it('requires every account-menu journey without omissions or skips', () => {
     const titles = [
       'account menu uses real personal data, working destinations, and resilient logout on desktop and mobile',

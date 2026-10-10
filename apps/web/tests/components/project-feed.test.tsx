@@ -18,6 +18,8 @@ import type { HomeFeedPage } from '../../src/lib/home-feed';
 
 const filters: FeedFilterState = {
   city: [],
+  locality: [],
+  propertySubtype: [],
   bhk: [],
   propertyType: [],
   scope: [],

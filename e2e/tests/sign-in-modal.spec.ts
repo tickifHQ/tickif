@@ -96,7 +96,9 @@ test('phone OTP in the dialog rejects a wrong code then completes visitor sign-i
 
     await firstDigit.fill(code);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page).toHaveURL(/\/home\?feed=custom$/);
     await expect(page.getByRole('dialog')).toHaveCount(0);
   } finally {
     await removeSyntheticUserByPhone(phoneNumber);

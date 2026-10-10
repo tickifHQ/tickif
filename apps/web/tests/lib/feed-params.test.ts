@@ -70,3 +70,22 @@ describe('feed params', () => {
     expect(feedPageHref({ q: 'warm kitchen', page: '2' }, 1)).toBe('/?q=warm+kitchen');
   });
 });
+
+describe('visitor preference filters', () => {
+  it('preserves locality and Villa subtype through feed URL encoding and both API mappings', () => {
+    const state = parseFeedParams(
+      new URLSearchParams(
+        'city=chennai&locality=adyar&propertyType=residential&propertySubtype=villa',
+      ),
+    );
+    const expected = {
+      citySlug: 'chennai',
+      localitySlug: 'adyar',
+      propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'villa',
+    };
+    expect(toDiscoveryFeedFilters(state)).toEqual(expected);
+    expect(toSearchProjectFilters(state)).toEqual(expected);
+    expect(parseFeedParams(serializeFeedParams(state))).toEqual(state);
+  });
+});

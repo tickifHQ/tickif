@@ -74,23 +74,25 @@ test('phone OTP creates a visitor session, completes onboarding, and opens perso
     await expect(page.getByRole('alert')).toBeVisible();
     await firstDigit.fill(code);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page).toHaveURL(/\/onboarding/);
+    await expect(page.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
     const session = await context.request.get(`${apiUrl}/api/auth/get-session`);
     const body = await session.json();
     expect(body.user.phoneNumber).toBe(phoneNumber);
     expect(body.user.phoneNumberVerified).toBe(true);
     expect(body.user.role).toBe('visitor');
 
-    await page.getByLabel('Display name').fill('Synthetic Visitor');
-    await page.getByLabel('Address').fill('Bandra West, Mumbai');
-    await page.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page).toHaveURL(/\/home$/);
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page).toHaveURL(/\/home\?feed=custom$/);
     await page.getByRole('button', { name: /Open account menu/ }).click();
     const settings = page.getByRole('menuitem', { name: 'Settings', exact: true });
     await expect(settings).toBeVisible();
     await settings.click();
     await expect(page).toHaveURL(/\/home\/settings$/);
+    await page.getByLabel('Display name').fill('Synthetic Visitor');
+    await page.getByLabel('Personal address (optional)').fill('Bandra West, Mumbai');
+    await page.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('status')).toContainText('Personal settings saved.');
 
     const [account] = await db
       .select({ status: schema.user.status })
@@ -117,7 +119,7 @@ test('phone OTP creates a visitor session, completes onboarding, and opens perso
   }
 });
 
-test('visitor onboarding keeps client validation local and persists details after reload', async ({
+test('visitor personal settings keep client validation local and persist details after onboarding', async ({
   page,
 }) => {
   const phoneNumber = `+9192${randomInt(10_000_000, 99_999_999)}`;
@@ -129,27 +131,34 @@ test('visitor onboarding keeps client validation local and persists details afte
     await expect(firstDigit).toBeVisible();
     await firstDigit.fill(await phoneCode(phoneNumber));
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page).toHaveURL(/\/home\?feed=custom$/);
+    await page.goto('/home/settings');
+    const settingsForm = page.getByRole('form', { name: 'Personal settings', exact: true });
 
     // Two raw characters satisfy the native minimum while the trimmed name remains invalid.
-    await page.getByLabel('Display name').fill(' A');
-    await page.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(
-      page.getByText('Enter a display name between 2 and 100 characters', { exact: true }),
-    ).toBeVisible();
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await settingsForm.getByLabel('Display name').fill(' A');
+    await settingsForm.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
+    await settingsForm.getByRole('button', { name: 'Save changes' }).click();
+    await expect(settingsForm.getByRole('alert')).toContainText(
+      'Enter a name between 2 and 100 characters',
+    );
+    await expect(settingsForm.getByLabel('Display name')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page).toHaveURL(/\/home\/settings$/);
 
-    await page.getByLabel('Display name').fill('Reload Visitor');
-    await page.getByLabel('Address').fill('Khar West, Mumbai');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page).toHaveURL(/\/home$/);
+    await settingsForm.getByLabel('Display name').fill('Reload Visitor');
+    await settingsForm.getByLabel('Personal address (optional)').fill('Khar West, Mumbai');
+    await settingsForm.getByRole('button', { name: 'Save changes' }).click();
+    await expect(settingsForm.getByRole('status')).toContainText('Personal settings saved.');
 
     await page.goto('/home/settings');
     await page.reload();
-    await expect(page.getByLabel('Display name')).toHaveValue('Reload Visitor');
-    await expect(page.getByLabel('Personal address (optional)')).toHaveValue('Khar West, Mumbai');
-    await expect(page.getByLabel('WhatsApp number (optional)')).toHaveValue(phoneNumber);
+    await expect(settingsForm.getByLabel('Display name')).toHaveValue('Reload Visitor');
+    await expect(settingsForm.getByLabel('Personal address (optional)')).toHaveValue(
+      'Khar West, Mumbai',
+    );
+    await expect(settingsForm.getByLabel('WhatsApp number (optional)')).toHaveValue(phoneNumber);
   } finally {
     await removeSyntheticUserByPhone(phoneNumber);
   }

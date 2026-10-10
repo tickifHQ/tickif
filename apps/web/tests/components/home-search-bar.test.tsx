@@ -206,7 +206,9 @@ describe('HomeSearchBar', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen, Space' }));
 
-    expect(mock.push).toHaveBeenCalledWith('/home?room=bedroom%2Cliving-room%2Cbathroom%2Ckitchen');
+    expect(mock.push).toHaveBeenCalledWith(
+      '/home?room=bedroom%2Cliving-room%2Cbathroom%2Ckitchen&feed=custom',
+    );
   });
 
   it('clears stale suggestions and shows loading immediately for a changed query', async () => {
@@ -297,7 +299,7 @@ describe('HomeSearchBar', () => {
     fireEvent.change(input, { target: { value: 'sunlit' } });
     fireEvent.submit(screen.getByRole('search'));
 
-    expect(mock.push).toHaveBeenCalledWith('/home?q=sunlit');
+    expect(mock.push).toHaveBeenCalledWith('/home?q=sunlit&feed=custom');
   });
 
   it('runs a recent search when it is selected', () => {

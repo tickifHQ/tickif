@@ -1,8 +1,15 @@
-import { ACCOUNT_STATUS, PLATFORM_ROLE, type UpsertVisitorProfileInput } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
+  type UpsertVisitorProfileInput,
+  type VisitorFeedPreferences,
+} from '@repo/contracts';
 import { and, db, eq, schema } from '@repo/db';
 import { VisitorProfileAccessDeniedError, VisitorProfileConstraintError } from './errors.js';
 
 export type VisitorProfileRecord = typeof schema.visitorProfile.$inferSelect;
+export type VisitorProfileUpdate =
+  UpsertVisitorProfileInput | { feedPreferences: VisitorFeedPreferences };
 
 function databaseErrorCode(error: unknown): string | null {
   if (typeof error !== 'object' || error === null) return null;
@@ -22,7 +29,7 @@ export const visitorsRepository = {
 
   async upsertCompleted(
     userId: string,
-    input: UpsertVisitorProfileInput,
+    input: VisitorProfileUpdate,
   ): Promise<VisitorProfileRecord> {
     try {
       return await db.transaction(async (tx) => {
@@ -50,8 +57,7 @@ export const visitorsRepository = {
           .insert(schema.visitorProfile)
           .values({
             userId,
-            address: input.address,
-            whatsappNumber: input.whatsappNumber,
+            ...input,
             onboardingCompletedAt: now,
             createdAt: now,
             updatedAt: now,
@@ -59,8 +65,7 @@ export const visitorsRepository = {
           .onConflictDoUpdate({
             target: schema.visitorProfile.userId,
             set: {
-              address: input.address,
-              whatsappNumber: input.whatsappNumber,
+              ...input,
               updatedAt: now,
             },
           })
@@ -68,7 +73,7 @@ export const visitorsRepository = {
 
         if (!profile) throw new Error('visitor profile upsert returned no row');
 
-        // Completion is deliberately data-independent: both nullable fields may be skipped.
+        // Completion is data-independent: a visitor may skip the optional questions.
         await tx
           .update(schema.user)
           .set({ status: ACCOUNT_STATUS.ACTIVE, updatedAt: now })

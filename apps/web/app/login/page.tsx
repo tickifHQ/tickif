@@ -29,6 +29,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   const initialMode = mode === 'designer' ? 'designer' : 'browsing';
   const callbackPath = safeCallbackPath(params.callbackURL) ?? safeCallbackPath(params.next);
 
+  if (
+    session?.user.role === PLATFORM_ROLE.VISITOR &&
+    session.user.status === ACCOUNT_STATUS.PENDING &&
+    initialMode === 'browsing'
+  ) {
+    redirect(
+      callbackPath ? `/onboarding?callbackURL=${encodeURIComponent(callbackPath)}` : '/onboarding',
+    );
+  }
+
   if (session && callbackPath) {
     redirect(callbackPath);
   }

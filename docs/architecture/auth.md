@@ -283,3 +283,24 @@ The web app authenticates against `/api/auth/*` using better-auth's client (or
 direct calls during early development). Authenticated API calls rely on the
 session cookie; the `hc<AppType>` client forwards credentials when configured to.
 Keep auth calls separate from the typed `hc` data client.
+
+### Visitor feed preferences
+
+The optional visitor welcome form stores a typed `feed_preferences` JSON value
+on `visitor_profile`. Missing preferences and an explicit skip are distinct.
+`GET` and `PUT /api/visitors/me/feed-preferences` require an eligible visitor in
+personal context. Writes reuse the account-locked onboarding transaction and
+preserve address and WhatsApp details.
+
+The response derives canonical discovery filters from the saved home type and
+city/locality slugs. Location validation uses active taxonomy terms. The public
+feed remains session-independent; the client passes these filters explicitly.
+See [the integration guide](../guides/visitor-feed-preferences.md) for the flow,
+cache behavior, error handling, and preview-count limitations.
+
+Phone sign-in keeps pending personal visitors in the welcome dialog. Direct
+`/onboarding` visits render the same home/location form. Save and Skip both
+complete onboarding before resuming an explicit callback or entering `/home`.
+Active visitors can reopen `/onboarding` to edit their preferences. Bare `/home`
+resolves saved defaults into an explicit filter URL; `feed=custom` keeps a cleared
+or edited feed from silently reapplying those defaults.

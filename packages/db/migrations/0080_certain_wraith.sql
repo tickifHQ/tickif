@@ -1,0 +1,1 @@
+ALTER TABLE "visitor_profile" ADD COLUMN "feed_preferences" jsonb;

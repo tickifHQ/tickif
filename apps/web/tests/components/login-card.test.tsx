@@ -21,6 +21,9 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
+    getSession: async () => ({
+      data: { user: { role: 'visitor', status: 'active' }, session: {} },
+    }),
     phoneNumber: { sendOtp: mock.sendOtp, verify: mock.verify },
     signIn: { social: mock.signInSocial, emailOtp: mock.signInEmailOtp },
     emailOtp: { sendVerificationOtp: mock.emailOtpSendVerificationOtp },
