@@ -1159,7 +1159,12 @@ function RoomCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-border/80 bg-background">
       <div className="flex items-start justify-between gap-4 px-5 py-4">
-        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={room.expanded}
+          className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           <div className={cn(typography.subsectionTitle, 'text-foreground')}>{room.title}</div>
           <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
             {photoSummary}
@@ -1170,7 +1175,7 @@ function RoomCard({
             <button
               type="button"
               onClick={onDelete}
-              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={`Delete ${room.title}`}
             >
               <Trash2 className="size-4" />
@@ -1179,8 +1184,9 @@ function RoomCard({
           <button
             type="button"
             onClick={onToggle}
-            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={`Toggle ${room.title}`}
+            aria-expanded={room.expanded}
           >
             <ChevronDown
               className={cn('size-4 transition-transform', room.expanded && 'rotate-180')}

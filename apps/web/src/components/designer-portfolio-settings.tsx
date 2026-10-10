@@ -2037,7 +2037,7 @@ function ToggleableSection({
             type="button"
             onClick={onToggleExpanded}
             aria-expanded={expanded}
-            className="flex-1 text-left"
+            className="flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <h3 className="text-lg font-medium leading-relaxed text-foreground">{title}</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
@@ -2049,6 +2049,7 @@ function ToggleableSection({
               onClick={onToggleExpanded}
               aria-expanded={expanded}
               aria-label={`Toggle ${title} details`}
+              className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>
