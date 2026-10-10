@@ -317,6 +317,14 @@ completion gates, and subsequent role rollout.
 
 ## Portfolio configuration compatibility
 
+The owner Portfolio page passes the authenticated profile's published-project
+count and resolved experience into its live preview. Unknown profile data is
+omitted rather than rendered as a fabricated zero; a real zero count remains
+visible. In the public opening view, the main heading carries the studio name,
+navigation carries its logo/location, and the adjacent photo card says "Selected
+work". This feedback adjustment is recorded in
+[ADR 0006](../../adr/0006-feedback-card-identity-and-logo-fallbacks.md).
+
 The owner editor and public profile share recognition artwork through
 `apps/web/src/lib/portfolio-recognition.ts` and the UI package RecognitionBadge.
 Google summary visibility is independent of review-card visibility; the public

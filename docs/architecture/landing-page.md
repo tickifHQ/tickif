@@ -26,10 +26,13 @@ designer/admin routing and other public pages retain their existing behavior.
   1512px frame, capped at the number of real results. Landing cards have a maximum
   width of 320px, so sparse and filtered feeds stay compact and left aligned.
   Landing photographs use a consistent 285px crop (240px on mobile), with studio
-  initials and metadata below. Allocation uses equal card heights; other feeds
+  title and location below. Allocation uses equal card heights; other feeds
   retain their natural image ratios and existing breakpoints.
-- `ShowcaseCard` has a landing presentation with visible title, studio, location,
-  tags and budget. Other routes retain the existing overlay presentation.
+- `ShowcaseCard` has a landing presentation with a compact single-line title,
+  location and budget. Studio names and tags are omitted from both presentations
+  per feedback item 8; see [ADR 0006](../adr/0006-feedback-card-identity-and-logo-fallbacks.md).
+  Other routes retain the existing overlay presentation, visible on keyboard focus
+  as well as hover.
 - The hero and header city pickers use taxonomy options. The header fetches the
   public city taxonomy and supports Control/Command K without a visible shortcut
   button. The header forms a layer above the hero so suggestions remain unobscured.

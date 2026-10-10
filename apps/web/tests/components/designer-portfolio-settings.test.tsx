@@ -220,6 +220,23 @@ async function renderSettings() {
 }
 
 describe('DesignerPortfolioSettings', () => {
+  it('shows sourced experience and published projects inside the portfolio preview', async () => {
+    render(<DesignerPortfolioSettings previewStats={{ yearsExperience: 31, projectCount: 7 }} />);
+    await screen.findByPlaceholderText(SLUG_PLACEHOLDER);
+    const stats = within(screen.getByRole('group', { name: 'Portfolio preview statistics' }));
+    expect(stats.getByText('31')).toBeVisible();
+    expect(stats.getByText('Years experience')).toBeVisible();
+    expect(stats.getByText('7')).toBeVisible();
+    expect(stats.getByText('Published projects')).toBeVisible();
+  });
+
+  it('preserves zero counts and omits unknown experience in the portfolio preview', async () => {
+    render(<DesignerPortfolioSettings previewStats={{ yearsExperience: null, projectCount: 0 }} />);
+    await screen.findByPlaceholderText(SLUG_PLACEHOLDER);
+    const stats = within(screen.getByRole('group', { name: 'Portfolio preview statistics' }));
+    expect(stats.getByText('0')).toBeVisible();
+    expect(stats.queryByText('Years experience')).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mock.fetchPortfolio.mockResolvedValue(basePortfolio);

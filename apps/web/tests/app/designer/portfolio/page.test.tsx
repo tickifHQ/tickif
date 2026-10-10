@@ -6,6 +6,11 @@ const mock = vi.hoisted(() => ({
   getCurrentOrgIdentity: vi.fn(),
   getCurrentOrgRole: vi.fn(),
   redirect: vi.fn(),
+  getCurrentDesignerProfile: vi.fn(),
+}));
+
+vi.mock('@/lib/designer-profile', () => ({
+  getCurrentDesignerProfile: mock.getCurrentDesignerProfile,
 }));
 
 vi.mock('@/lib/current-org-role', () => ({
@@ -17,7 +22,11 @@ vi.mock('@/lib/current-org-role', () => ({
 vi.mock('next/navigation', () => ({ redirect: mock.redirect }));
 
 vi.mock('@/components/designer-portfolio-settings', () => ({
-  DesignerPortfolioSettings: () => <div data-testid="designer-portfolio-settings" />,
+  DesignerPortfolioSettings: ({
+    previewStats,
+  }: {
+    previewStats?: { yearsExperience: number | null; projectCount: number };
+  }) => <div data-testid="designer-portfolio-settings">{JSON.stringify(previewStats)}</div>,
 }));
 
 vi.mock('@/components/designer-close-studio', () => ({
@@ -29,8 +38,17 @@ vi.mock('@/components/designer-close-studio', () => ({
 describe('DesignerPortfolioPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.getCurrentDesignerProfile.mockResolvedValue({
+      yearsExperience: 12,
+      foundedYear: null,
+      projectCount: 7,
+    });
     mock.getCurrentOrgRole.mockResolvedValue('owner');
-    mock.getCurrentOrgIdentity.mockResolvedValue({ id: 'studio', name: 'My studio', slug: 'my-studio' });
+    mock.getCurrentOrgIdentity.mockResolvedValue({
+      id: 'studio',
+      name: 'My studio',
+      slug: 'my-studio',
+    });
     mock.redirect.mockImplementation(() => {
       throw new Error('redirected');
     });
@@ -56,6 +74,9 @@ describe('DesignerPortfolioPage', () => {
     render(await Page());
 
     expect(screen.getByTestId('designer-portfolio-settings')).toBeInTheDocument();
+    expect(screen.getByTestId('designer-portfolio-settings')).toHaveTextContent(
+      '"yearsExperience":12,"projectCount":7',
+    );
     expect(screen.getByTestId('close-studio')).toHaveTextContent('my-studio');
   });
 
