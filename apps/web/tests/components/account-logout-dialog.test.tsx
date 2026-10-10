@@ -43,6 +43,13 @@ function AnchoredHarness() {
 }
 
 describe('AccountLogoutDialog', () => {
+  it('uses a decorative Lucide logout icon instead of a custom image', () => {
+    render(<Harness />);
+    const dialog = screen.getByRole('dialog', { name: 'Log out of this device?' });
+    expect(dialog.querySelector('img')).toBeNull();
+    expect(dialog.querySelector('svg.lucide-log-out')).toHaveAttribute('aria-hidden', 'true');
+  });
+
   it('uses the scoped neutral account backdrop instead of the shared green overlay', () => {
     render(<Harness />);
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveClass(

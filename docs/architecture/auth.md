@@ -48,8 +48,10 @@ The logout backdrop uses the neutral `account-menu-overlay` token from Figma
 `16123:68131` (`rgba(23, 22, 18, 0.12)`) in light and dark mode, without changing
 the shared overlay used by other dialogs.
 The source green `#1a9b7a` is darkened to `#168266` for 4.51:1 contrast against
-`#faf9f6` on small functional labels. Exported decorative icons live in
-`apps/web/public/ui/account`; reference screenshots are not shipped.
+`#faf9f6` on small functional labels. Account-menu and logout-confirmation icons
+come from `lucide-react` and are decorative (`aria-hidden`). They inherit the
+menu foreground; the confirmation icon uses scoped light/dark semantic tokens.
+Custom account SVG assets and reference screenshots are not shipped.
 
 ## What's enabled
 

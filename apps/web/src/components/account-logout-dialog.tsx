@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { Checkbox } from '@repo/ui/components/checkbox';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@repo/ui/components/dialog';
@@ -125,7 +126,7 @@ export function AccountLogoutDialog({
         }}
       >
         <div className="flex size-11 items-center justify-center rounded-lg bg-account-logout-icon-background">
-          <img src="/ui/account/logout-confirm.svg" alt="" className="dark:brightness-150" />
+          <LogOut aria-hidden="true" className="size-5 text-account-logout-icon-foreground" />
         </div>
         <DialogTitle className="p-0 text-lg leading-6">Log out of this device?</DialogTitle>
         <DialogDescription className="leading-5">

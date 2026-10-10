@@ -19,7 +19,15 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { cn } from '@repo/ui/lib/utils';
-import { ChevronDown } from 'lucide-react';
+import {
+  Bookmark,
+  ChevronDown,
+  House,
+  LogOut,
+  MessageSquareMore,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -176,32 +184,20 @@ export function AccountMenu({
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild className={itemClassName}>
                   <Link href="/saved-projects">
-                    <img
-                      src="/images/landing/bookmarks.svg"
-                      alt=""
-                      className="shrink-0 dark:brightness-0 dark:invert"
-                    />
+                    <Bookmark aria-hidden="true" />
                     Saved projects
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className={itemClassName}>
                   <Link href="/enquiries">
-                    <img
-                      src="/ui/account/chat-bubble.svg"
-                      alt=""
-                      className="shrink-0 dark:brightness-0 dark:invert"
-                    />
+                    <MessageSquareMore aria-hidden="true" />
                     Enquiries
                   </Link>
                 </DropdownMenuItem>
                 {isPersonalVisitor ? (
                   <DropdownMenuItem asChild className={itemClassName}>
                     <Link href="/home/settings#personal-details">
-                      <img
-                        src="/ui/account/home.svg"
-                        alt=""
-                        className="shrink-0 dark:brightness-0 dark:invert"
-                      />
+                      <House aria-hidden="true" />
                       My home profile
                     </Link>
                   </DropdownMenuItem>
@@ -215,11 +211,7 @@ export function AccountMenu({
               !hasOrganizationContext ? (
                 <DropdownMenuItem asChild className={itemClassName}>
                   <Link href="/home/settings">
-                    <img
-                      src="/ui/account/settings.svg"
-                      alt=""
-                      className="shrink-0 dark:brightness-0 dark:invert"
-                    />
+                    <Settings aria-hidden="true" />
                     Settings
                   </Link>
                 </DropdownMenuItem>
@@ -229,11 +221,7 @@ export function AccountMenu({
               !hasOrganizationContext ? (
                 <DropdownMenuItem asChild className={itemClassName}>
                   <Link href={completeSetupHref(personalRole)}>
-                    <img
-                      src="/ui/account/settings.svg"
-                      alt=""
-                      className="shrink-0 dark:brightness-0 dark:invert"
-                    />
+                    <Settings aria-hidden="true" />
                     Complete setup
                   </Link>
                 </DropdownMenuItem>
@@ -244,22 +232,14 @@ export function AccountMenu({
               hasOrganizationContext ? (
                 <DropdownMenuItem asChild className={itemClassName}>
                   <Link href="/designer/profile">
-                    <img
-                      src="/ui/account/settings.svg"
-                      alt=""
-                      className="shrink-0 dark:brightness-0 dark:invert"
-                    />
+                    <Settings aria-hidden="true" />
                     Profile &amp; settings
                   </Link>
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuItem asChild className={itemClassName}>
                 <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src="/ui/account/help.svg"
-                    alt=""
-                    className="shrink-0 dark:brightness-0 dark:invert"
-                  />
+                  <ShieldCheck aria-hidden="true" />
                   Help &amp; report
                 </a>
               </DropdownMenuItem>
@@ -275,7 +255,7 @@ export function AccountMenu({
                 'bg-account-menu-primary text-account-menu-primary-foreground focus:bg-account-menu-primary-hover focus:text-account-menu-primary-foreground',
               )}
             >
-              <img src="/ui/account/logout.svg" alt="" className="shrink-0" />
+              <LogOut aria-hidden="true" />
               Log out
             </DropdownMenuItem>
           </div>

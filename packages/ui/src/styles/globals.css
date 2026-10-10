@@ -65,6 +65,7 @@
   --color-account-menu-divider: var(--account-menu-divider);
   --color-account-menu-overlay: var(--account-menu-overlay);
   --color-account-logout-icon-background: var(--account-logout-icon-background);
+  --color-account-logout-icon-foreground: var(--account-logout-icon-foreground);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);

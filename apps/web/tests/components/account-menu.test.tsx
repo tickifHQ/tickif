@@ -108,8 +108,15 @@ describe('AccountMenu', () => {
       'href',
       '/enquiries',
     );
+    expect(screen.getByRole('menuitem', { name: 'Enquiries' }).querySelector('svg')).toHaveClass(
+      'lucide-message-square-more',
+    );
     expect(screen.queryByRole('menuitem', { name: 'Boards' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Following' })).not.toBeInTheDocument();
+    for (const item of screen.getAllByRole('menuitem')) {
+      expect(item.querySelector('img')).toBeNull();
+      expect(item.querySelector('svg.lucide')).toHaveAttribute('aria-hidden', 'true');
+    }
   });
 
   it('loads real details only while open and aborts work when dismissed', async () => {
@@ -363,7 +370,7 @@ describe('AccountMenu', () => {
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
     const signOut = screen.getByRole('menuitem', { name: 'Log out' });
-    expect(signOut.querySelector('img')).toHaveAttribute('src', '/ui/account/logout.svg');
+    expect(signOut.querySelector('svg.lucide-log-out')).toHaveAttribute('aria-hidden', 'true');
     await user.click(signOut);
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Log out of this device?' })).toBeInTheDocument();
@@ -387,7 +394,7 @@ describe('AccountMenu', () => {
     const items = screen.getAllByRole('menuitem');
     const profile = screen.getByRole('menuitem', { name: 'Profile & settings' });
     expect(profile).toHaveAttribute('href', '/designer/profile');
-    expect(profile.querySelector('img')).toHaveAttribute('src', '/ui/account/settings.svg');
+    expect(profile.querySelector('svg.lucide-settings')).toHaveAttribute('aria-hidden', 'true');
     expect(items.map((item) => item.textContent)).toEqual([
       'Saved projects',
       'Enquiries',
