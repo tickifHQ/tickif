@@ -8,6 +8,27 @@ import { PublicDesignerProfile } from '../../src/components/public-designer-prof
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
 describe('Figma review corrections', () => {
+  it.each([
+    { count: 1, label: 'City' },
+    { count: 2, label: 'Cities' },
+  ])('shows $count service-area cities separately from offices', ({ count, label }) => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, cityPresenceCount: count, officeCount: 4 },
+        }}
+      />,
+    );
+    const hero = within(screen.getByRole('region', { name: 'Portfolio hero' }));
+    const cityTile = hero.getByText(label, { exact: true }).parentElement!;
+    expect(within(cityTile).getByRole('definition', { name: String(count) })).toBeVisible();
+    expect(within(cityTile).getByText('Service area')).toBeVisible();
+    expect(hero.getByText('Offices')).toBeVisible();
+    expect(hero.getByRole('definition', { name: '4' })).toBeVisible();
+  });
+
   it('shows the supplied office count without inferring it from centres', () => {
     const portfolio = makePublicPortfolio();
     render(
@@ -834,6 +855,7 @@ describe('PublicDesignerProfile', () => {
 
     expect(screen.queryByText('Established')).not.toBeInTheDocument();
     expect(screen.queryByText('Typical budget')).not.toBeInTheDocument();
+    expect(screen.queryByText('Service area')).not.toBeInTheDocument();
     expect(screen.queryByText('anikaspaces.in')).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('region', { name: 'Portfolio hero' })).getByText('Projects'),

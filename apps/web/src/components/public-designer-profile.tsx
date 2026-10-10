@@ -463,6 +463,15 @@ function HeroSection({ portfolio, view }: SectionProps) {
           },
         ]
       : []),
+    ...(stats.cityPresenceCount > 0
+      ? [
+          {
+            value: String(stats.cityPresenceCount),
+            label: stats.cityPresenceCount === 1 ? 'City' : 'Cities',
+            detail: 'Service area',
+          },
+        ]
+      : []),
   ];
 
   return (
