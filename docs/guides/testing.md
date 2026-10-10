@@ -101,6 +101,9 @@ is unchanged and still rejects missing auth settings, including in production.
 Postgres, Redis and Typesense must be running locally. The default Compose
 credentials and ports match the test defaults; MinIO is only needed for live
 upload/E2E work (Vitest storage calls are mocked or signed locally).
+The project route integration suite mocks object deletion while testing real
+database cleanup. Project service tests cover object-store calls and their
+best-effort failure handling, so that route suite does not wait on MinIO.
 
 ```bash
 pnpm install --frozen-lockfile

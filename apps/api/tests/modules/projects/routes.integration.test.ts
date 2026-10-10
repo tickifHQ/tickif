@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { testClient } from 'hono/testing';
 import { and, eq } from 'drizzle-orm';
+import type * as Storage from '@repo/storage';
 import type {
   ErrorResponse,
   ListProjectRoomsResponse,
@@ -28,6 +29,12 @@ import {
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+
+// This suite checks real database cleanup; object-store calls belong to service tests.
+vi.mock('@repo/storage', async (importOriginal) => {
+  const storage = await importOriginal<typeof Storage>();
+  return { ...storage, deleteObject: vi.fn().mockResolvedValue(undefined) };
+});
 
 const client = testClient(app);
 
