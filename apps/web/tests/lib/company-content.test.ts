@@ -15,14 +15,21 @@ describe('Company Markdown content', () => {
     }
   });
 
-  it('indexes document sections without treating code examples as headings', () => {
-    expect(
-      getCompanySections('## First\n\n```md\n## Example\n```\n\n## First\n\n### Detail'),
-    ).toEqual([
-      { id: 'section-1', title: 'First' },
-      { id: 'section-7', title: 'First' },
-    ]);
-  });
+  it.each(['\n', '\r\n'])(
+    'indexes document sections with %j line endings without treating code examples as headings',
+    (lineEnding) => {
+      expect(
+        getCompanySections(
+          ['## First', '', '```md', '## Example', '```', '', '## First', '', '### Detail'].join(
+            lineEnding,
+          ),
+        ),
+      ).toEqual([
+        { id: 'section-1', title: 'First' },
+        { id: 'section-7', title: 'First' },
+      ]);
+    },
+  );
 
   it.each(['missing', '../privacy', '../../.env', 'privacy%2F..', 'toString'])(
     'does not read files for an unregistered slug: %s',

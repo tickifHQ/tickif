@@ -3,7 +3,7 @@ export function getCompanySections(content: string) {
   const sections: { id: string; title: string }[] = [];
   let fence: { marker: string; length: number } | null = null;
 
-  content.split('\n').forEach((line, index) => {
+  content.split(/\r?\n/).forEach((line, index) => {
     const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
     if (marker) {
       if (!fence) fence = { marker: marker[0]!, length: marker.length };
