@@ -179,12 +179,12 @@ export function DesignerProjectsList({
       ) : null}
 
       <div className="overflow-hidden rounded-lg">
-        <Table className="min-w-[62rem]">
+        <Table className="min-w-[76rem]">
           <TableHeader className="[&_th]:h-9 [&_th]:whitespace-nowrap [&_th]:font-sans [&_th]:text-[13px] [&_th]:tracking-normal">
             <TableRow className="border-0 bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[22rem] rounded-l-lg">Project</TableHead>
               <TableHead className="w-[12.5rem]">Type</TableHead>
-              <TableHead className="w-[11rem]">Status</TableHead>
+              <TableHead className="w-[175px] min-w-[175px]">Status</TableHead>
               <TableHead className="w-[11.5rem]">Uploaded on</TableHead>
               <TableHead className="w-[11.5rem]">Last updated</TableHead>
               <TableHead className="w-[7.5rem] rounded-r-lg text-right">Actions</TableHead>

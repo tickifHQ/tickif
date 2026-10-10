@@ -91,6 +91,12 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     const thumbnail = preview.locator(':scope > span').first();
     await expect(thumbnail).toHaveCSS('width', '52px');
     await expect(thumbnail).toHaveCSS('height', '40px');
+    expect(
+      (await page.getByRole('columnheader', { name: 'Status', exact: true }).boundingBox())!.width,
+    ).toBeGreaterThanOrEqual(175);
+    expect(
+      (await row.getByText('Pending changes · Submitted').boundingBox())!.height,
+    ).toBeLessThanOrEqual(32);
     // A click is replayed across hydration; an early pointer hover is not.
     // Establish the interactive preview before checking each input modality.
     await preview.click();
