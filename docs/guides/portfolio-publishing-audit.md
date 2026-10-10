@@ -50,7 +50,7 @@ content and visibility settings were restored after verification.
 | View Your Enquiries                                                            | Opens the signed-in visitor's persisted enquiry.                                                                       |
 | Visitor access to owner editor                                                 | Redirects to Access denied.                                                                                            |
 | Share this card / Copy link                                                    | Clipboard contains the canonical portfolio URL without the section hash.                                               |
-| Project like / unlike                                                          | Persists the authenticated like and restores it to unliked.                                                            |
+| Project views                                                                  | Shows a passive eye and real project views; authenticated detail visits count once per UTC day.                        |
 | Featured / Newest / Top rated / Largest                                        | Selected sort changes and returns to Featured.                                                                         |
 | Project card / View profile                                                    | Opens the real image-detail page and returns to the portfolio.                                                         |
 | Review numbered pages and arrows                                               | Page 3 shows the final review; Next disables; Previous returns to page 2; page 1 can be restored.                      |

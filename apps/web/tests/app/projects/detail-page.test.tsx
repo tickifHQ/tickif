@@ -3,21 +3,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../../fixtures/public-project';
 
 const mock = vi.hoisted(() => ({
+  getSession: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
   }),
 }));
+
+vi.mock('@/lib/auth-guard', () => ({ getServerSession: mock.getSession }));
 
 vi.mock('next/navigation', () => ({ notFound: mock.notFound }));
 vi.mock('@/components/public-project-overview', () => ({
   PublicProjectOverview: ({
     project,
     canonicalUrl,
+    isAuthenticated,
   }: {
     project: { title: string };
     canonicalUrl: string;
+    isAuthenticated: boolean;
   }) => (
-    <div data-testid="project-overview" data-canonical-url={canonicalUrl}>
+    <div
+      data-testid="project-overview"
+      data-canonical-url={canonicalUrl}
+      data-authenticated={isAuthenticated}
+    >
       {project.title}
     </div>
   ),
@@ -39,6 +48,7 @@ function response(body: unknown, status = 200) {
 describe('/projects/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.getSession.mockResolvedValue(null);
   });
 
   it('loads the canonical public model by id and renders the project', async () => {
@@ -59,6 +69,14 @@ describe('/projects/[id]', () => {
     expect(new Headers(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).get('Cache-Control')).toBe(
       'no-cache',
     );
+  });
+
+  it('enables project tracking only when the page has a session', async () => {
+    const project = makePublicProject();
+    vi.mocked(fetch).mockResolvedValue(response(project) as Response);
+    mock.getSession.mockResolvedValue({ user: { id: 'visitor' } });
+    render(await ProjectDetailPage({ params: Promise.resolve({ id: project.id }) }));
+    expect(screen.getByTestId('project-overview')).toHaveAttribute('data-authenticated', 'true');
   });
 
   it('returns not found for an unknown or ineligible project id', async () => {

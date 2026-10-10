@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../fixtures/public-project';
 
 const featureFlags = vi.hoisted(() => ({ CONSULTATIONS_ENABLED: false }));
+const recordProjectView = vi.hoisted(() => vi.fn());
+vi.mock('@/components/project-view-tracker', () => ({
+  ProjectViewTracker: (props: { projectId: string; isAuthenticated: boolean }) => {
+    if (props.isAuthenticated) recordProjectView(props.projectId);
+    return null;
+  },
+}));
 vi.mock('@repo/config/features', () => ({ config: featureFlags }));
 vi.mock('@/components/booking-cta', () => ({
   BookingCta: () => <button>Book consultation</button>,
@@ -12,8 +19,12 @@ beforeEach(() => {
   featureFlags.CONSULTATIONS_ENABLED = false;
 });
 
-vi.mock('@/components/project-like-button', () => ({
-  ProjectLikeButton: () => <button>Like</button>,
+vi.mock('@/components/project-view-count', () => ({
+  ProjectViewCount: () => (
+    <span role="img" aria-label="0 project views">
+      0
+    </span>
+  ),
 }));
 
 vi.mock('@/components/enquiry-cta', () => ({
@@ -31,6 +42,11 @@ const { PublicProjectOverview } = await import('../../src/components/public-proj
 const canonicalUrl = 'https://tickif.com/projects/11111111-1111-4111-8111-111111111111';
 
 describe('PublicProjectOverview', () => {
+  it('records an authenticated visit to the project itself', () => {
+    const project = makePublicProject();
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} isAuthenticated />);
+    expect(recordProjectView).toHaveBeenCalledWith(project.id);
+  });
   it('does not add a second enquiry action where the project already has one', () => {
     render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
 

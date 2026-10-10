@@ -6,6 +6,7 @@ import { Button } from '@repo/ui/components/button';
 import { PublicProjectOverview } from '@/components/public-project-overview';
 import { fetchPublicProject, isUnavailableProject } from '@/lib/public-project-api';
 import { publicMetadata, publicUrl } from '@/lib/social-metadata';
+import { getServerSession } from '@/lib/auth-guard';
 
 type ProjectDetailPageProps = { params: Promise<{ id: string }> };
 
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }: ProjectDetailPageProps): Prom
 
 export default async function ProjectDetailPage({ params }: ProjectDetailPageProps) {
   const { id } = await params;
-  const project = await resolveProject(id);
+  const [project, session] = await Promise.all([resolveProject(id), getServerSession()]);
   const canonicalUrl = canonicalProjectUrl(project.id);
 
   if (isUnavailableProject(project)) {
@@ -67,5 +68,11 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
     );
   }
 
-  return <PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />;
+  return (
+    <PublicProjectOverview
+      project={project}
+      canonicalUrl={canonicalUrl}
+      isAuthenticated={!!session}
+    />
+  );
 }

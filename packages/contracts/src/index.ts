@@ -18,7 +18,6 @@ export * from './organizations';
 export * from './enquiries';
 export * from './interactions';
 export * from './saved-projects';
-export * from './project-likes';
 export * from './visitors';
 export * from './verifications';
 export * from './billing';

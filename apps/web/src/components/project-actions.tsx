@@ -7,7 +7,7 @@ import { Bookmark, Check, Share2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useHydrated } from '@/lib/use-hydrated';
-import { ProjectLikeButton } from '@/components/project-like-button';
+import { ProjectViewCount } from '@/components/project-view-count';
 import { ActionLoginDialog } from '@/components/action-login-dialog';
 
 export function ProjectActions({
@@ -167,7 +167,7 @@ export function ProjectActions({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-1">
-        <ProjectLikeButton projectId={projectId} loginHref={loginHref} />
+        <ProjectViewCount projectId={projectId} />
         {!hydrated || isSessionPending || isSaveStateLoading ? (
           <Button
             type="button"

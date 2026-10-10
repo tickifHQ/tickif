@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { ShowcaseCard } from '@/components/showcase-card';
 import { EnquiryCta } from '@/components/enquiry-cta';
-import { ProjectLikeButton } from '@/components/project-like-button';
+import { ProjectViewTracker } from '@/components/project-view-tracker';
+import { ProjectViewCount } from '@/components/project-view-count';
 import { ActionLoginDialog } from '@/components/action-login-dialog';
 import { PublicGoogleRating } from '@/components/public-google-rating';
 import { env } from '@/env';
@@ -37,28 +38,6 @@ interface ImageDetailViewProps {
   activeImageId: string;
   designerProfileId: string;
   isAuthenticated?: boolean;
-}
-
-const ANONYMOUS_ID_STORAGE_KEY = 'tickif.anonymousId';
-
-/**
- * Reads (or lazily creates) the stable pseudonymous visitor id behind
- * `interaction_event.anonymous_id`. It has to survive page loads: minting a
- * fresh uuid per view would make `count(distinct anonymous_id)` degenerate to
- * `count(*)`, and the table is append-only so that is not backfillable.
- */
-function getAnonymousId(): string {
-  try {
-    const existing = window.localStorage.getItem(ANONYMOUS_ID_STORAGE_KEY);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    window.localStorage.setItem(ANONYMOUS_ID_STORAGE_KEY, created);
-    return created;
-  } catch {
-    // Storage unavailable (private mode / blocked cookies) — fall back to a
-    // throwaway id rather than dropping the view record.
-    return crypto.randomUUID();
-  }
 }
 
 /**
@@ -111,29 +90,6 @@ export function ImageDetailView({
       }
     }
     checkSavedState();
-  }, [isAuthenticated, project.id]);
-
-  // Record page view for authenticated users (fire-and-forget)
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    async function recordView() {
-      try {
-        await fetch(`${env.NEXT_PUBLIC_API_URL}/api/interactions/views`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'project_view',
-            projectId: project.id,
-            eventKey: crypto.randomUUID(),
-            anonymousId: getAnonymousId(),
-          }),
-        });
-      } catch {
-        // Fire-and-forget
-      }
-    }
-    recordView();
   }, [isAuthenticated, project.id]);
 
   useEffect(() => {
@@ -250,6 +206,7 @@ export function ImageDetailView({
 
   return (
     <div className="w-full py-8">
+      <ProjectViewTracker projectId={project.id} isAuthenticated={isAuthenticated} />
       <div className="mx-auto w-full max-w-[1512px] px-6 lg:px-10">
         <nav className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
           <Link
@@ -401,10 +358,7 @@ export function ImageDetailView({
 
               {/* Action buttons: bookmark + share */}
               <div className="flex items-center gap-3">
-                <ProjectLikeButton
-                  projectId={project.id}
-                  loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`}
-                />
+                <ProjectViewCount projectId={project.id} />
                 <button
                   type="button"
                   onClick={handleBookmark}

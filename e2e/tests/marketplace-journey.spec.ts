@@ -571,18 +571,13 @@ test('designer onboarding and media processing connects to visitor onboarding an
       animations: 'disabled',
     });
     await visitor.setViewportSize(projectViewport);
-    await projectActions.getByRole('button', { name: 'Like project', exact: true }).click();
-    await expect(
-      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
-    ).toBeVisible();
+    await expect(projectActions.getByRole('img', { name: /project views?/ })).toBeVisible();
     await projectActions.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(
       projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
     await visitor.reload();
-    await expect(
-      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
-    ).toBeVisible();
+    await expect(projectActions.getByRole('img', { name: /project views?/ })).toBeVisible();
     await expect(
       projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();

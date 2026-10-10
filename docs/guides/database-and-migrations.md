@@ -132,6 +132,29 @@ Two things to know before applying this against a populated database:
   a large/persistent table, omit the three index statements from the deploy migration and
   build the equivalent indexes with `CREATE INDEX CONCURRENTLY` out-of-band.
 
+### 0081 and 0082 — project view totals and removal of likes
+
+0081 adds `project_engagement`, backfills retained project events and installs an
+`AFTER INSERT` trigger. The event-table write lock spans backfill and trigger
+installation inside the migration transaction. Allow a maintenance window for
+the scan and waiting writers. Verify retained counts before releasing traffic;
+historical events already purged cannot be recovered. Do not increment totals
+again in application code or replay raw events with new identities.
+
+0082 drops `project_like`. Preserve migration 0060 and historical snapshots.
+Do not migrate likes into saved projects. The standard migration runner applies
+all pending migrations, including the drop: drain old API instances before
+running it, then start the new API/web release. A rolling additive-first rollout
+requires a separate release containing only 0081, followed by the application
+removal and finally 0082. Do not edit migration journals to skip the drop.
+
+After migration, verify a new eligible view increments once, replay does not
+increment, authenticated self-views are excluded, public counts contain no
+identities, saves still persist, and removed like routes return 404. Deleting old
+events for retention must leave lifetime totals unchanged. The trigger and its
+function must be explicitly removed before any future rollback dropping the
+aggregate table; application rollback alone cannot restore deleted like data.
+
 ## Querying
 
 Import `db`, `schema`, and the common operators from `@repo/db` (re-exported so

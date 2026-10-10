@@ -1,5 +1,9 @@
 # Tickif UI refresh handoff and checklist
 
+Engagement update, 10 October 2026: project likes are replaced by passive eye/view
+counts. Earlier like-related notes below are historical. Current behavior and
+release tracking live in the [project engagement checklist](./project-engagement-checklist.md).
+
 Refresh the shared system and every web UI from the
 [new Figma designer profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-4108&m=dev).
 Apply it to the profile first, then remaining designer views, visitor/public

@@ -17,7 +17,7 @@ packages/db/
       billing.ts           subscriptions, billing operations and payments
       retention.ts         organization retention lifecycle
       search.ts            search projection outbox
-      project-likes.ts     persistent project likes
+      project-engagement.ts lifetime project view totals
       index.ts             barrel — re-exports all schema domains
   migrations/              generated SQL migrations (COMMIT THESE)
 ```
@@ -38,7 +38,7 @@ it without understanding the auth implications.
 ## Single migration set (important)
 
 Both the **domain** tables and the **better-auth** tables are defined in the same
-Drizzle schema, alongside billing, retention, search and project-like schemas,
+Drizzle schema, alongside billing, retention, search and project-engagement schemas,
 unified in `packages/db/src/schema/index.ts`. `drizzle.config.ts` points at that
 unified schema, so a single
 `pnpm db:generate` produces one migration covering everything, and they migrate

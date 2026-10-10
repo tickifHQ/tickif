@@ -3,8 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { PublicProjectRecommendations } from '../../src/components/public-project-recommendations';
 import { makePublicProject, makeRecommendationProject } from '../fixtures/public-project';
 
-vi.mock('@/components/project-like-button', () => ({
-  ProjectLikeButton: () => <button>Like</button>,
+vi.mock('@/components/project-view-count', () => ({
+  ProjectViewCount: () => (
+    <span role="img" aria-label="0 project views">
+      0
+    </span>
+  ),
 }));
 
 describe('PublicProjectRecommendations', () => {

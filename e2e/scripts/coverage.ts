@@ -253,8 +253,8 @@ const requiredEntries: [file: string, title: string][] = [
     'project view action opens the live version while submitted edits remain private',
   ],
   [
-    'project-likes.spec.ts',
-    'visitor likes persist across project and portfolio views independently of bookmarks',
+    'project-views.spec.ts',
+    'project views persist across detail and portfolio pages without changing saves',
   ],
   [
     'project-moderation.spec.ts',
