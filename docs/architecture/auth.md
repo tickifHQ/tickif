@@ -29,7 +29,9 @@ cards. Removing the last item on a page reuses the server's page-bound correctio
 Account details have a persistent, visually hidden polite status region outside
 the busy activity area. Loading, partial or complete failures, and successful
 retry results are announced without moving keyboard focus. Retry remains a menu
-item; announcements contain activity counts, not personal contact details.
+item; announcements contain activity counts, not personal contact details. Activating
+Retry moves its focus to the first remaining menu action before the retry item is
+removed for loading, preserving arrow-key navigation as the request completes.
 
 Logout requires confirmation. By default, Better Auth `signOut` revokes the current
 session and clears its cookie. With all devices selected, `revokeOtherSessions`

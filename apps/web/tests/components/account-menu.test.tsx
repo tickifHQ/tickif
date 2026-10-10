@@ -160,7 +160,10 @@ describe('AccountMenu', () => {
       'Some account details could not load. Use Retry to try again.',
     );
     expect(screen.getByText('2')).toBeInTheDocument();
-    await user.click(screen.getByRole('menuitem', { name: 'Some details could not load. Retry' }));
+    const retry = screen.getByRole('menuitem', { name: 'Some details could not load. Retry' });
+    act(() => retry.focus());
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menuitem', { name: 'Saved projects' })).toHaveFocus();
     expect(screen.getByRole('status')).toBe(status);
     expect(status).toHaveTextContent('Loading account details.');
     await act(async () => completeRetry({ saved: 24, enquiries: 3 }));
@@ -168,6 +171,9 @@ describe('AccountMenu', () => {
     expect(screen.getByRole('status')).toBe(status);
     expect(status).toHaveTextContent('Account details loaded. Saved projects: 24. Enquiries: 3.');
     expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Saved projects' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Enquiries' })).toHaveFocus();
   });
 
   it('keeps a polite status region outside the busy activity area throughout loading and success', async () => {

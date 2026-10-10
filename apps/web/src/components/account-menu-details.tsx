@@ -137,6 +137,17 @@ export function AccountMenuDetails({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
+            // Retry disappears when loading starts. Move its focus to a surviving
+            // action first so keyboard navigation does not fall back to the page.
+            const retry = event.currentTarget;
+            if (retry instanceof HTMLElement && document.activeElement === retry) {
+              const items = retry
+                .closest('[role="menu"]')
+                ?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])');
+              Array.from(items ?? [])
+                .find((item) => item !== retry)
+                ?.focus();
+            }
             setAttempt((value) => value + 1);
           }}
           className="mx-2.5 mb-1 cursor-pointer rounded-lg text-xs text-muted-foreground"

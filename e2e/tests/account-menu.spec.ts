@@ -151,12 +151,16 @@ test('account menu uses real personal data, working destinations, and resilient 
       'Some account details could not load. Use Retry to try again.',
     );
     failCounts = false;
-    await menu.getByRole('menuitem', { name: 'Some details could not load. Retry' }).click();
+    await menu.getByRole('menuitem', { name: 'Some details could not load. Retry' }).focus();
+    await page.keyboard.press('Enter');
     await expect(menu.getByLabel('saved count unavailable')).toHaveCount(0);
     await expect(menu.getByLabel('Your activity')).toHaveAttribute('aria-busy', 'false');
     await expect(accountStatus).toHaveText(
       'Account details loaded. Saved projects: 0. Enquiries: 0.',
     );
+    await expect(menu.getByRole('menuitem', { name: 'Saved projects', exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(menu.getByRole('menuitem', { name: 'Enquiries', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(menu).toHaveCount(0);
     await page.unroute('**/api/saved-projects?**');
