@@ -130,9 +130,9 @@ async function placesRequest<T>(
 
   if (!response.ok) {
     // New API returns { error: { code, status, message } } on failure.
-    const errBody = (await response.json().catch(() => null)) as
-      | { error?: { message?: string } }
-      | null;
+    const errBody = (await response.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
     throw httpStatusToError(response.status, errBody?.error?.message ?? '');
   }
 
@@ -146,6 +146,85 @@ async function placesRequest<T>(
 // A Google Maps place-id always begins with this prefix; used to short-circuit resolution.
 const PLACE_ID_RE = /^ChI[A-Za-z0-9_-]+$/;
 
+const GOOGLE_LINK_HOSTS = new Set([
+  'share.google',
+  'maps.app.goo.gl',
+  'www.google.com',
+  'google.com',
+  'maps.google.com',
+]);
+
+/** Resolve only Google's known link hosts; never forward the API key or follow arbitrary redirects. */
+async function resolveGoogleLink(input: string): Promise<string> {
+  let url: URL;
+  try {
+    url = new URL(input);
+  } catch {
+    return input;
+  }
+  if (!GOOGLE_LINK_HOSTS.has(url.hostname)) return input;
+  const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const visited = new Set<string>();
+  for (let hop = 0; hop <= 5; hop += 1) {
+    if (
+      url.protocol !== 'https:' ||
+      url.port ||
+      url.username ||
+      url.password ||
+      !GOOGLE_LINK_HOSTS.has(url.hostname) ||
+      visited.has(url.href)
+    ) {
+      throw new GooglePlacesError('invalid_input', 'Unsupported Google Business redirect');
+    }
+    const placeId = extractPlaceIdFromUrl(url.href);
+    if (placeId) return placeId;
+    if (url.pathname === '/search' || url.pathname.startsWith('/maps')) {
+      const query = url.searchParams.get('q') ?? url.searchParams.get('query');
+      if (query?.trim()) return query.trim();
+      const placeName = url.pathname.match(/^\/maps\/place\/([^/]+)/)?.[1];
+      if (placeName) {
+        try {
+          return decodeURIComponent(placeName.replace(/\+/g, ' '));
+        } catch {
+          throw new GooglePlacesError('invalid_input', 'Invalid Google Maps place name');
+        }
+      }
+    }
+    const shortLink =
+      url.hostname === 'share.google' ||
+      url.hostname === 'maps.app.goo.gl' ||
+      url.pathname === '/share.google';
+    if (!shortLink || hop === 5) {
+      throw new GooglePlacesError(
+        'invalid_input',
+        'Use a Google Business place link or business name',
+      );
+    }
+    visited.add(url.href);
+    let response: Response;
+    try {
+      // Google's share endpoint returns 200 for HEAD without its GET redirect.
+      response = await fetch(url.href, { method: 'GET', redirect: 'manual', signal });
+      await response.body?.cancel();
+    } catch {
+      throw new GooglePlacesError('network', 'Could not resolve the Google Business link');
+    }
+    const location = response.headers.get('location');
+    if (![301, 302, 303, 307, 308].includes(response.status) || !location) {
+      throw new GooglePlacesError(
+        'invalid_input',
+        'Google Business link did not resolve to a place',
+      );
+    }
+    try {
+      url = new URL(location, url);
+    } catch {
+      throw new GooglePlacesError('invalid_input', 'Invalid Google Business redirect');
+    }
+  }
+  throw new GooglePlacesError('invalid_input', 'Too many Google Business redirects');
+}
+
 /**
  * Resolve a designer-supplied Google Business URL (or raw place-id / free text)
  * to a canonical `place_id`.
@@ -153,7 +232,8 @@ const PLACE_ID_RE = /^ChI[A-Za-z0-9_-]+$/;
  * - A value that already looks like a place-id is returned as-is.
  * - A maps URL carrying `?place_id=...` or a `!1s<place_id>` data segment is
  *   parsed directly (no API call).
- * - Anything else is sent to Text Search (New).
+ * - Google share/Maps short links are resolved through bounded, allowlisted redirects.
+ * - A Maps/Search business name or free text is sent to Text Search (New).
  */
 export async function resolvePlaceId(input: string): Promise<string> {
   const trimmed = input.trim();
@@ -165,11 +245,14 @@ export async function resolvePlaceId(input: string): Promise<string> {
   const embedded = extractPlaceIdFromUrl(trimmed);
   if (embedded) return embedded;
 
+  const reference = await resolveGoogleLink(trimmed);
+  if (PLACE_ID_RE.test(reference)) return reference;
+
   const body = await placesRequest<{ places?: Array<{ id: string }> }>(
     'POST',
     'places:searchText',
     'places.id',
-    { textQuery: trimmed, maxResultCount: 1 },
+    { textQuery: reference, maxResultCount: 1 },
   );
   const placeId = body.places?.[0]?.id;
   if (!placeId) throw new GooglePlacesError('not_found', 'No place matched the given reference');
@@ -184,7 +267,7 @@ export function extractPlaceIdFromUrl(value: string): string | null {
   } catch {
     return null;
   }
-  const qp = url.searchParams.get('place_id');
+  const qp = url.searchParams.get('place_id') ?? url.searchParams.get('query_place_id');
   if (qp && PLACE_ID_RE.test(qp)) return qp;
   const dataMatch = url.pathname.match(/!1s(ChI[A-Za-z0-9_-]+)/);
   if (dataMatch) return dataMatch[1] ?? null;
