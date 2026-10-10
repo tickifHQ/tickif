@@ -43,6 +43,10 @@ The feedback follow-up preserves that composition while making each experience
 centre's state group visible in the map selector. The hero includes a supplied
 positive office count; absent and zero counts do not create a public location
 claim. Counts come from profile data, independently of experience-centre entries.
+The hero also shows the positive `cityPresenceCount` as City/Cities, labelled
+Service area, to retain feedback item 25's requested city metric. This is the
+API's combined taxonomy/custom service-area city count, not the office count or
+number of experience centres. Empty service areas do not create a zero-city claim.
 
 The 9 October staging corrections preserve official Google Maps embed URLs and
 fall back to a safely encoded address query for ordinary links, shortened

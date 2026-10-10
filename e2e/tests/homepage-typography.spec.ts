@@ -4,7 +4,10 @@ test('homepage and sign-in use the measured Figma text styles', async ({ page })
   await page.setViewportSize({ width: 1512, height: 982 });
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
-  const hero = page.getByRole('heading', { name: /Real Indian homes/ });
+  const hero = page.getByRole('heading', {
+    name: 'Inspire from real homes you’ll love.',
+    exact: true,
+  });
   await expect(hero).toHaveCSS('font-size', '88px');
   await expect(hero).toHaveCSS('line-height', '96px');
   await expect(hero).toHaveCSS('letter-spacing', '-4px');
@@ -47,10 +50,9 @@ test('a loaded display font reaches both the homepage and its portalled sign-in'
   await page.evaluate(() => {
     document.documentElement.style.setProperty('--font-display-base', '"Tickif display test"');
   });
-  await expect(page.getByRole('heading', { name: /Real Indian homes/ })).toHaveCSS(
-    'font-family',
-    '"Tickif display test"',
-  );
+  await expect(
+    page.getByRole('heading', { name: 'Inspire from real homes you’ll love.', exact: true }),
+  ).toHaveCSS('font-family', '"Tickif display test"');
   await page.getByRole('link', { name: 'Log in', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: /Log in to keep exploring|Login to continue/ }),
