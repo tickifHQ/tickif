@@ -355,6 +355,52 @@ requiredEntries.push([
   'custom cities can be typed, saved, reloaded, and removed on desktop and mobile',
 ]);
 
+requiredEntries.push(
+  ...[852, 516, 489, 390, 320].map((width): [string, string] => [
+    'sign-in-modal.spec.ts',
+    `sign-in fits ${width}px without shifting the page or reserving inactive form space`,
+  ]),
+  [
+    'sign-in-modal.spec.ts',
+    'a short mobile viewport scrolls only the dialog and preserves the underlying page position',
+  ],
+  ...[1512, 390].flatMap((width): [string, string][] => [
+    [
+      'login-scroll-lock.spec.ts',
+      `scroll-revealed login locks the page until dismissal at ${width}px`,
+    ],
+    [
+      'login-scroll-lock.spec.ts',
+      `explicit login locks the page and restores scrolling at ${width}px`,
+    ],
+  ]),
+  ['homepage-typography.spec.ts', 'homepage and sign-in use the measured Figma text styles'],
+  [
+    'homepage-typography.spec.ts',
+    'a loaded display font reaches both the homepage and its portalled sign-in',
+  ],
+  ...[320, 390, 489].map((width): [string, string] => [
+    'homepage-typography.spec.ts',
+    `mobile sign-in retains readable typography and touch targets at ${width}px`,
+  ]),
+  [
+    'company-pages.spec.ts',
+    'every Company footer link opens its Markdown document with an honest publication status',
+  ],
+  ...[1512, 390, 320].map((width): [string, string] => [
+    'company-pages.spec.ts',
+    `policy sections stay readable and navigable at ${width}px`,
+  ]),
+  [
+    'company-pages.spec.ts',
+    'drafts expose official sources without inventing a reporting endpoint',
+  ],
+  [
+    'company-pages.spec.ts',
+    'reading login policies keeps entered authentication data in the original tab',
+  ],
+);
+
 export const requiredTests = requiredEntries.map(([file, title]) => ({ file, title }));
 
 const testSchema = z.object({
