@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@repo/ui/lib/utils';
+import { typography } from '@repo/ui/lib/typography';
 
 type PublicNavigationItem = { href: string; label: string };
 
@@ -53,6 +54,7 @@ export function PublicNavigation({
               aria-current="page"
               className={cn(
                 itemClassName,
+                landing && typography.labelSm,
                 landing ? 'bg-foreground/6 text-foreground' : 'bg-accent text-foreground',
               )}
             >
@@ -65,7 +67,11 @@ export function PublicNavigation({
           <Link
             key={item.label}
             href={item.href}
-            className={cn(itemClassName, 'hover:bg-accent hover:text-foreground')}
+            className={cn(
+              itemClassName,
+              landing && typography.labelMd,
+              'hover:bg-accent hover:text-foreground',
+            )}
           >
             {item.label}
           </Link>

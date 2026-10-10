@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/blog/**': ['./content/blog/**/*.md'],
     '/d/*/social-card': ['./src/assets/fonts/*.ttf'],
+    '/company/**': ['./content/company/**/*.md'],
   },
   // Transpile workspace packages consumed directly as TS source.
   transpilePackages: [

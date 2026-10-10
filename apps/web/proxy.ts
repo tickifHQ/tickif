@@ -17,7 +17,8 @@ const PUBLIC_PATHS = new Set([
 /**
  * Route trees anonymous visitors may enter.
  *
- * `/blog/` serves published Markdown articles; `/d/` is the designer portfolio;
+ * `/blog/` serves published Markdown articles; `/company/` serves company documents;
+ * `/d/` is the designer portfolio;
  * `/projects/` is the public project detail
  * route it links to; `/image/` is the public image detail route. Gating these
  * sends visitors to a login wall mid-browse. These routes read published-only API projections
@@ -27,7 +28,7 @@ const PUBLIC_PATHS = new Set([
  * Trailing slashes are deliberate: they keep `/designer/...` from matching `/d/`
  * and any future `/projectsomething` from matching `/projects/`.
  */
-const PUBLIC_PATH_PREFIXES = ['/blog/', '/d/', '/projects/', '/image/'] as const;
+const PUBLIC_PATH_PREFIXES = ['/blog/', '/company/', '/d/', '/projects/', '/image/'] as const;
 
 export function isPublicPath(pathname: string): boolean {
   const normalizedPathname =

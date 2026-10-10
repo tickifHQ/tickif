@@ -124,6 +124,28 @@ describe('ScrollGate', () => {
     vi.unstubAllGlobals();
   });
 
+  it('clips the offscreen reveal so it cannot add a second page scrollbar', () => {
+    render(<ScrollGate />);
+    const scroller = screen
+      .getByTestId('scroll-signup-gate')
+      .querySelector('[data-slot="scroll-gate-scroller"]');
+    expect(scroller).toHaveStyle({ overflowY: 'hidden' });
+    scrollTo(1_000);
+    expect(scroller).toHaveStyle({ overflowY: 'auto' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('scroll-signup-gate')).not.toBeInTheDocument();
+  });
+
+  it.each(['/login', '/company/privacy'])(
+    'does not compete with authentication or policy reading on %s',
+    (pathname) => {
+      pathnameState.value = pathname;
+      render(<ScrollGate />);
+      scrollTo(1_000);
+      expect(screen.queryByTestId('scroll-signup-gate')).not.toBeInTheDocument();
+    },
+  );
+
   it('leaves landing photography undimmed until the login panel enters the viewport', () => {
     pathnameState.value = '/';
     render(<ScrollGate />);
@@ -268,7 +290,7 @@ describe('ScrollGate', () => {
     );
   });
 
-  it('reveals with downward scroll and reverses with upward scroll', () => {
+  it('reverses partial progress but stays pinned once the modal is fully open', () => {
     render(<ScrollGate />);
 
     const gate = screen.getByTestId('scroll-signup-gate');
@@ -289,6 +311,12 @@ describe('ScrollGate', () => {
       transform: 'translate3d(0, 500px, 0)',
     });
 
+    scrollTo(0);
+    expect(gate).toHaveAttribute('data-scroll-progress', '0.000');
+    expect(screen.getByTestId('login-card').parentElement).toHaveStyle({
+      transform: 'translate3d(0, 1000px, 0)',
+    });
+
     scrollTo(1_000);
     expect(screen.getByRole('dialog', { name: 'Sign in required' })).toBeVisible();
     expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
@@ -302,21 +330,15 @@ describe('ScrollGate', () => {
     expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
 
     scrollTo(500);
-    expect(gate).toHaveAttribute('data-scroll-progress', '0.500');
-    expect(gate).toHaveAttribute('aria-hidden', 'true');
-
-    scrollTo(0);
-    expect(gate).toHaveAttribute('data-scroll-progress', '0.000');
-    expect(screen.getByTestId('login-card').parentElement).toHaveStyle({
-      transform: 'translate3d(0, 1000px, 0)',
-    });
+    expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
+    expect(gate).toHaveAttribute('aria-hidden', 'false');
   });
 
   it('updates scrolling visuals without rerendering the login form each frame', () => {
     render(<ScrollGate />);
     const initialRenders = loginCardRenders;
 
-    for (const y of [200, 400, 600, 800, 1_000, 800, 400, 0]) {
+    for (const y of [200, 400, 600, 800, 600, 400, 0]) {
       scrollTo(y);
     }
 
@@ -486,7 +508,7 @@ describe('ScrollGate', () => {
     expect(window.localStorage.getItem('tickif:scroll-gate-dismissed-until:v2')).not.toBeNull();
   });
 
-  it('focuses the revealed dialog, blocks the page behind it, and restores focus on scroll up', () => {
+  it('focuses the revealed dialog, blocks the page behind it, and restores focus on dismissal', () => {
     render(
       <>
         <button type="button">Background action</button>
@@ -504,11 +526,11 @@ describe('ScrollGate', () => {
     expect(backgroundAction.parentElement).toHaveAttribute('inert');
     expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ pointerEvents: 'auto' });
 
-    scrollTo(500);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(document.activeElement).toBe(backgroundAction);
     expect(backgroundAction.parentElement).not.toHaveAttribute('inert');
-    expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ pointerEvents: 'none' });
+    expect(screen.queryByTestId('scroll-signup-backdrop')).not.toBeInTheDocument();
   });
 
   it('returns focus on dismissal and does not dismiss a nested menu with Escape', () => {
@@ -554,7 +576,7 @@ describe('ScrollGate', () => {
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(document.activeElement).toBe(close);
 
-    scrollTo(500);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(preExistingInert).toHaveAttribute('inert');
     preExistingInert.remove();
   });

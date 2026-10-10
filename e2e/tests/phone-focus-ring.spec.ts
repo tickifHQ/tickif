@@ -63,17 +63,8 @@ test('composite fields show one visible focus indicator across login and designe
 
   await page.getByRole('tab', { name: /I'm a designer/ }).click();
   const email = page.getByRole('textbox', { name: 'Email', exact: true });
-  await expect
-    .poll(() =>
-      email.evaluate((element) => {
-        const slider = element.closest<HTMLElement>('[style*="translateX"]');
-        if (!slider) return false;
-
-        const translation = new DOMMatrixReadOnly(getComputedStyle(slider).transform).m41;
-        return Math.abs(translation + slider.getBoundingClientRect().width / 2) < 1;
-      }),
-    )
-    .toBe(true);
+  await expect(email).toBeVisible();
+  await expect(page.locator('#phone')).toBeHidden();
   await email.focus();
   await expect(email).toBeFocused();
   await page.screenshot({

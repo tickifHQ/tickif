@@ -304,3 +304,47 @@ complete onboarding before resuming an explicit callback or entering `/home`.
 Active visitors can reopen `/onboarding` to edit their preferences. Bare `/home`
 resolves saved defaults into an explicit filter URL; `feed=custom` keeps a cleared
 or edited feed from silently reapplying those defaults.
+
+### Public sign-in presentation
+
+`ActionLoginDialog` owns explicit and intercepted sign-in overlays; direct visits
+to `/login` retain the standalone `LoginCard` fallback. On mobile, the card uses
+a compact dark green gradient welcome panel with a short, mode-specific
+introduction, a subdued discovery line below the title, and a touch-sized close control
+at the top corner. Tabs and inputs retain touch-sized targets. Inactive authentication
+panels stay mounted to preserve entered values but are hidden from layout and
+accessibility. The Terms and Privacy agreement follows the active form, and its
+links open separately so reading a document does not discard authentication state.
+The original welcome gradient is retained in the `auth-welcome` theme token.
+Login phone and email fields use the 1px, 12% foreground border, 12px radius and
+subtle shadow measured from Figma node `16121:57187`; the country selector divider
+uses 10% foreground. Focus and invalid states retain the shared control behavior.
+The Google action uses the same outlined field treatment. Dark mode boundaries
+are inferred from the existing theme.
+The active form wrapper allows control borders and shadows to paint outside their
+boxes. Tabs reserve inset space and use an inner keyboard-focus ring, while the
+outer card still clips its rounded corners.
+
+Anonymous public shells reserve the root scrollbar gutter while browsing, then move
+the reservation to the body during an explicit or scroll-triggered sign-in lock
+without adding Radix's margin compensation twice. Page content retains its width even
+on short pages while fixed
+backdrops cover the full viewport without a scrollbar strip. Authenticated public
+pages and private workspaces retain their native gutter and Radix compensation;
+the sign-in styling must not reserve an extra gutter in those layouts.
+Explicit dialogs lock page scrolling and only scroll
+internally when the content exceeds the available dynamic viewport height. The
+scroll-linked prompt clips its offscreen reveal and enables its own scrolling only
+when interactive. Once fully revealed, it locks both page scrolling roots without
+changing the current scroll offset and stays pinned until dismissal or navigation.
+Before that point, upward scrolling can reverse its entrance. Dismissal/unmount
+removes the lock and restores page interaction. It is suppressed on `/login` and
+`/company/*`.
+
+Company footer links resolve to `/company/[slug]`, using a fixed registry and
+Markdown in `apps/web/content/company/`. About remains a sample; Report a problem, Takedown policy,
+Terms and Privacy are researched drafts dated 10 October 2026, excluded
+from search indexing. The reporting pages describe preparation only; they do not
+submit reports. The reporting guide links the canonical WhatsApp support channel;
+formal grievance and privacy-notice contacts remain pending. See the
+[company content guide](../guides/company-content.md) for research and publication prerequisites.

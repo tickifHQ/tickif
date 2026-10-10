@@ -22,6 +22,7 @@ export function ActionLoginDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        data-auth-dialog
         data-landing={presentation === 'landing' || undefined}
         aria-describedby={undefined}
         showCloseButton={false}
@@ -30,7 +31,7 @@ export function ActionLoginDialog({
             ? 'bg-background/60 backdrop-blur-sm'
             : 'bg-foreground/60 backdrop-blur-sm'
         }
-        className={`max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] overflow-y-auto border-0 bg-transparent p-0 shadow-none ${presentation === 'landing' ? 'sm:max-w-[862px]' : 'sm:max-w-[836px]'}`}
+        className={`max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] overflow-x-hidden overflow-y-auto overscroll-contain border-0 bg-transparent p-0 shadow-none ${presentation === 'landing' ? 'sm:max-w-[862px]' : 'sm:max-w-[836px]'}`}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <LoginCard

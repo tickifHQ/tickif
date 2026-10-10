@@ -1,5 +1,7 @@
 'use client';
 
+import { typography } from '@repo/ui/lib/typography';
+
 import Link from 'next/link';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -337,7 +339,7 @@ export function HomeSearchBar({
                 : 'Search interiors, construction, a style, or a city…'
           }
           aria-label="Search homes"
-          className={`h-9 min-w-0 flex-1 appearance-none bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${variant === 'hero' ? 'text-base sm:text-lg' : 'text-sm'}`}
+          className={`h-9 min-w-0 flex-1 appearance-none bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${variant === 'hero' ? `${typography.bodyLg} text-base sm:text-lg` : variant === 'header' ? typography.labelMd : 'text-sm'}`}
         />
         {query.length > 0 ? (
           <Button
@@ -365,8 +367,8 @@ export function HomeSearchBar({
               aria-label={variant === 'header' ? 'Header search city' : 'Search city'}
               className={
                 variant === 'header'
-                  ? 'order-first h-[30px] max-w-36 shrink-0 gap-1.5 rounded-full border-0 bg-card px-2.5 text-sm shadow-sm [&>svg]:hidden'
-                  : 'h-7 max-w-28 shrink-0 gap-2 rounded-none border-0 border-l border-border bg-transparent px-2 shadow-none sm:max-w-44 sm:px-4 sm:text-base [&>svg]:hidden'
+                  ? `${typography.labelMd} order-first h-[30px] max-w-36 shrink-0 gap-1.5 rounded-full border-0 bg-card px-2.5 shadow-sm [&>svg]:hidden`
+                  : `${typography.labelLg} h-7 max-w-28 shrink-0 gap-2 rounded-none border-0 border-l border-border bg-transparent px-2 shadow-none sm:max-w-44 sm:px-4 [&>svg]:hidden`
               }
             >
               {variant === 'header' ? (
@@ -407,7 +409,7 @@ export function HomeSearchBar({
           <Button
             type="submit"
             size="lg"
-            className="landing-lift h-[54px] shrink-0 gap-2 rounded-full px-4 sm:px-6"
+            className={`landing-lift h-[54px] shrink-0 gap-2 rounded-full px-4 sm:px-6 ${typography.labelLg}`}
             aria-label="Search"
           >
             <img src="/images/landing/search-light.svg" alt="" className="dark:brightness-0" />

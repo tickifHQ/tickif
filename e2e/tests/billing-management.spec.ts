@@ -323,6 +323,9 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await expect(page.getByRole('heading', { name: 'Checkout closed', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    // Wait for the asynchronous provider dismissal to close its review dialog
+    // before delivering activation evidence for the resumed checkout.
+    await expect(page.getByRole('dialog')).not.toBeVisible();
     await expect(page.getByRole('status', { name: 'Secure checkout' })).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Continue checkout', exact: true }),

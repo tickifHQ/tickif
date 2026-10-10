@@ -82,6 +82,8 @@ jobs:
       - name: Assert every critical journey ran and passed
         if: always()
         run: pnpm --filter @repo/e2e exec tsx scripts/assert-coverage.ts
+      - name: Verify scroll-triggered sign-in
+        run: pnpm --filter @repo/e2e exec playwright test --config scroll-gate-evidence.config.ts
       - uses: actions/upload-artifact@v7
         if: always()
         with:

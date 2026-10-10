@@ -5,12 +5,12 @@ import { PublicFooter } from '../../src/components/public-footer';
 describe('PublicFooter', () => {
   it.each([false, true])('offers WhatsApp support with landing=%s', (landing) => {
     render(<PublicFooter landing={landing} />);
-    expect(screen.getByRole('link', { name: 'Report a problem' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'WhatsApp support' })).toHaveAttribute(
       'href',
       'https://wa.me/919994645911',
     );
   });
-  it('renders the landing footer destinations and does not fabricate legal links', () => {
+  it('links every Company entry to its Markdown-backed page', () => {
     render(<PublicFooter landing />);
     expect(screen.getByRole('link', { name: 'Pricing' })).toHaveAttribute(
       'href',
@@ -21,8 +21,15 @@ describe('PublicFooter', () => {
       '/designer/verification',
     );
     expect(screen.getByRole('heading', { name: 'Company' })).toBeInTheDocument();
-    expect(screen.getByText('Terms & privacy')).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.queryByRole('link', { name: 'Terms & privacy' })).toBeNull();
+    for (const [name, slug] of [
+      ['About', 'about'],
+      ['Report a problem', 'report-a-problem'],
+      ['Takedown policy', 'takedown-policy'],
+      ['Terms', 'terms'],
+      ['Privacy', 'privacy'],
+    ]) {
+      expect(screen.getByRole('link', { name: name! })).toHaveAttribute('href', `/company/${slug}`);
+    }
   });
   it('renders inside a contentinfo landmark with the current copyright year', () => {
     render(<PublicFooter />);
