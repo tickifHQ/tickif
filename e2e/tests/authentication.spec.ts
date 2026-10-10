@@ -140,7 +140,9 @@ test('visitor personal settings keep client validation local and persist details
     await page.getByLabel('Display name').fill(' A');
     await page.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Personal settings' }).getByRole('alert')).toContainText(
+      'Enter a name between 2 and 100 characters',
+    );
     await expect(page.getByLabel('Display name')).toHaveAttribute('aria-invalid', 'true');
     await expect(page).toHaveURL(/\/home\/settings$/);
 
