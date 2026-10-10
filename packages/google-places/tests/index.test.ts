@@ -61,6 +61,106 @@ describe('extractPlaceIdFromUrl', () => {
 });
 
 describe('resolvePlaceId', () => {
+  it('resolves a Google share link through its business-name redirect', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://www.google.com/share.google?q=short-id' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 301,
+          headers: {
+            location: 'https://www.google.com/search?kgmid=/g/example&q=Elixir+home+Interiors',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ places: [{ id: PLACE_ID }] })));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(resolvePlaceId('https://share.google/short-id')).resolves.toBe(PLACE_ID);
+    expect(JSON.parse(fetchMock.mock.calls[2]?.[1].body as string)).toEqual({
+      textQuery: 'Elixir home Interiors',
+      maxResultCount: 1,
+    });
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', redirect: 'manual' });
+    expect(fetchMock.mock.calls[0]?.[1].headers).toBeUndefined();
+  });
+
+  it('resolves Maps short links without a paid search when the redirect contains a place ID', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: `https://www.google.com/maps/place/Studio/data=!1s${PLACE_ID}` },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(resolvePlaceId('https://maps.app.goo.gl/example')).resolves.toBe(PLACE_ID);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses short-link redirects outside Google without fetching the target', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(resolvePlaceId('https://share.google/example')).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds short-link redirect loops', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(null, { status: 302, headers: { location: 'https://share.google/loop' } }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(resolvePlaceId('https://share.google/loop')).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(5);
+  });
+
+  it.each([
+    'http://share.google/example',
+    'https://share.google:8443/example',
+    'https://user:password@share.google/example',
+  ])('refuses unsafe Google link authority: %s', async (url) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(resolvePlaceId(url)).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stops after five distinct redirects', async () => {
+    let hop = 0;
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: `https://share.google/hop-${++hop}` },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(resolvePlaceId('https://share.google/start')).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('maps a short-link network failure to a typed error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection reset')));
+    await expect(resolvePlaceId('https://share.google/example')).rejects.toMatchObject({
+      code: 'network',
+    });
+  });
+
   it('returns a raw place-id without hitting the network', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);

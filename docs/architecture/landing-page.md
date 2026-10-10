@@ -7,6 +7,9 @@ designer/admin routing and other public pages retain their existing behavior.
 
 ## Data and interactions
 
+- The visible hero uses “Inspire from real homes you’ll love.” and “Architecture ·
+  Construction · Interior.” The product owner restored the original feedback copy
+  over the newer Figma wording; see [ADR 0008](../adr/0008-homepage-feedback-copy.md).
 - The server loads taxonomy and the recent/featured discovery feeds concurrently
   through the typed Hono client, validating responses with `@repo/contracts`.
 - Hero project photography and captions use the first three featured projects with cover
@@ -73,6 +76,10 @@ designer/admin routing and other public pages retain their existing behavior.
   [ADR 0004](../adr/0004-early-bird-trials.md) for eligibility and expiry policy.
 
 ## Content boundaries
+
+The designer directory shows a connected Google rating and count as passive text
+outside the portfolio navigation link. The photograph and studio details still
+open the portfolio; clicking the Google aggregate does not navigate.
 
 No Figma sample project, designer, price, testimonial or platform total is used as
 live content. The existing public contracts do not supply the sponsorship campaign,

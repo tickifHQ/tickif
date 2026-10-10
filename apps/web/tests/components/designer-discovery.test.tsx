@@ -173,6 +173,7 @@ describe('designer discovery', () => {
     const googleRating = screen.getByLabelText('Google Business rating');
     expect(googleRating).toBeVisible();
     expect(googleRating).toHaveTextContent('Google 4.9 · 127 ratings');
+    expect(googleRating.closest('a, button, [role="button"]')).toBeNull();
     expect(googleRating.querySelector('svg')).toBeInTheDocument();
     expect(googleRating.querySelector('.fill-rating')).toBeInTheDocument();
     expect(screen.getByText('8 years of experience · 12 projects')).toBeVisible();
