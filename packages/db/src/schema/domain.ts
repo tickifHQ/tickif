@@ -36,6 +36,7 @@ import {
   type OnboardingStep,
   type OnboardingDraftFields,
   type LogoCropArea,
+  type VisitorHomeType,
 } from '@repo/contracts';
 import { user, organization, member, team } from './auth.js';
 
@@ -281,11 +282,20 @@ export const visitorProfile = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     address: text('address'),
     whatsappNumber: text('whatsapp_number'),
+    homeType: text('home_type').$type<VisitorHomeType>(),
+    cityId: uuid('city_id').references(() => taxonomy.id, { onDelete: 'set null' }),
+    localityId: uuid('locality_id').references(() => taxonomy.id, { onDelete: 'set null' }),
     onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    index('visitor_profile_city_idx').on(t.cityId),
+    index('visitor_profile_locality_idx').on(t.localityId),
+    check(
+      'visitor_profile_home_type_check',
+      sql`${t.homeType} IS NULL OR ${t.homeType} IN ('1-bhk', '2-bhk', '3-bhk', '4-plus-bhk', 'villa')`,
+    ),
     check(
       'visitor_profile_address_length_check',
       sql`${t.address} IS NULL OR char_length(trim(${t.address})) BETWEEN 1 AND 300`,

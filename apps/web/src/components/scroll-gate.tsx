@@ -400,7 +400,7 @@ export function ScrollGate() {
           aria-modal={interactive}
           inert={!interactive}
           tabIndex={-1}
-          className={`my-auto w-full will-change-transform ${pathname === '/' ? 'max-w-[862px]' : 'max-w-3xl'}`}
+          className="my-auto w-full max-w-4xl will-change-transform"
           style={{
             pointerEvents: interactive ? 'auto' : 'none',
             transform: `translate3d(0, ${panelOffset}px, 0)`,

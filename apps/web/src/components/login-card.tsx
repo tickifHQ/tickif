@@ -33,6 +33,16 @@ import {
 } from '@/components/phone-number-input';
 import { DESIGNER_AUTH_CONTINUE_PATH, VISITOR_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
 import { useLandingProjectPreviews } from '@/components/landing-project-preview';
+import {
+  PLATFORM_ROLE,
+  ACCOUNT_STATUS,
+  platformRoleSchema,
+  accountStatusSchema,
+  visitorFeedPreferencesResponseSchema,
+} from '@repo/contracts';
+import { VisitorFeedOnboarding } from '@/components/visitor-feed-onboarding';
+import { api } from '@/lib/api';
+import { visitorFeedHref } from '@/lib/visitor-feed-preferences';
 
 type LoginMode = 'browsing' | 'designer';
 
@@ -44,7 +54,7 @@ interface LoginCardProps {
   onClose?: () => void;
 }
 
-type Step = 'phone' | 'otp';
+type Step = 'phone' | 'otp' | 'visitor-onboarding';
 type OtpDigits = string[];
 
 const COOLDOWN_SECONDS = 30;
@@ -124,6 +134,7 @@ export function LoginCard({
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
+  const [visitorDestination, setVisitorDestination] = useState<string | null>(null);
   const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
   const handleClose = onClose ?? (() => router.push('/'));
 
@@ -156,12 +167,16 @@ export function LoginCard({
       window.location.href = callbackPath;
       return;
     }
+    if (visitorDestination) {
+      window.location.href = visitorDestination;
+      return;
+    }
     // Otherwise continue through the server-rendered login page so it resolves
     // the fresh Better Auth session and owns the platform-role redirect.
     const continuePath =
       loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH;
     window.location.href = continuePath;
-  }, [success, loginMode, callbackPath, onSuccess]);
+  }, [success, loginMode, callbackPath, onSuccess, visitorDestination]);
 
   // Phone OTP cooldown
   useEffect(() => {
@@ -230,6 +245,29 @@ export function LoginCard({
         setError(error.message || 'Invalid or expired OTP');
         setCode(['', '', '', '', '', '']);
         return;
+      }
+      const session = await authClient
+        .getSession({ query: { disableCookieCache: true } })
+        .catch(() => ({ data: null }));
+      const user = session.data?.user;
+      const role = platformRoleSchema.safeParse(user && 'role' in user ? user.role : null);
+      const status = accountStatusSchema.safeParse(user && 'status' in user ? user.status : null);
+      if (role.success && role.data === PLATFORM_ROLE.VISITOR && status.success) {
+        if (status.data === ACCOUNT_STATUS.PENDING) {
+          setStep('visitor-onboarding');
+          return;
+        }
+        if (status.data === ACCOUNT_STATUS.ACTIVE) {
+          try {
+            const response = await api.api.visitors.me['feed-preferences'].$get();
+            if (response.ok) {
+              const parsed = visitorFeedPreferencesResponseSchema.safeParse(await response.json());
+              if (parsed.success) setVisitorDestination(visitorFeedHref(parsed.data));
+            }
+          } catch {
+            // Saved feed lookup is optional; the server login continuation remains available.
+          }
+        }
       }
       setSuccess(true);
     } catch (err: unknown) {
@@ -371,6 +409,17 @@ export function LoginCard({
         <p className="text-lg font-medium text-success">Signed in</p>
         <p className="mt-1 text-sm text-muted-foreground">Redirecting…</p>
       </Card>
+    );
+  }
+
+  if (step === 'visitor-onboarding') {
+    return (
+      <VisitorFeedOnboarding
+        onComplete={(href) => {
+          setVisitorDestination(href);
+          setSuccess(true);
+        }}
+      />
     );
   }
 

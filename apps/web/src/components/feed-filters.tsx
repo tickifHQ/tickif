@@ -97,10 +97,10 @@ export function FeedFilters({
     'facet' | 'slug'
   > | null>(null);
   const applied = FEED_FACET_DEFINITIONS.flatMap((facet) =>
-    selected[facet.key].map((slug) => ({ facet, slug })),
+    (selected[facet.key] ?? []).map((slug) => ({ facet, slug })),
   );
   const draftCount = FEED_FACET_DEFINITIONS.reduce(
-    (total, facet) => total + draft[facet.key].length,
+    (total, facet) => total + (draft[facet.key]?.length ?? 0),
     0,
   );
 
@@ -127,6 +127,11 @@ export function FeedFilters({
   }, [facetDistribution, options, presentation]);
 
   function update(next: FeedFilterState) {
+    // Locality belongs to the onboarding city. Broaden it when city filters change
+    // instead of silently retaining an incompatible area and showing an empty feed.
+    if (next.city.join(',') !== selected.city.join(',') && next.locality?.length) {
+      next = { ...next, locality: [] };
+    }
     router.push(hrefFor(pathname, next, currentParams));
     setDraft(next);
   }
@@ -148,7 +153,7 @@ export function FeedFilters({
     if (activeSuggestion?.facet === facet && activeSuggestion.slug === slug) {
       setActiveSuggestion(null);
     }
-    update({ ...selected, [facet]: selected[facet].filter((value) => value !== slug) });
+    update({ ...selected, [facet]: (selected[facet] ?? []).filter((value) => value !== slug) });
   }
 
   function clearAll() {
@@ -158,7 +163,7 @@ export function FeedFilters({
 
   function selectSuggestion(tag: FeedFilterTag) {
     const trackedSuggestion =
-      activeSuggestion && selected[activeSuggestion.facet].includes(activeSuggestion.slug)
+      activeSuggestion && selected[activeSuggestion.facet]?.includes(activeSuggestion.slug)
         ? activeSuggestion
         : null;
     const soleAppliedFilter = applied.length === 1 ? applied[0] : undefined;
@@ -174,24 +179,24 @@ export function FeedFilters({
         : null;
     const previousSuggestion = trackedSuggestion ?? inferredSuggestion;
     const next: FeedFilterState = Object.fromEntries(
-      FEED_FACET_DEFINITIONS.map((facet) => [facet.key, [...selected[facet.key]]]),
+      FEED_FACET_DEFINITIONS.map((facet) => [facet.key, [...(selected[facet.key] ?? [])]]),
     ) as FeedFilterState;
 
     if (previousSuggestion) {
-      next[previousSuggestion.facet] = next[previousSuggestion.facet].filter(
+      next[previousSuggestion.facet] = (next[previousSuggestion.facet] ?? []).filter(
         (slug) => slug !== previousSuggestion.slug,
       );
     }
 
     const isSameSuggestion =
       previousSuggestion?.facet === tag.facet && previousSuggestion.slug === tag.slug;
-    const isSelectedFilter = !previousSuggestion && next[tag.facet].includes(tag.slug);
+    const isSelectedFilter = !previousSuggestion && next[tag.facet]?.includes(tag.slug);
 
     if (isSameSuggestion || isSelectedFilter) {
-      next[tag.facet] = next[tag.facet].filter((slug) => slug !== tag.slug);
+      next[tag.facet] = (next[tag.facet] ?? []).filter((slug) => slug !== tag.slug);
       setActiveSuggestion(null);
     } else {
-      next[tag.facet] = [...new Set([...next[tag.facet], tag.slug])];
+      next[tag.facet] = [...new Set([...(next[tag.facet] ?? []), tag.slug])];
       setActiveSuggestion({ facet: tag.facet, slug: tag.slug });
     }
 
@@ -228,7 +233,7 @@ export function FeedFilters({
             {FEED_FACET_DEFINITIONS.map((facet) => {
               const facetOptions = options[facet.key] ?? [];
               const distribution = facetDistribution[facet.apiKey];
-              const count = draft[facet.key].length;
+              const count = draft[facet.key]?.length ?? 0;
 
               return (
                 <DropdownMenuSub key={facet.key}>
@@ -248,9 +253,9 @@ export function FeedFilters({
                           return (
                             <DropdownMenuCheckboxItem
                               key={option.slug}
-                              checked={draft[facet.key].includes(option.slug)}
+                              checked={draft[facet.key]?.includes(option.slug) ?? false}
                               disabled={
-                                optionCount === 0 && !draft[facet.key].includes(option.slug)
+                                optionCount === 0 && !draft[facet.key]?.includes(option.slug)
                               }
                               onCheckedChange={(checked) =>
                                 toggleDraft(facet.key, option.slug, checked)
@@ -306,7 +311,7 @@ export function FeedFilters({
           All
         </button>
         {suggestedTags.map((tag) => {
-          const isSelected = selected[tag.facet].includes(tag.slug);
+          const isSelected = selected[tag.facet]?.includes(tag.slug) ?? false;
           return (
             <button
               key={`${tag.facet}-${tag.slug}`}

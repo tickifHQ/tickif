@@ -13,11 +13,17 @@ export const FEED_FILTER_KEYS = [
   'theme',
   'material',
   'tag',
+  'locality',
+  'propertySubtype',
 ] as const;
 
 export type FeedFilterKey = (typeof FEED_FILTER_KEYS)[number];
 
-export type FeedFilterState = Record<FeedFilterKey, string[]>;
+export type FeedFilterState = Record<
+  Exclude<FeedFilterKey, 'locality' | 'propertySubtype'>,
+  string[]
+> &
+  Partial<Record<'locality' | 'propertySubtype', string[]>>;
 
 export type FeedFacetKey =
   | 'citySlug'
@@ -29,20 +35,14 @@ export type FeedFacetKey =
   | 'themes'
   | 'materials'
   | 'tags';
+// Location and property subtype are also carried by visitor onboarding URLs.
 
 type FeedTaxonomyKind =
-  | 'city'
-  | 'bhk'
-  | 'property_type'
-  | 'scope'
-  | 'budget_band'
-  | 'room'
-  | 'theme'
-  | 'material';
+  'city' | 'bhk' | 'property_type' | 'scope' | 'budget_band' | 'room' | 'theme' | 'material';
 
 export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   key: FeedFilterKey;
-  apiKey: FeedFacetKey;
+  apiKey: FeedFacetKey | 'localitySlug' | 'propertySubtypeSlug';
   kind: FeedTaxonomyKind | null;
   label: string;
 }> = [
@@ -60,6 +60,8 @@ export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   { key: 'theme', apiKey: 'themes', kind: 'theme', label: 'Style' },
   { key: 'material', apiKey: 'materials', kind: 'material', label: 'Material' },
   { key: 'tag', apiKey: 'tags', kind: null, label: 'Tag' },
+  { key: 'locality', apiKey: 'localitySlug', kind: null, label: 'Locality' },
+  { key: 'propertySubtype', apiKey: 'propertySubtypeSlug', kind: null, label: 'Property subtype' },
 ];
 
 const FEED_FILTER_KEY_SET = new Set<string>(FEED_FILTER_KEYS);
@@ -112,7 +114,10 @@ export function parseFeedParams(
   const state = emptyState();
 
   for (const key of FEED_FILTER_KEYS) {
-    state[key] = splitValues(valuesFor(input, key));
+    const values = splitValues(valuesFor(input, key));
+    if (key === 'locality' || key === 'propertySubtype') {
+      if (values.length) state[key] = values;
+    } else state[key] = values;
   }
 
   return state;
@@ -127,7 +132,7 @@ export function serializeFeedParams(
 
   for (const key of FEED_FILTER_KEYS) {
     params.delete(key);
-    const values = splitValues(state[key]);
+    const values = splitValues(state[key] ?? []);
     if (values.length > 0) params.set(key, values.join(','));
   }
 

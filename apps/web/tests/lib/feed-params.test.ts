@@ -10,6 +10,20 @@ import {
 } from '../../src/lib/feed-params';
 
 describe('feed params', () => {
+  it('round-trips onboarding locality and villa subtype through discovery and search', () => {
+    const state = parseFeedParams(
+      new URLSearchParams('city=chennai&locality=adyar&propertySubtype=villa'),
+    );
+    expect(serializeFeedParams(state).toString()).toBe(
+      'city=chennai&locality=adyar&propertySubtype=villa',
+    );
+    expect(toDiscoveryFeedFilters(state)).toEqual({
+      citySlug: 'chennai',
+      localitySlug: 'adyar',
+      propertySubtypeSlug: 'villa',
+    });
+    expect(toSearchProjectFilters(state)).toEqual(toDiscoveryFeedFilters(state));
+  });
   it('round-trips comma-separated and repeated URL values', () => {
     const parsed = parseFeedParams(
       new URLSearchParams('city=bengaluru,pune&city=pune&bhk=3bhk&other=ignored'),

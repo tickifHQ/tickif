@@ -33,7 +33,7 @@ describe('ActionLoginDialog', () => {
 
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toHaveClass(
       'max-w-[calc(100%-2rem)]',
-      'sm:max-w-3xl',
+      'sm:max-w-4xl',
     );
     expect(screen.getByTestId('login-card')).toHaveAttribute(
       'data-callback-path',

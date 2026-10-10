@@ -75,6 +75,13 @@ Generated components land in `src/components/` and already consume the semantic 
 
 ## Shared component additions
 
+- `ToggleGroup` / `ToggleGroupItem` and `Toggle` use shadcn/Radix primitives,
+  shared intent tokens and keyboard focus styles. Single groups expose radio
+  semantics and multiple groups expose pressed-button semantics. The visitor
+  preference form uses a single group for home type.
+- `bg-visitor-welcome` maps to the Figma visitor onboarding gradient in the
+  Tickif theme. It is an inverse panel and requires inverse foreground tokens.
+
 - `Button`: `shape="pill"` is the default; `shape="rounded"` opts into control
   corners. `variant="soft"` supports inverse sections. `size="lg"` is 50px,
   `size="xl"` is 64px; `icon-sm` is 32px. Existing compact/fancy sizes remain.

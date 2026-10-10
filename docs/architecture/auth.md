@@ -215,6 +215,20 @@ superadmin or recovering a deployment with no accessible superadmin.
 
 ## Client side (web)
 
+### Visitor feed onboarding
+
+Pending visitors see a home-type and location form inside the login card after
+successful phone verification. `/onboarding` renders the same form for recovery.
+GET/PUT `/api/visitors/me/feed-preferences` require a fresh, eligible visitor session
+in personal context. Saves validate active taxonomy terms and activate pending
+visitors atomically. Skip completes onboarding with null preferences. Contacts
+remain editable separately in personal settings and are never erased by this form.
+
+The selected home type, city and optional locality become `/home` query filters.
+Returning phone logins restore those filters; a safe callback for an interrupted
+action retains priority. Direct `/home` navigation remains broad discovery.
+See [ADR 0005](../adr/0005-visitor-feed-preferences.md).
+
 ### Unfinished designer onboarding
 
 Fresh accounts keep their visitor role until validated onboarding creates the

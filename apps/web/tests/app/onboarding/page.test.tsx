@@ -19,6 +19,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/auth-guard', () => ({
   requireAuth: mock.requireAuth,
 }));
+vi.mock('@/components/visitor-feed-onboarding-page', () => ({
+  VisitorFeedOnboardingPage: () => <div>Visitor feed preferences</div>,
+}));
 
 describe('VisitorOnboardingPage', () => {
   beforeEach(() => {
@@ -40,19 +43,8 @@ describe('VisitorOnboardingPage', () => {
 
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
     const page = await Page();
-    const { container } = render(page);
-
-    expect(screen.getByText("Let's set up your space on Tickif")).toBeInTheDocument();
-    expect(screen.getByLabelText(/display name/i)).toHaveValue('');
-    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('+919123456789');
-    expect(screen.getByLabelText(/^address$/i)).toHaveValue('');
-    expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
-    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
-    expect(container.querySelector('img[src*="onboarding-living-room.svg"]')).toHaveAttribute(
-      'height',
-      '189',
-    );
+    render(page);
+    expect(screen.getByText('Visitor feed preferences')).toBeInTheDocument();
   });
 
   it('redirects designers into the designer dashboard', async () => {

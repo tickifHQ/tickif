@@ -1,5 +1,10 @@
-import { ACCOUNT_STATUS, PLATFORM_ROLE, type UpsertVisitorProfileInput } from '@repo/contracts';
-import { and, db, eq, schema } from '@repo/db';
+import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
+  type UpsertVisitorProfileInput,
+  type VisitorFeedPreferencesInput,
+} from '@repo/contracts';
+import { and, db, eq, schema, sql } from '@repo/db';
 import { VisitorProfileAccessDeniedError, VisitorProfileConstraintError } from './errors.js';
 
 export type VisitorProfileRecord = typeof schema.visitorProfile.$inferSelect;
@@ -22,7 +27,7 @@ export const visitorsRepository = {
 
   async upsertCompleted(
     userId: string,
-    input: UpsertVisitorProfileInput,
+    input: UpsertVisitorProfileInput | VisitorFeedPreferencesInput,
   ): Promise<VisitorProfileRecord> {
     try {
       return await db.transaction(async (tx) => {
@@ -46,12 +51,46 @@ export const visitorsRepository = {
           !isBanned;
         if (!canWrite) throw new VisitorProfileAccessDeniedError();
 
+        if ('homeType' in input && input.cityId) {
+          const [city] = await tx
+            .select()
+            .from(schema.taxonomy)
+            .where(
+              and(
+                eq(schema.taxonomy.id, input.cityId),
+                eq(schema.taxonomy.kind, 'city'),
+                eq(schema.taxonomy.isActive, true),
+              ),
+            )
+            .for('share');
+          if (!city) throw new VisitorProfileConstraintError();
+          if (input.localityId) {
+            const [locality] = await tx
+              .select()
+              .from(schema.taxonomy)
+              .where(
+                and(
+                  eq(schema.taxonomy.id, input.localityId),
+                  eq(schema.taxonomy.kind, 'locality'),
+                  eq(schema.taxonomy.parentId, city.id),
+                  eq(schema.taxonomy.isActive, true),
+                ),
+              )
+              .for('share');
+            if (!locality) throw new VisitorProfileConstraintError();
+          }
+        }
+
+        const fields =
+          'homeType' in input
+            ? { homeType: input.homeType, cityId: input.cityId, localityId: input.localityId }
+            : { address: input.address, whatsappNumber: input.whatsappNumber };
+
         const [profile] = await tx
           .insert(schema.visitorProfile)
           .values({
             userId,
-            address: input.address,
-            whatsappNumber: input.whatsappNumber,
+            ...fields,
             onboardingCompletedAt: now,
             createdAt: now,
             updatedAt: now,
@@ -59,8 +98,8 @@ export const visitorsRepository = {
           .onConflictDoUpdate({
             target: schema.visitorProfile.userId,
             set: {
-              address: input.address,
-              whatsappNumber: input.whatsappNumber,
+              ...fields,
+              onboardingCompletedAt: sql`coalesce(${schema.visitorProfile.onboardingCompletedAt}, ${now})`,
               updatedAt: now,
             },
           })
@@ -77,8 +116,50 @@ export const visitorsRepository = {
         return profile;
       });
     } catch (error) {
-      if (databaseErrorCode(error) === '23514') throw new VisitorProfileConstraintError();
+      if (['23514', '23503'].includes(databaseErrorCode(error) ?? ''))
+        throw new VisitorProfileConstraintError();
       throw error;
     }
+  },
+
+  async findLocation(cityId: string | null, localityId: string | null) {
+    if (!cityId) return { city: null, locality: null };
+    const [city] = await db
+      .select({
+        id: schema.taxonomy.id,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        parentId: schema.taxonomy.parentId,
+      })
+      .from(schema.taxonomy)
+      .where(
+        and(
+          eq(schema.taxonomy.id, cityId),
+          eq(schema.taxonomy.kind, 'city'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .limit(1);
+    if (!city) return { city: null, locality: null };
+    const [locality] = localityId
+      ? await db
+          .select({
+            id: schema.taxonomy.id,
+            slug: schema.taxonomy.slug,
+            label: schema.taxonomy.label,
+            parentId: schema.taxonomy.parentId,
+          })
+          .from(schema.taxonomy)
+          .where(
+            and(
+              eq(schema.taxonomy.id, localityId),
+              eq(schema.taxonomy.kind, 'locality'),
+              eq(schema.taxonomy.parentId, cityId),
+              eq(schema.taxonomy.isActive, true),
+            ),
+          )
+          .limit(1)
+      : [];
+    return { city, locality: locality ?? null };
   },
 };

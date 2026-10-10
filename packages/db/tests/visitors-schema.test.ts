@@ -17,6 +17,7 @@ describe('visitor profile schema', () => {
 
   it('constrains address length and WhatsApp E.164 formatting at the database boundary', () => {
     expect(config.checks.map((tableCheck) => tableCheck.name)).toEqual([
+      'visitor_profile_home_type_check',
       'visitor_profile_address_length_check',
       'visitor_profile_whatsapp_e164_check',
     ]);
@@ -32,8 +33,8 @@ describe('visitor profile schema', () => {
     expect(timestamps.every((column) => 'withTimezone' in column && column.withTimezone)).toBe(
       true,
     );
-    expect(
-      timestamps.find((column) => column.name === 'onboarding_completed_at')?.notNull,
-    ).toBe(false);
+    expect(timestamps.find((column) => column.name === 'onboarding_completed_at')?.notNull).toBe(
+      false,
+    );
   });
 });

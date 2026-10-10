@@ -1,5 +1,15 @@
 # Tickif UI Refresh Specification
 
+## Visitor onboarding addition (2026-10-10)
+
+Figma node `16121:61230` adds the post-OTP home/location preference form. It reuses
+the shared Card, Field, Select and newly generated ToggleGroup primitives, with
+Lucide icons and a `visitor-welcome` gradient token. The old visitor contact form
+is replaced by `visitor-feed-onboarding.tsx`; contacts remain in personal settings.
+See [ADR 0005](../../adr/0005-visitor-feed-preferences.md) for data and feed behavior.
+The component audit below is the recorded refresh baseline, not a generated
+inventory of every subsequent app composition.
+
 The new designer portfolio is the visual source for the shared system. Runtime
 theme values, components, a crown presentation primitive and an interactive
 gallery now apply that reference. The user approved the component gallery on

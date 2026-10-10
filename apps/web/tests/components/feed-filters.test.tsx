@@ -14,6 +14,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('FeedFilters', () => {
+  it('clears an onboarding locality when its city filter is removed', () => {
+    mock.params = new URLSearchParams('city=chennai&locality=adyar&bhk=3-bhk');
+    render(<FeedFilters options={{ city: [{ slug: 'chennai', label: 'Chennai' }] }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Chennai filter' }));
+    expect(mock.push).toHaveBeenCalledWith('/?bhk=3-bhk');
+  });
   it('keeps landing room categories in design order with thumbnails, even when empty', () => {
     render(
       <FeedFilters

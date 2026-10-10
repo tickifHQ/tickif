@@ -10,6 +10,7 @@ vi.mock('../../../src/modules/visitors/repository.js', () => ({
   visitorsRepository: {
     findByUserId: vi.fn(),
     upsertCompleted: vi.fn(),
+    findLocation: vi.fn(),
   },
 }));
 
@@ -27,6 +28,9 @@ const profile: VisitorProfileRecord = {
   userId: pendingVisitor.userId,
   address: 'Bandra West, Mumbai',
   whatsappNumber: '+919800000001',
+  homeType: null,
+  cityId: null,
+  localityId: null,
   onboardingCompletedAt: new Date('2026-08-09T10:00:00.000Z'),
   createdAt: new Date('2026-08-09T10:00:00.000Z'),
   updatedAt: new Date('2026-08-09T10:00:00.000Z'),
@@ -124,5 +128,56 @@ describe('visitor profile authorization', () => {
     await expect(
       visitorsService.upsertMine({ address: null, whatsappNumber: null }, caller),
     ).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('visitor feed preferences', () => {
+  it('returns an empty preference state for a new visitor', async () => {
+    vi.mocked(visitorsRepository.findByUserId).mockResolvedValue(null);
+    await expect(visitorsService.getFeedPreferences(pendingVisitor)).resolves.toEqual({
+      homeType: null,
+      city: null,
+      locality: null,
+      onboardingCompletedAt: null,
+    });
+  });
+  it('saves and returns resolved preferences without contact fields', async () => {
+    vi.mocked(visitorsRepository.upsertCompleted).mockResolvedValue(profile);
+    vi.mocked(visitorsRepository.findByUserId).mockResolvedValue(profile);
+    vi.mocked(visitorsRepository.findLocation).mockResolvedValue({ city: null, locality: null });
+    await expect(
+      visitorsService.saveFeedPreferences(
+        { homeType: null, cityId: null, localityId: null },
+        pendingVisitor,
+      ),
+    ).resolves.toEqual({
+      homeType: null,
+      city: null,
+      locality: null,
+      onboardingCompletedAt: profile.onboardingCompletedAt!.toISOString(),
+    });
+  });
+  it('maps guarded persistence failures', async () => {
+    vi.mocked(visitorsRepository.upsertCompleted)
+      .mockRejectedValueOnce(new VisitorProfileAccessDeniedError())
+      .mockRejectedValueOnce(new VisitorProfileConstraintError());
+    const input = { homeType: null, cityId: null, localityId: null };
+    await expect(visitorsService.saveFeedPreferences(input, pendingVisitor)).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(visitorsService.saveFeedPreferences(input, pendingVisitor)).rejects.toMatchObject({
+      status: 422,
+    });
+  });
+  it('denies non-visitor preference reads and writes before persistence', async () => {
+    const caller = { ...pendingVisitor, role: PLATFORM_ROLE.DESIGNER };
+    await expect(visitorsService.getFeedPreferences(caller)).rejects.toMatchObject({ status: 403 });
+    await expect(
+      visitorsService.saveFeedPreferences(
+        { homeType: null, cityId: null, localityId: null },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(visitorsRepository.findByUserId).not.toHaveBeenCalled();
   });
 });

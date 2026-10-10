@@ -44,6 +44,17 @@ unified schema, so a single
 `pnpm db:generate` produces one migration covering everything, and they migrate
 together. This is intentional — see [auth.md](./auth.md).
 
+## Visitor preferences
+
+`visitor_profile` stores optional contact details and separate nullable
+`home_type`, `city_id` and `locality_id` feed preferences. Location foreign keys
+reference taxonomy with `ON DELETE SET NULL`; reads also exclude inactive or
+reparented terms. A check constraint bounds home type. The repository locks the
+account and validates location terms before a transactional upsert and activation.
+Updates preserve existing contact details and the original completion timestamp.
+Migration 0080 adds these fields without changing existing visitor data. See
+[ADR 0005](../adr/0005-visitor-feed-preferences.md).
+
 ## Connection
 
 The connection string is `DATABASE_URL` in `.env`. The local default

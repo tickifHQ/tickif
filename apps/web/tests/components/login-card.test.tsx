@@ -13,6 +13,7 @@ const mock = vi.hoisted(() => ({
   signInSocial: vi.fn(),
   emailOtpSendVerificationOtp: vi.fn(),
   signInEmailOtp: vi.fn(),
+  getSession: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -24,7 +25,14 @@ vi.mock('@/lib/auth-client', () => ({
     phoneNumber: { sendOtp: mock.sendOtp, verify: mock.verify },
     signIn: { social: mock.signInSocial, emailOtp: mock.signInEmailOtp },
     emailOtp: { sendVerificationOtp: mock.emailOtpSendVerificationOtp },
+    getSession: mock.getSession,
   },
+}));
+
+vi.mock('@/components/visitor-feed-onboarding', () => ({
+  VisitorFeedOnboarding: ({ onComplete }: { onComplete: (href: string) => void }) => (
+    <button onClick={() => onComplete('/home?city=chennai&bhk=3-bhk')}>Complete preferences</button>
+  ),
 }));
 
 describe('LoginCard', () => {
@@ -37,6 +45,7 @@ describe('LoginCard', () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.getSession.mockResolvedValue({ data: null, error: null });
   });
 
   it('renders trusted-by badge, welcome title, and phone input', () => {
@@ -340,6 +349,36 @@ describe('LoginCard', () => {
       await fillOtp(user, '123456');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Invalid or expired OTP')).toBeInTheDocument();
+    });
+
+    it('keeps pending visitor OTP completion in the modal until preferences are completed', async () => {
+      mock.verify.mockResolvedValueOnce({ data: null, error: null });
+      mock.getSession.mockResolvedValueOnce({
+        data: { user: { role: 'visitor', status: 'pending' } },
+      });
+      const onSuccess = vi.fn();
+      const user = userEvent.setup();
+      render(<LoginCard onSuccess={onSuccess} />);
+      await goToOtpStep(user);
+      await fillOtp(user, '123456');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(screen.getByRole('button', { name: 'Complete preferences' })).toBeInTheDocument();
+      expect(onSuccess).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'Complete preferences' }));
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not turn session lookup failure into a false OTP error', async () => {
+      mock.verify.mockResolvedValueOnce({ data: null, error: null });
+      mock.getSession.mockRejectedValueOnce(new Error('Session lookup unavailable'));
+      const onSuccess = vi.fn();
+      const user = userEvent.setup();
+      render(<LoginCard onSuccess={onSuccess} />);
+      await goToOtpStep(user);
+      await fillOtp(user, '123456');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
     it('hides browsing form during OTP step', async () => {

@@ -76,6 +76,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@repo/ui/components/ta
 import { TagCombobox } from '@repo/ui/components/tag-combobox';
 import { Textarea } from '@repo/ui/components/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components/tooltip';
+import { Toggle } from '@repo/ui/components/toggle';
+import { ToggleGroup, ToggleGroupItem } from '@repo/ui/components/toggle-group';
 import { portfolioAccentStyle } from '@/lib/portfolio-accent';
 
 const buttonOptions: { variant: NonNullable<ButtonVariantProps['variant']>; label: string }[] = [
@@ -165,6 +167,35 @@ export function ButtonDemos() {
       <p role="status" className="text-sm text-muted-foreground">
         {selected}
       </p>
+      <div className="flex flex-wrap items-center gap-4">
+        <Toggle
+          type="button"
+          variant="outline"
+          onPressedChange={(pressed) =>
+            setSelected(pressed ? 'Favourite selected.' : 'Favourite cleared.')
+          }
+        >
+          Favourite
+        </Toggle>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          spacing={2}
+          aria-label="Example density"
+          onValueChange={(value) =>
+            setSelected(value ? `${value} density selected.` : 'Density cleared.')
+          }
+        >
+          {['Compact', 'Comfortable', 'Wide'].map((value) => (
+            <ToggleGroupItem key={value} type="button" value={value}>
+              {value}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <Toggle type="button" disabled>
+          Disabled toggle
+        </Toggle>
+      </div>
     </div>
   );
 }

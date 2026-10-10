@@ -11,6 +11,7 @@ these records preserve decision context and consequences.
 | [0001 — RBAC role and organization model](./0001-rbac-role-and-org-model.md) | Accepted; amended | 2026-06-09; amended 2026-08-27              | Platform/org roles, membership, permissions and downgrade behavior       |
 | [0002 — Media pipeline](./0002-media-pipeline.md)                            | Accepted          | 2026-06-14                                  | Direct upload, asynchronous derivation, idempotency and failure handling |
 | [0003 — Consultation enquiries](./0003-consultation-enquiries.md)            | Accepted          | Original date unknown; confirmed 2026-10-02 | Enquiry CTAs and deferred consultation scheduling                        |
+| [0005: Visitor feed preferences](./0005-visitor-feed-preferences.md)         | Accepted          | 2026-10-10                                  | Post-OTP visitor onboarding, persistence and feed URL filters            |
 
 No record is currently marked superseded. ADR 0003 supersedes the older booking
 CTA request linked in that record; it does not remove the retained booking code.

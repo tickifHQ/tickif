@@ -5,6 +5,8 @@ import {
   type PlatformRole,
   type UpsertVisitorProfileInput,
   type VisitorProfileResponse,
+  type VisitorFeedPreferencesInput,
+  type VisitorFeedPreferences,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { VisitorProfileAccessDeniedError, VisitorProfileConstraintError } from './errors.js';
@@ -36,6 +38,35 @@ function toResponse(row: VisitorProfileRecord): VisitorProfileResponse {
 }
 
 export const visitorsService = {
+  async getFeedPreferences(caller: VisitorCaller): Promise<VisitorFeedPreferences> {
+    assertEligibleVisitor(caller);
+    const profile = await visitorsRepository.findByUserId(caller.userId);
+    if (!profile)
+      return { homeType: null, city: null, locality: null, onboardingCompletedAt: null };
+    const location = await visitorsRepository.findLocation(profile.cityId, profile.localityId);
+    return {
+      homeType: profile.homeType,
+      ...location,
+      onboardingCompletedAt: profile.onboardingCompletedAt?.toISOString() ?? null,
+    };
+  },
+
+  async saveFeedPreferences(
+    input: VisitorFeedPreferencesInput,
+    caller: VisitorCaller,
+  ): Promise<VisitorFeedPreferences> {
+    assertEligibleVisitor(caller);
+    try {
+      await visitorsRepository.upsertCompleted(caller.userId, input);
+      return await visitorsService.getFeedPreferences(caller);
+    } catch (error) {
+      if (error instanceof VisitorProfileAccessDeniedError)
+        throw AppError.forbidden('Visitor profile access is not permitted');
+      if (error instanceof VisitorProfileConstraintError)
+        throw AppError.unprocessable('Choose a valid home type, city and locality.');
+      throw error;
+    }
+  },
   async getMine(caller: VisitorCaller): Promise<VisitorProfileResponse> {
     assertEligibleVisitor(caller);
     const profile = await visitorsRepository.findByUserId(caller.userId);

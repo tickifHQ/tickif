@@ -94,7 +94,7 @@ async function fetchFeedSafely(
 }
 
 function hasFilters(filters: FeedFilterState): boolean {
-  return FEED_FILTER_KEYS.some((key) => filters[key].length > 0);
+  return FEED_FILTER_KEYS.some((key) => (filters[key]?.length ?? 0) > 0);
 }
 
 export async function generateMetadata({

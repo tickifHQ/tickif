@@ -40,7 +40,7 @@ export function canonicalFeedParams(
 
   const filters = parseFeedParams(params);
   for (const key of FEED_FILTER_KEYS) {
-    if (filters[key].length > 0) result[key] = filters[key].join(',');
+    if (filters[key]?.length) result[key] = filters[key].join(',');
   }
   if (page > 1) result.page = String(page);
 
