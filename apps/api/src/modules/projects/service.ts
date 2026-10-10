@@ -1572,7 +1572,7 @@ export const projectsService = {
    * Fetches limit+1 to compute `hasMore`, then resolves taxonomy labels and
    * cover URLs for the page in a single batched query (no N+1).
    */
-  async feed(query: FeedProjectsQuery): Promise<FeedProjectsResponse> {
+  async feed(query: FeedProjectsQuery, savedByUserId?: string): Promise<FeedProjectsResponse> {
     const { page, limit } = query;
     const filters: PublishedFeedFilters = {
       citySlug: query.citySlug,
@@ -1587,9 +1587,11 @@ export const projectsService = {
       limit: number;
       offset: number;
       filters?: PublishedFeedFilters;
+      savedByUserId?: string;
     } = {
       limit: limit + 1,
       offset: (page - 1) * limit,
+      ...(savedByUserId ? { savedByUserId } : {}),
     };
     if (Object.values(filters).some((value) => value !== undefined)) {
       feedRequest.filters = filters;

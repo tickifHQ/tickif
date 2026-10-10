@@ -5,13 +5,18 @@ vi.mock('../../../src/modules/saved-projects/repository.js', () => ({
     savePublished: vi.fn(),
     remove: vi.fn(),
     findSavedProjectIds: vi.fn(),
+    countVisible: vi.fn(),
   },
 }));
 
+vi.mock('../../../src/modules/projects/service.js', () => ({
+  projectsService: { feed: vi.fn() },
+}));
+const { projectsService } = await import('../../../src/modules/projects/service.js');
+
 const { savedProjectsService } = await import('../../../src/modules/saved-projects/service.js');
-const { savedProjectsRepository } = await import(
-  '../../../src/modules/saved-projects/repository.js'
-);
+const { savedProjectsRepository } =
+  await import('../../../src/modules/saved-projects/repository.js');
 
 const userId = 'user_1';
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -22,6 +27,39 @@ beforeEach(() => {
 });
 
 describe('savedProjectsService', () => {
+  it('scopes the public projection and visible count to the caller', async () => {
+    vi.mocked(projectsService.feed).mockResolvedValue({
+      projects: [],
+      page: 2,
+      limit: 12,
+      hasMore: false,
+    });
+    vi.mocked(savedProjectsRepository.countVisible).mockResolvedValue(13);
+    await expect(savedProjectsService.list(userId, { page: 2, limit: 12 })).resolves.toEqual({
+      projects: [],
+      page: 2,
+      limit: 12,
+      total: 13,
+      totalPages: 2,
+    });
+    expect(projectsService.feed).toHaveBeenCalledWith({ page: 2, limit: 12 }, userId);
+    expect(savedProjectsRepository.countVisible).toHaveBeenCalledWith(userId);
+  });
+
+  it('returns an honest empty list and propagates read failures', async () => {
+    vi.mocked(projectsService.feed).mockResolvedValue({
+      projects: [],
+      page: 1,
+      limit: 12,
+      hasMore: false,
+    });
+    vi.mocked(savedProjectsRepository.countVisible).mockResolvedValue(0);
+    expect((await savedProjectsService.list(userId, { page: 1, limit: 12 })).totalPages).toBe(0);
+    vi.mocked(savedProjectsRepository.countVisible).mockRejectedValue(new Error('DB offline'));
+    await expect(savedProjectsService.list(userId, { page: 1, limit: 12 })).rejects.toThrow(
+      'DB offline',
+    );
+  });
   it('returns saved state after persisting a published project', async () => {
     vi.mocked(savedProjectsRepository.savePublished).mockResolvedValue(true);
 

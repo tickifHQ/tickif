@@ -3,6 +3,49 @@
 Auth is handled by **better-auth**, configured once in `packages/auth/src/index.ts`
 and mounted into the API. We do not hand-roll sessions, OTP, or OAuth.
 
+## Account dropdown
+
+The shared `AccountMenu` is used by public, personal, designer and admin headers.
+It follows Figma nodes `16123:68132` (menu) and `16123:68176` (logout confirmation)
+in file `WJhOguDptAwt2735BS2WMG`, retaining the existing role/context settings links.
+The unsupported Boards and Following entries are omitted. Active customers get
+Saved projects and Enquiries with real counts; only personal visitors get My home
+profile. Phone numbers are masked, phone-auth placeholder names use the safe
+Account label, generated phone-auth email addresses are never displayed, and
+missing address or count data is not fabricated. Details load in
+parallel only while the menu is open, are scoped to the current account/context,
+and are cancelled on unmount. Failed reads have an inline retry.
+
+`GET /api/saved-projects` uses the existing customer guard, bounds pagination,
+returns private/no-store data, and filters by the authenticated caller, published
+project and active studio. Its shared public-feed projection keeps pending edits
+and private media out of `/saved-projects`; hidden saves are not counted or shown.
+This is a read surface over existing saves, not a new boards/following data model.
+The saved-projects page listens for validated save-change events belonging to its
+authenticated user and refreshes its server-rendered list, counts and pagination
+without a full page reload. Failed mutations do not emit these events or remove
+cards. Removing the last item on a page reuses the server's page-bound correction.
+
+Logout requires confirmation. By default, Better Auth `signOut` revokes the current
+session and clears its cookie. With all devices selected, `revokeOtherSessions`
+must succeed before `signOut` runs. Better Auth validates an authoritative session
+for this endpoint, bypassing the session cookie cache; it does not require a
+recently created session. Failures keep the dialog open and retryable without pretending logout
+succeeded. Pending requests disable duplicate submissions and dismissal. Cancel
+and Escape restore focus to the account trigger. The account menu remains visible
+but inert behind the modal confirmation. When there is room, confirmation is
+anchored to the menu's left and bottom-aligned, clamped inside the viewport;
+narrow screens use the centered dialog. Resize observation keeps the placement
+correct as content wraps or errors appear. No auth data is stored locally.
+
+Menu colors, radii and shadows are semantic theme tokens with dark-mode mappings.
+The logout backdrop uses the neutral `account-menu-overlay` token from Figma
+`16123:68131` (`rgba(23, 22, 18, 0.12)`) in light and dark mode, without changing
+the shared overlay used by other dialogs.
+The source green `#1a9b7a` is darkened to `#168266` for 4.51:1 contrast against
+`#faf9f6` on small functional labels. Exported decorative icons live in
+`apps/web/public/ui/account`; reference screenshots are not shipped.
+
 ## What's enabled
 
 | Capability                 | Plugin / provider        | Notes                                                                            |

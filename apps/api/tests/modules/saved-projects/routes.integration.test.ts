@@ -3,8 +3,80 @@ import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
+import { listSavedProjectsResponseSchema } from '@repo/contracts';
 
 describe('saved project routes', () => {
+  it('lists only the caller’s still-public saves with stable pagination', async () => {
+    const caller = await createRoleSession('+919800005110', 'visitor');
+    const other = await createRoleSession('+919800005111', 'visitor');
+    const active = await makeDesigner({ status: 'active' });
+    const inactive = await makeDesigner({ status: 'draft' });
+    const first = await makeProject({ designerId: active.id, status: 'published' });
+    const second = await makeProject({ designerId: active.id, status: 'published' });
+    const draft = await makeProject({ designerId: active.id, status: 'draft' });
+    const hidden = await makeProject({ designerId: inactive.id, status: 'published' });
+    const privateSave = await makeProject({ designerId: active.id, status: 'published' });
+    await db.insert(schema.savedProject).values([
+      { userId: caller.userId, projectId: first.id, createdAt: new Date('2026-01-01') },
+      { userId: caller.userId, projectId: second.id, createdAt: new Date('2026-01-02') },
+      { userId: caller.userId, projectId: draft.id },
+      { userId: caller.userId, projectId: hidden.id },
+      { userId: other.userId, projectId: privateSave.id },
+    ]);
+    for (const [page, project] of [
+      [1, second],
+      [2, first],
+    ] as const) {
+      const response = await app.request(`/api/saved-projects?page=${page}&limit=1`, {
+        headers: { cookie: caller.cookie },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      const body = listSavedProjectsResponseSchema.parse(await response.json());
+      expect(body).toMatchObject({ page, limit: 1, total: 2, totalPages: 2 });
+      expect(body.projects.map((item) => item.id)).toEqual([project.id]);
+    }
+    const beyond = await app.request('/api/saved-projects?page=3&limit=1', {
+      headers: { cookie: caller.cookie },
+    });
+    expect(await beyond.json()).toMatchObject({ projects: [], total: 2 });
+  });
+
+  it('guards list access and bounds every pagination input', async () => {
+    expect((await app.request('/api/saved-projects')).status).toBe(401);
+    const caller = await createRoleSession('+919800005112', 'visitor');
+    const headers = { cookie: caller.cookie };
+    const empty = await app.request('/api/saved-projects', { headers });
+    expect(await empty.json()).toEqual({
+      projects: [],
+      page: 1,
+      limit: 12,
+      total: 0,
+      totalPages: 0,
+    });
+    for (const query of [
+      'page=0',
+      'page=100001',
+      'page=1.5',
+      'limit=49',
+      'limit=0',
+      'limit=oops',
+    ]) {
+      expect((await app.request(`/api/saved-projects?${query}`, { headers })).status).toBe(422);
+    }
+    await db
+      .update(schema.user)
+      .set({ status: 'pending' })
+      .where(eq(schema.user.id, caller.userId));
+    // Existing customer APIs allow a pending customer's own data; the menu instead
+    // prioritizes Complete setup and does not fetch activity until onboarding completes.
+    expect((await app.request('/api/saved-projects', { headers })).status).toBe(200);
+    await db
+      .update(schema.user)
+      .set({ status: 'active', banned: true })
+      .where(eq(schema.user.id, caller.userId));
+    expect((await app.request('/api/saved-projects', { headers })).status).toBe(403);
+  });
   it.each(['admin', 'superadmin'] as const)(
     'keeps platform %s accounts out of customer saved-project APIs',
     async (role) => {
@@ -17,6 +89,9 @@ describe('saved project routes', () => {
       });
 
       expect(response.status).toBe(403);
+      expect(
+        (await app.request('/api/saved-projects', { headers: { cookie: account.cookie } })).status,
+      ).toBe(403);
     },
   );
 
