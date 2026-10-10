@@ -30,6 +30,12 @@ require_secrets \
   "$R2_ACCESS_KEY_ID_SECRET" "$R2_SECRET_ACCESS_KEY_SECRET" "$RESEND_API_KEY_SECRET" \
   "$GOOGLE_CLIENT_SECRET_NAME" "$RAZORPAY_KEY_SECRET_NAME" "$RAZORPAY_WEBHOOK_SECRET_NAME"
 
+stack_compose_args=(--compose-file "$STAGING_DIR/stack.yml")
+if [[ -n "${GOOGLE_PLACES_API_KEY_SECRET:-}" ]]; then
+  require_secrets "$GOOGLE_PLACES_API_KEY_SECRET"
+  stack_compose_args+=(--compose-file "$STAGING_DIR/google-reviews.yml")
+fi
+
 # This must precede the failure trap: preflight failures leave live traffic alone.
 python3 "$SCRIPT_DIR/storage.py" prepare \
   "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$OPERATIONS_IMAGE"
@@ -66,14 +72,13 @@ docker config inspect "$TRAEFIK_STATIC_CONFIG" >/dev/null 2>&1 || \
 docker config inspect "$TRAEFIK_DYNAMIC_CONFIG" >/dev/null 2>&1 || \
   docker config create "$TRAEFIK_DYNAMIC_CONFIG" "$render_dir/dynamic.yml" >/dev/null
 
-stack_file="$STAGING_DIR/stack.yml"
-docker stack config --compose-file "$stack_file" >/dev/null
+docker stack config "${stack_compose_args[@]}" >/dev/null
 
 echo "[deploy] closing traffic and all writers before preparation"
 close_traffic
 wait_stopped
 export WEB_REPLICAS=0 API_REPLICAS=0 WORKER_REPLICAS=0 TRAEFIK_REPLICAS=0
-docker stack deploy --with-registry-auth --prune --compose-file "$stack_file" "$STACK_NAME"
+docker stack deploy --with-registry-auth --prune "${stack_compose_args[@]}" "$STACK_NAME"
 for service in postgres redis typesense socket-proxy; do wait_healthy "$service" 1; done
 bash "$SCRIPT_DIR/prepare.sh" "${1:-$DEFAULT_ENV_FILE}"
 for service in worker api web; do
