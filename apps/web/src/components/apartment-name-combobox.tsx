@@ -10,10 +10,15 @@ import { cn } from '@repo/ui/lib/utils';
 type ConfiguredApartment = {
   name: string;
   mark: string;
+  logoSrc?: string;
 };
 
 const configuredApartments = [
-  { name: 'Casagrand First City', mark: 'CF' },
+  {
+    name: 'Casagrand First City',
+    mark: 'CF',
+    logoSrc: '/images/apartments/casagrand-first-city.png',
+  },
   { name: 'Maitri Apartments', mark: 'MA' },
   { name: 'Prestige Lakeside', mark: 'PL' },
   { name: 'Sea View', mark: 'SV' },
@@ -35,6 +40,19 @@ function apartmentForName(value: string) {
 }
 
 function ApartmentMark({ apartment }: { apartment: ConfiguredApartment }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (apartment.logoSrc && apartment.logoSrc !== failedSrc) {
+    return (
+      <img
+        src={apartment.logoSrc}
+        alt={`${apartment.name} logo`}
+        width={56}
+        height={28}
+        className="h-7 w-14 shrink-0 object-contain"
+        onError={() => setFailedSrc(apartment.logoSrc ?? null)}
+      />
+    );
+  }
   return (
     <span
       role="img"
@@ -142,7 +160,10 @@ export function ApartmentNameCombobox({
   function openMenu() {
     if (open) return;
     setActiveIndex(
-      Math.max(0, filteredApartments.findIndex((apartment) => apartment === selectedApartment)),
+      Math.max(
+        0,
+        filteredApartments.findIndex((apartment) => apartment === selectedApartment),
+      ),
     );
     setOpen(true);
   }

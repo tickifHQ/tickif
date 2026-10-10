@@ -26,6 +26,7 @@ import {
   type GoogleReviewsResponse,
   type PortfolioProjectItem,
   type PortfolioResponse,
+  type PublicPortfolioStats,
   type RequiredPortfolioField,
   type UpdatePortfolioInput,
   type UploadLogoResponse,
@@ -260,7 +261,11 @@ function getClearedSavedHeroFields(current: FormState, saved: FormState) {
 // Component
 // ---------------------------------------------------------------------------
 
-export function DesignerPortfolioSettings() {
+export function DesignerPortfolioSettings({
+  previewStats,
+}: {
+  previewStats?: Pick<PublicPortfolioStats, 'yearsExperience' | 'projectCount'>;
+} = {}) {
   const router = useRouter();
   // Data states
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
@@ -1718,6 +1723,26 @@ export function DesignerPortfolioSettings() {
                       <Copy className="size-3 shrink-0" />
                       <span className="truncate">{previewUrl}</span>
                     </div>
+                    {previewStats ? (
+                      <div
+                        role="group"
+                        aria-label="Portfolio preview statistics"
+                        className="flex justify-center gap-6 border-t border-border pt-3"
+                      >
+                        {previewStats.yearsExperience !== null ? (
+                          <div>
+                            <div className="text-lg font-semibold">
+                              {previewStats.yearsExperience}
+                            </div>
+                            <div className="text-xs text-muted-foreground">Years experience</div>
+                          </div>
+                        ) : null}
+                        <div>
+                          <div className="text-lg font-semibold">{previewStats.projectCount}</div>
+                          <div className="text-xs text-muted-foreground">Published projects</div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
