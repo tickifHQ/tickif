@@ -1,12 +1,24 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { DropdownMenu } from '@repo/ui/components/dropdown-menu';
+import { AccountMenuDetails } from '@/components/account-menu-details';
 import { AccountMenu } from '../../src/components/account-menu';
 
 const mock = vi.hoisted(() => ({
   signOut: vi.fn(),
+  revokeOtherSessions: vi.fn(),
+  activity: vi.fn(),
+  address: vi.fn(),
   session: null as {
-    user: { name: string | null; email: string | null; role?: string; status?: string };
+    user: {
+      name: string | null;
+      email: string | null;
+      phoneNumber?: string | null;
+      role?: string;
+      status?: string;
+    };
     session?: { activeOrganizationId?: string | null };
   } | null,
   isPending: false,
@@ -16,10 +28,61 @@ vi.mock('@/lib/auth-client', () => ({
   authClient: {
     useSession: () => ({ data: mock.session, isPending: mock.isPending }),
     signOut: mock.signOut,
+    revokeOtherSessions: mock.revokeOtherSessions,
   },
+}));
+vi.mock('@/lib/account-menu-data', () => ({
+  fetchAccountActivity: mock.activity,
+  fetchAccountAddress: mock.address,
+  maskedAccountPhone: () => null,
 }));
 
 describe('AccountMenu', () => {
+  it('registers an empty status region before the first request starts', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(
+      <DropdownMenu>
+        <AccountMenuDetails
+          displayName="Alice"
+          avatarSeed="Alice"
+          image={null}
+          phoneNumber={null}
+          showActivity
+          canReadPersonal
+        />
+      </DropdownMenu>,
+    );
+    expect(container.querySelector('[role="status"]')).toBeEmptyDOMElement();
+    expect(container.querySelector('[aria-label="Your activity"]')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(mock.activity).not.toHaveBeenCalled();
+    expect(mock.address).not.toHaveBeenCalled();
+  });
+
+  it.each(['+919876543210', '  +91 (98765) 43210  '])(
+    'uses the safe account label instead of a phone-auth placeholder name: %s',
+    async (name) => {
+      mock.session = {
+        user: {
+          name,
+          email: '+919876543210@phone.tickif.local',
+          phoneNumber: '+919876543210',
+          role: 'visitor',
+          status: 'pending',
+        },
+        session: { activeOrganizationId: null },
+      };
+      const user = userEvent.setup();
+      render(<AccountMenu showLabel />);
+      await user.click(screen.getByRole('button', { name: 'Open account menu for Account' }));
+      expect(screen.getByRole('menu')).toHaveTextContent('Account');
+      expect(screen.getByRole('menu')).not.toHaveTextContent(name.trim());
+      expect(screen.getByRole('menuitem', { name: 'Complete setup' })).toBeVisible();
+    },
+  );
+
   it('offers personal settings to a visitor in personal context', async () => {
     mock.session = {
       user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
@@ -28,12 +91,166 @@ describe('AccountMenu', () => {
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu/i }));
-    expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/home/settings',
     );
     expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'My home profile' })).toHaveAttribute(
+      'href',
+      '/home/settings#personal-details',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Saved projects' })).toHaveAttribute(
+      'href',
+      '/saved-projects',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Enquiries' })).toHaveAttribute(
+      'href',
+      '/enquiries',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Enquiries' }).querySelector('svg')).toHaveClass(
+      'lucide-message-square-more',
+    );
+    expect(screen.queryByRole('menuitem', { name: 'Boards' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Following' })).not.toBeInTheDocument();
+    for (const item of screen.getAllByRole('menuitem')) {
+      expect(item.querySelector('img')).toBeNull();
+      expect(item.querySelector('svg.lucide')).toHaveAttribute('aria-hidden', 'true');
+    }
   });
+
+  it('loads real details only while open and aborts work when dismissed', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    expect(mock.activity).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(await screen.findByText('24')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('Chennai')).toBeInTheDocument();
+    const signal = mock.activity.mock.calls[0]![0] as AbortSignal;
+    await user.keyboard('{Escape}');
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('renders unavailable counts honestly and supports retry without closing the menu', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    mock.activity.mockResolvedValueOnce({ saved: 2, enquiries: null });
+    let completeRetry: (value: { saved: number; enquiries: number }) => void = () => {
+      throw new Error('Not pending');
+    };
+    mock.activity.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeRetry = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(await screen.findByLabelText('enquiries count unavailable')).toHaveTextContent('N/A');
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent(
+      'Some account details could not load. Use Retry to try again.',
+    );
+    expect(screen.getByText('2')).toBeInTheDocument();
+    const retry = screen.getByRole('menuitem', { name: 'Some details could not load. Retry' });
+    act(() => retry.focus());
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menuitem', { name: 'Saved projects' })).toHaveFocus();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Loading account details.');
+    await act(async () => completeRetry({ saved: 24, enquiries: 3 }));
+    expect(await screen.findByText('24')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Account details loaded. Saved projects: 24. Enquiries: 3.');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Saved projects' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Enquiries' })).toHaveFocus();
+  });
+
+  it('keeps a polite status region outside the busy activity area throughout loading and success', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    let complete: (value: { saved: number; enquiries: number }) => void = () => {
+      throw new Error('Not pending');
+    };
+    mock.activity.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveAttribute('aria-atomic', 'true');
+    expect(status).toHaveClass('sr-only');
+    expect(status).toHaveTextContent('Loading account details.');
+    expect(status.closest('[aria-busy="true"]')).toBeNull();
+    const settings = screen.getByRole('menuitem', { name: 'Settings' });
+    settings.focus();
+    await act(async () => complete({ saved: 0, enquiries: 0 }));
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent('Account details loaded. Saved projects: 0. Enquiries: 0.');
+    expect(settings).toHaveFocus();
+    expect(screen.queryByRole('menuitem', { name: /Retry/ })).not.toBeInTheDocument();
+  });
+
+  it.each(['activity', 'address'] as const)(
+    'announces rejected %s requests without hiding retry',
+    async (request) => {
+      mock.session = {
+        user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+        session: { activeOrganizationId: null },
+      };
+      mock[request].mockRejectedValueOnce(new Error('Unavailable'));
+      const user = userEvent.setup();
+      render(<AccountMenu />);
+      await user.click(screen.getByRole('button', { name: /open account menu/i }));
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Some account details could not load. Use Retry to try again.',
+        ),
+      );
+      expect(
+        screen.getByRole('menuitem', { name: 'Some details could not load. Retry' }),
+      ).toBeVisible();
+    },
+  );
+
+  it.each(['admin', 'superadmin', 'pending', 'banned'])(
+    'does not fetch customer information for %s accounts',
+    async (context) => {
+      mock.session = {
+        user: {
+          name: 'Alice',
+          email: null,
+          role: context === 'pending' || context === 'banned' ? 'visitor' : context,
+          status: context === 'pending' || context === 'banned' ? context : 'active',
+        },
+        session: { activeOrganizationId: null },
+      };
+      const user = userEvent.setup();
+      render(<AccountMenu />);
+      await user.click(screen.getByRole('button', { name: /open account menu/i }));
+      expect(mock.activity).not.toHaveBeenCalled();
+      expect(mock.address).not.toHaveBeenCalled();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Saved projects' })).not.toBeInTheDocument();
+    },
+  );
 
   it('does not expose visitor-only pages to a designer in personal context', async () => {
     mock.session = {
@@ -85,6 +302,10 @@ describe('AccountMenu', () => {
     mock.session = null;
     mock.isPending = false;
     mock.signOut.mockReset();
+    mock.signOut.mockResolvedValue({ error: null });
+    mock.revokeOtherSessions.mockReset().mockResolvedValue({ error: null });
+    mock.activity.mockReset().mockResolvedValue({ saved: 24, enquiries: 3 });
+    mock.address.mockReset().mockResolvedValue('Chennai');
   });
 
   afterEach(() => {
@@ -145,7 +366,7 @@ describe('AccountMenu', () => {
     expect(screen.queryByText('919876543210@phone.tickif.local')).not.toBeInTheDocument();
   });
 
-  it('calls signOut on sign-out click', async () => {
+  it('requires confirmation and logs out only the current device by default', async () => {
     const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
     mock.session = {
       user: { name: 'Alice', email: null },
@@ -154,14 +375,20 @@ describe('AccountMenu', () => {
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
-    const signOut = screen.getByRole('menuitem', { name: 'Sign out' });
-    expect(signOut.querySelector('svg')).toHaveClass('lucide-log-out');
+    const signOut = screen.getByRole('menuitem', { name: 'Log out' });
+    expect(signOut.querySelector('svg.lucide-log-out')).toHaveAttribute('aria-hidden', 'true');
     await user.click(signOut);
+    expect(mock.signOut).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Log out of this device?' })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { hidden: true })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { hidden: true })).toHaveAttribute('inert');
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
     expect(mock.signOut).toHaveBeenCalledTimes(1);
+    expect(mock.revokeOtherSessions).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/login');
   });
 
-  it('places the designer profile link immediately before sign out and closes on selection', async () => {
+  it('keeps the designer profile link in settings and closes on selection', async () => {
     mock.session = {
       user: { name: 'Alice', email: null, role: 'designer', status: 'active' },
       session: { activeOrganizationId: 'org' },
@@ -173,8 +400,14 @@ describe('AccountMenu', () => {
     const items = screen.getAllByRole('menuitem');
     const profile = screen.getByRole('menuitem', { name: 'Profile & settings' });
     expect(profile).toHaveAttribute('href', '/designer/profile');
-    expect(profile.querySelector('svg')).toHaveClass('lucide-settings');
-    expect(items).toEqual([profile, screen.getByRole('menuitem', { name: 'Sign out' })]);
+    expect(profile.querySelector('svg.lucide-settings')).toHaveAttribute('aria-hidden', 'true');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Saved projects',
+      'Enquiries',
+      'Profile & settings',
+      'Help & report',
+      'Log out',
+    ]);
     await user.click(profile);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
@@ -210,14 +443,14 @@ describe('AccountMenu', () => {
         'focus-visible:ring-offset-background',
       );
       await user.keyboard('{ArrowDown}');
-      expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveFocus();
+      expect(screen.getByRole('menuitem', { name: 'Saved projects' })).toHaveFocus();
       await user.keyboard('{Escape}');
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(trigger).toHaveFocus();
     },
   );
 
-  it('still redirects to login even when signOut rejects', async () => {
+  it('keeps logout failures retryable without falsely redirecting', async () => {
     const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
     mock.session = {
       user: { name: 'Alice', email: null },
@@ -227,8 +460,13 @@ describe('AccountMenu', () => {
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
-    await user.click(screen.getByText('Sign out'));
-    expect(navigate).toHaveBeenCalledWith('/login');
+    await user.click(screen.getByRole('menuitem', { name: 'Log out' }));
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not log out. Please try again.');
+    expect(navigate).not.toHaveBeenCalled();
+    mock.signOut.mockResolvedValue({ error: null });
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
   });
 
   it('never renders a blank account label when the user name is missing', async () => {

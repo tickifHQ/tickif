@@ -14,3 +14,16 @@ export function visibleAccountEmail(email: string | null | undefined): string | 
   if (!email || isGeneratedPhoneEmail(email)) return null;
   return email;
 }
+
+/** Phone OTP creates a placeholder name equal to the sign-in number until onboarding. */
+export function visibleAccountName(
+  name: string | null | undefined,
+  phoneNumber: string | null | undefined,
+): string | null {
+  const value = name?.trim();
+  if (!value) return null;
+  const phoneDigits = phoneNumber?.replace(/\D/g, '');
+  if (phoneDigits && /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '') === phoneDigits)
+    return null;
+  return value;
+}

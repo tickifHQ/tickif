@@ -33,6 +33,21 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires every account-menu journey without omissions or skips', () => {
+    const titles = [
+      'account menu uses real personal data, working destinations, and resilient logout on desktop and mobile',
+      'saved projects requires authentication',
+      'saved projects keeps failed removals retryable and corrects pagination without a reload',
+      'phone-auth placeholder names use a safe menu label before onboarding',
+    ];
+    expect(requiredTests.filter(({ file }) => file === 'account-menu.spec.ts')).toHaveLength(4);
+    for (const title of titles) {
+      expect(requiredTests).toContainEqual({ file: 'account-menu.spec.ts', title });
+      expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+      expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+    }
+  });
+
   it('requires the public profile mobile rating regression without omission or skip', () => {
     const title = 'Google rating summary and review carousel fit narrow profile screens';
     expect(requiredTests).toContainEqual({ file: 'public-profile-ratings-mobile.spec.ts', title });

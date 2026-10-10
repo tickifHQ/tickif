@@ -56,6 +56,16 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  --color-account-menu-primary: var(--account-menu-primary);
+  --color-account-menu-primary-hover: var(--account-menu-primary-hover);
+  --color-account-menu-primary-foreground: var(--account-menu-primary-foreground);
+  --color-account-menu-subtle: var(--account-menu-subtle);
+  --color-account-menu-muted: var(--account-menu-muted);
+  --color-account-menu-border: var(--account-menu-border);
+  --color-account-menu-divider: var(--account-menu-divider);
+  --color-account-menu-overlay: var(--account-menu-overlay);
+  --color-account-logout-icon-background: var(--account-logout-icon-background);
+  --color-account-logout-icon-foreground: var(--account-logout-icon-foreground);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
@@ -108,10 +118,13 @@
   --radius-card: var(--card-radius);
   --radius-feature: var(--feature-radius);
   --radius-popover: var(--popover-radius);
+  --radius-account-menu: var(--account-menu-radius);
+  --radius-account-logout: var(--account-logout-radius);
   --radius-checkbox: var(--checkbox-radius);
   --shadow-button-primary: var(--button-primary-shadow);
   --shadow-card: var(--card-shadow);
   --shadow-popover: var(--popover-shadow);
+  --shadow-account-menu: var(--account-menu-shadow);
   --shadow-location-card: var(--location-card-shadow);
 }
 
