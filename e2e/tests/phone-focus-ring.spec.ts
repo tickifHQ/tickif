@@ -191,6 +191,26 @@ test('composite fields show one visible focus indicator across login and designe
     await apartment.fill('Casa');
     await apartment.press('Enter');
     await expect(apartment).toHaveValue('Casagrand First City');
+    const selectedLogo = page.getByRole('img', { name: 'Casagrand First City logo' });
+    await expect(selectedLogo).toBeVisible();
+    await expect
+      .poll(() => selectedLogo.evaluate((element: HTMLImageElement) => element.naturalWidth))
+      .toBeGreaterThan(0);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const logoRight = await selectedLogo.evaluate(
+        (element) => element.getBoundingClientRect().right,
+      );
+      const textLeft = await apartment.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return (
+          element.getBoundingClientRect().left +
+          Number.parseFloat(style.borderLeftWidth) +
+          Number.parseFloat(style.paddingLeft)
+        );
+      });
+      expect(textLeft).toBeGreaterThan(logoRight);
+    }
     await apartment.fill('Independent Residency');
     await expect(page.getByText(/keep this custom apartment name/)).toBeVisible();
 

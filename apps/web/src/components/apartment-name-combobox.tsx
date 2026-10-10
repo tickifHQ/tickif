@@ -28,7 +28,7 @@ function normalizeApartmentName(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 }
 
-function apartmentForName(value: string) {
+function apartmentForName(value: string): ConfiguredApartment | null {
   const normalizedValue = normalizeApartmentName(value);
   if (!normalizedValue) return null;
 
@@ -240,7 +240,10 @@ export function ApartmentNameCombobox({
           onClick={openMenu}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={cn('text-[13px] leading-[1.1]', selectedApartment ? 'pr-9 pl-11' : 'pr-9')}
+          className={cn(
+            'pr-9 text-[13px] leading-[1.1]',
+            selectedApartment && (selectedApartment.logoSrc ? 'pl-18' : 'pl-11'),
+          )}
         />
         <ChevronsUpDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
 
