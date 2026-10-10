@@ -1,4 +1,4 @@
-import { and, db, eq, schema } from '@repo/db';
+import { and, db, eq, inArray, schema, sql } from '@repo/db';
 import type { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 type ViewEventIdentity = {
@@ -22,6 +22,27 @@ export type InsertViewEvent = ViewEventIdentity &
   );
 
 export const interactionsRepository = {
+  async projectCounts(projectIds: string[]) {
+    if (projectIds.length === 0) return [];
+    return db
+      .select({
+        projectId: schema.project.id,
+        viewCount: sql<number>`coalesce(${schema.projectEngagement.viewCount}, 0)`.mapWith(Number),
+        saveCount: sql<number>`(select count(*) from ${schema.savedProject}
+          where ${schema.savedProject.projectId} = ${schema.project.id})`.mapWith(Number),
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .leftJoin(schema.projectEngagement, eq(schema.projectEngagement.projectId, schema.project.id))
+      .where(
+        and(
+          inArray(schema.project.id, projectIds),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      );
+  },
+
   async findPublicProjectOrgId(projectId: string): Promise<string | null> {
     const [row] = await db
       .select({ orgId: schema.designerProfile.orgId })

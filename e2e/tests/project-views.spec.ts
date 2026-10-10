@@ -1,12 +1,22 @@
 import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
 import { db, desc, eq, inArray, schema } from '@repo/db';
-import { assertTestDb, makeDesigner, makeProject, makeUser, migrateTestDb } from '@repo/db/testing';
+import {
+  assertTestDb,
+  makeDesigner,
+  makeProject,
+  makeProjectImage,
+  makeUser,
+  migrateTestDb,
+} from '@repo/db/testing';
+import { putObject, deleteObject } from '@repo/storage';
 import { makePublicPortfolio } from '../lib/public-portfolio';
 
-test('visitor likes persist across project and portfolio views independently of bookmarks', async ({
+test('project views persist across detail and portfolio pages without changing saves', async ({
   page,
   context,
 }, testInfo) => {
@@ -17,7 +27,7 @@ test('visitor likes persist across project and portfolio views independently of 
     !database.pathname.endsWith('_test') ||
     config.DATABASE_URL !== config.DATABASE_URL_TEST
   )
-    throw new Error('Likes E2E requires matching isolated local test database URLs.');
+    throw new Error('Views E2E requires matching isolated local test database URLs.');
   await migrateTestDb(config.DATABASE_URL);
   await assertTestDb();
   const visitor = await makeUser({
@@ -28,35 +38,52 @@ test('visitor likes persist across project and portfolio views independently of 
   });
   const designer = await makeDesigner({
     status: 'active',
-    displayName: 'Synthetic Likes Studio',
-    slug: `likes-studio-${randomUUID()}`,
-    bio: 'Synthetic likes studio biography.',
-    logoImageId: 'e2e/public/likes-studio-logo.png',
+    displayName: 'Synthetic Views Studio',
+    slug: `views-studio-${randomUUID()}`,
+    bio: 'Synthetic views studio biography.',
+    logoImageId: 'e2e/public/views-studio-logo.png',
   });
   await makePublicPortfolio({ profileId: designer.id, portfolioSlug: designer.slug });
   const project = await makeProject({
     designerId: designer.id,
     status: 'published',
-    title: 'Synthetic Likes Project',
+    title: 'Synthetic Views Project',
   });
+  const imageKey = `e2e/views/${randomUUID()}.jpg`;
+  await putObject({
+    key: imageKey,
+    contentType: 'image/jpeg',
+    body: await readFile(
+      resolve('../apps/web/public/images/home-hero/warm-pendant-living-room.jpg'),
+    ),
+  });
+  const projectImage = await makeProjectImage({
+    projectId: project.id,
+    status: 'ready',
+    originalKey: imageKey,
+    width: 1280,
+    height: 960,
+    derivatives: [{ variant: 'large', format: 'jpeg', key: imageKey, width: 1280, height: 960 }],
+  });
+  await db
+    .update(schema.project)
+    .set({ coverImageId: projectImage.id })
+    .where(eq(schema.project.id, project.id));
+  await db
+    .update(schema.designerProfile)
+    .set({ logoImageId: imageKey })
+    .where(eq(schema.designerProfile.id, designer.id));
   const path = `/projects/${project.id}`;
   const projectActions = page.getByRole('complementary', {
-    name: 'Synthetic Likes Studio project designer',
+    name: 'Synthetic Views Studio project designer',
     exact: true,
   });
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   try {
     await page.goto(path);
-    await projectActions
-      .getByRole('button', { name: 'Sign in to like project', exact: true })
-      .click();
-    await expect(page).toHaveURL(`${stackWebUrl}${path}`);
-    const loginDialog = page.getByRole('dialog', { name: 'Sign in to continue' });
-    await expect(loginDialog).toBeVisible();
-    await expect(loginDialog.getByRole('heading', { name: 'Login to continue' })).toBeVisible();
-    await loginDialog.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(loginDialog).toBeHidden();
+    await expect(projectActions.getByRole('img', { name: '0 project views' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /like project/i })).toHaveCount(0);
 
     const headers = { origin: stackWebUrl };
     const phoneNumber = visitor.phoneNumber!;
@@ -85,13 +112,14 @@ test('visitor likes persist across project and portfolio views independently of 
       ).ok(),
     ).toBeTruthy();
     await page.goto(path);
-    await projectActions.getByRole('button', { name: 'Like project', exact: true }).click();
     await expect(
-      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
-    ).toHaveAttribute('aria-pressed', 'true');
-    await expect(
-      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
-    ).toContainText('1');
+      projectActions.getByRole('img', { name: '1 project view', exact: true }),
+    ).toBeVisible();
+    await projectActions.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: testInfo.outputPath('views-desktop.png'),
+      animations: 'disabled',
+    });
     await expect(
       projectActions.getByRole('button', { name: 'Save project', exact: true }),
     ).toHaveAttribute('aria-pressed', 'false');
@@ -101,32 +129,38 @@ test('visitor likes persist across project and portfolio views independently of 
     ).toBeVisible();
     await page.reload();
     await expect(
-      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
+      projectActions.getByRole('img', { name: '1 project view', exact: true }),
     ).toBeVisible();
-    await page.goto(`/d/${designer.slug}`);
-    await expect(page.getByRole('button', { name: 'Unlike project', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Unlike project', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Like project', exact: true })).toContainText(
-      '0',
-    );
-    await page.goto(path);
+    await page.goto(`/image/${projectImage.id}`);
+    await expect(page.getByRole('img', { name: '1 project view', exact: true })).toBeVisible();
     await expect(
-      projectActions.getByRole('button', { name: 'Like project', exact: true }),
-    ).toHaveAttribute('aria-pressed', 'false');
+      page.getByRole('button', { name: 'Remove bookmark', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('img', { name: '1 project view', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: testInfo.outputPath('image-views-desktop.png'),
+      animations: 'disabled',
+    });
+    await page.goto(`/d/${designer.slug}`);
+    await expect(page.getByRole('img', { name: '1 project view', exact: true })).toBeVisible();
+    await page.goto(path);
     await expect(
       projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole('button', { name: /like project/i })).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
+    await projectActions.scrollIntoViewIfNeeded();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
       .toBe(true);
     await page.screenshot({
-      path: testInfo.outputPath('likes-mobile.png'),
+      path: testInfo.outputPath('views-mobile.png'),
       animations: 'disabled',
       fullPage: true,
     });
     expect(runtimeErrors).toEqual([]);
   } finally {
+    await deleteObject(imageKey);
     await assertTestDb();
     await db.delete(schema.organization).where(eq(schema.organization.id, designer.orgId));
     await db.delete(schema.user).where(

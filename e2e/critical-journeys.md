@@ -63,7 +63,7 @@ coverage gate.
   designer disputes and both publish/remove resolutions.
 - `marketplace-journey.spec.ts`: individual onboarding, editor uploads through
   presigned URLs, real worker derivatives, publication, visitor onboarding and
-  discovery, persistent save/like, enquiry, lead response and billing access.
+  discovery, persistent saves and project views, enquiry, lead response and billing access.
 - `organization-access.spec.ts`: real invitations, acceptance, role changes,
   context switching and forbidden cross-organization mutations.
 - `organization-workflows.spec.ts`: projects, leads, profile, portfolio,

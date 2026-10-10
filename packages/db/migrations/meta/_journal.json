@@ -554,6 +554,20 @@
       "when": 1791651911963,
       "tag": "0080_certain_wraith",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1791656147811,
+      "tag": "0081_project_view_totals",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791656166547,
+      "tag": "0082_remove_project_likes",
+      "breakpoints": true
     }
   ]
 }

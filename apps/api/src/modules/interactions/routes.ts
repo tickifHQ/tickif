@@ -3,6 +3,8 @@ import {
   errorResponseSchema,
   recordViewEventResponseSchema,
   recordViewEventSchema,
+  projectEngagementQuerySchema,
+  projectEngagementResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
@@ -44,12 +46,36 @@ const recordViewRoute = createRoute({
 
 export const interactionsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
-}).openapi(recordViewRoute, async (c) => {
-  const result = await interactionsService.recordView({
-    actorUserId: c.get('user')!.id,
-    event: c.req.valid('json'),
+})
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/projects',
+      tags: ['Interactions'],
+      summary: 'Public lifetime view and current save totals for up to 48 visible projects',
+      request: { query: projectEngagementQuerySchema },
+      responses: {
+        200: {
+          description: 'Public project counts; no visitor identities',
+          content: { 'application/json': { schema: projectEngagementResponseSchema } },
+        },
+        422: {
+          description: 'Invalid project ids',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      c.header('Cache-Control', 'no-store');
+      return c.json(await interactionsService.projectCounts(c.req.valid('query')), 200);
+    },
+  )
+  .openapi(recordViewRoute, async (c) => {
+    const result = await interactionsService.recordView({
+      actorUserId: c.get('user')!.id,
+      event: c.req.valid('json'),
+    });
+    return c.json(result, 202);
   });
-  return c.json(result, 202);
-});
 
 export type InteractionsRoutes = typeof interactionsRoutes;

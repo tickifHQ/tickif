@@ -7,8 +7,12 @@ import type { DesignerProjectCard, DiscoveryCard, FeedProject } from '@repo/cont
 import { PublicProjectCard } from '../../src/components/public-project-card';
 import { ShowcaseCard } from '../../src/components/showcase-card';
 
-vi.mock('@/components/project-like-button', () => ({
-  ProjectLikeButton: () => <button>Like</button>,
+vi.mock('@/components/project-view-count', () => ({
+  ProjectViewCount: () => (
+    <span role="img" aria-label="0 project views">
+      0
+    </span>
+  ),
 }));
 
 const feedProject: FeedProject = {

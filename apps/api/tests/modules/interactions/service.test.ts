@@ -7,6 +7,7 @@ vi.mock('../../../src/modules/interactions/repository.js', () => ({
     findActiveDesignerOrgId: vi.fn(),
     isOrgMember: vi.fn(),
     insertViewEvent: vi.fn(),
+    projectCounts: vi.fn(),
   },
 }));
 
@@ -27,6 +28,14 @@ beforeEach(() => {
 });
 
 describe('interactionsService.recordView', () => {
+  it('deduplicates the public counts query', async () => {
+    vi.mocked(interactionsRepository.projectCounts).mockResolvedValue([]);
+    const projectId = '33333333-3333-4333-8333-333333333333';
+    await expect(
+      interactionsService.projectCounts({ projectIds: [projectId, projectId] }),
+    ).resolves.toEqual({ projects: [] });
+    expect(interactionsRepository.projectCounts).toHaveBeenCalledWith([projectId]);
+  });
   it('records a project view with authenticated identity', async () => {
     const result = await interactionsService.recordView({
       actorUserId: 'user_1',

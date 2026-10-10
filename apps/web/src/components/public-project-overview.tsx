@@ -12,6 +12,7 @@ import { PublicGoogleRating } from '@/components/public-google-rating';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ConsultationCta } from '@/components/consultation-cta';
 import { ProjectActions } from '@/components/project-actions';
+import { ProjectViewTracker } from '@/components/project-view-tracker';
 import { ProjectHeroCarousel } from '@/components/project-hero-carousel';
 import { PublicProjectRecommendations } from '@/components/public-project-recommendations';
 import { PublicProjectStory } from '@/components/public-project-story';
@@ -243,9 +244,11 @@ function DesignerCard({
 export function PublicProjectOverview({
   project,
   canonicalUrl,
+  isAuthenticated = false,
 }: {
   project: PublicProjectDetailResponse;
   canonicalUrl: string;
+  isAuthenticated?: boolean;
 }) {
   const specifications = projectSpecifications(project);
   const location = [
@@ -260,6 +263,7 @@ export function PublicProjectOverview({
 
   return (
     <article className={cn(hasRecommendations ? 'pb-0' : 'pb-24')}>
+      <ProjectViewTracker projectId={project.id} isAuthenticated={isAuthenticated} />
       <div className="mx-auto w-full max-w-[1512px] px-4 sm:px-6 lg:px-8">
         <nav aria-label="Breadcrumb" className="flex h-14 items-center gap-1.5 text-xs font-medium">
           <Link

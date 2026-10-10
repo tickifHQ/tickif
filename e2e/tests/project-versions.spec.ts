@@ -284,16 +284,8 @@ test('published project edits keep live content through rejection and replace it
     await expect(publicPage).toHaveURL(`${webUrl}${publicPath}`);
     await loginDialog.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(loginDialog).toBeHidden();
-    const like = publicPage.getByRole('button', { name: 'Sign in to like project' });
-    await expect(like).toBeEnabled();
-    await like.scrollIntoViewIfNeeded();
-    await testInfo.attach('e252-public-actions-mobile', {
-      body: await publicPage.screenshot({ animations: 'disabled', caret: 'initial' }),
-      contentType: 'image/png',
-    });
-    await like.click();
-    await expect(loginDialog).toBeVisible();
-    await expect(publicPage).toHaveURL(`${webUrl}${publicPath}`);
+    await expect(publicPage.getByRole('img', { name: '0 project views' }).first()).toBeVisible();
+    await expect(publicPage.getByRole('button', { name: /like project/i })).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await Promise.allSettled([designerContext.close(), publicContext.close()]);

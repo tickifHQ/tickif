@@ -42,3 +42,22 @@ export const recordViewEventResponseSchema = z
   })
   .meta({ id: 'RecordViewEventResponse' });
 export type RecordViewEventResponse = z.infer<typeof recordViewEventResponseSchema>;
+
+export const projectEngagementQuerySchema = z
+  .object({ projectIds: z.union([z.uuid(), z.array(z.uuid()).min(1).max(48)]) })
+  .meta({ id: 'ProjectEngagementQuery' });
+export type ProjectEngagementQuery = z.infer<typeof projectEngagementQuerySchema>;
+
+export const projectEngagementSchema = z
+  .object({
+    projectId: z.uuid(),
+    viewCount: z.number().int().nonnegative(),
+    saveCount: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'ProjectEngagement' });
+export type ProjectEngagement = z.infer<typeof projectEngagementSchema>;
+
+export const projectEngagementResponseSchema = z
+  .object({ projects: z.array(projectEngagementSchema) })
+  .meta({ id: 'ProjectEngagementResponse' });
+export type ProjectEngagementResponse = z.infer<typeof projectEngagementResponseSchema>;

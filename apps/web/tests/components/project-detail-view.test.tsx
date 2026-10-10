@@ -7,8 +7,13 @@ import type {
 } from '@repo/contracts';
 import { ImageDetailView } from '../../src/components/image-detail-view';
 
-vi.mock('@/components/project-like-button', () => ({
-  ProjectLikeButton: () => <button>Like</button>,
+vi.mock('@/components/project-view-tracker', () => ({ ProjectViewTracker: () => null }));
+vi.mock('@/components/project-view-count', () => ({
+  ProjectViewCount: () => (
+    <span role="img" aria-label="0 project views">
+      0
+    </span>
+  ),
 }));
 vi.mock('@/components/action-login-dialog', () => ({
   ActionLoginDialog: ({ open }: { open: boolean }) =>
@@ -281,7 +286,7 @@ describe('ImageDetailView', () => {
     expect(screen.queryByRole('button', { name: /report/i })).not.toBeInTheDocument();
   });
 
-  it('does not display fabricated views or bookmark counts', () => {
+  it('uses the shared project view count without like controls', () => {
     renderComponent();
 
     const eyeIcons = document.querySelectorAll('.lucide-eye');
@@ -465,31 +470,6 @@ describe('ImageDetailView', () => {
       window.removeEventListener('error', onError);
       consoleError.mockRestore();
     }
-  });
-
-  // --- View tracking identity ---
-
-  it('reuses a persisted anonymousId across page views but a fresh eventKey', async () => {
-    window.localStorage.clear();
-    const viewBodies: Array<Record<string, unknown>> = [];
-    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (String(url).includes('/api/interactions/views')) {
-        viewBodies.push(JSON.parse(String(init?.body)));
-        return { ok: true, json: async () => ({ recorded: true }) };
-      }
-      return { ok: true, json: async () => ({ savedProjectIds: [] }) };
-    });
-
-    await act(async () => {
-      renderComponent({ isAuthenticated: true });
-    });
-    await act(async () => {
-      renderComponent({ isAuthenticated: true });
-    });
-
-    expect(viewBodies).toHaveLength(2);
-    expect(viewBodies[0]!.anonymousId).toBe(viewBodies[1]!.anonymousId);
-    expect(viewBodies[0]!.eventKey).not.toBe(viewBodies[1]!.eventKey);
   });
 
   // --- Finding #7: Gallery accessibility ---

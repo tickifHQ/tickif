@@ -132,8 +132,12 @@ describe('Figma review corrections', () => {
   });
 });
 
-vi.mock('@/components/project-like-button', () => ({
-  ProjectLikeButton: () => <button>Like</button>,
+vi.mock('@/components/project-view-count', () => ({
+  ProjectViewCount: () => (
+    <span role="img" aria-label="0 project views">
+      0
+    </span>
+  ),
 }));
 vi.mock('@/components/action-login-dialog', () => ({
   ActionLoginDialog: ({ open }: { open: boolean }) =>

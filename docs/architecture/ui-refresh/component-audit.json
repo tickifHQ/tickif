@@ -315,7 +315,6 @@
         "apps/web/src/components/project-actions.tsx",
         "apps/web/src/components/project-feed.tsx",
         "apps/web/src/components/project-image-grid.tsx",
-        "apps/web/src/components/project-like-button.tsx",
         "apps/web/src/components/public-header.tsx",
         "apps/web/src/components/public-project-gallery.tsx",
         "apps/web/src/components/public-project-overview.tsx",

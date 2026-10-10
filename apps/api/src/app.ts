@@ -22,7 +22,6 @@ import { orgsRoutes } from './modules/orgs/routes.js';
 import { enquiriesRoutes } from './modules/enquiries/routes.js';
 import { interactionsRoutes } from './modules/interactions/routes.js';
 import { savedProjectsRoutes } from './modules/saved-projects/routes.js';
-import { projectLikesRoutes } from './modules/project-likes/routes.js';
 import { visitorsRoutes } from './modules/visitors/routes.js';
 import { personalAccountRoutes } from './modules/personal-account/routes.js';
 import { adminVerificationsRoutes, verificationsRoutes } from './modules/verifications/routes.js';
@@ -119,7 +118,6 @@ export const app = base
   .route('/api/enquiries', enquiriesRoutes)
   .route('/api/interactions', interactionsRoutes)
   .route('/api/saved-projects', savedProjectsRoutes)
-  .route('/api/project-likes', projectLikesRoutes)
   .route('/api/visitors', visitorsRoutes)
   .route('/api/personal-account', personalAccountRoutes)
   .route('/api/verifications', verificationsRoutes)

@@ -14,6 +14,7 @@ read the documents and [ADRs](../adr/README.md) relevant to the domain.
 | [Email workflows](./email-workflows.md)        | Transactional delivery, branding and preview boundaries          |
 | [Moderation reasons](./moderation-reasons.md)  | Submission and moderation data                                   |
 | [Project versions](./project-versions.md)      | Pending changes to published projects                            |
+| [Project engagement](./project-engagement.md)  | Public view totals, tracking and saved projects                  |
 | [Public sharing metadata](./social-sharing.md) | Canonical URLs, social cards and visibility                      |
 | [Observability](./observability.md)            | Structured logs, telemetry, privacy and deferred coverage        |
 | [UI refresh](./ui-refresh/README.md)           | Figma provenance, tokens, artwork and shared component decisions |

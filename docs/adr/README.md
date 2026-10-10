@@ -5,14 +5,15 @@ Follow amendment and supersession notes to identify the current decision. The
 [architecture](../architecture/README.md) describes current implementation;
 these records preserve decision context and consequences.
 
-| ADR                                                                          | Status            | Date                                        | Topic and applicability                                                  |
-| ---------------------------------------------------------------------------- | ----------------- | ------------------------------------------- | ------------------------------------------------------------------------ |
-| [0006 — Feedback identity and logo fallbacks](./0006-feedback-card-identity-and-logo-fallbacks.md) | Accepted | 2026-10-10 | Current feedback takes precedence over sample card text; identifiable apartment logos with initials fallback |
-| [0005 — Tickif image signatures](./0005-tickif-image-signatures.md)          | Accepted          | Original date unknown; confirmed 2026-10-09 | Tickif signature replaces the planned SynthID integration                |
-| [0004 — No-card early-bird trials](./0004-early-bird-trials.md)              | Accepted          | 2026-10-09                                  | Campaign deadline, claim eligibility, expiry and payment consent         |
-| [0001 — RBAC role and organization model](./0001-rbac-role-and-org-model.md) | Accepted; amended | 2026-06-09; amended 2026-08-27              | Platform/org roles, membership, permissions and downgrade behavior       |
-| [0002 — Media pipeline](./0002-media-pipeline.md)                            | Accepted          | 2026-06-14                                  | Direct upload, asynchronous derivation, idempotency and failure handling |
-| [0003 — Consultation enquiries](./0003-consultation-enquiries.md)            | Accepted          | Original date unknown; confirmed 2026-10-02 | Enquiry CTAs and deferred consultation scheduling                        |
+| ADR                                                                                                | Status            | Date                                        | Topic and applicability                                                                                      |
+| -------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [0006 — Feedback identity and logo fallbacks](./0006-feedback-card-identity-and-logo-fallbacks.md) | Accepted          | 2026-10-10                                  | Current feedback takes precedence over sample card text; identifiable apartment logos with initials fallback |
+| [0005 — Tickif image signatures](./0005-tickif-image-signatures.md)                                | Accepted          | Original date unknown; confirmed 2026-10-09 | Tickif signature replaces the planned SynthID integration                                                    |
+| [0004 — No-card early-bird trials](./0004-early-bird-trials.md)                                    | Accepted          | 2026-10-09                                  | Campaign deadline, claim eligibility, expiry and payment consent                                             |
+| [0007 — Project views replace likes](./0007-project-views-replace-likes.md)                        | Accepted          | 2026-10-10                                  | View totals, daily recording, saved projects and removal of likes                                            |
+| [0001 — RBAC role and organization model](./0001-rbac-role-and-org-model.md)                       | Accepted; amended | 2026-06-09; amended 2026-08-27              | Platform/org roles, membership, permissions and downgrade behavior                                           |
+| [0002 — Media pipeline](./0002-media-pipeline.md)                                                  | Accepted          | 2026-06-14                                  | Direct upload, asynchronous derivation, idempotency and failure handling                                     |
+| [0003 — Consultation enquiries](./0003-consultation-enquiries.md)                                  | Accepted          | Original date unknown; confirmed 2026-10-02 | Enquiry CTAs and deferred consultation scheduling                                                            |
 
 No record is currently marked superseded. ADR 0003 supersedes the older booking
 CTA request linked in that record; it does not remove the retained booking code.
