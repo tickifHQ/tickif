@@ -1,6 +1,21 @@
 import { and, db, eq, inArray, schema, sql } from '@repo/db';
 
 export const savedProjectsRepository = {
+  async countVisible(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(schema.savedProject)
+      .innerJoin(schema.project, eq(schema.savedProject.projectId, schema.project.id))
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .where(
+        and(
+          eq(schema.savedProject.userId, userId),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      );
+    return row?.total ?? 0;
+  },
   async savePublished(userId: string, projectId: string): Promise<boolean> {
     const result = await db.execute<{ projectId: string }>(sql`
       insert into ${schema.savedProject} (user_id, project_id)
@@ -22,10 +37,7 @@ export const savedProjectsRepository = {
     await db
       .delete(schema.savedProject)
       .where(
-        and(
-          eq(schema.savedProject.userId, userId),
-          eq(schema.savedProject.projectId, projectId),
-        ),
+        and(eq(schema.savedProject.userId, userId), eq(schema.savedProject.projectId, projectId)),
       );
   },
 

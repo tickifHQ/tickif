@@ -45,6 +45,10 @@ coverage gate.
 
 ## Coverage and evidence
 
+- `account-menu.spec.ts`: real account data and fallback labels, responsive menu
+  and logout confirmation, single-device and all-device session boundaries,
+  authentication-protected saved projects, recoverable failures, and list/count/
+  pagination synchronization after unsaving without a page reload.
 - `authentication.spec.ts`: real phone/email OTP sessions, wrong-code rejection,
   Google callback account creation and denied consent; unfinished designer setup
   can be deferred, resumed and completed without granting premature workspace access.
@@ -70,7 +74,8 @@ coverage gate.
 - Existing billing, personal settings, designer directory and homepage pagination
   specs remain in the same complete run.
 
-`test-results/e2e-results.json` is checked against the complete 25-test manifest;
+`test-results/e2e-results.json` is checked against the complete critical-test manifest
+in `e2e/scripts/coverage.ts`;
 missing, filtered, skipped, retried or failed tests fail the gate. Screenshots and failed-run traces are in `test-results/e2e` and
 uploaded as the `critical-e2e-evidence` workflow artifact. The repository's ordinary
 CI independently runs typecheck, lint, unit/integration tests and builds.

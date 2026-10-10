@@ -122,7 +122,7 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
         <Card>
           <CardHeader>
             <CardTitle>
-              <h2>Personal details</h2>
+              <h2 id="personal-details">Personal details</h2>
             </CardTitle>
           </CardHeader>
           <CardContent>

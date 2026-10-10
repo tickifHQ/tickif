@@ -84,7 +84,7 @@ test('phone OTP creates a visitor session, completes onboarding, and opens perso
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(page).toHaveURL(/\/home\?feed=custom$/);
     await page.getByRole('button', { name: /Open account menu/ }).click();
-    const settings = page.getByRole('menuitem', { name: 'Personal settings' });
+    const settings = page.getByRole('menuitem', { name: 'Settings', exact: true });
     await expect(settings).toBeVisible();
     await settings.click();
     await expect(page).toHaveURL(/\/home\/settings$/);

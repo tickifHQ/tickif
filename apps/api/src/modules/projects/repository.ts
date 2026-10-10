@@ -665,6 +665,7 @@ export const projectsRepository = {
     limit: number;
     offset: number;
     filters?: PublishedFeedFilters;
+    savedByUserId?: string;
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
@@ -680,10 +681,28 @@ export const projectsRepository = {
           and(
             eq(schema.project.status, 'published'),
             eq(schema.designerProfile.status, 'active'),
+            ...(params.savedByUserId
+              ? [
+                  sql`exists (
+              select 1 from ${schema.savedProject}
+              where ${schema.savedProject.projectId} = ${schema.project.id}
+                and ${schema.savedProject.userId} = ${params.savedByUserId}
+            )`,
+                ]
+              : []),
             ...projectFeedFilterClauses(params.filters),
           ),
         )
         .orderBy(
+          ...(params.savedByUserId
+            ? [
+                sql`(
+            select ${schema.savedProject.createdAt} from ${schema.savedProject}
+            where ${schema.savedProject.projectId} = ${schema.project.id}
+              and ${schema.savedProject.userId} = ${params.savedByUserId}
+          ) desc`,
+              ]
+            : []),
           sql`${schema.project.publishedAt} desc nulls last`,
           desc(schema.project.createdAt),
           desc(schema.project.id),

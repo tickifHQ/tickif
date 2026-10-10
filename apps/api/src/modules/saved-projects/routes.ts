@@ -5,6 +5,8 @@ import {
   savedProjectStateSchema,
   savedProjectsStateQuerySchema,
   savedProjectsStateResponseSchema,
+  listSavedProjectsQuerySchema,
+  listSavedProjectsResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireCustomerAccess as requireAuth } from '../../lib/auth-middleware.js';
@@ -38,6 +40,25 @@ const stateRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Account suspended'),
     422: errorJson('Invalid project ids'),
+  },
+});
+
+const listRoute = createRoute({
+  method: 'get',
+  path: '/',
+  tags: ['Saved Projects'],
+  summary: 'List the caller’s saved published projects',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { query: listSavedProjectsQuerySchema },
+  responses: {
+    200: {
+      description: 'Visible saved projects belonging to the caller',
+      content: { 'application/json': { schema: listSavedProjectsResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Customer account required or account suspended'),
+    422: errorJson('Invalid pagination'),
   },
 });
 
@@ -83,6 +104,11 @@ const removeRoute = createRoute({
 export const savedProjectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
+  .openapi(listRoute, async (c) => {
+    const result = await savedProjectsService.list(callerId(c.get('user')), c.req.valid('query'));
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(result, 200);
+  })
   .openapi(stateRoute, async (c) => {
     const result = await savedProjectsService.state(callerId(c.get('user')), c.req.valid('query'));
     return c.json(result, 200);

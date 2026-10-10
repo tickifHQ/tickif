@@ -56,6 +56,22 @@
   --card-foreground: #171612;
   --popover: #ffffff;
   --popover-foreground: #171612;
+  /* Account dropdown and logout confirmation, Figma 16123:68132 and 16123:68176. */
+  /* Figma green #1a9b7a darkened for 4.5:1 small-label contrast. */
+  --account-menu-primary: #168266;
+  --account-menu-primary-hover: #157d62;
+  --account-menu-primary-foreground: #faf9f6;
+  --account-menu-subtle: #faf9f6;
+  --account-menu-muted: rgba(23, 22, 18, 0.04);
+  --account-menu-border: rgba(23, 22, 18, 0.08);
+  --account-menu-divider: rgba(23, 22, 18, 0.07);
+  /* Neutral account backdrop, Figma 16123:68131; shared in light and dark mode. */
+  --account-menu-overlay: rgba(23, 22, 18, 0.12);
+  --account-logout-icon-background: #f5e3d9;
+  --account-logout-icon-foreground: #c2603a;
+  --account-menu-radius: 1.25rem;
+  --account-logout-radius: 1.375rem;
+  --account-menu-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.16), 0 2px 4px rgba(0, 0, 0, 0.06);
   --primary: #1e7a55;
   --primary-foreground: #ffffff;
   --primary-hover: #196747;
@@ -176,6 +192,16 @@
   --card-foreground: #f4f0e8;
   --popover: #18261f;
   --popover-foreground: #f4f0e8;
+  --account-menu-primary: #168266;
+  --account-menu-primary-hover: #157d62;
+  --account-menu-primary-foreground: #faf9f6;
+  --account-menu-subtle: var(--muted);
+  --account-menu-muted: var(--muted);
+  --account-menu-border: var(--border);
+  --account-menu-divider: var(--border);
+  --account-logout-icon-background: #4c3226;
+  --account-logout-icon-foreground: #ef9a73;
+  --account-menu-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.2);
   --primary: #8fd8b4;
   --primary-foreground: #0f3326;
   --primary-hover: #a8e3c5;

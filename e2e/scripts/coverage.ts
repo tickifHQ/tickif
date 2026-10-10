@@ -19,6 +19,12 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  ...[
+    'account menu uses real personal data, working destinations, and resilient logout on desktop and mobile',
+    'saved projects requires authentication',
+    'saved projects keeps failed removals retryable and corrects pagination without a reload',
+    'phone-auth placeholder names use a safe menu label before onboarding',
+  ].map((title): [string, string] => ['account-menu.spec.ts', title]),
   ['shared-ui.spec.ts', 'shared typography uses loaded brand fonts instead of the system fallback'],
   ['shared-ui.spec.ts', 'button and badge labels share a tight centered line box at every size'],
   ['shared-ui.spec.ts', 'shared form controls reset native and controlled values together'],
