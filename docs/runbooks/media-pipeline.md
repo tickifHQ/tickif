@@ -81,8 +81,11 @@ previous visible watermark in immutable CDN caches.
 Before reprocessing existing images in an environment:
 
 1. Deploy the new worker and API together.
-2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v4`) in that environment.
-   This prevents immutable caches from continuing to serve old encoded bytes.
+2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v6`) in that environment.
+   Set `WATERMARK_OPACITY=1` and `WATERMARK_SCALE=0.0432`
+   if the deployment overrides the defaults. An older explicit value takes precedence
+   over the new code defaults. This prevents immutable caches from continuing to serve
+   the old badge and keeps new uploads on the same visual settings.
 3. Queue ready images in a controlled batch using
    `pnpm --filter @repo/worker media:reprocess -- <image-id>`, or use
    `pnpm --filter @repo/worker media:reprocess -- --all --confirm` only after
