@@ -364,6 +364,10 @@ describe('DesignerProjectUpload', () => {
     mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
     mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
     const originalTaxonomy = mock.taxonomyGet.getMockImplementation()!;
+    mock.completenessGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({ complete: true, score: 100, missing: [], requirements: [] }),
+    });
     mock.taxonomyGet.mockImplementation(async (input) =>
       input.query.kind === 'budget_band'
         ? Response.json({
@@ -404,6 +408,7 @@ describe('DesignerProjectUpload', () => {
         }),
       ),
     );
+    await screen.findByText('Draft saved.');
   });
 
   function selectWithOption(container: HTMLElement, optionLabel: string) {
