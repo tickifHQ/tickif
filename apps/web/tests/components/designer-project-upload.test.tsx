@@ -388,7 +388,7 @@ describe('DesignerProjectUpload', () => {
       projectBudgetBands.map((band) => band.label),
     );
     await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: 'Design', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Design' }));
     await user.click(budget);
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Under ₹1L',
