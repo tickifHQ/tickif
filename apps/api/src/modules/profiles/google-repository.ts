@@ -1,4 +1,4 @@
-import { db, schema, eq } from '@repo/db';
+import { db, schema, eq, and } from '@repo/db';
 
 /**
  * Data-access for the Google review cache (`google_place_cache`) — API side.
@@ -57,7 +57,27 @@ export const googleReviewsRepository = {
       .where(eq(schema.googlePlaceCache.profileId, profileId));
   },
 
+  /** Leave worker results and newer attempts untouched when queueing fails. */
+  async restoreRefresh(
+    profileId: string,
+    attemptAt: Date,
+    previous: Pick<GooglePlaceCacheRecord, 'status' | 'lastError'>,
+  ): Promise<void> {
+    await db
+      .update(schema.googlePlaceCache)
+      .set({ ...previous, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.googlePlaceCache.profileId, profileId),
+          eq(schema.googlePlaceCache.status, 'pending'),
+          eq(schema.googlePlaceCache.lastAttemptAt, attemptAt),
+        ),
+      );
+  },
+
   async delete(profileId: string): Promise<void> {
-    await db.delete(schema.googlePlaceCache).where(eq(schema.googlePlaceCache.profileId, profileId));
+    await db
+      .delete(schema.googlePlaceCache)
+      .where(eq(schema.googlePlaceCache.profileId, profileId));
   },
 };

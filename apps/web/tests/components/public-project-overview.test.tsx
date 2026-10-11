@@ -42,6 +42,25 @@ const { PublicProjectOverview } = await import('../../src/components/public-proj
 const canonicalUrl = 'https://tickif.com/projects/11111111-1111-4111-8111-111111111111';
 
 describe('PublicProjectOverview', () => {
+  it('shows saved locality, project type and square footage alongside the title', () => {
+    const project = makePublicProject();
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
+    const titleSection = screen.getByRole('heading', { name: project.title }).closest('header')!;
+    expect(within(titleSection).getByText('Mylapore, Chennai')).toBeInTheDocument();
+    expect(within(titleSection).getByText('Apartment')).toBeInTheDocument();
+    expect(within(titleSection).getByText('4,590 sq.ft')).toBeInTheDocument();
+  });
+
+  it('uses the saved project type when no subtype is present and omits unknown floor area', () => {
+    const project = makePublicProject();
+    project.specifications.propertySubtype = null;
+    project.sizeSqft = null;
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
+    const titleSection = screen.getByRole('heading', { name: project.title }).closest('header')!;
+    expect(within(titleSection).getByText('Residential')).toBeInTheDocument();
+    expect(within(titleSection).queryByText(/sq.ft/)).not.toBeInTheDocument();
+  });
+
   it('records an authenticated visit to the project itself', () => {
     const project = makePublicProject();
     render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} isAuthenticated />);
@@ -70,7 +89,7 @@ describe('PublicProjectOverview', () => {
     expect(screen.getByRole('heading', { name: project.title })).toBeInTheDocument();
     expect(screen.getAllByText(/Mylapore/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Casagrand First City').length).toBeGreaterThan(0);
-    expect(screen.getByText('Apartment')).toBeInTheDocument();
+    expect(screen.getAllByText('Apartment').length).toBeGreaterThan(0);
     expect(screen.getByText('₹12–18L')).toBeInTheDocument();
     expect(screen.getByText('4,590')).toBeInTheDocument();
     expect(screen.getByText('Interior Design Execution')).toBeInTheDocument();

@@ -19,9 +19,9 @@ export function readState(row: GooglePlaceCacheRecord): {
 } {
   const expired =
     row.lastFetchedAt != null && Date.now() - row.lastFetchedAt.getTime() >= TOS_MAX_AGE_MS;
-  const status = expired ? 'stale' : row.status;
-  // Only a fresh, successfully-connected row serves rating + review content.
-  const serve = status === 'connected';
+  const status = expired && row.status !== 'pending' ? 'stale' : row.status;
+  const serve =
+    !expired && (status === 'connected' || (status === 'pending' && row.lastFetchedAt !== null));
 
   const summary: GoogleConnectionSummary = {
     status,

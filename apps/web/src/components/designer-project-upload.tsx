@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  taxonomyTermSchema,
   legacyProjectBudgetBands,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
@@ -1369,6 +1370,8 @@ export function DesignerProjectUpload({
   });
   const [roomSearchOpen, setRoomSearchOpen] = useState(false);
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
+  const [creatingRoomType, setCreatingRoomType] = useState(false);
+  const [roomTypeError, setRoomTypeError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [sizeSqftError, setSizeSqftError] = useState<string | null>(null);
@@ -1421,17 +1424,14 @@ export function DesignerProjectUpload({
         .map((term) => ({ value: term.slug, label: term.label })),
     [scopeTerms],
   );
-  const budgetOptions = useMemo(
-    () => {
-      const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
-      const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
-      if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
-        options.push({ value: savedRange.slug, label: savedRange.label });
-      }
-      return options;
-    },
-    [budgetBandTerms, budgetBandSlug],
-  );
+  const budgetOptions = useMemo(() => {
+    const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
+    const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
+    if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
+      options.push({ value: savedRange.slug, label: savedRange.label });
+    }
+    return options;
+  }, [budgetBandTerms, budgetBandSlug]);
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),
     [propertySubtypes],
@@ -1643,9 +1643,12 @@ export function DesignerProjectUpload({
   );
 
   async function loadTerms(kind: TaxonomyKind, parentId?: string) {
-    const response = await api.api.taxonomy.terms.$get({
-      query: parentId ? { kind, parentId } : { kind },
-    });
+    const response = await api.api.taxonomy.terms.$get(
+      {
+        query: parentId ? { kind, parentId } : { kind },
+      },
+      kind === 'room' ? { init: { cache: 'no-store' } } : undefined,
+    );
     if (!response.ok) {
       throw new Error(`Could not load ${kind} options.`);
     }
@@ -3126,6 +3129,9 @@ export function DesignerProjectUpload({
   const availableRoomTemplates = useMemo(() => {
     const templatesBySlug = new Map<string, RoomTemplate>();
 
+    for (const term of roomTerms) {
+      templatesBySlug.set(term.slug, { slug: term.slug, title: term.label });
+    }
     for (const template of suggestedRooms) {
       templatesBySlug.set(template.slug, template);
     }
@@ -3136,7 +3142,7 @@ export function DesignerProjectUpload({
         (room) => room.title === template.title || room.roomSlug === template.slug,
       );
     });
-  }, [rooms, suggestedRooms]);
+  }, [rooms, suggestedRooms, roomTerms]);
   const normalizedRoomSearchQuery = useMemo(
     () => normalizeRoomSearchValue(roomSearchQuery),
     [roomSearchQuery],
@@ -3175,9 +3181,31 @@ export function DesignerProjectUpload({
       return left.title.localeCompare(right.title);
     });
   }, [availableRoomTemplates, normalizedRoomSearchQuery, roomAddOptions]);
+  async function createCustomRoomType() {
+    setCreatingRoomType(true);
+    setRoomTypeError('');
+    try {
+      const response = await api.api.taxonomy.rooms.$post({
+        json: { label: roomSearchQuery.trim() },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(extractApiMessage(payload, 'Could not create room type.'));
+      const term = parseApiPayload(payload, taxonomyTermSchema, 'Could not create room type.');
+      setRoomTerms((current) =>
+        current.some((item) => item.id === term.id) ? current : [...current, term],
+      );
+      handleRoomSearchSelect({ slug: term.slug, title: term.label });
+    } catch (error) {
+      setRoomTypeError(error instanceof Error ? error.message : 'Could not create room type.');
+    } finally {
+      setCreatingRoomType(false);
+    }
+  }
+
   function closeRoomSearch() {
     setRoomSearchOpen(false);
     setRoomSearchQuery('');
+    setRoomTypeError('');
   }
 
   function handleRoomSearchSelect(template: RoomTemplate) {
@@ -3863,6 +3891,29 @@ export function DesignerProjectUpload({
                 </span>
               </div>
 
+              {roomSearchQuery.trim() &&
+              !roomTerms.some(
+                (term) => normalizeRoomSearchValue(term.label) === normalizedRoomSearchQuery,
+              ) ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={creatingRoomType || roomSearchQuery.trim().length > 80}
+                  onClick={() => void createCustomRoomType()}
+                >
+                  {creatingRoomType ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  Create “{roomSearchQuery.trim()}”
+                </Button>
+              ) : null}
+              {roomTypeError ? (
+                <p role="alert" className="px-2 py-2 text-destructive">
+                  {roomTypeError}
+                </p>
+              ) : null}
               {roomSearchResults.length > 0 ? (
                 roomSearchResults.map((template) => (
                   <button
@@ -3881,7 +3932,7 @@ export function DesignerProjectUpload({
                 ))
               ) : (
                 <div className={cn('px-2 py-6 text-muted-foreground', typography.bodyMedium)}>
-                  No matching taxonomy-backed room type found.
+                  No matching room type found.
                 </div>
               )}
             </div>

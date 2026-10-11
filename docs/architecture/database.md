@@ -53,3 +53,13 @@ app — don't create ad-hoc connections.
 
 For schema changes, migration warnings, repository queries and local inspection, use
 [the migration guide](../guides/database-and-migrations.md).
+
+## Room vocabulary
+
+The upload room picker lists every active room taxonomy term, with the project's
+suggested rooms first. Designers can create additional room types through
+`POST /api/taxonomy/rooms`. Names are limited to 80 characters and normalize to a
+unique room slug. Duplicate requests reuse the active term; disabled terms are
+not reactivated. Room taxonomy reads revalidate immediately so added types become
+available to tagging and discovery filters. Saved rooms retain the taxonomy ID,
+and search indexing derives their room slugs from that shared vocabulary.

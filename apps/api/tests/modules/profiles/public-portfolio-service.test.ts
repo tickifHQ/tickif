@@ -527,14 +527,23 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
     expect(result.stats.google).toBeNull();
   });
 
-  it('withholds review content while a connection is still pending', async () => {
+  it('withholds review content while the first connection is still pending', async () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(
-      makeGoogleRow({ status: 'pending', reviews: [makeGoogleReview()] }),
+      makeGoogleRow({ status: 'pending', lastFetchedAt: null, reviews: [makeGoogleReview()] }),
     );
 
     const result = await publicPortfolioService.getBySlug('test-studio');
 
     expect(result.reviews).toEqual([]);
+  });
+
+  it('retains fresh Google reviews and rating while refreshing', async () => {
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(
+      makeGoogleRow({ status: 'pending' }),
+    );
+    const result = await publicPortfolioService.getBySlug('test-studio');
+    expect(result.reviews).toHaveLength(1);
+    expect(result.stats.google).toEqual({ rating: 4.8, reviewCount: 57 });
   });
 
   it('hides all reviews when the designer hid the reviews section', async () => {

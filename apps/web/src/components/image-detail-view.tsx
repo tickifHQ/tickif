@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import type {
   FeedProject,
   PublicProjectGalleryImage,
@@ -62,7 +61,6 @@ export function ImageDetailView({
   designerProfileId,
   isAuthenticated = false,
 }: ImageDetailViewProps) {
-  const router = useRouter();
   const [selectedImageId, setSelectedImageId] = useState(activeImageId);
   const [bookmarked, setBookmarked] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -96,6 +94,16 @@ export function ImageDetailView({
     setSelectedImageId(activeImageId);
   }, [activeImageId]);
 
+  useEffect(() => {
+    function restoreSelectedImage() {
+      const image = gallery.find((entry) => window.location.pathname === `/image/${entry.id}`);
+      if (image) setSelectedImageId(image.id);
+    }
+
+    window.addEventListener('popstate', restoreSelectedImage);
+    return () => window.removeEventListener('popstate', restoreSelectedImage);
+  }, [gallery]);
+
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
   const projectFacts = [
     project.specifications.propertySubtype?.label ?? project.specifications.propertyType?.label,
@@ -119,7 +127,9 @@ export function ImageDetailView({
 
   function selectImage(image: PublicProjectGalleryImage) {
     setSelectedImageId(image.id);
-    router.push(`/image/${image.id}`, { scroll: false });
+    if (window.location.pathname !== `/image/${image.id}`) {
+      window.history.pushState(null, '', `/image/${image.id}`);
+    }
   }
 
   // Finding #1: Keyboard navigation — scoped, with guards
@@ -223,7 +233,7 @@ export function ImageDetailView({
         <div className="flex flex-col gap-8 lg:h-[65vh] lg:flex-row">
           {/* Hero image */}
           <div className="h-full w-full lg:w-[65%]">
-            <div className="relative h-full overflow-hidden rounded-2xl bg-muted">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:h-full">
               {mainImageUrl ? (
                 <img
                   src={mainImageUrl}

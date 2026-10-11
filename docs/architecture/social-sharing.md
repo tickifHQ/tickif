@@ -19,6 +19,11 @@ Image details deliberately have their own card, rather than sharing a parent
 project cover. The image-view sidebar also displays the resolved property
 subtype (or type) and supplied positive floor area from its public API response.
 These facts do not require opening the full project. Unknown values stay absent.
+The project overview repeats the saved locality, property subtype (or type) and
+positive floor area beside its title. Selecting another photo updates the image
+and browser history in place, preserving the surrounding page, scroll and focus.
+Back and Forward restore the selected photo. Direct loads and reloads resolve
+the selected image's server metadata and sharing card.
 Unknown/private projects, images, portfolios and articles return
 404 from their card endpoint. Recoverable unavailable projects keep their existing
 noindex page but have no generated image. API failures remain failures; they do not

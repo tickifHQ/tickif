@@ -80,6 +80,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       headers,
       data: {
         title: `Journey Home ${suffix}`,
+        sizeSqft: 1500,
         citySlug: 'mumbai',
         propertyTypeSlug: 'apartment',
         scopeSlug: 'full-home',
@@ -516,7 +517,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     });
     const firstImageHref = await projectGallery.getByRole('link').first().getAttribute('href');
     if (!firstImageHref) throw new Error('Published project image link is missing');
-    await visitor.goto(firstImageHref);
+    await visitor.goto(`${firstImageHref}?source=gallery`);
     const imageStrip = visitor.getByRole('group', { name: 'Project gallery' });
     await imageStrip.scrollIntoViewIfNeeded();
     const stripBounds = await imageStrip.boundingBox();
@@ -544,7 +545,89 @@ test('designer onboarding and media processing connects to visitor onboarding an
       )
       .toBeLessThan(3);
     await imageStrip.screenshot({ path: testInfo.outputPath('image-strip-wheel-snap-mobile.png') });
+    const originalImageUrl = visitor.url();
+    const sidebar = await visitor.locator('aside').elementHandle();
+    const hero = await visitor
+      .locator('aside')
+      .locator('..')
+      .locator('img')
+      .first()
+      .elementHandle();
+    if (!sidebar || !hero) throw new Error('Image detail content is missing');
+    const nextThumbnail = imageStrip.getByRole('button').nth(1);
+    await nextThumbnail.focus();
+    const initialScroll = await visitor.evaluate(() => window.scrollY);
+    const mobileHeroBounds = await hero.boundingBox();
+    const mobileSidebarBounds = await sidebar.boundingBox();
+    await visitor.keyboard.press('ArrowRight');
+    await expect(visitor).not.toHaveURL(originalImageUrl);
+    await expect(nextThumbnail).toHaveAttribute('aria-current', 'true');
+    await expect(nextThumbnail).toBeFocused();
+    expect(await sidebar.evaluate((node) => node.isConnected)).toBe(true);
+    expect(await hero.evaluate((node) => node.isConnected)).toBe(true);
+    expect(await visitor.evaluate(() => window.scrollY)).toBe(initialScroll);
+    expect(await hero.boundingBox()).toEqual(mobileHeroBounds);
+    expect(await sidebar.boundingBox()).toEqual(mobileSidebarBounds);
+    await expect
+      .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      .toBe(true);
+    const selectedImageUrl = visitor.url();
+    await visitor.goBack();
+    await expect(visitor).toHaveURL(originalImageUrl);
+    await expect(imageStrip.getByRole('button').first()).toHaveAttribute('aria-current', 'true');
+    await visitor.goForward();
+    await expect(visitor).toHaveURL(selectedImageUrl);
+    await expect(nextThumbnail).toHaveAttribute('aria-current', 'true');
+    expect(await sidebar.evaluate((node) => node.isConnected)).toBe(true);
+    await visitor.reload();
+    await expect(nextThumbnail).toHaveAttribute('aria-current', 'true');
+    await visitor.evaluate(() => window.scrollTo(0, 0));
+    await visitor.screenshot({
+      path: testInfo.outputPath('image-gallery-detail-mobile.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    await visitor.setViewportSize({ width: 1280, height: 720 });
+    const desktopHero = visitor.locator('aside').locator('..').locator('img').first();
+    const desktopSidebar = visitor.locator('aside');
+    await nextThumbnail.focus();
+    const desktopHeroBounds = await desktopHero.boundingBox();
+    const desktopSidebarBounds = await desktopSidebar.boundingBox();
+    const desktopScroll = await visitor.evaluate(() => window.scrollY);
+    await visitor.keyboard.press('ArrowRight');
+    await expect(imageStrip.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'true');
+    expect(await desktopHero.boundingBox()).toEqual(desktopHeroBounds);
+    expect(await desktopSidebar.boundingBox()).toEqual(desktopSidebarBounds);
+    expect(await visitor.evaluate(() => window.scrollY)).toBe(desktopScroll);
+    await visitor.evaluate(() => window.scrollTo(0, 0));
+    await visitor.screenshot({
+      path: testInfo.outputPath('image-gallery-detail-desktop.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    await sidebar.dispose();
+    await hero.dispose();
     await visitor.goto(`/projects/${project.id}`);
+    await visitor.setViewportSize({ width: 1280, height: 720 });
+    const projectTitleSection = visitor
+      .getByRole('heading', { name: project.title, exact: true })
+      .locator('..');
+    await expect(projectTitleSection).toContainText('1,500 sq.ft');
+    await visitor.screenshot({
+      path: testInfo.outputPath('project-detail-facts-desktop.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    await visitor.setViewportSize({ width: 390, height: 844 });
+    await expect(projectTitleSection).toContainText('1,500 sq.ft');
+    await expect
+      .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      .toBe(true);
+    await visitor.screenshot({
+      path: testInfo.outputPath('project-detail-facts-mobile.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
     await visitor.setViewportSize({ width: 1280, height: 720 });
     const projectActions = visitor.getByRole('complementary', { name: `Journey Studio ${suffix}` });
     await expect(

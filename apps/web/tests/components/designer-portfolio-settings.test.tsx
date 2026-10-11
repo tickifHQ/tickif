@@ -1833,6 +1833,8 @@ describe('DesignerPortfolioSettings', () => {
       expect(
         await screen.findByPlaceholderText('Google Maps link or business name'),
       ).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Google Business Profile' })).toBeVisible();
+      expect(screen.getByText(/open your business listing in google maps/i)).toBeVisible();
       expect(screen.getByRole('button', { name: /connect/i })).toBeDisabled();
     });
 
@@ -1888,6 +1890,11 @@ describe('DesignerPortfolioSettings', () => {
       });
       await expandReviews();
       expect(await screen.findByText(/isn.t enabled on this workspace/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Contact Tickif support' })).toHaveAttribute(
+        'href',
+        expect.stringContaining('wa.me'),
+      );
+      expect(screen.getByText(/after fetching is enabled/i)).toBeVisible();
     });
 
     it('surfaces the error state with a needs-attention badge and guidance', async () => {
