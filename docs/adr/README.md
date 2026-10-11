@@ -7,6 +7,7 @@ these records preserve decision context and consequences.
 
 | ADR                                                                                                | Status            | Date                                        | Topic and applicability                                                                                      |
 | -------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [0009 — AVIF encoding effort](./0009-media-encoding-effort.md) | Proposed | 2026-10-11 | Explicit CPU effort 2 at the existing quality, sizes and signature policy; staging latency verification pending |
 | [0010 — Saved custom location classification](./0010-saved-custom-location-classification.md) | Accepted | 2026-10-11 | Derived location backfill preserves live/pending boundaries and authored content |
 | [0008 — Homepage feedback copy](./0008-homepage-feedback-copy.md) | Accepted | 2026-10-11 | Original feedback headline and category line override the newer Figma wording |
 | [0006 — Feedback identity and logo fallbacks](./0006-feedback-card-identity-and-logo-fallbacks.md) | Accepted          | 2026-10-10                                  | Current feedback takes precedence over sample card text; identifiable apartment logos with initials fallback |
