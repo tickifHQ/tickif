@@ -143,6 +143,7 @@ function renderComponent(overrides: Partial<Parameters<typeof ImageDetailView>[0
 describe('ImageDetailView', () => {
   beforeEach(() => {
     push.mockClear();
+    window.history.replaceState(null, '', `/image/${gallery[0]!.id}`);
     mockFetch.mockReset();
     // Default mock: saved-state returns empty, view tracking succeeds
     mockFetch.mockResolvedValue({
@@ -299,30 +300,32 @@ describe('ImageDetailView', () => {
     renderComponent({ activeImageId: gallery[1]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowRight' });
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[2]!.id}`, { scroll: false });
+    expect(window.location.pathname).toBe(`/image/${gallery[2]!.id}`);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('navigates gallery backward with ArrowLeft key', () => {
     renderComponent({ activeImageId: gallery[1]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowLeft' });
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[0]!.id}`, { scroll: false });
+    expect(window.location.pathname).toBe(`/image/${gallery[0]!.id}`);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('wraps to the last image when ArrowLeft is pressed on the first', () => {
     renderComponent({ activeImageId: gallery[0]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowLeft' });
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[gallery.length - 1]!.id}`, {
-      scroll: false,
-    });
+    expect(window.location.pathname).toBe(`/image/${gallery[gallery.length - 1]!.id}`);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('wraps to the first image when ArrowRight is pressed on the last', () => {
     renderComponent({ activeImageId: gallery[gallery.length - 1]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowRight' });
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[0]!.id}`, { scroll: false });
+    expect(window.location.pathname).toBe(`/image/${gallery[0]!.id}`);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('does NOT navigate when arrow key is inside an input', () => {
@@ -356,7 +359,79 @@ describe('ImageDetailView', () => {
     renderComponent();
 
     fireEvent.click(screen.getByRole('button', { name: /kitchen/i }));
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[1]!.id}`, { scroll: false });
+    expect(window.location.pathname).toBe(`/image/${gallery[1]!.id}`);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('keeps the image, sidebar and open login dialog mounted while selecting a picture', () => {
+    renderComponent();
+    const hero = screen.getByRole('img', { name: `${project.title}, Living room` });
+    const sidebar = screen.getByRole('heading', { name: project.title, level: 2 });
+    fireEvent.click(screen.getByRole('button', { name: /bookmark/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Sign in to continue' });
+    const thumbnail = screen.getByRole('button', { name: 'Kitchen' });
+    thumbnail.focus();
+    fireEvent.click(thumbnail);
+
+    expect(screen.getByRole('img', { name: `${project.title}, Kitchen` })).toBe(hero);
+    expect(hero).toHaveAttribute('src', gallery[1]!.url);
+    expect(screen.getByRole('heading', { name: project.title, level: 2 })).toBe(sidebar);
+    expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBe(dialog);
+    expect(thumbnail).toHaveFocus();
+    expect(thumbnail).toHaveAttribute('aria-current', 'true');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('restores the selected image for browser history entries in the current gallery', () => {
+    renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
+    window.history.replaceState(null, '', `/image/${gallery[0]!.id}?source=gallery`);
+    fireEvent.popState(window);
+    expect(screen.getByRole('button', { name: 'Living room' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    window.history.replaceState(null, '', `/image/${gallery[1]!.id}`);
+    fireEvent.popState(window);
+    expect(screen.getByRole('button', { name: 'Kitchen' })).toHaveAttribute('aria-current', 'true');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('does not add a history entry when the current thumbnail is selected again', () => {
+    const pushState = vi.spyOn(window.history, 'pushState');
+    renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Living room' }));
+    expect(pushState).not.toHaveBeenCalled();
+  });
+
+  it('resets selection when navigating to a different project through the server route', () => {
+    const rendered = renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
+    rendered.rerender(
+      <ImageDetailView
+        project={{ ...project, id: '66666666-6666-4666-8666-666666666666', title: 'Another home' }}
+        gallery={[gallery[2]!]}
+        designer={designer}
+        narrative={null}
+        moreProjects={[]}
+        activeImageId={gallery[2]!.id}
+        designerProfileId={designer.id}
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'Another home, Bedroom' })).toHaveAttribute(
+      'src',
+      gallery[2]!.url,
+    );
+  });
+
+  it('shares the selected image after navigation without requesting a new page', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /share/i })));
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/image/${gallery[1]!.id}`);
+    expect(push).not.toHaveBeenCalled();
   });
 
   // --- Finding #5 + Bookmark API ---
