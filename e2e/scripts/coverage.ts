@@ -43,6 +43,10 @@ const requiredEntries: [file: string, title: string][] = [
   ['project-photo-reorder.spec.ts', 'photo ordering persists with desktop mouse and keyboard'],
   ['project-photo-reorder.spec.ts', 'photo ordering persists with phone touch'],
   [
+    'project-location-material-feedback.spec.ts',
+    'custom city and area, commercial Hospital and material finish persist through the editor',
+  ],
+  [
     'project-feedback.spec.ts',
     'scope-specific project budget choices persist and room descriptions are absent from the editor',
   ],

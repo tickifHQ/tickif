@@ -9,6 +9,7 @@ import {
 import { taxonomyService } from './service.js';
 import { requireAnyRole, type AuthVariables } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
+import { locationsRoutes } from './locations-routes.js';
 
 /**
  * Taxonomy public read routes.
@@ -82,7 +83,9 @@ export const taxonomyRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const result = await taxonomyService.list(kind, parentId);
     // Only long-cache non-empty results. Empty responses get a short cache so
     // later seeds surface without waiting 7 days.
-    if (kind === 'room') {
+    if (kind === 'city' || kind === 'locality') {
+      c.header('Cache-Control', 'no-store');
+    } else if (kind === 'room') {
       c.header('Cache-Control', 'no-cache');
     } else if (result.terms.length > 0) {
       c.header('Cache-Control', CACHE_CONTROL);
@@ -90,6 +93,7 @@ export const taxonomyRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.header('Cache-Control', 'public, max-age=60');
     }
     return c.json(result, 200);
-  });
+  })
+  .route('/', locationsRoutes);
 
 export type TaxonomyRoutes = typeof taxonomyRoutes;

@@ -350,6 +350,18 @@ describe('designer project upload helpers', () => {
     expect(canonicalTaxonomySlug('stone', terms)).toBe('');
   });
 
+  it('makes a combined material/finish choice searchable as a material filter', () => {
+    expect(
+      buildImageMetadata({
+        roomId: '11111111-1111-4111-8111-111111111111',
+        sortOrder: 0,
+        designStyle: 'modern',
+        materialFinish: 'lacquered-glass',
+        tags: [],
+      }),
+    ).toMatchObject({ materialSlugs: ['lacquered-glass'], finishSlugs: ['lacquered-glass'] });
+  });
+
   it('matches UI room aliases against backend default room slugs', () => {
     expect(roomSlugCandidates('modular-kitchen')).toContain('kitchen');
     expect(roomSlugsMatch('modular-kitchen', 'kitchen')).toBe(true);

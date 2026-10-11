@@ -128,6 +128,7 @@ const propertySubtypes: TermSeed[] = [
   { kind: 'property_subtype', slug: 'home-office', label: 'Home office', sortOrder: 43, metadata: { propertyTypeSlug: 'commercial-workspace', ...workspaceRoomDefaults } },
   { kind: 'property_subtype', slug: 'creative-studio', label: 'Creative studio', sortOrder: 44, metadata: { propertyTypeSlug: 'commercial-workspace', ...workspaceRoomDefaults } },
   { kind: 'property_subtype', slug: 'bank-finance', label: 'Bank / Finance', sortOrder: 45, metadata: { propertyTypeSlug: 'commercial-workspace', ...workspaceRoomDefaults } },
+  { kind: 'property_subtype', slug: 'hospital', label: 'Hospital', sortOrder: 46, metadata: { propertyTypeSlug: 'commercial-workspace', ...institutionalRoomDefaults } },
   { kind: 'property_subtype', slug: 'cafe-coffee-shop', label: 'Cafe / coffee shop', sortOrder: 60, metadata: { propertyTypeSlug: 'food-hospitality', ...hospitalityRoomDefaults } },
   { kind: 'property_subtype', slug: 'restaurant', label: 'Restaurant', sortOrder: 61, metadata: { propertyTypeSlug: 'food-hospitality', ...hospitalityRoomDefaults } },
   { kind: 'property_subtype', slug: 'bar-lounge', label: 'Bar / Lounge', sortOrder: 62, metadata: { propertyTypeSlug: 'food-hospitality', ...hospitalityRoomDefaults } },
@@ -272,18 +273,35 @@ const materials: TermSeed[] = [
   { kind: 'material', slug: 'quartz', label: 'Quartz', sortOrder: 11 },
   { kind: 'material', slug: 'granite', label: 'Granite', sortOrder: 12 },
   { kind: 'material', slug: 'marble', label: 'Marble', sortOrder: 13 },
+  { kind: 'material', slug: 'lacquered-glass', label: 'Lacquered glass', sortOrder: 14 },
+  { kind: 'material', slug: 'fabric', label: 'Fabric', sortOrder: 15 },
+  { kind: 'material', slug: 'stone', label: 'Stone', sortOrder: 16 },
+  { kind: 'material', slug: 'metal', label: 'Metal', sortOrder: 17 },
+  { kind: 'material', slug: 'upvc', label: 'UPVC', sortOrder: 18 },
+  { kind: 'material', slug: 'aluminium', label: 'Aluminium', sortOrder: 19 },
+  { kind: 'material', slug: 'acrylic-gloss', label: 'Acrylic (Glossy)', sortOrder: 20 },
+  { kind: 'material', slug: 'acrylic-matte', label: 'Acrylic (Matte)', sortOrder: 21 },
+  { kind: 'material', slug: 'pu', label: 'PU (Polyurethane)', sortOrder: 22 },
+  { kind: 'material', slug: 'membrane', label: 'Membrane', sortOrder: 23 },
+  { kind: 'material', slug: 'glass', label: 'Glass', sortOrder: 24 },
 ];
 
 // --- FINISHES ---
 const finishes: TermSeed[] = [
   { kind: 'finish', slug: 'laminate', label: 'Laminate', sortOrder: 1 },
-  { kind: 'finish', slug: 'acrylic-gloss', label: 'Acrylic (Gloss)', sortOrder: 2 },
+  { kind: 'finish', slug: 'acrylic-gloss', label: 'Acrylic (Glossy)', sortOrder: 2 },
   { kind: 'finish', slug: 'acrylic-matte', label: 'Acrylic (Matte)', sortOrder: 3 },
   { kind: 'finish', slug: 'pu', label: 'PU (Polyurethane)', sortOrder: 4 },
   { kind: 'finish', slug: 'membrane', label: 'Membrane', sortOrder: 5 },
   { kind: 'finish', slug: 'veneer', label: 'Veneer', sortOrder: 6 },
   { kind: 'finish', slug: 'glass', label: 'Glass', sortOrder: 7 },
   { kind: 'finish', slug: 'fabric', label: 'Fabric', sortOrder: 8 },
+  { kind: 'finish', slug: 'lacquered-glass', label: 'Lacquered glass', sortOrder: 9 },
+  { kind: 'finish', slug: 'stone', label: 'Stone', sortOrder: 10 },
+  { kind: 'finish', slug: 'metal', label: 'Metal', sortOrder: 11 },
+  { kind: 'finish', slug: 'upvc', label: 'UPVC', sortOrder: 12 },
+  { kind: 'finish', slug: 'pvc', label: 'PVC', sortOrder: 13 },
+  { kind: 'finish', slug: 'aluminium', label: 'Aluminium', sortOrder: 14 },
 ];
 
 // --- LAYOUTS (per-room) ---

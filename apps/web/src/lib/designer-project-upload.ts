@@ -1,4 +1,5 @@
 import {
+  materialFinishSlugs,
   createProjectSchema,
   imageFailureReason,
   type ImageFailureReason,
@@ -383,6 +384,9 @@ export function buildImageMetadata(input: {
     sortOrder: input.sortOrder,
     themeSlugs: input.designStyle ? [input.designStyle] : [],
     finishSlugs: input.materialFinish ? [input.materialFinish] : [],
+    ...(materialFinishSlugs.some((slug) => slug === input.materialFinish)
+      ? { materialSlugs: [input.materialFinish] }
+      : {}),
     tagSlugs: uniqueNonEmpty(input.tags.map(toSlug)),
   };
 }

@@ -76,3 +76,22 @@ unique room slug. Duplicate requests reuse the active term; disabled terms are
 not reactivated. Room taxonomy reads revalidate immediately so added types become
 available to tagging and discovery filters. Saved rooms retain the taxonomy ID,
 and search indexing derives their room slugs from that shared vocabulary.
+
+## Custom locations and October taxonomy feedback
+
+Designers create reusable cities and city-scoped localities through
+`POST /api/taxonomy/locations`. The upload editor resolves custom names to active
+taxonomy terms before saving a project, so homepage location filters and search
+use the same canonical slugs. Repeated creation reuses existing terms; inactive
+terms remain inactive. City/locality reads use `no-store` so new locations appear
+immediately. Existing free-text `cityName` projects remain readable and searchable;
+editing and saving a custom location registers it for location filters.
+
+The combined Material & finish picker tags its standard choices as both materials
+and finishes, so the homepage material filter and typed search find those photos.
+The idempotent taxonomy seed includes the requested material/finish vocabulary
+and a standalone `hospital` subtype of `commercial-workspace`. Legacy
+`clinic-hospital` remains under `institutional-public` for saved projects.
+Deployment must rerun `pnpm db:seed` before verifying these additional choices.
+Custom locations do not infer GPS coordinates: nearby recommendations currently
+use a selected city and the project's existing location metadata.
