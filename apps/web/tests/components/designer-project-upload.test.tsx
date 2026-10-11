@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
+import {
+  projectDetailResponseSchema,
+  type ListProjectImagesResponse,
+  type ProjectDetailResponse,
+} from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
 import { uploadProjectImage } from '../../src/lib/upload-project-image';
 
@@ -1812,8 +1816,8 @@ describe('DesignerProjectUpload batch recovery', () => {
       dataTransfer: { files: [new File(['image'], 'first.jpg', { type: 'image/jpeg' })] },
     });
     const tile = await screen.findByRole('listitem', { name: 'first.jpg' });
-    const detail = await projectDraftResponse().json();
-    detail.rooms[0].name = 'Kitchen';
+    const detail = projectDetailResponseSchema.parse(await projectDraftResponse().json());
+    detail.rooms[0]!.name = 'Kitchen';
     await act(async () => finishDraft(Response.json(detail)));
     await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
     expect(screen.getByRole('listitem', { name: 'first.jpg' })).toBe(tile);
