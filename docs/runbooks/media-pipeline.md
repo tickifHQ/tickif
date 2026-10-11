@@ -177,6 +177,18 @@ media work, inventories every project, logo, and verification prefix, deletes ma
 items, then inventories them again before the database cascade. Failures leave the
 manifest retryable.
 
+## Verify single-image moderation
+
+On a synthetic submitted project with at least three images, sign in as a platform
+admin and claim the review. Select **Remove image** on one card; cancel first and
+confirm that every image remains, then confirm removal. Reload the review and
+check the selected image is absent, the other original links still open, and the
+timeline records **Image removed**. Removing the cover clears its selection;
+approval remains blocked until completeness is restored. Repeat on pending edits
+of a published synthetic project and confirm its approved public images remain
+unchanged until approval. An unrelated admin, designer or signed-out caller must
+be denied by the endpoint. Do not perform destructive checks on customer projects.
+
 ## Worker memory sizing
 
 Peak worker memory is driven by concurrent decodes. Budget roughly:

@@ -55,6 +55,9 @@ coverage gate.
 - `visitor-feed-preferences.spec.ts`: desktop and phone welcome forms, saved home
   and location filters, reload and Clear all, editing, callback preservation and Skip.
   Visitor contact details and local validation remain covered in personal settings.
+- `single-image-moderation.spec.ts`: claimed reviewer confirms one image removal,
+  cancellation leaves all images intact, the other originals remain accessible,
+  and removal persists after reload on mobile.
 - `project-moderation.spec.ts`: authenticated claim, comments, approve, request
   changes, reject and unpublish with FIFO pagination.
 - `verification-lifecycle.spec.ts`: upload, private signed download, change request

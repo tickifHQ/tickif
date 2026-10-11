@@ -9,6 +9,21 @@ bypass. Do not infer access from the historical owner-only boundary in ADR 0002.
 See [authentication](./auth.md), [branches](./branches.md) and
 [ADR 0001](../adr/0001-rbac-role-and-org-model.md) for the related access model.
 
+Project moderation exposes `DELETE /api/admin/projects/{id}/images/{imageId}`
+only to the claimed reviewer (or superadmin) while the project is in review.
+The review panel confirms the selected image before removal. The mutation locks
+the project and verifies its moderation revision and reviewer, removes only the
+selected image, clears its cover selection when necessary, and records an
+`image_removed` event with the before/after image IDs. Completeness is recomputed,
+so removal can block approval until the designer supplies the missing photos or
+cover. Other images and rooms remain in place.
+
+When reviewing edits to a published project, removal affects the pending version;
+the approved image graph and its objects remain public until approval or discard.
+For unpublished projects, the selected row is removed and object cleanup deletes
+only keys no longer referenced by another image. Originals shared by fixture or
+legacy image rows are therefore retained.
+
 ## How an upload flows (the media slice)
 
 Image bytes never pass through the API — the client uploads straight to R2:

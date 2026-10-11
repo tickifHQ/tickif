@@ -1,0 +1,1 @@
+ALTER TYPE "public"."moderation_action" ADD VALUE 'image_removed' BEFORE 'archive';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type {
   AdminModerationDetailResponse,
@@ -10,7 +10,16 @@ import { db, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectImage, makeProjectRoom } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { adminProjectsRepository } from '../../../src/modules/admin-projects/repository.js';
+import {
+  readProjectAggregate,
+  writePendingAggregate,
+} from '../../../src/modules/project-versions/repository.js';
 import { createRoleSession } from '../../helpers/auth.js';
+
+vi.mock('@repo/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@repo/storage')>()),
+  deleteObject: vi.fn().mockResolvedValue(undefined),
+}));
 
 async function roleSession(phoneNumber: string, role: 'designer' | 'admin' | 'superadmin') {
   return createRoleSession(phoneNumber, role);
@@ -54,6 +63,107 @@ async function makeCompleteProject(overrides: Partial<typeof schema.project.$inf
 }
 
 describe('admin project moderation API', () => {
+  it('preserves approved images and storage when removing an image from pending review', async () => {
+    const { deleteObject } = await import('@repo/storage');
+    vi.mocked(deleteObject).mockClear();
+    const admin = await roleSession('+919800002194', 'admin');
+    const review = await makeCompleteProject({ status: 'published', publishedAt: new Date() });
+    const state = (await readProjectAggregate(review.project.id))!;
+    await db.transaction(async (tx) => {
+      const aggregate = structuredClone(state.live);
+      aggregate.project.status = 'in_review';
+      aggregate.project.reviewedBy = admin.userId;
+      await writePendingAggregate(tx, aggregate, 0);
+    });
+    const response = await app.request(
+      `/api/admin/projects/${review.project.id}/images/${review.images[0]!.id}`,
+      { method: 'DELETE', headers: { cookie: admin.cookie } },
+    );
+    expect(response.status).toBe(200);
+    const result = (await response.json()) as AdminModerationDetailResponse;
+    expect(result.images.map((image) => image.id)).toEqual(
+      review.images.slice(1).map((image) => image.id),
+    );
+    expect(result.liveVersion?.images.map((image) => image.id)).toEqual(
+      review.images.map((image) => image.id),
+    );
+    expect(result.liveVersion?.project.coverImageId).toBe(review.images[0]!.id);
+    const assets = await db
+      .select()
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, review.project.id));
+    expect(assets).toEqual(review.images);
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+  it('fails a stale removal atomically and leaves the reviewed images intact', async () => {
+    const admin = await roleSession('+919800002195', 'admin');
+    const review = await makeCompleteProject({ status: 'in_review', reviewedBy: admin.userId });
+    const result = await adminProjectsRepository.removeImage({
+      projectId: review.project.id,
+      imageId: review.images[0]!.id,
+      actorUserId: admin.userId,
+      expectedRevision: 99,
+      expectedReviewerId: admin.userId,
+    });
+    expect(result).toBe('project_changed');
+    const assets = await db
+      .select()
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, review.project.id));
+    expect(assets).toEqual(review.images);
+    expect(
+      await db
+        .select()
+        .from(schema.projectModerationEvent)
+        .where(eq(schema.projectModerationEvent.projectId, review.project.id)),
+    ).toEqual([]);
+  });
+  it('removes only the selected image, scopes reviewers and updates cover/completeness/audit', async () => {
+    const admin = await roleSession('+919800002191', 'admin');
+    const otherAdmin = await roleSession('+919800002192', 'admin');
+    const designer = await roleSession('+919800002193', 'designer');
+    const review = await makeCompleteProject({ status: 'in_review', reviewedBy: admin.userId });
+    const image = review.images[0]!;
+    const path = `/api/admin/projects/${review.project.id}/images/${image.id}`;
+    const remove = (cookie?: string) =>
+      app.request(path, { method: 'DELETE', headers: cookie ? { cookie } : {} });
+    expect((await remove()).status).toBe(401);
+    expect((await remove(designer.cookie)).status).toBe(403);
+    expect((await remove(otherAdmin.cookie)).status).toBe(403);
+    const foreign = await makeCompleteProject();
+    expect(
+      (
+        await app.request(
+          `/api/admin/projects/${review.project.id}/images/${foreign.images[0]!.id}`,
+          { method: 'DELETE', headers: { cookie: admin.cookie } },
+        )
+      ).status,
+    ).toBe(404);
+    const response = await remove(admin.cookie);
+    expect(response.status).toBe(200);
+    const result = (await response.json()) as AdminModerationDetailResponse;
+    expect(result.images.map((row) => row.id)).toEqual(review.images.slice(1).map((row) => row.id));
+    expect(result.project).toMatchObject({ status: 'in_review', coverImageId: null });
+    expect(result.completeness.complete).toBe(false);
+    expect(result.history).toContainEqual(
+      expect.objectContaining({
+        action: 'image_removed',
+        actorLabel: 'Tickif Review Team',
+        fieldDiff: {
+          images: {
+            from: review.images.map((row) => row.id),
+            to: review.images.slice(1).map((row) => row.id),
+          },
+        },
+      }),
+    );
+    const remaining = await db
+      .select()
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, review.project.id));
+    expect(remaining).toEqual(review.images.slice(1));
+    expect((await remove(admin.cookie)).status).toBe(404);
+  });
   it('rejects missing and unknown categories and persists multiple categories in the audit', async () => {
     const admin = await roleSession('+919800002190', 'admin');
     const review = await makeCompleteProject({ status: 'in_review', reviewedBy: admin.userId });

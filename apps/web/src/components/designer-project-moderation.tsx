@@ -48,6 +48,7 @@ const actionTone: Record<
   unpublish: { dot: 'bg-warning', badge: 'warning' },
   publish: { dot: 'bg-success', badge: 'success' },
   metadata_corrected: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  image_removed: { dot: 'bg-warning', badge: 'warning' },
   archive: { dot: 'bg-muted-foreground', badge: 'secondary' },
   restore: { dot: 'bg-success', badge: 'success' },
   delete: { dot: 'bg-destructive', badge: 'destructive' },
