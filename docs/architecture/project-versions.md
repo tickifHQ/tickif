@@ -38,6 +38,13 @@ and in-review versions are locked against designer writes. Admin corrections use
 pending revision for compare-and-swap and audit the pending before/after values.
 Submission and approval evaluate the selected version's images and cover.
 
+The deployment seed's [derived location classification](../adr/0010-saved-custom-location-classification.md)
+is a narrow exception for legacy `cityName` values that lack a canonical slug.
+It classifies live and pending locations independently under the same canonical
+lock without changing authored names, review state or timestamps. It never
+promotes pending content or modifies historical audit records. Ordinary authored
+location changes remain material edits.
+
 Pending edits and review transitions do not index. Approval writes one project index
 event in the same transaction and preserves the original slug, publish date and
 designer project count. Minor edits publish immediately and index their live changes.
