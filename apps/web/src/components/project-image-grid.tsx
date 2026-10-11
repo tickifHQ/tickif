@@ -43,6 +43,14 @@ type ProjectImageGridProps = {
 const controlClass =
   'size-11 rounded-full border border-border/60 bg-background/95 text-foreground shadow-sm hover:bg-background focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
+function photoStatus(image: ProjectImagePreview) {
+  if (image.status === 'ready') return 'Ready';
+  if (image.status === 'failed') return 'Failed';
+  if (image.transferState === 'queued') return 'Queued';
+  if (image.transferState === 'uploading') return `Uploading ${image.transferPercent ?? 0}%`;
+  return 'Processing';
+}
+
 export function ProjectImageGrid(props: ProjectImageGridProps) {
   const { images, roomTitle, onMove } = props;
   const id = useId();
@@ -155,7 +163,7 @@ function PhotoPreview({ image }: { image: ProjectImagePreview }) {
   return image.previewUrl ? (
     <div
       role="img"
-      aria-label={`${image.fileName} (${image.status === 'ready' ? 'Ready' : image.status === 'processing' ? 'Processing' : 'Failed'})`}
+      aria-label={`${image.fileName} (${photoStatus(image)})`}
       className="h-full w-full bg-cover bg-center"
       style={{ backgroundImage: `url(${image.previewUrl})` }}
     />
@@ -197,16 +205,7 @@ function SortablePhoto({
     disabled: disabled || !canReorder,
   });
   const isCover = props.coverImageId === image.id;
-  const statusLabel =
-    image.status === 'ready'
-      ? 'Ready'
-      : image.status === 'failed'
-        ? 'Failed'
-        : image.transferState === 'queued'
-          ? 'Queued'
-          : image.transferState === 'uploading'
-            ? `Uploading ${image.transferPercent ?? 0}%`
-            : 'Processing';
+  const statusLabel = photoStatus(image);
   const failureDetail =
     image.transferError ??
     imageFailureMessage(image.failureReason) ??
