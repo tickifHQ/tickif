@@ -7,7 +7,7 @@ import type {
   UpdateImageMetadataInput,
 } from '@repo/contracts';
 import { imageFailureReason, ORGANIZATION_CAPABILITY } from '@repo/contracts';
-import { config } from '@repo/config';
+import { config, formatBytes } from '@repo/config';
 import { buildOriginalKey, presignDownload, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
@@ -119,7 +119,7 @@ export const mediaService = {
     if (input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
       throw new AppError(
         'file_too_large',
-        `Declared size exceeds the ${config.MEDIA_MAX_UPLOAD_BYTES}-byte limit`,
+        `File is too large. The maximum size is ${formatBytes(config.MEDIA_MAX_UPLOAD_BYTES)}.`,
         422,
       );
     }

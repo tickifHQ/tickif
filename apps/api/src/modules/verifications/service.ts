@@ -15,7 +15,7 @@ import {
   type VerificationDocumentUploadInput,
   type VerificationStateResponse,
 } from '@repo/contracts';
-import { config } from '@repo/config';
+import { config, formatBytes } from '@repo/config';
 import {
   buildVerificationDocumentKey,
   deleteObject,
@@ -289,7 +289,7 @@ export const verificationsService = {
     await assertPersonalIdentityOwner(caller, organizationId, input.type);
     if (input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
       throw AppError.unprocessable(
-        `Document must be ${config.MEDIA_MAX_UPLOAD_BYTES} bytes or smaller`,
+        `Document is too large. The maximum size is ${formatBytes(config.MEDIA_MAX_UPLOAD_BYTES)}.`,
       );
     }
     const application = await verificationsRepository.getOrCreateForOrganization(organizationId);
