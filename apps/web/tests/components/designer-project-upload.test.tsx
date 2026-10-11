@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import {
   projectBudgetBands,
+  projectDetailResponseSchema,
   type ListProjectImagesResponse,
   type ProjectDetailResponse,
 } from '@repo/contracts';
@@ -1914,8 +1915,8 @@ describe('DesignerProjectUpload batch recovery', () => {
       dataTransfer: { files: [new File(['image'], 'first.jpg', { type: 'image/jpeg' })] },
     });
     const tile = await screen.findByRole('listitem', { name: 'first.jpg' });
-    const detail = await projectDraftResponse().json();
-    detail.rooms[0].name = 'Kitchen';
+    const detail = projectDetailResponseSchema.parse(await projectDraftResponse().json());
+    detail.rooms[0]!.name = 'Kitchen';
     await act(async () => finishDraft(Response.json(detail)));
     await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
     expect(screen.getByRole('listitem', { name: 'first.jpg' })).toBe(tile);
