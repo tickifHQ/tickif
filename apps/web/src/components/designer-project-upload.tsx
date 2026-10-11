@@ -73,6 +73,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { ApartmentNameCombobox } from '@/components/apartment-name-combobox';
 import { ProjectImageGrid } from '@/components/project-image-grid';
+import { uploadProjectImage } from '@/lib/upload-project-image';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
@@ -665,6 +666,7 @@ function toProjectImagePreview(
     height: image.height,
     failureReason: image.failureReason ?? existing?.failureReason ?? null,
     transferError: image.failureReason ? undefined : existing?.transferError,
+    clientId: existing?.clientId,
     fileName: existing?.fileName ?? `Image ${index + 1}`,
     file: image.status === 'failed' ? undefined : existing?.file,
     previewUrl: image.previewUrl ?? existing?.previewUrl,
@@ -1421,17 +1423,14 @@ export function DesignerProjectUpload({
         .map((term) => ({ value: term.slug, label: term.label })),
     [scopeTerms],
   );
-  const budgetOptions = useMemo(
-    () => {
-      const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
-      const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
-      if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
-        options.push({ value: savedRange.slug, label: savedRange.label });
-      }
-      return options;
-    },
-    [budgetBandTerms, budgetBandSlug],
-  );
+  const budgetOptions = useMemo(() => {
+    const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
+    const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
+    if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
+      options.push({ value: savedRange.slug, label: savedRange.label });
+    }
+    return options;
+  }, [budgetBandTerms, budgetBandSlug]);
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),
     [propertySubtypes],
@@ -2031,8 +2030,9 @@ export function DesignerProjectUpload({
 
         const existingById = new Map(room.images.map((image) => [image.id, image]));
         const localPreviews = room.images.filter(isLocalPreviewImage);
+        const transferringIds = new Set(localPreviews.map((image) => image.reservedImageId));
         const roomServerImages = serverImages
-          .filter((image) => image.roomId === room.id)
+          .filter((image) => image.roomId === room.id && !transferringIds.has(image.id))
           .sort((left, right) => left.sortOrder - right.sortOrder)
           .map((image, index) => toProjectImagePreview(image, index, existingById.get(image.id)));
 
@@ -2366,7 +2366,9 @@ export function DesignerProjectUpload({
         'Could not create the draft project.',
       );
       const attachedRooms = attachExistingProjectRoomsToDrafts(rooms, detail.rooms, roomTerms);
-      setRooms(attachedRooms);
+      // The request began before local previews were queued. Preserve the live
+      // room state while attaching server IDs instead of replacing it with that snapshot.
+      setRooms((current) => attachExistingProjectRoomsToDrafts(current, detail.rooms, roomTerms));
       setProjectId(detail.id);
       setLoadedProjectId(detail.id);
       setProjectStatus(detail.status);
@@ -2376,7 +2378,7 @@ export function DesignerProjectUpload({
       setRejectionReasonCode(detail.rejectionReasonCode);
       setRejectionReasonCodes(detail.rejectionReasonCodes);
       setReviewComments(detail.reviewComments);
-      router.replace(`/designer/projects/upload?projectId=${detail.id}`);
+      router.replace(`/designer/projects/upload?projectId=${detail.id}`, { scroll: false });
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
       ensureProjectPromiseRef.current = null;
@@ -2836,18 +2838,23 @@ export function DesignerProjectUpload({
         `Could not prepare upload for ${file.name}.`,
       );
       reservedImageId = uploaded.imageId;
+      updateRoom(roomClientId, (current) => ({
+        ...current,
+        images: current.images.map((image) =>
+          image.id === previewId ? { ...image, reservedImageId: uploaded.imageId } : image,
+        ),
+      }));
 
-      const storageResponse = await fetch(uploaded.uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type,
-        },
-        body: file,
+      await uploadProjectImage(uploaded.uploadUrl, file, (transferPercent) => {
+        updateRoom(roomClientId, (current) => ({
+          ...current,
+          images: current.images.map((image) =>
+            image.id === previewId
+              ? { ...image, transferState: 'uploading', transferPercent }
+              : image,
+          ),
+        }));
       });
-
-      if (!storageResponse.ok) {
-        throw new Error(`Could not upload ${file.name}.`);
-      }
 
       const commitResponse = await api.api.media[':imageId'].commit.$post({
         param: { imageId: uploaded.imageId },
@@ -2898,6 +2905,7 @@ export function DesignerProjectUpload({
           currentImage.id === previewId
             ? {
                 id: linkedImage.id,
+                clientId: currentImage.clientId ?? previewId,
                 status: updatedImage.status,
                 sortOrder: updatedImage.sortOrder,
                 width: updatedImage.width,
@@ -2925,7 +2933,12 @@ export function DesignerProjectUpload({
         ...current,
         images: current.images.map((currentImage) =>
           currentImage.id === previewId
-            ? { ...currentImage, status: 'failed', transferError: message }
+            ? {
+                ...currentImage,
+                status: 'failed',
+                transferState: undefined,
+                transferError: message,
+              }
             : currentImage,
         ),
       }));
@@ -2947,7 +2960,13 @@ export function DesignerProjectUpload({
       uploadError: '',
       images: current.images.map((currentImage) =>
         currentImage.id === previewId
-          ? { ...currentImage, status: 'processing', transferError: undefined }
+          ? {
+              ...currentImage,
+              status: 'processing',
+              transferState: 'queued',
+              transferPercent: 0,
+              transferError: undefined,
+            }
           : currentImage,
       ),
     }));
@@ -3024,6 +3043,8 @@ export function DesignerProjectUpload({
           preview: {
             id: `local-preview-${previewBatchId}-${index}`,
             status: 'processing',
+            transferState: 'queued',
+            transferPercent: 0,
             sortOrder: room.images.length + index,
             width: null,
             height: null,

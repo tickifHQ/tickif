@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
+import { uploadProjectImage } from '../../src/lib/upload-project-image';
+
+vi.mock('../../src/lib/upload-project-image', () => ({
+  uploadProjectImage: vi.fn(async (url: string, file: File, progress: (value: number) => void) => {
+    progress(0);
+    const response = await fetch(url, { method: 'PUT', body: file });
+    if (!response.ok) throw new Error(`Could not upload ${file.name}.`);
+    progress(100);
+  }),
+}));
 
 const mock = vi.hoisted(() => ({
   router: {
@@ -1532,6 +1542,7 @@ describe('DesignerProjectUpload batch recovery', () => {
   beforeEach(() => {
     // Reset accumulated calls from earlier blocks (implementations persist).
     vi.clearAllMocks();
+    mock.deleteImage.mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:project-image-preview');
     // Fresh single-use Response objects per test: the shared mocks from the
@@ -1744,6 +1755,72 @@ describe('DesignerProjectUpload batch recovery', () => {
     // The second file transferred fully instead of stalling at Processing.
     await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
     expect(screen.queryByText('second.jpg · Processing')).not.toBeInTheDocument();
+  });
+
+  it('keeps each preview mounted and reports its own transfer progress', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([true]);
+    mockImageList([
+      readyItem,
+      { ...readyItem, id: 'a1111111-1111-4111-8111-111111111111' },
+      { ...readyItem, id: 'a2222222-2222-4222-8222-222222222222' },
+    ]);
+    mock.listImagesGet.mockImplementationOnce(async () => imageListResponse([readyItem]));
+    let finishTransfer!: () => void;
+    let reportProgress!: (value: number) => void;
+    vi.mocked(uploadProjectImage).mockImplementationOnce(async (_url, _file, progress) => {
+      reportProgress = progress;
+      await new Promise<void>((resolve) => {
+        finishTransfer = resolve;
+      });
+    });
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+    await dropFiles([{ name: 'first.jpg' }, { name: 'second.jpg' }]);
+    await waitFor(() => expect(finishTransfer).toBeDefined());
+    const tile = screen.getByLabelText('first.jpg', { selector: 'li' });
+    act(() => reportProgress(42));
+    await waitFor(() =>
+      expect(tile.querySelector('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '42'),
+    );
+    expect(
+      within(screen.getByLabelText('second.jpg', { selector: 'li' })).getByText('Queued'),
+    ).toBeInTheDocument();
+    await act(async () => finishTransfer());
+    await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('first.jpg', { selector: 'li' })).toBe(tile);
+  });
+
+  it('preserves queued previews and scroll when the first upload creates the draft', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([true]);
+    mockImageList([{ ...readyItem, id: 'a1111111-1111-4111-8111-111111111111' }]);
+    let finishDraft!: (response: Response) => void;
+    mock.createProject.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishDraft = resolve;
+        }),
+    );
+    render(<DesignerProjectUpload />);
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: /step 4 project images/i }));
+    const zone = screen
+      .getAllByText(/drag and drop files here or click to upload/i)[0]!
+      .closest('label')!;
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(['image'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    const tile = await screen.findByRole('listitem', { name: 'first.jpg' });
+    const detail = await projectDraftResponse().json();
+    detail.rooms[0].name = 'Kitchen';
+    await act(async () => finishDraft(Response.json(detail)));
+    await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
+    expect(screen.getByRole('listitem', { name: 'first.jpg' })).toBe(tile);
+    expect(mock.router.replace).toHaveBeenCalledWith(
+      `/designer/projects/upload?projectId=${projectId}`,
+      { scroll: false },
+    );
   });
 
   it('retries a failed tile with its original file', async () => {
