@@ -5,6 +5,7 @@ import {
   errorResponseSchema,
   createRoomTypeSchema,
   taxonomyTermSchema,
+  taxonomyNeedsFreshRead,
 } from '@repo/contracts';
 import { taxonomyService } from './service.js';
 import { requireAnyRole, type AuthVariables } from '../../lib/auth-middleware.js';
@@ -83,10 +84,8 @@ export const taxonomyRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const result = await taxonomyService.list(kind, parentId);
     // Only long-cache non-empty results. Empty responses get a short cache so
     // later seeds surface without waiting 7 days.
-    if (kind === 'city' || kind === 'locality') {
+    if (taxonomyNeedsFreshRead(kind)) {
       c.header('Cache-Control', 'no-store');
-    } else if (kind === 'room') {
-      c.header('Cache-Control', 'no-cache');
     } else if (result.terms.length > 0) {
       c.header('Cache-Control', CACHE_CONTROL);
     } else {

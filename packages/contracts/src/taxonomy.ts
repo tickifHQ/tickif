@@ -21,6 +21,20 @@ export const TAXONOMY_KIND_VALUES = [
 export const taxonomyKindSchema = z.enum(TAXONOMY_KIND_VALUES).meta({ id: 'TaxonomyKind' });
 export type TaxonomyKind = z.infer<typeof taxonomyKindSchema>;
 
+/** Runtime additions and release-changing catalogs must bypass client/server caches. */
+const freshTaxonomyKinds = new Set<string>([
+  'room',
+  'city',
+  'locality',
+  'material',
+  'finish',
+  'property_subtype',
+  'budget_band',
+]);
+export function taxonomyNeedsFreshRead(kind: string | null | undefined): boolean {
+  return kind != null && freshTaxonomyKinds.has(kind);
+}
+
 /** A single taxonomy term in the public response. */
 export const taxonomyTermSchema = z.object({
   id: z.uuid(),

@@ -646,6 +646,48 @@ describe('DesignerProjectUpload', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('blocks classification edits until a slow saved-project request has hydrated the form', async () => {
+    const projectResponse: Response = await mock.projectGet();
+    mock.projectGet.mockReset();
+    let resolveProject: ((response: Response) => void) | undefined;
+    mock.projectGet.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveProject = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    const commercial = screen.getByRole('button', { name: 'Office / Commercial', exact: true });
+    expect(commercial).toBeDisabled();
+    await waitFor(() => expect(mock.projectGet).toHaveBeenCalled());
+    expect(commercial).toBeDisabled();
+    await user.click(commercial);
+    expect(
+      screen.queryByRole('combobox', { name: 'Commercial type', exact: true }),
+    ).not.toBeInTheDocument();
+
+    resolveProject?.(projectResponse);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    await waitFor(() => expect(commercial).toBeEnabled());
+    await user.click(commercial);
+    await user.click(screen.getByRole('combobox', { name: 'Commercial type', exact: true }));
+    expect(screen.getByRole('option', { name: 'Hospital', exact: true })).toBeVisible();
+  });
+
+  it('keeps an unhydrated saved draft disabled when loading fails and cannot save over it', async () => {
+    mock.projectGet.mockResolvedValue(Response.json({}, { status: 503 }));
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    expect(await screen.findByText('Could not load this project draft.')).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Save as draft', exact: true });
+    expect(save).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Office / Commercial', exact: true })).toBeDisabled();
+    await user.click(save);
+    expect(mock.createProject).not.toHaveBeenCalled();
+    expect(mock.projectPatch).not.toHaveBeenCalled();
+  });
+
   it.each(['draft', 'submitted', 'in_review', 'changes_requested'] as const)(
     'shows the published version remains live when pending changes are %s',
     async (status) => {
@@ -2348,7 +2390,9 @@ describe('DesignerProjectUpload floor area', () => {
 
   async function sizeInput() {
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
-    return screen.findByPlaceholderText('e.g. 1450');
+    const input = await screen.findByPlaceholderText('e.g. 1450');
+    await waitFor(() => expect(input).toBeEnabled());
+    return input;
   }
 
   it('rejects a negative area with field feedback and blocks the save', async () => {

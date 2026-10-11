@@ -176,6 +176,16 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
 
   // --- Cache header ---
 
+  it.each(['room', 'city', 'locality', 'material', 'finish', 'property_subtype', 'budget_band'])(
+    'does not cache release-changing or custom %s catalogs', async (kind) => {
+      const parent = kind === 'locality' ? await seed('city', 'Fresh parent', 'fresh-parent') : null;
+      await seed(kind, 'Fresh choice', 'fresh-choice', parent ? { parentId: parent.id } : undefined);
+      const res = await get(`/api/taxonomy/terms?kind=${kind}`);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect((await json(res)).terms).toHaveLength(1);
+    },
+  );
+
   it('includes 7-day Cache-Control for non-empty results', async () => {
     await seed('property_type', 'Cache Type', 'cache-type');
     const res = await get('/api/taxonomy/terms?kind=property_type');
@@ -233,7 +243,7 @@ describe('POST /api/taxonomy/rooms', () => {
     const repeated = await createRoom('Music & Media Room', cookie);
     expect(await repeated.json()).toEqual(term);
     const listed = await get('/api/taxonomy/terms?kind=room');
-    expect(listed.headers.get('cache-control')).toBe('no-cache');
+    expect(listed.headers.get('cache-control')).toBe('no-store');
     expect(listTaxonomyResponseSchema.parse(await listed.json()).terms).toEqual([term]);
   });
 
