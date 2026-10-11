@@ -100,6 +100,23 @@ original at mobile and desktop sizes after the rollout.
 For derivative sizing and embedded-token limitations, read
 [media pipeline architecture](../architecture/media-pipeline.md).
 
+### Encoding effort rollout verification
+
+For the AVIF effort correction in [ADR 0009](../adr/0009-media-encoding-effort.md),
+use new owned portrait and landscape uploads after worker deployment. Record file
+size/dimensions, transfer and commit observations, first server/UI Ready observation,
+and worker completion timestamps for their exact image IDs. Do not label the interval
+from image-row creation to Ready as encoding time: it includes transfer and queueing.
+Successful jobs are removed, so capture enqueue/start timing while available if
+queue and processor durations are needed separately.
+
+Inspect decoded derivatives at actual gallery sizes and verify signature recovery
+from WebP and AVIF bytes. Compare real staging timings with the preserved baseline;
+a local encoding benchmark is not a rollout result. Keep the existing five sizes,
+two formats and private-original boundary. This change does not require an automatic
+backfill or an environment override. Any later regeneration of existing images must
+follow the revision and immutable-cache checks above.
+
 ### Signature rollout verification
 
 After a signature revision change, deploy the matching encoder/reader and run

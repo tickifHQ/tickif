@@ -43,7 +43,9 @@ export type GenerateOptions = {
 };
 
 function encode(pipeline: Sharp, format: DerivativeFormat): Sharp {
-  return format === 'webp' ? pipeline.webp({ quality: 88 }) : pipeline.avif({ quality: 65 });
+  return format === 'webp'
+    ? pipeline.webp({ quality: 88 })
+    : pipeline.avif({ quality: 65, effort: 2 });
 }
 
 /**

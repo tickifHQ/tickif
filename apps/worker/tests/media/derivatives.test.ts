@@ -90,6 +90,37 @@ describe('generateDerivatives', () => {
     expect(meta.orientation).toBeUndefined();
   });
 
+  it.each([
+    { width: 640, height: 480 },
+    { width: 480, height: 640 },
+  ])('preserves color detail in a $width by $height AVIF derivative', async ({ width, height }) => {
+    const pixels = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * 3;
+        pixels[offset] = Math.floor((x * 255) / width);
+        pixels[offset + 1] = Math.floor((y * 255) / height);
+        pixels[offset + 2] = ((Math.floor(x / 16) + Math.floor(y / 16)) % 2) * 180 + 40;
+      }
+    }
+    const original = await sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer();
+    const [derivative] = await generateDerivatives(original, {
+      variants: [{ variant: 'preview', width }],
+      formats: ['avif'],
+    });
+    const decoded = await sharp(derivative!.buffer).raw().toBuffer();
+    expect(derivative!.width).toBe(width);
+    expect(derivative!.height).toBe(height);
+    expect(decoded.length).toBe(pixels.length);
+    const absoluteError = decoded.reduce(
+      (sum, value, index) => sum + Math.abs(value - pixels[index]!),
+      0,
+    );
+    // Verify encoded output rather than its options: gradients and checker edges
+    // must retain their color detail across both portrait and landscape frames.
+    expect(absoluteError / pixels.length).toBeLessThan(6);
+  });
+
   it.each(['webp', 'avif'] as const)(
     'embeds an identifiable image signature in a %s public derivative',
     async (format) => {

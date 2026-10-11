@@ -82,6 +82,10 @@ The `wm-v6` revision gives this treatment new immutable URLs. Originals stay pri
 and unchanged; the embedded identifier below is independent of the visible marks.
 
 New uploads produce both WebP and AVIF variants at the updated encoding quality.
+AVIF uses quality 65 with explicit CPU effort 2; WebP uses quality 88.
+[ADR 0009](../adr/0009-media-encoding-effort.md) records the CPU-effort tradeoff
+and pending staging performance acceptance. Sizes and encoded watermark/signature
+requirements remain unchanged; local codec timings do not establish deployment latency.
 The worker writes derivatives one at a time to avoid retaining every high-density
 buffer in memory. Existing ready images retain their old variants until queued
 for reprocessing. The source original must still exist for that operation.
