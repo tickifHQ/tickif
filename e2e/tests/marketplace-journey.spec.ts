@@ -111,6 +111,16 @@ test('designer onboarding and media processing connects to visitor onboarding an
     // Its hidden input must not scroll the fixed workspace out of the viewport.
     await designer.locator('input[type="file"]').first().focus();
     await expect(designer.getByRole('banner')).toBeInViewport();
+    const uploadScroll = await designer.evaluate(() => window.scrollY);
+    let releaseSecondUpload!: () => void;
+    const secondUploadGate = new Promise<void>((resolve) => {
+      releaseSecondUpload = resolve;
+    });
+    let transferCount = 0;
+    await designer.route('**/originals/**', async (route) => {
+      if (route.request().method() === 'PUT' && ++transferCount === 2) await secondUploadGate;
+      await route.continue();
+    });
     await designer
       .locator('input[type="file"]')
       .first()
@@ -125,6 +135,32 @@ test('designer onboarding and media processing connects to visitor onboarding an
           await designerContext.request.get(`${apiUrl}/api/projects/${project.id}/images`)
         ).json(),
       ).items;
+    const firstTile = designer.getByRole('listitem', {
+      name: 'warm-pendant-living-room.jpg',
+      exact: true,
+    });
+    await expect(firstTile).toBeVisible();
+    const firstTileNode = await firstTile.elementHandle();
+    if (!firstTileNode) throw new Error('Queued preview is missing');
+    try {
+      await expect.poll(() => transferCount).toBe(2);
+      await expect(
+        designer.getByRole('listitem', { name: 'gallery-wall-living-room.jpg', exact: true }),
+      ).toContainText('Queued');
+      await expect(firstTile).toContainText('Ready', { timeout: 90_000 });
+      expect(await firstTileNode.evaluate((node) => node.isConnected)).toBe(true);
+      expect(await designer.evaluate(() => window.scrollY)).toBe(uploadScroll);
+      await firstTile
+        .getByRole('button', { name: 'Open warm-pendant-living-room.jpg', exact: true })
+        .click();
+      await expect(
+        designer.getByRole('button', { name: 'Close image preview', exact: true }),
+      ).toBeVisible();
+      await designer.getByRole('button', { name: 'Close image preview', exact: true }).click();
+    } finally {
+      releaseSecondUpload();
+      await firstTileNode.dispose();
+    }
     // Three uploads now produce five sizes in two formats. On a shared CI runner,
     // the real worker can finish just after the old 45-second polling deadline.
     await expect

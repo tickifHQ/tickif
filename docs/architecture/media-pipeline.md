@@ -39,6 +39,14 @@ Permanent failures (oversize/invalid/duplicate) flip the row to `failed` and del
 the orphan original; transient errors retry via BullMQ. See
 [ADR 0002](../adr/0002-media-pipeline.md).
 
+The project editor keeps local image previews mounted while their temporary IDs
+become persisted IDs. Creating the first draft preserves queued files and scroll
+position. Each tile distinguishes queued files, measured storage upload progress,
+worker processing and ready images; a completed transfer does not imply completed
+processing. Ready previews remain viewable while sibling files are uploading.
+The browser uses XMLHttpRequest only for the direct storage PUT so it can measure
+bytes; application API requests continue through the typed Hono client.
+
 ## Public image quality and embedded identifiers
 
 Public cards use the medium derivative (1024px) when available, with larger and
