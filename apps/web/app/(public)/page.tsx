@@ -62,7 +62,7 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
           { query: { kind: facet.kind } },
           {
             init:
-              facet.kind === 'room'
+              facet.kind === 'room' || facet.kind === 'city' || facet.kind === 'locality'
                 ? { cache: 'no-store' }
                 : { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } },
           },

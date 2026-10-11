@@ -13,10 +13,10 @@ import { locationsRoutes } from './locations-routes.js';
 
 /**
  * Taxonomy public read routes.
- * Public, unauthenticated, aggressively cached.
+ * Public and unauthenticated. Designer-created locations bypass caching.
  */
 
-/** Seeded vocabularies can be cached; designer-created rooms are revalidated. */
+/** Seeded vocabularies are cached; designer-created rooms and locations stay fresh. */
 const CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400';
 
 const listRoute = createRoute({
