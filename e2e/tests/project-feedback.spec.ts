@@ -31,6 +31,7 @@ test('scope-specific project budget choices persist and room descriptions are ab
     const budget = page.getByLabel('Cost range', { exact: true });
     await expect(budget).toHaveText('₹15L - ₹35L');
     await expect(page.getByText('About this room', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Construction', exact: true }).click();
     await budget.click();
     await page.getByRole('option', { name: '₹30L - ₹40L', exact: true }).click();
     await budget.click();
