@@ -372,7 +372,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('button', { name: 'Load more projects' })).toBeInTheDocument();
   });
 
-  it('refreshes custom locations and caches the preset taxonomy vocabulary', async () => {
+  it('refreshes custom and release-changing catalogs while caching unchanged presets', async () => {
     render(await HomePage());
 
     const taxonomyCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
@@ -382,7 +382,7 @@ describe('HomePage', () => {
     expect(taxonomyCall?.[1]).toEqual(
       expect.objectContaining({ next: { revalidate: 60 * 60 * 24 * 7 } }),
     );
-    for (const kind of ['city', 'locality']) {
+    for (const kind of ['city', 'locality', 'room', 'material', 'property_subtype', 'budget_band']) {
       const locationCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
         String(input).includes(`/api/taxonomy/terms?kind=${kind}`),
       );

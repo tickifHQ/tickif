@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
-import { listTaxonomyResponseSchema, listTaxonomyQuerySchema, errorResponseSchema } from '@repo/contracts';
+import { listTaxonomyResponseSchema, listTaxonomyQuerySchema, errorResponseSchema, taxonomyNeedsFreshRead } from '@repo/contracts';
 import { taxonomyService } from './service.js';
 import { validationHook } from '../../lib/validation.js';
 import { locationsRoutes } from './locations-routes.js';
@@ -35,7 +35,7 @@ export const taxonomyRoutes = new OpenAPIHono({ defaultHook: validationHook }).o
   const result = await taxonomyService.list(kind, parentId);
   // Only long-cache non-empty results. Empty responses get a short cache so
   // later seeds surface without waiting 7 days.
-  if (kind === 'city' || kind === 'locality') {
+  if (taxonomyNeedsFreshRead(kind)) {
     c.header('Cache-Control', 'no-store');
   } else if (result.terms.length > 0) {
     c.header('Cache-Control', CACHE_CONTROL);

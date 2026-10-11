@@ -1340,6 +1340,10 @@ export function DesignerProjectUpload({
   // — no extra request. Shown separately from the general decision note below.
   const [reviewComments, setReviewComments] = useState<ProjectReviewComment[]>([]);
   const [loadingProject, setLoadingProject] = useState(false);
+  const loadingEditor =
+    loadingTaxonomy ||
+    loadingProject ||
+    Boolean(initialProjectId && loadedProjectId !== initialProjectId);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
@@ -3324,7 +3328,7 @@ export function DesignerProjectUpload({
       ) : null}
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,50.3125rem)_19.8125rem]">
-        <fieldset disabled={reviewLocked} className="min-w-0 space-y-4 xl:pr-2">
+        <fieldset disabled={reviewLocked || loadingEditor} className="min-w-0 space-y-4 xl:pr-2">
           <SectionFrame
             step="Step 1"
             title="Project classification"

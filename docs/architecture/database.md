@@ -60,8 +60,11 @@ Designers create reusable cities and city-scoped localities through
 `POST /api/taxonomy/locations`. The upload editor resolves custom names to active
 taxonomy terms before saving a project, so homepage location filters and search
 use the same canonical slugs. Repeated creation reuses existing terms; inactive
-terms remain inactive. City/locality reads use `no-store` so new locations appear
-immediately. The deployment seed also classifies previously saved free-text
+terms remain inactive. Room, city, locality, material, finish, property-subtype and
+budget catalogs use `no-store` at the API, browser typed client and homepage Next
+fetch boundaries. This shared policy bypasses previously warmed browser HTTP
+caches and seven-day Next data caches when a release seeds new choices; unrelated
+preset kinds retain their existing caching. The deployment seed also classifies previously saved free-text
 `cityName` projects for location filters. It locks each canonical project and
 resolves the live and pending versions from their own names, preserving authored
 content, review state and timestamps. Changed live rows enqueue transactional

@@ -10,6 +10,9 @@ Public project, image, discovery, recommendation and worker search reads use onl
 live rows. Internal project reads select pending content for the owning organization
 or superadmin and include `pendingChanges`, `liveStatus` and the approved version.
 Those properties are absent from public contracts and anonymous responses.
+The upload editor disables form controls while taxonomy and the selected saved
+project hydrate, so asynchronous loading cannot overwrite edits made during that
+interval. Editing becomes available only after that saved aggregate is loaded.
 Public detail fields and worker project search documents use read-only repeatable-read
 transactions, so an approval cannot mix old scalar values with the new gallery or tags.
 Signed URLs and related-project recommendations are built after the detail transaction.

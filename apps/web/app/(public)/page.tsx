@@ -9,6 +9,7 @@ import {
   listTaxonomyResponseSchema,
   PLATFORM_ROLE,
   platformRoleSchema,
+  taxonomyNeedsFreshRead,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { getBillingCatalog } from '@/lib/billing-catalog';
@@ -62,7 +63,7 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
           { query: { kind: facet.kind } },
           {
             init:
-              facet.kind === 'city' || facet.kind === 'locality'
+              taxonomyNeedsFreshRead(facet.kind)
                 ? { cache: 'no-store' }
                 : { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } },
           },

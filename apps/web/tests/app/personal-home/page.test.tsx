@@ -85,9 +85,9 @@ vi.mock('@/components/public-header', () => ({
 import PersonalHomePage from '../../../app/(protected)/home/page';
 
 describe('PersonalHomePage', () => {
-  it('refreshes newly added cities and areas in personalized location filters', async () => {
+  it('refreshes newly added locations and changed seeded catalogs in personalized filters', async () => {
     await PersonalHomePage();
-    for (const kind of ['city', 'locality']) {
+    for (const kind of ['city', 'locality', 'room', 'material', 'property_subtype', 'budget_band']) {
       expect(mock.taxonomyGet).toHaveBeenCalledWith(
         { query: { kind } },
         { init: { cache: 'no-store' } },

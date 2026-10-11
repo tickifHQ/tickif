@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getVisitorFeedPreferences } from '@/lib/visitor-feed.server';
 import { visitorFeedHref } from '@/lib/visitor-feed';
-import { listTaxonomyResponseSchema } from '@repo/contracts';
+import { listTaxonomyResponseSchema, taxonomyNeedsFreshRead } from '@repo/contracts';
 import { ProjectFeed } from '@/components/project-feed';
 import { PublicFooter } from '@/components/public-footer';
 import { PublicHeader } from '@/components/public-header';
@@ -51,7 +51,7 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
           { query: { kind: facet.kind } },
           {
             init:
-              facet.kind === 'city' || facet.kind === 'locality'
+              taxonomyNeedsFreshRead(facet.kind)
                 ? { cache: 'no-store' }
                 : { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } },
           },
