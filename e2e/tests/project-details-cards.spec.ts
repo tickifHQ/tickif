@@ -5,7 +5,7 @@ import { createProjectVersionFixture } from '../lib/project-version-fixtures';
 import { moderationApiUrl, signInProjectAdmin } from '../lib/project-moderation-fixtures';
 import { webUrl } from '../lib/environment';
 
-test.use({ hasTouch: true, video: 'on', viewport: { width: 1440, height: 1000 } });
+test.use({ hasTouch: true, video: 'on', viewport: { width: 1512, height: 1000 } });
 
 test('project preview and status cards support hover, keyboard and mobile touch', async ({
   page,
@@ -46,10 +46,11 @@ test('project preview and status cards support hover, keyboard and mobile touch'
       { headers: { origin: webUrl }, data: { organizationId: fixture.organization.id } },
     );
     expect(active.ok()).toBeTruthy();
-    const pendingTitle = `${target.title} — new revision`;
+    const pendingTitle = `${target.title} — ${'bright connected rooms '.repeat(8)}`.slice(0, 160);
+    expect(pendingTitle).toHaveLength(160);
     const update = await context.request.patch(`${moderationApiUrl}/api/projects/${target.id}`, {
       headers: { origin: webUrl },
-      data: { title: pendingTitle },
+      data: { title: pendingTitle, propertySubtypeSlug: 'row-house-town-house' },
     });
     expect(update.ok()).toBeTruthy();
     const submit = await context.request.post(
@@ -74,6 +75,38 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await expect(row.getByText('Pending changes · Submitted')).toBeVisible();
     const preview = row.getByRole('button', { name: 'Preview ' + pendingTitle });
     const card = page.locator('[data-slot="tooltip-content"]');
+    const tableContainer = page.locator('[data-slot="table-container"]');
+    // Maximum-length titles must truncate instead of moving desktop actions out of view.
+    expect(
+      await tableContainer.evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(1);
+    const title = preview.locator(':scope > span').nth(1).locator('span').first();
+    await expect(title).toHaveText(pendingTitle);
+    expect(await title.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    const viewProject = row.getByRole('link', {
+      name: `View project: ${pendingTitle} (opens in new tab)`,
+    });
+    await expect(viewProject).toBeInViewport({ ratio: 1 });
+    const typeCell = row.getByRole('cell').nth(1);
+    const typeBadge = typeCell.locator('[data-slot="badge"]');
+    await expect(typeBadge).toHaveText('row-house-town-house');
+    await expect(typeBadge).toHaveAttribute('title', 'row-house-town-house');
+    expect(
+      await typeBadge
+        .locator('span')
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true);
+    const typeBounds = await typeBadge.boundingBox();
+    const typeCellBounds = await typeCell.boundingBox();
+    expect
+      .soft(typeBounds!.x + typeBounds!.width)
+      .toBeLessThanOrEqual(typeCellBounds!.x + typeCellBounds!.width - 16);
+    for (const cell of [row.getByRole('cell').nth(3), row.getByRole('cell').nth(4)]) {
+      await expect(cell).toHaveCSS('white-space', 'nowrap');
+      expect(
+        await cell.evaluate((element) => element.scrollWidth - element.clientWidth),
+      ).toBeLessThanOrEqual(1);
+    }
     // Figma designer table 14737:7634: compact body-font header and landscape cover.
     const header = page.getByRole('columnheader', { name: 'Project', exact: true });
     await expect(header).toHaveCSS('height', '36px');
@@ -144,6 +177,34 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     await capture('pending-status-mobile-touch', page);
     await page.keyboard.press('Escape');
     await expect(card).toHaveCount(0);
+    await viewProject.focus();
+    await expect(viewProject).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+    expect(
+      await tableContainer.evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true);
+    await capture('long-title-mobile-actions', page);
+    // Exercise the longest primary status badge as well as the separate live/pending label.
+    await db
+      .update(schema.project)
+      .set({ status: 'changes_requested' })
+      .where(eq(schema.project.id, target.id));
+    await page.setViewportSize({ width: 1512, height: 1000 });
+    await page.reload();
+    const feedbackRow = page.getByRole('row').filter({ hasText: target.title });
+    const feedbackCell = feedbackRow.getByRole('cell').nth(2);
+    const feedbackBadge = feedbackCell.locator('[data-slot="badge"]');
+    await expect(feedbackBadge).toHaveText('Needs Change');
+    const feedbackBounds = await feedbackBadge.boundingBox();
+    const feedbackCellBounds = await feedbackCell.boundingBox();
+    await testInfo.attach('long-label-bounds', {
+      body: JSON.stringify({ typeBounds, typeCellBounds, feedbackBounds, feedbackCellBounds }),
+      contentType: 'application/json',
+    });
+    expect
+      .soft(feedbackBounds!.x + feedbackBounds!.width)
+      .toBeLessThanOrEqual(feedbackCellBounds!.x + feedbackCellBounds!.width - 16);
+    await capture('long-type-and-status-desktop', page);
     expect(errors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   } finally {
