@@ -42,6 +42,7 @@ const requiredEntries: [file: string, title: string][] = [
     'project-feedback.spec.ts',
     'project budget choices persist and room descriptions are absent from the editor',
   ],
+  ['project-feedback.spec.ts', 'custom room types persist and appear as search filters'],
   ...[1440, 390].map((width): [string, string] => [
     'team-size.spec.ts',
     `company team-size ranges resume and persist through profile editing at ${width}px`,
