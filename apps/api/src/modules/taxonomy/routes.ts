@@ -6,10 +6,10 @@ import { locationsRoutes } from './locations-routes.js';
 
 /**
  * Taxonomy public read routes.
- * Public, unauthenticated, aggressively cached.
+ * Public and unauthenticated. Designer-created locations bypass caching.
  */
 
-/** Taxonomy only changes on deploy/seed — cache for 7 days. */
+/** Preset vocabulary changes on deploy/seed; custom locations change at runtime. */
 const CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400';
 
 const listRoute = createRoute({
