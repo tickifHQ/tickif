@@ -9,6 +9,12 @@ export const projectBudgetBands = [
   { slug: '1cr-plus', label: '₹1Cr+', min: 10000001, max: null },
 ];
 
+// Design-only fees replace the first two execution bands; larger ranges stay shared.
+export const designProjectBudgetBands = [
+  { slug: 'under-1l', label: 'Under ₹1L', min: 0, max: 100000 },
+  { slug: '2l-4l', label: '₹2L–₹4L', min: 200000, max: 400000 },
+];
+
 // These ranges remain valid for saved projects, but are no longer offered for new selections.
 export const legacyProjectBudgetBands = [
   { slug: 'moderate', label: '₹5L - ₹15L', min: 500001, max: 1500000 },

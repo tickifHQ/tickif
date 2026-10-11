@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
+import {
+  projectBudgetBands,
+  type ListProjectImagesResponse,
+  type ProjectDetailResponse,
+} from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
 
 const mock = vi.hoisted(() => ({
@@ -126,6 +130,12 @@ describe('DesignerProjectUpload', () => {
         },
       ],
       scope: [
+        {
+          id: '11111111-1111-4111-8111-111111111110',
+          label: 'Design',
+          slug: 'design',
+          parentId: null,
+        },
         {
           id: '11111111-1111-4111-8111-111111111105',
           label: 'Construction',
@@ -343,6 +353,57 @@ describe('DesignerProjectUpload', () => {
       }),
     );
     expect(mock.roomPatch.mock.calls[0]![0].json).not.toHaveProperty('description');
+  });
+
+  it('uses scoped Design budgets and saves the selected range without changing other scopes', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    mock.projectGet.mockImplementation(async () => Response.json(project));
+    mock.projectPatch.mockImplementation(async () => Response.json(project));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    const originalTaxonomy = mock.taxonomyGet.getMockImplementation()!;
+    mock.taxonomyGet.mockImplementation(async (input) =>
+      input.query.kind === 'budget_band'
+        ? Response.json({
+            terms: [
+              ...projectBudgetBands,
+              { slug: 'under-1l', label: 'Under ₹1L' },
+              { slug: '2l-4l', label: '₹2L–₹4L' },
+            ].map((band, index) => ({
+              ...band,
+              id: `11111111-1111-4111-8111-${String(index + 120).padStart(12, '0')}`,
+              parentId: null,
+            })),
+          })
+        : originalTaxonomy(input),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    const budget = screen.getByRole('combobox', { name: 'Cost range' });
+    await user.click(budget);
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(
+      projectBudgetBands.map((band) => band.label),
+    );
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Design', exact: true }));
+    await user.click(budget);
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Under ₹1L',
+      '₹2L–₹4L',
+      ...projectBudgetBands.slice(2).map((band) => band.label),
+    ]);
+    await user.click(screen.getByRole('option', { name: 'Under ₹1L' }));
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() =>
+      expect(mock.projectPatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({ scopeSlug: 'design', budgetBandSlug: 'under-1l' }),
+        }),
+      ),
+    );
   });
 
   function selectWithOption(container: HTMLElement, optionLabel: string) {

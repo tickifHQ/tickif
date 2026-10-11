@@ -26,7 +26,6 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
-  legacyProjectBudgetBands,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
   projectCompletenessResponseSchema,
@@ -74,6 +73,7 @@ import { api } from '@/lib/api';
 import { ApartmentNameCombobox } from '@/components/apartment-name-combobox';
 import { ProjectImageGrid } from '@/components/project-image-grid';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
+import { projectBudgetOptions } from '@/lib/project-budget-options';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
@@ -1422,15 +1422,8 @@ export function DesignerProjectUpload({
     [scopeTerms],
   );
   const budgetOptions = useMemo(
-    () => {
-      const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
-      const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
-      if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
-        options.push({ value: savedRange.slug, label: savedRange.label });
-      }
-      return options;
-    },
-    [budgetBandTerms, budgetBandSlug],
+    () => projectBudgetOptions(budgetBandTerms, selectedScopes[0] ?? '', budgetBandSlug),
+    [budgetBandTerms, budgetBandSlug, selectedScopes],
   );
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),

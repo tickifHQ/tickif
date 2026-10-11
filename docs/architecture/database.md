@@ -44,6 +44,19 @@ unified schema, so a single
 `pnpm db:generate` produces one migration covering everything, and they migrate
 together. This is intentional — see [auth.md](./auth.md).
 
+## Scope-specific project budgets
+
+The taxonomy seed keeps the eight shared project budget bands and two additional
+Design fee bands (`under-1l`, `2l-4l`). In the project editor, the existing `design`
+delivery scope corresponds to the feedback's “Design change” scope: its first two
+cost choices are Under ₹1L and ₹2L–₹4L, followed by the unchanged six larger bands.
+Interior execution and Construction retain all eight shared choices. Saved
+global, Design or retired budgets remain selected when editing or changing scope;
+switching scope never silently changes a saved budget. Stable distinct slugs allow
+API persistence, public detail labels and discovery filters to retain the exact
+chosen range. Deployment must run the ordinary taxonomy seed before verifying
+the new choices; no project rewrite or schema migration is needed.
+
 ## Connection
 
 The connection string is `DATABASE_URL` in `.env`. The local default

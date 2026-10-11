@@ -6,7 +6,7 @@ import { createProjectVersionFixture } from '../lib/project-version-fixtures';
 import { moderationApiUrl, signInProjectAdmin } from '../lib/project-moderation-fixtures';
 import { webUrl } from '../lib/environment';
 
-test('project budget choices persist and room descriptions are absent from the editor', async ({
+test('scope-specific project budget choices persist and room descriptions are absent from the editor', async ({
   page,
   context,
 }, testInfo) => {
@@ -65,6 +65,29 @@ test('project budget choices persist and room descriptions are absent from the e
     await expect.poll(readBudget).toBe('1cr-plus');
     await page.reload();
     await expect(budget).toHaveText('₹1Cr+');
+    await page.getByRole('button', { name: 'Design', exact: true }).click();
+    await budget.click();
+    await expect(page.getByRole('option')).toHaveText([
+      'Under ₹1L',
+      '₹2L–₹4L',
+      '₹10L - ₹20L',
+      '₹20L - ₹30L',
+      '₹30L - ₹40L',
+      '₹40L - ₹50L',
+      '₹50L - ₹1Cr',
+      '₹1Cr+',
+    ]);
+    await page.getByRole('option', { name: 'Under ₹1L', exact: true }).click();
+    await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
+    await expect.poll(readBudget).toBe('under-1l');
+    await page.reload();
+    await expect(budget).toHaveText('Under ₹1L');
+    await budget.click();
+    await page.getByRole('option', { name: '₹2L–₹4L', exact: true }).click();
+    await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
+    await expect.poll(readBudget).toBe('2l-4l');
+    await page.reload();
+    await expect(budget).toHaveText('₹2L–₹4L');
     await page.getByText('Upload Files', { exact: true }).first().scrollIntoViewIfNeeded();
     await testInfo.attach('room-without-description', {
       body: await page.screenshot({ path: testInfo.outputPath('room-without-description.png') }),
