@@ -179,15 +179,15 @@ export function DesignerProjectsList({
       ) : null}
 
       <div className="overflow-hidden rounded-lg">
-        <Table className="min-w-[76rem]">
+        <Table className="min-w-[74rem] table-fixed">
           <TableHeader className="[&_th]:h-9 [&_th]:whitespace-nowrap [&_th]:font-sans [&_th]:text-[13px] [&_th]:tracking-normal">
             <TableRow className="border-0 bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[22rem] rounded-l-lg">Project</TableHead>
-              <TableHead className="w-[12.5rem]">Type</TableHead>
+              <TableHead className="rounded-l-lg">Project</TableHead>
+              <TableHead className="w-36">Type</TableHead>
               <TableHead className="w-[175px] min-w-[175px]">Status</TableHead>
-              <TableHead className="w-[11.5rem]">Uploaded on</TableHead>
-              <TableHead className="w-[11.5rem]">Last updated</TableHead>
-              <TableHead className="w-[7.5rem] rounded-r-lg text-right">Actions</TableHead>
+              <TableHead className="w-36">Uploaded on</TableHead>
+              <TableHead className="w-36">Last updated</TableHead>
+              <TableHead className="w-58 rounded-r-lg text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -234,10 +234,10 @@ export function DesignerProjectsList({
                       </StatusWithFeedback>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm font-medium text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-sm font-medium text-muted-foreground">
                     {formatDate(project.createdAt)}
                   </TableCell>
-                  <TableCell className="text-sm font-medium text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-sm font-medium text-muted-foreground">
                     {formatUpdated(project.updatedAt)}
                   </TableCell>
                   <TableCell>

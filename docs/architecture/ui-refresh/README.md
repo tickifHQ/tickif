@@ -203,15 +203,19 @@ profile's 94px hero size to every screen heading.
 Use Inter for functional controls and keep dense table/form text legible.
 The designer project table follows [dashboard frame 14737:7634](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=14737-7634):
 36px body-font headers at 13px and 52 × 40px landscape thumbnails. A 175px
-minimum status column and 1216px table minimum preserve readable pending-change
+status column and 1184px table minimum preserve readable pending-change
 labels; narrower workspaces scroll the table instead of compressing its cells. Its detail
 cards retain the 300px width from [feedback frame 14740:3734](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=14740-3734),
 bounded by the viewport. These scoped measurements do not change shared table
 defaults. The newer feedback requirements retain the prominent View action,
 Copy/Duplicate menu and explicit pending-edit/live-version explanation.
-The labelled View action needs more room than the old three-icon Figma sample;
-columns therefore remain fluid above those minimums rather than fixing all six
-widths. Single-line headers also reserve enough space for ordinary date values.
+The labelled View action needs more room than the old three-icon Figma sample.
+A fixed table layout reserves 232px for actions, 144px for Type and each date
+column, and the remaining width for Project (about 350px at the 1512px reference).
+Long project titles and locations truncate inside that column, retaining their
+full accessible preview name and detail-card text. This prevents intrinsic text
+width from pushing actions outside the desktop workspace. Headers and date cells
+stay on one line; the table fills wider workspaces and scrolls within smaller ones.
 Portfolio section and project-room header controls share the semantic 2px
 keyboard focus ring with form controls; both room expansion triggers expose
 their expanded state.
