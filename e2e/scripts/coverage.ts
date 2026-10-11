@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'upload-scroll.spec.ts',
+    'first upload preserves the workspace scroll position while creating a draft',
+  ],
+  [
     'single-image-moderation.spec.ts',
     'E-371 reviewer removes one image after confirmation and keeps the other originals',
   ],

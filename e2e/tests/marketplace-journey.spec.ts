@@ -107,11 +107,24 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(
       designer.getByRole('button', { name: 'Toggle Living room', exact: true }),
     ).toBeVisible();
+    const uploadScroller = designer.getByRole('main');
+    // Hydrating a saved draft opens sections with 300ms padding transitions.
+    // Measure upload movement only after those finite layout animations settle.
+    await uploadScroller.evaluate(async (element) => {
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      );
+    });
     // The file picker receives focus on click and when the native dialog closes.
     // Its hidden input must not scroll the fixed workspace out of the viewport.
     await designer.locator('input[type="file"]').first().focus();
     await expect(designer.getByRole('banner')).toBeInViewport();
-    const uploadScroll = await designer.evaluate(() => window.scrollY);
+    const uploadScroll = await uploadScroller.evaluate((element) => element.scrollTop);
+    const uploadSection = designer.getByRole('button', { name: /Step 4 Project images/i });
+    const uploadSectionY = (await uploadSection.boundingBox())!.y;
     let releaseSecondUpload!: () => void;
     const secondUploadGate = new Promise<void>((resolve) => {
       releaseSecondUpload = resolve;
@@ -149,7 +162,13 @@ test('designer onboarding and media processing connects to visitor onboarding an
       ).toContainText('Queued');
       await expect(firstTile).toContainText('Ready', { timeout: 90_000 });
       expect(await firstTileNode.evaluate((node) => node.isConnected)).toBe(true);
-      expect(await designer.evaluate(() => window.scrollY)).toBe(uploadScroll);
+      // Allow one CSS pixel for browser focus/scroll anchoring rounding.
+      expect(
+        Math.abs((await uploadScroller.evaluate((element) => element.scrollTop)) - uploadScroll),
+      ).toBeLessThanOrEqual(1);
+      expect(Math.abs((await uploadSection.boundingBox())!.y - uploadSectionY)).toBeLessThanOrEqual(
+        1,
+      );
       await firstTile
         .getByRole('button', { name: 'Open warm-pendant-living-room.jpg', exact: true })
         .click();
