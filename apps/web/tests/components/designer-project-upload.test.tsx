@@ -1936,6 +1936,7 @@ describe('DesignerProjectUpload batch recovery', () => {
     expect(
       within(screen.getByLabelText('second.jpg', { selector: 'li' })).getByText('Queued'),
     ).toBeInTheDocument();
+    expect(screen.getByText('3 photos added · 1 queued · 1 uploading')).toBeInTheDocument();
     await act(async () => finishTransfer());
     await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText('first.jpg', { selector: 'li' })).toBe(tile);
