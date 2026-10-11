@@ -258,7 +258,7 @@ const budgetBands: TermSeed[] = [...projectBudgetBands, ...legacyProjectBudgetBa
 // ─── E-124: PER-ROOM ATTRIBUTE VOCABULARIES ────────────────────────────────────
 
 // --- MATERIALS (surface-scoped: cabinet, countertop, wall/floor) ---
-const materials: TermSeed[] = [
+export const materials: TermSeed[] = [
   { kind: 'material', slug: 'plywood-bwp', label: 'Plywood (BWP/Marine)', sortOrder: 1 },
   { kind: 'material', slug: 'plywood-bwr', label: 'Plywood (BWR)', sortOrder: 2 },
   { kind: 'material', slug: 'mdf', label: 'MDF', sortOrder: 3 },
@@ -275,7 +275,7 @@ const materials: TermSeed[] = [
 ];
 
 // --- FINISHES ---
-const finishes: TermSeed[] = [
+export const finishes: TermSeed[] = [
   { kind: 'finish', slug: 'laminate', label: 'Laminate', sortOrder: 1 },
   { kind: 'finish', slug: 'acrylic-gloss', label: 'Acrylic (Gloss)', sortOrder: 2 },
   { kind: 'finish', slug: 'acrylic-matte', label: 'Acrylic (Matte)', sortOrder: 3 },
@@ -284,6 +284,11 @@ const finishes: TermSeed[] = [
   { kind: 'finish', slug: 'veneer', label: 'Veneer', sortOrder: 6 },
   { kind: 'finish', slug: 'glass', label: 'Glass', sortOrder: 7 },
   { kind: 'finish', slug: 'fabric', label: 'Fabric', sortOrder: 8 },
+  { kind: 'finish', slug: 'lacquered-glass', label: 'Lacquered Glass', sortOrder: 9 },
+  { kind: 'finish', slug: 'stone', label: 'Stone', sortOrder: 10 },
+  { kind: 'finish', slug: 'metal', label: 'Metal', sortOrder: 11 },
+  { kind: 'finish', slug: 'upvc', label: 'UPVC', sortOrder: 12 },
+  { kind: 'finish', slug: 'aluminium', label: 'Aluminium', sortOrder: 13 },
 ];
 
 // --- LAYOUTS (per-room) ---
