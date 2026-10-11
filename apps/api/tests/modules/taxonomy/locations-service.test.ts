@@ -30,7 +30,6 @@ describe('create reusable locations', () => {
     expect(locationsRepository.ensureLocality).toHaveBeenCalledWith(
       city.id,
       'New Area',
-      'new-area',
     );
   });
   it('does not revive a deactivated city', async () => {

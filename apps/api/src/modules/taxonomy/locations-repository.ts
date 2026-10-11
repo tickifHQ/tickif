@@ -1,4 +1,4 @@
-import { db, schema, eq, and } from '@repo/db';
+import { db, schema, eq, and, locationSlug } from '@repo/db';
 import type { TaxonomyTerm } from '@repo/contracts';
 
 const selection = {
@@ -22,15 +22,13 @@ export const locationsRepository = {
       );
     return city ?? null;
   },
-  async ensureCity(label: string, slug: string): Promise<TaxonomyTerm | null> {
+  async ensureCity(label: string): Promise<TaxonomyTerm | null> {
+    const slug = locationSlug(label);
     await db.insert(schema.taxonomy).values({ kind: 'city', label, slug }).onConflictDoNothing();
     return this.findCity(slug);
   },
-  async ensureLocality(
-    parentId: string,
-    label: string,
-    slug: string,
-  ): Promise<TaxonomyTerm | null> {
+  async ensureLocality(parentId: string, label: string): Promise<TaxonomyTerm | null> {
+    const slug = locationSlug(label);
     await db
       .insert(schema.taxonomy)
       .values({ kind: 'locality', parentId, label, slug })

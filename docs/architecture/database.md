@@ -61,8 +61,13 @@ Designers create reusable cities and city-scoped localities through
 taxonomy terms before saving a project, so homepage location filters and search
 use the same canonical slugs. Repeated creation reuses existing terms; inactive
 terms remain inactive. City/locality reads use `no-store` so new locations appear
-immediately. Existing free-text `cityName` projects remain readable and searchable;
-editing and saving a custom location registers it for location filters.
+immediately. The deployment seed also classifies previously saved free-text
+`cityName` projects for location filters. It locks each canonical project and
+resolves the live and pending versions from their own names, preserving authored
+content, review state and timestamps. Changed live rows enqueue transactional
+search projection events; pending-only classification never indexes private
+content. Invalid names, inactive cities and deleted projects remain unchanged.
+See [ADR 0010](../adr/0010-saved-custom-location-classification.md).
 
 The combined Material & finish picker tags its standard choices as both materials
 and finishes, so the homepage material filter and typed search find those photos.
