@@ -9,7 +9,7 @@
  * Run: pnpm db:seed
  */
 
-import { projectBudgetBands, legacyProjectBudgetBands } from '@repo/contracts';
+import { projectBudgetBands, designProjectBudgetBands, legacyProjectBudgetBands } from '@repo/contracts';
 import { db, schema, sql, and, eq, inArray } from '../index.js';
 
 type TaxonomyKind = (typeof schema.taxonomyKindEnum.enumValues)[number];
@@ -245,7 +245,7 @@ const themes: TermSeed[] = [
 ];
 
 // ─── BUDGET BANDS ──────────────────────────────────────────────────────────────
-const budgetBands: TermSeed[] = [...projectBudgetBands, ...legacyProjectBudgetBands].map(
+const budgetBands: TermSeed[] = [...projectBudgetBands, ...designProjectBudgetBands, ...legacyProjectBudgetBands].map(
   ({ slug, label, min, max }, index) => ({
     kind: 'budget_band',
     slug,
@@ -431,7 +431,7 @@ export async function seedTaxonomy(): Promise<void> {
         inArray(schema.taxonomy.slug, legacyProjectBudgetBands.map((band) => band.slug)),
       ),
     );
-  console.log(`  ✓ ${projectBudgetBands.length} current budget bands`);
+  console.log(`  ✓ ${projectBudgetBands.length + designProjectBudgetBands.length} current budget bands`);
 
   // 4. E-124: Per-room attribute vocabularies
   for (const term of materials) await upsertTerm(term);

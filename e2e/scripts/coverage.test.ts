@@ -40,6 +40,14 @@ describe('critical E2E coverage gate', () => {
     expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/custom room/);
   });
 
+  it('requires persisted scope-specific project budgets without omission or skip', () => {
+    const title =
+      'scope-specific project budget choices persist and room descriptions are absent from the editor';
+    expect(requiredTests).toContainEqual({ file: 'project-feedback.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+    expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+  });
+
   it('requires visitor preference journeys without omissions or skips', () => {
     const preferences = requiredTests.filter(
       ({ file }) => file === 'visitor-feed-preferences.spec.ts',

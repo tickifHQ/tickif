@@ -40,7 +40,7 @@ const requiredEntries: [file: string, title: string][] = [
   ['project-photo-reorder.spec.ts', 'photo ordering persists with phone touch'],
   [
     'project-feedback.spec.ts',
-    'project budget choices persist and room descriptions are absent from the editor',
+    'scope-specific project budget choices persist and room descriptions are absent from the editor',
   ],
   ['project-feedback.spec.ts', 'custom room types persist and appear as search filters'],
   ...[1440, 390].map((width): [string, string] => [
