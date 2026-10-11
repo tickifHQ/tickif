@@ -50,7 +50,7 @@ test('project preview and status cards support hover, keyboard and mobile touch'
     expect(pendingTitle).toHaveLength(160);
     const update = await context.request.patch(`${moderationApiUrl}/api/projects/${target.id}`, {
       headers: { origin: webUrl },
-      data: { title: pendingTitle },
+      data: { title: pendingTitle, propertySubtypeSlug: 'row-house-town-house' },
     });
     expect(update.ok()).toBeTruthy();
     const submit = await context.request.post(
@@ -87,6 +87,20 @@ test('project preview and status cards support hover, keyboard and mobile touch'
       name: `View project: ${pendingTitle} (opens in new tab)`,
     });
     await expect(viewProject).toBeInViewport({ ratio: 1 });
+    const typeCell = row.getByRole('cell').nth(1);
+    const typeBadge = typeCell.locator('[data-slot="badge"]');
+    await expect(typeBadge).toHaveText('row-house-town-house');
+    await expect(typeBadge).toHaveAttribute('title', 'row-house-town-house');
+    expect(
+      await typeBadge
+        .locator('span')
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true);
+    const typeBounds = await typeBadge.boundingBox();
+    const typeCellBounds = await typeCell.boundingBox();
+    expect
+      .soft(typeBounds!.x + typeBounds!.width)
+      .toBeLessThanOrEqual(typeCellBounds!.x + typeCellBounds!.width - 16);
     for (const cell of [row.getByRole('cell').nth(3), row.getByRole('cell').nth(4)]) {
       await expect(cell).toHaveCSS('white-space', 'nowrap');
       expect(
@@ -170,6 +184,27 @@ test('project preview and status cards support hover, keyboard and mobile touch'
       await tableContainer.evaluate((element) => element.scrollWidth > element.clientWidth),
     ).toBe(true);
     await capture('long-title-mobile-actions', page);
+    // Exercise the longest primary status badge as well as the separate live/pending label.
+    await db
+      .update(schema.project)
+      .set({ status: 'changes_requested' })
+      .where(eq(schema.project.id, target.id));
+    await page.setViewportSize({ width: 1512, height: 1000 });
+    await page.reload();
+    const feedbackRow = page.getByRole('row').filter({ hasText: target.title });
+    const feedbackCell = feedbackRow.getByRole('cell').nth(2);
+    const feedbackBadge = feedbackCell.locator('[data-slot="badge"]');
+    await expect(feedbackBadge).toHaveText('Needs Change');
+    const feedbackBounds = await feedbackBadge.boundingBox();
+    const feedbackCellBounds = await feedbackCell.boundingBox();
+    await testInfo.attach('long-label-bounds', {
+      body: JSON.stringify({ typeBounds, typeCellBounds, feedbackBounds, feedbackCellBounds }),
+      contentType: 'application/json',
+    });
+    expect
+      .soft(feedbackBounds!.x + feedbackBounds!.width)
+      .toBeLessThanOrEqual(feedbackCellBounds!.x + feedbackCellBounds!.width - 16);
+    await capture('long-type-and-status-desktop', page);
     expect(errors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   } finally {

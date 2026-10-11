@@ -133,12 +133,13 @@ function ProjectTypeBadge({ label }: { label: string | null }) {
   return (
     <Badge
       variant="secondary"
+      title={label ?? 'Project'}
       className={cn(
-        'rounded-full border-transparent px-2.5 py-1 text-[13px] font-medium leading-[1.1]',
+        'max-w-full rounded-full border-transparent px-2.5 py-1 text-[13px] font-medium leading-[1.1]',
         className,
       )}
     >
-      {label ?? 'Project'}
+      <span className="truncate">{label ?? 'Project'}</span>
     </Badge>
   );
 }

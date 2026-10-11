@@ -216,6 +216,8 @@ Long project titles and locations truncate inside that column, retaining their
 full accessible preview name and detail-card text. This prevents intrinsic text
 width from pushing actions outside the desktop workspace. Headers and date cells
 stay on one line; the table fills wider workspaces and scrolls within smaller ones.
+Property-type badges also truncate within their column, retaining the complete
+text in the DOM and title attribute so long subtype names cannot overlap Status.
 Portfolio section and project-room header controls share the semantic 2px
 keyboard focus ring with form controls; both room expansion triggers expose
 their expanded state.
