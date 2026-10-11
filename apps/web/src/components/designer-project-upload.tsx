@@ -1148,12 +1148,22 @@ function RoomCard({
   // but must not inflate the added-photo count, with pending and failed
   // entries called out separately (E-281).
   const usableImages = room.images.filter((image) => image.status !== 'failed');
-  const processingCount = room.images.filter((image) => image.status === 'processing').length;
+  const processingCount = room.images.filter(
+    (image) => image.status === 'processing' && !image.transferState,
+  ).length;
+  const queuedCount = room.images.filter(
+    (image) => image.transferState === 'queued' && image.status !== 'failed',
+  ).length;
+  const transferringCount = room.images.filter(
+    (image) => image.transferState === 'uploading' && image.status !== 'failed',
+  ).length;
   const failedCount = room.images.length - usableImages.length;
   const photoSummary = [
     usableImages.length > 0
       ? `${usableImages.length} photo${usableImages.length === 1 ? '' : 's'} added`
       : 'No photos yet',
+    ...(queuedCount > 0 ? [`${queuedCount} queued`] : []),
+    ...(transferringCount > 0 ? [`${transferringCount} uploading`] : []),
     ...(processingCount > 0 ? [`${processingCount} processing`] : []),
     ...(failedCount > 0 ? [`${failedCount} failed`] : []),
   ].join(' · ');
