@@ -5,6 +5,15 @@ theme values, components, a crown presentation primitive and an interactive
 gallery now apply that reference. The user approved the component gallery on
 7 October 2026 for publication in the single shared phase PR. The real /d/[slug] profile composition is implemented locally and remains in phase 2 review.
 
+## Completed designer dashboard
+
+Once the tracked setup checklist is complete, the dashboard shows recent projects,
+project/enquiry totals, analytics and portfolio sharing. Its right rail no longer
+shows onboarding's unconditional project-review promise or "What happens next"
+heading. Outstanding identity verification keeps its own status and permitted
+action under "Verification"; completing setup does not imply KYC approval.
+Actual project-review totals remain in the overview metrics.
+
 ## Sources and coverage
 
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)

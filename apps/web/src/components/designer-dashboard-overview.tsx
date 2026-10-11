@@ -611,14 +611,16 @@ export function DesignerDashboardOverview({
     <div>
       <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
         <ShieldPlus className="size-4" />
-        WHAT HAPPENS NEXT
+        {trackedChecklistComplete ? 'VERIFICATION' : 'WHAT HAPPENS NEXT'}
       </div>
       <Card radius="2xl" className="overflow-hidden">
-        <RightRailInfoRow
-          icon={<CalendarDays className="size-4" />}
-          title="We review your project"
-          description="A human check, usually within 24–48 hours."
-        />
+        {!trackedChecklistComplete ? (
+          <RightRailInfoRow
+            icon={<CalendarDays className="size-4" />}
+            title="We review your project"
+            description="A human check, usually within 24–48 hours."
+          />
+        ) : null}
         {!portfolioBasicsDone ? (
           <RightRailInfoRow
             icon={<User className="size-4" />}
