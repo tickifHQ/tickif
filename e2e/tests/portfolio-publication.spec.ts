@@ -399,6 +399,12 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByTestId('post-setup-overview')).toBeVisible();
       await expect(page.getByRole('progressbar', { name: 'Portfolio setup' })).toHaveCount(0);
       await expect(page.getByText('Setup complete', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('WHAT HAPPENS NEXT', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('We review your project', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: /start verification/i })).toHaveAttribute(
+        'href',
+        '/designer/verification',
+      );
       await expect(page.getByRole('heading', { name: 'Recent projects' })).toBeVisible();
       await expect(page.getByText(project.title, { exact: true })).toBeVisible();
       await expect(page.locator('[data-metric="total-projects"]')).toHaveText('1');
