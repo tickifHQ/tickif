@@ -10,6 +10,7 @@ const mock = vi.hoisted(() => ({
     replace: vi.fn(),
   },
   taxonomyGet: vi.fn(),
+  locationPost: vi.fn(),
   projectGet: vi.fn(),
   projectPatch: vi.fn(),
   roomPatch: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       taxonomy: {
+        locations: { $post: mock.locationPost },
         terms: {
           $get: mock.taxonomyGet,
         },
@@ -79,6 +81,29 @@ describe('DesignerProjectUpload', () => {
     vi.clearAllMocks();
     mock.router.push.mockReset();
     mock.router.replace.mockReset();
+    mock.locationPost.mockImplementation(
+      async ({
+        json,
+      }: {
+        json: { cityLabel?: string; citySlug?: string; localityLabel?: string };
+      }) =>
+        Response.json({
+          city: {
+            id: '11111111-1111-4111-8111-111111111111',
+            label: json.cityLabel ?? 'Chennai',
+            slug: json.cityLabel ? 'pondicherry' : json.citySlug,
+            parentId: null,
+          },
+          locality: json.localityLabel
+            ? {
+                id: '22222222-2222-4222-8222-222222222222',
+                label: json.localityLabel,
+                slug: 'new-area',
+                parentId: '11111111-1111-4111-8111-111111111111',
+              }
+            : null,
+        }),
+    );
     mock.historyGet.mockImplementation(async () => Response.json({ items: [] }));
 
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
@@ -811,7 +836,7 @@ describe('DesignerProjectUpload', () => {
       const { project } = await renderSubmittableDraft();
       render(<DesignerProjectUpload initialProjectId={project.id} />);
 
-      await screen.findByDisplayValue('2 BHK in Adyar');
+      await screen.findByDisplayValue('2 BHK in Adyar', {}, { timeout: 10_000 });
       await user.click(screen.getByRole('button', { name: /enter a custom city/i }));
       await user.type(screen.getByLabelText('City'), 'Pondicherry');
       await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
@@ -820,9 +845,32 @@ describe('DesignerProjectUpload', () => {
       expect(mock.projectPatch).toHaveBeenCalledWith(
         expect.objectContaining({
           json: expect.objectContaining({
-            cityName: 'Pondicherry',
-            citySlug: null,
+            cityName: null,
+            citySlug: 'pondicherry',
             localitySlug: null,
+          }),
+        }),
+      );
+      expect(mock.locationPost).toHaveBeenCalledWith({ json: { cityLabel: 'Pondicherry' } });
+    });
+
+    it('saves a custom area under an existing city before previewing', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+      await screen.findByDisplayValue('2 BHK in Adyar', {}, { timeout: 10_000 });
+      await user.click(await screen.findByRole('button', { name: /enter a custom area/i }));
+      await user.type(screen.getByLabelText('Locality / Area'), 'New Area');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await screen.findByRole('dialog');
+      expect(mock.locationPost).toHaveBeenCalledWith({
+        json: { citySlug: 'chennai', localityLabel: 'New Area' },
+      });
+      expect(mock.projectPatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({
+            citySlug: 'chennai',
+            localitySlug: 'new-area',
           }),
         }),
       );

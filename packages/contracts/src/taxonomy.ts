@@ -18,9 +18,7 @@ export const TAXONOMY_KIND_VALUES = [
   'size_band',
 ] as const;
 
-export const taxonomyKindSchema = z
-  .enum(TAXONOMY_KIND_VALUES)
-  .meta({ id: 'TaxonomyKind' });
+export const taxonomyKindSchema = z.enum(TAXONOMY_KIND_VALUES).meta({ id: 'TaxonomyKind' });
 export type TaxonomyKind = z.infer<typeof taxonomyKindSchema>;
 
 /** A single taxonomy term in the public response. */
@@ -52,3 +50,48 @@ export const listTaxonomyQuerySchema = z
   })
   .meta({ id: 'ListTaxonomyQuery' });
 export type ListTaxonomyQuery = z.infer<typeof listTaxonomyQuerySchema>;
+
+const locationLabel = z
+  .string()
+  .trim()
+  .min(2)
+  .max(100)
+  .regex(/[\p{L}\p{N}]/u);
+/** Combined picker choices also exposed by the material discovery filter. */
+export const materialFinishSlugs = [
+  'laminate',
+  'acrylic-gloss',
+  'acrylic-matte',
+  'pu',
+  'membrane',
+  'veneer',
+  'glass',
+  'fabric',
+  'lacquered-glass',
+  'stone',
+  'metal',
+  'upvc',
+  'pvc',
+  'aluminium',
+] as const;
+export const createLocationSchema = z
+  .object({
+    citySlug: z
+      .string()
+      .max(80)
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      .optional(),
+    cityLabel: locationLabel.optional(),
+    localityLabel: locationLabel.optional(),
+  })
+  .refine((input) => Boolean(input.citySlug) !== Boolean(input.cityLabel), {
+    message: 'Provide either an existing city or a new city name.',
+  })
+  .meta({ id: 'CreateLocation' });
+export type CreateLocationInput = z.infer<typeof createLocationSchema>;
+export const createLocationResponseSchema = z
+  .object({
+    city: taxonomyTermSchema,
+    locality: taxonomyTermSchema.nullable(),
+  })
+  .meta({ id: 'CreateLocationResponse' });

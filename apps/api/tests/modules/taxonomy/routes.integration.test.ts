@@ -163,8 +163,8 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
   // --- Cache header ---
 
   it('includes 7-day Cache-Control for non-empty results', async () => {
-    await seed('city', 'CacheCity', 'cache-city');
-    const res = await get('/api/taxonomy/terms?kind=city');
+    await seed('property_type', 'Cache Type', 'cache-type');
+    const res = await get('/api/taxonomy/terms?kind=property_type');
     expect(res.headers.get('cache-control')).toBe(
       'public, max-age=604800, stale-while-revalidate=86400',
     );

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  createLocationResponseSchema,
   legacyProjectBudgetBands,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
@@ -247,6 +248,7 @@ const roomTagOptions: TagComboboxOption[] = [
 ].map((tag) => ({ label: tag, value: tag }));
 
 const commercialTypeOptions: ProjectSubtypeOption[] = [
+  { slug: 'hospital', label: 'Hospital' },
   { slug: 'corporate-office', label: 'Corporate office' },
   { slug: 'it-tech-office', label: 'IT/Tech office' },
   { slug: 'co-working-space', label: 'Co-working space' },
@@ -1314,6 +1316,7 @@ export function DesignerProjectUpload({
   const [loadingTaxonomy, setLoadingTaxonomy] = useState(true);
   const [cities, setCities] = useState<TaxonomyTerm[]>([]);
   const [localities, setLocalities] = useState<TaxonomyTerm[]>([]);
+  const [customLocalityMode, setCustomLocalityMode] = useState(false);
   const [propertyTypes, setPropertyTypes] = useState<TaxonomyTerm[]>([]);
   const [propertySubtypes, setPropertySubtypes] = useState<TaxonomyTerm[]>([]);
   const [bhkOptions, setBhkOptions] = useState<TaxonomyTerm[]>([]);
@@ -2291,7 +2294,7 @@ export function DesignerProjectUpload({
     setProjectName(value);
   }
 
-  function buildCreateProjectPayload() {
+  async function buildCreateProjectPayload() {
     if (!backendProjectSelection) {
       throw new Error(
         backendProjectSelectionError ||
@@ -2299,7 +2302,7 @@ export function DesignerProjectUpload({
       );
     }
 
-    return buildCreateProjectPayloadInput({
+    const payload = buildCreateProjectPayloadInput({
       projectName,
       selectedProjectTypeLabel,
       aboutProject,
@@ -2322,10 +2325,34 @@ export function DesignerProjectUpload({
       selectedProjectSubtypeLabel,
       selectedScopes,
     });
+    // Register custom locations once, then save canonical slugs so the same
+    // city/area can be selected in the homepage location filter.
+    if (customCityMode || (locality.trim() && !selectedLocality)) {
+      const response = await api.api.taxonomy.locations.$post({
+        json: {
+          ...(customCityMode ? { cityLabel: cityName.trim() } : { citySlug }),
+          ...(locality.trim() ? { localityLabel: locality.trim() } : {}),
+        },
+      });
+      const json: unknown = await response.json();
+      if (!response.ok) throw new Error(extractApiMessage(json, 'Could not save this location.'));
+      const location = parseApiPayload(
+        json,
+        createLocationResponseSchema,
+        'Could not read the saved location.',
+      );
+      return {
+        ...payload,
+        citySlug: location.city.slug,
+        cityName: undefined,
+        localitySlug: location.locality?.slug,
+      };
+    }
+    return payload;
   }
 
-  function buildUpdateProjectPayload(): UpdateProjectInput {
-    const createPayload = buildCreateProjectPayload();
+  async function buildUpdateProjectPayload(): Promise<UpdateProjectInput> {
+    const createPayload = await buildCreateProjectPayload();
     return {
       title: createPayload.title,
       description: aboutProject.trim() || null,
@@ -2351,7 +2378,7 @@ export function DesignerProjectUpload({
     if (ensureProjectPromiseRef.current) return ensureProjectPromiseRef.current;
 
     const promise = (async () => {
-      const payload = buildCreateProjectPayload();
+      const payload = await buildCreateProjectPayload();
 
       const response = await api.api.projects.$post({ json: payload });
       const payloadJson = await response.json();
@@ -2387,7 +2414,7 @@ export function DesignerProjectUpload({
   }
 
   async function syncProject(currentProjectId: string) {
-    const updatePayload = buildUpdateProjectPayload();
+    const updatePayload = await buildUpdateProjectPayload();
 
     const response = await api.api.projects[':id'].$patch({
       param: { id: currentProjectId },
@@ -3419,6 +3446,7 @@ export function DesignerProjectUpload({
                           onChange={(value) => {
                             setCitySlug(value);
                             setLocality('');
+                            setCustomLocalityMode(false);
                           }}
                           options={cityOptions}
                           placeholder={loadingTaxonomy ? 'Loading…' : 'Select city'}
@@ -3440,21 +3468,40 @@ export function DesignerProjectUpload({
                       </>
                     )}
                   </div>
-                  {localityOptions.length > 0 ? (
-                    <SelectField
-                      label="Locality / Area"
-                      value={locality}
-                      onValueChange={setLocality}
-                      options={localityOptions}
-                      placeholder="e.g. Adyar, Koramangala"
-                      allowEmpty
-                    />
+                  {localityOptions.length > 0 && !customLocalityMode ? (
+                    <div className="space-y-1.5">
+                      <SelectField
+                        label="Locality / Area"
+                        value={locality}
+                        onValueChange={setLocality}
+                        options={localityOptions}
+                        placeholder="e.g. Adyar, Koramangala"
+                        allowEmpty
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomLocalityMode(true);
+                          setLocality('');
+                        }}
+                        className={cn(
+                          typography.bodySmall,
+                          'text-primary underline-offset-2 hover:underline',
+                        )}
+                      >
+                        Can&apos;t find your area? Enter a custom area
+                      </button>
+                    </div>
                   ) : (
                     <div className="space-y-1.5">
-                      <Label className={cn(typography.label, 'text-foreground')}>
+                      <Label
+                        htmlFor="project-custom-locality"
+                        className={cn(typography.label, 'text-foreground')}
+                      >
                         Locality / Area
                       </Label>
                       <Input
+                        id="project-custom-locality"
                         value={locality}
                         onChange={(event) => setLocality(event.target.value)}
                         placeholder="e.g. Adyar, Koramangala"
