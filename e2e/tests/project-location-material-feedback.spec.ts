@@ -40,7 +40,6 @@ test('custom city and area, commercial Hospital and material finish persist thro
     const cityLabel = `Feedback City ${target.id.slice(0, 8)}`;
     await page.getByLabel('City', { exact: true }).fill(cityLabel);
     await page.getByLabel('Locality / Area', { exact: true }).fill('New Area');
-    await page.getByRole('button', { name: 'Step 4 Project images', exact: true }).click();
     await page.getByRole('combobox', { name: 'Material & finish', exact: true }).first().click();
     await page.getByRole('option', { name: 'Lacquered glass', exact: true }).click();
     const savedLocation = page.waitForResponse(
