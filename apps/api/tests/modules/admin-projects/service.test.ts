@@ -19,6 +19,7 @@ vi.mock('../../../src/modules/admin-projects/repository.js', () => ({
     createReviewComment: vi.fn(),
     updateReviewComment: vi.fn(),
     correctMetadata: vi.fn(),
+    removeImage: vi.fn(),
   },
 }));
 
@@ -26,6 +27,7 @@ vi.mock('../../../src/modules/projects/service.js', () => ({
   buildCompleteness: vi.fn(),
   transitionProject: vi.fn(),
   validateProjectTaxonomy: vi.fn(),
+  deleteImageObjects: vi.fn(),
 }));
 
 vi.mock('@repo/storage', () => ({
@@ -141,6 +143,13 @@ beforeEach(() => {
 });
 
 describe('adminProjectsService', () => {
+  it('refuses an image removal when the reviewed version changed concurrently', async () => {
+    repo.findById.mockResolvedValue(project());
+    repo.removeImage.mockResolvedValue('project_changed');
+    await expect(
+      adminProjectsService.removeImage(project().id, image().id, admin),
+    ).rejects.toMatchObject({ status: 409 });
+  });
   const reviewComment = (
     overrides: Partial<AdminReviewCommentRecord> = {},
   ): AdminReviewCommentRecord => ({

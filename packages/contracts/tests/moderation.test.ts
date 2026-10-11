@@ -40,6 +40,7 @@ describe('moderation contracts', () => {
       'reject',
       'unpublish',
       'metadata_corrected',
+      'image_removed',
       'archive',
       'restore',
       'delete',
@@ -73,6 +74,7 @@ describe('moderation contracts', () => {
       'reject',
       'unpublish',
       'metadata_corrected',
+      'image_removed',
     ]);
   });
 
@@ -175,6 +177,7 @@ describe('moderation contracts', () => {
       'publish',
       'unpublish',
       'metadata_corrected',
+      'image_removed',
     ] as const) {
       expect(moderationActorLabel(action)).toBe(MODERATION_ACTOR_LABEL.REVIEW_TEAM);
     }

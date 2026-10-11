@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   correct: vi.fn(),
   createComment: vi.fn(),
   updateComment: vi.fn(),
+  removeImage: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
 }));
@@ -35,6 +36,7 @@ vi.mock('../../src/lib/admin-moderation-api', () => ({
   correctAdminProject: mocks.correct,
   createAdminReviewComment: mocks.createComment,
   updateAdminReviewComment: mocks.updateComment,
+  removeAdminProjectImage: mocks.removeImage,
 }));
 
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -167,6 +169,33 @@ function renderQueue(currentUserId = 'admin-1') {
 }
 
 describe('AdminModerationQueue', () => {
+  it('confirms one image removal and retains the other image cards', async () => {
+    const review = detail({ status: 'in_review', reviewedBy: 'admin-1' });
+    const other = { ...review.images[0]!, id: '77777777-7777-4777-8777-777777777777' };
+    review.images.push(other);
+    mocks.fetchDetail.mockResolvedValue(review);
+    mocks.removeImage.mockResolvedValue({ ...review, images: [other] });
+    const user = userEvent.setup();
+    renderQueue();
+    await user.click(screen.getByRole('button', { name: /open review for a calm coastal home/i }));
+    await user.click(await screen.findByRole('button', { name: 'Remove image 1' }));
+    expect(mocks.removeImage).not.toHaveBeenCalled();
+    const confirmation = screen.getByRole('dialog', { name: 'Remove this image?' });
+    expect(within(confirmation).getByText(/other images will stay/i)).toBeVisible();
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    expect(mocks.removeImage).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Remove image 1' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Remove this image?' })).getByRole('button', {
+        name: 'Remove image',
+      }),
+    );
+    await waitFor(() => expect(mocks.removeImage).toHaveBeenCalledWith(projectId, imageId));
+    expect(
+      screen.queryByRole('link', { name: `Open original image ${imageId}` }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: `Open original image ${other.id}` })).toBeVisible();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.fetchQueue.mockResolvedValue({ ...queue, items: [], total: 0, totalPages: 0 });

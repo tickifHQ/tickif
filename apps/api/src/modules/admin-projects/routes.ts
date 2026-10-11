@@ -8,6 +8,7 @@ import {
   errorResponseSchema,
   moderationNoteSchema,
   projectIdParamSchema,
+  projectImageIdParamSchema,
   projectReviewCommentParamsSchema,
   projectReviewCommentSchema,
   rejectProjectSchema,
@@ -51,6 +52,27 @@ const listRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Admin role required'),
+  },
+});
+
+const removeImageRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/images/{imageId}',
+  tags: ['Admin Projects'],
+  summary: 'Remove one image from the claimed project review',
+  security: [{ cookieAuth: [] }],
+  middleware: adminMiddleware,
+  request: { params: projectImageIdParamSchema },
+  responses: {
+    200: {
+      description: 'Updated review with the other images preserved',
+      content: { 'application/json': { schema: adminModerationDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Admin role or reviewer claim required'),
+    404: errorJson('Project or image not found'),
+    409: errorJson('The project review changed'),
+    422: errorJson('Invalid project or image ID'),
   },
 });
 
@@ -248,6 +270,11 @@ const updateReviewCommentRoute = createRoute({
 export const adminProjectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
+  .openapi(removeImageRoute, async (c) => {
+    const { id, imageId } = c.req.valid('param');
+    const result = await adminProjectsService.removeImage(id, imageId, caller(c.get('user')));
+    return c.json(result, 200);
+  })
   .openapi(listRoute, async (c) => {
     const result = await adminProjectsService.list(c.req.valid('query'), caller(c.get('user')));
     return c.json(result, 200);

@@ -81,6 +81,15 @@ export async function fetchAdminModerationDetail(projectId: string) {
   return parseDetail(await response.json());
 }
 
+export async function removeAdminProjectImage(projectId: string, imageId: string) {
+  const response = await api.api.admin.projects[':id'].images[':imageId'].$delete({
+    param: { id: projectId, imageId },
+  });
+  if (!response.ok)
+    throw new Error('Could not remove this image. Refresh the review and try again.');
+  return parseDetail(await response.json());
+}
+
 export async function startAdminReview(projectId: string) {
   const response = await api.api.admin.projects[':id']['start-review'].$post({
     param: { id: projectId },
