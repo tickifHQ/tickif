@@ -104,7 +104,12 @@ describe('Taxonomy seed (E-33)', () => {
         .from(schema.taxonomy)
         .where(sql`${schema.taxonomy.kind} = 'budget_band' AND ${schema.taxonomy.isActive} = true`);
 
-      expect(bands).toHaveLength(8);
+      // Eight shared ranges plus the two Design fee ranges.
+      expect(bands).toHaveLength(10);
+      expect(bands).toEqual(expect.arrayContaining([
+        { slug: 'under-1l', metadata: { min: 0, max: 100000 } },
+        { slug: '2l-4l', metadata: { min: 200000, max: 400000 } },
+      ]));
 
       for (const band of bands) {
         const meta = band.metadata as { min?: number; max?: number | null };
@@ -138,6 +143,8 @@ describe('Taxonomy seed (E-33)', () => {
         '40l-50l',
         '50l-1cr',
         '1cr-plus',
+        'under-1l',
+        '2l-4l',
       ]);
     });
   });
@@ -173,6 +180,8 @@ describe('Taxonomy seed (E-33)', () => {
       { min: 4000001, max: 5000000 },
       { min: 5000001, max: 10000000 },
       { min: 10000001, max: null },
+      { min: 0, max: 100000 },
+      { min: 200000, max: 400000 },
     ]);
   });
 
