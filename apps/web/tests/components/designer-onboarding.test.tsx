@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { DesignerOnboarding } from '../../src/components/designer-onboarding';
 
 function deferredSave() {
@@ -101,6 +102,21 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('DesignerOnboarding', () => {
+  it('keeps entity choices disabled until hydration so an early click cannot be lost', async () => {
+    const markup = renderToString(<DesignerOnboarding />);
+    const serverDocument = new DOMParser().parseFromString(markup, 'text/html');
+    const choices = Array.from(serverDocument.querySelectorAll('button[aria-pressed]'));
+    expect(choices).toHaveLength(2);
+    for (const choice of choices) expect(choice).toHaveAttribute('disabled');
+
+    const user = userEvent.setup();
+    render(<DesignerOnboarding />);
+    const individual = screen.getByRole('button', { name: /Just me/ });
+    expect(individual).toBeEnabled();
+    await user.click(individual);
+    expect(screen.getByLabelText(/^Display name/)).toBeVisible();
+  });
+
   it.each([
     ['51-99', 99],
     ['100+', 100],
