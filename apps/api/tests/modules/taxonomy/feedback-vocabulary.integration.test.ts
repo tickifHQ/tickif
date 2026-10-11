@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { seedTaxonomy } from '@repo/db/seeds/taxonomy';
 import { db, schema, and, eq } from '@repo/db';
 import { app } from '../../../src/app.js';
+import { listTaxonomyResponseSchema } from '@repo/contracts';
 import { makeDesigner, makeProject, makeProjectImage } from '@repo/db/testing';
 import { findFilterSuggestions } from '../../../src/modules/search/repository.js';
 import { discoveryRepository } from '../../../src/modules/discovery/repository.js';
@@ -11,7 +12,7 @@ describe('October feedback taxonomy', () => {
   it('offers all requested material/finish choices and a commercial Hospital', async () => {
     await seedTaxonomy();
     const response = await app.request('/api/taxonomy/terms?kind=finish');
-    const body: { terms: { slug: string; label: string }[] } = await response.json();
+    const body = listTaxonomyResponseSchema.parse(await response.json());
     expect(body.terms.map((term) => term.label)).toEqual(
       expect.arrayContaining([
         'Acrylic (Glossy)',
@@ -36,7 +37,7 @@ describe('October feedback taxonomy', () => {
       );
     expect(hospital?.metadata.propertyTypeSlug).toBe('commercial-workspace');
     const materialResponse = await app.request('/api/taxonomy/terms?kind=material');
-    const materials: { terms: { label: string }[] } = await materialResponse.json();
+    const materials = listTaxonomyResponseSchema.parse(await materialResponse.json());
     expect(materials.terms.map((term) => term.label)).toEqual(
       expect.arrayContaining([
         'Lacquered glass',

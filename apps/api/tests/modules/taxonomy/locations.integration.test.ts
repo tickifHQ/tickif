@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { db, schema, eq } from '@repo/db';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
+import { createLocationResponseSchema, listTaxonomyResponseSchema } from '@repo/contracts';
 
 function create(body: unknown, cookie?: string) {
   return app.request('/api/taxonomy/locations', {
@@ -24,21 +25,25 @@ describe('reusable city and locality creation', () => {
     const input = { cityLabel: 'Pondicherry', localityLabel: 'New Area' };
     const response = await create(input, cookie);
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = createLocationResponseSchema.parse(await response.json());
     expect(await (await create({ ...input, cityLabel: 'pondicherry' }, cookie)).json()).toEqual(
       body,
     );
-    const other = await (await create({ ...input, cityLabel: 'Other City' }, cookie)).json();
-    expect(other.locality.id).not.toBe(body.locality.id);
-    expect(other.locality.slug).toBe(body.locality.slug);
+    const other = createLocationResponseSchema.parse(
+      await (await create({ ...input, cityLabel: 'Other City' }, cookie)).json(),
+    );
+    expect(other.locality!.id).not.toBe(body.locality!.id);
+    expect(other.locality!.slug).toBe(body.locality!.slug);
     const cityRead = await app.request('/api/taxonomy/terms?kind=city');
     expect(cityRead.headers.get('Cache-Control')).toBe('no-store');
     const areas = await app.request(`/api/taxonomy/terms?kind=locality&parentId=${body.city.id}`);
-    expect((await areas.json()).terms).toEqual([body.locality]);
+    expect(listTaxonomyResponseSchema.parse(await areas.json()).terms).toEqual([body.locality]);
   });
   it('creates an area in an existing city and preserves inactive terms', async () => {
     const { cookie } = await createRoleSession('+919812005003', 'designer');
-    const { city } = await (await create({ cityLabel: 'Chennai' }, cookie)).json();
+    const { city } = createLocationResponseSchema.parse(
+      await (await create({ cityLabel: 'Chennai' }, cookie)).json(),
+    );
     const response = await create({ citySlug: city.slug, localityLabel: 'New Area' }, cookie);
     expect(response.status).toBe(200);
     await db
