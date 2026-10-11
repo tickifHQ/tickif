@@ -99,3 +99,16 @@ was not sent using the deliberately synthetic business ID in the demo fixture.
 Private fixture snapshots, raw logs and screenshots stay outside committed
 source under the task's local artifact paths. No production data or schema was
 changed for this audit.
+
+## Google connection refresh, 11 October 2026
+
+Manual refresh marks the connection pending before queueing the worker so the
+editor keeps polling until completion. Fresh cached ratings and reviews remain
+visible during refresh; content older than 30 days stays hidden. A queue failure
+restores the prior status only while the same attempt is still pending, preserving
+newer connection changes and worker results.
+
+When fetching is disabled, the editor links Tickif support for workspace setup.
+When enabled, it explains how to paste a Google Maps Share link or a business
+name and city. API and worker credentials and real provider smoke checks follow
+the [staging deployment runbook](../runbooks/staging-deployment.md).

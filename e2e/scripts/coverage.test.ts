@@ -33,6 +33,13 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires custom room persistence and discovery without omission or skip', () => {
+    const title = 'custom room types persist and appear as search filters';
+    expect(requiredTests).toContainEqual({ file: 'project-feedback.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/custom room/);
+    expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/custom room/);
+  });
+
   it('requires visitor preference journeys without omissions or skips', () => {
     const preferences = requiredTests.filter(
       ({ file }) => file === 'visitor-feed-preferences.spec.ts',

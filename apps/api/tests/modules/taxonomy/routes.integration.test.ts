@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema } from '@repo/db';
+import { listTaxonomyResponseSchema } from '@repo/contracts';
 import { app } from '../../../src/app.js';
 
 /**
@@ -17,11 +18,16 @@ async function get(path: string): Promise<Response> {
 }
 
 /** Seed a taxonomy term. */
-async function seed(kind: string, label: string, slug: string, opts?: { parentId?: string; sortOrder?: number; isActive?: boolean }) {
+async function seed(
+  kind: string,
+  label: string,
+  slug: string,
+  opts?: { parentId?: string; sortOrder?: number; isActive?: boolean },
+) {
   const [row] = await db
     .insert(schema.taxonomy)
     .values({
-      kind: kind as typeof schema.taxonomyKindEnum.enumValues[number],
+      kind: kind as (typeof schema.taxonomyKindEnum.enumValues)[number],
       label,
       slug,
       parentId: opts?.parentId ?? undefined,
@@ -43,7 +49,11 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.terms).toHaveLength(2);
-    expect(body.terms[0]).toMatchObject({ label: expect.any(String), slug: expect.any(String), id: expect.any(String) });
+    expect(body.terms[0]).toMatchObject({
+      label: expect.any(String),
+      slug: expect.any(String),
+      id: expect.any(String),
+    });
   });
 
   // --- Empty table ---
@@ -126,7 +136,9 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
   // --- Non-existent parentId ---
 
   it('returns empty for locality with non-existent parentId', async () => {
-    const res = await get('/api/taxonomy/terms?kind=locality&parentId=11111111-1111-4111-8111-111111111111');
+    const res = await get(
+      '/api/taxonomy/terms?kind=locality&parentId=11111111-1111-4111-8111-111111111111',
+    );
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.terms).toEqual([]);
@@ -137,7 +149,9 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
   it('ignores parentId for non-locality kinds', async () => {
     await seed('theme', 'Minimalist', 'minimalist');
 
-    const res = await get('/api/taxonomy/terms?kind=theme&parentId=11111111-1111-4111-8111-111111111111');
+    const res = await get(
+      '/api/taxonomy/terms?kind=theme&parentId=11111111-1111-4111-8111-111111111111',
+    );
     const body = await json(res);
     // Should return themes regardless of parentId
     expect(body.terms.length).toBeGreaterThanOrEqual(1);
@@ -183,5 +197,58 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
     const res = await get('/api/taxonomy/terms?kind=property_type');
     const body = await json(res);
     expect(body.terms[0]).toMatchObject({ label: 'Apartment', slug: 'apartment' });
+  });
+});
+
+describe('POST /api/taxonomy/rooms', () => {
+  async function createRoom(label: string, cookie?: string) {
+    return app.request('/api/taxonomy/rooms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  it('requires authentication', async () => {
+    expect((await createRoom('Music Room')).status).toBe(401);
+  });
+
+  it('does not allow visitors to change the shared room vocabulary', async () => {
+    const { createRoleSession } = await import('../../helpers/auth.js');
+    const { cookie } = await createRoleSession('+919812004001', 'visitor');
+    expect((await createRoom('Music Room', cookie)).status).toBe(403);
+  });
+
+  it('creates a shared room once and exposes it in uncached room reads', async () => {
+    const { createRoleSession } = await import('../../helpers/auth.js');
+    const { cookie } = await createRoleSession('+919812004002', 'designer');
+    const response = await createRoom('Music & Media Room', cookie);
+    expect(response.status).toBe(200);
+    const term = await response.json();
+    expect(term).toMatchObject({
+      label: 'Music & Media Room',
+      slug: 'music-media-room',
+      parentId: null,
+    });
+    const repeated = await createRoom('Music & Media Room', cookie);
+    expect(await repeated.json()).toEqual(term);
+    const listed = await get('/api/taxonomy/terms?kind=room');
+    expect(listed.headers.get('cache-control')).toBe('no-cache');
+    expect(listTaxonomyResponseSchema.parse(await listed.json()).terms).toEqual([term]);
+  });
+
+  it('rejects empty, oversized and unusable names', async () => {
+    const { createRoleSession } = await import('../../helpers/auth.js');
+    const { cookie } = await createRoleSession('+919812004003', 'designer');
+    expect((await createRoom('   ', cookie)).status).toBe(422);
+    expect((await createRoom('x'.repeat(81), cookie)).status).toBe(422);
+    expect((await createRoom('!!!', cookie)).status).toBe(400);
+  });
+
+  it('keeps inactive taxonomy terms disabled', async () => {
+    const { createRoleSession } = await import('../../helpers/auth.js');
+    const { cookie } = await createRoleSession('+919812004004', 'designer');
+    await seed('room', 'Attic', 'attic', { isActive: false });
+    expect((await createRoom('Attic', cookie)).status).toBe(409);
   });
 });

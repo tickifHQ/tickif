@@ -18,9 +18,7 @@ export const TAXONOMY_KIND_VALUES = [
   'size_band',
 ] as const;
 
-export const taxonomyKindSchema = z
-  .enum(TAXONOMY_KIND_VALUES)
-  .meta({ id: 'TaxonomyKind' });
+export const taxonomyKindSchema = z.enum(TAXONOMY_KIND_VALUES).meta({ id: 'TaxonomyKind' });
 export type TaxonomyKind = z.infer<typeof taxonomyKindSchema>;
 
 /** A single taxonomy term in the public response. */
@@ -52,3 +50,11 @@ export const listTaxonomyQuerySchema = z
   })
   .meta({ id: 'ListTaxonomyQuery' });
 export type ListTaxonomyQuery = z.infer<typeof listTaxonomyQuerySchema>;
+
+/** Designer-created room types use the same vocabulary as tagging and search. */
+export const createRoomTypeSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+  })
+  .meta({ id: 'CreateRoomType' });
+export type CreateRoomTypeInput = z.infer<typeof createRoomTypeSchema>;

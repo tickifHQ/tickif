@@ -60,7 +60,12 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
       try {
         const response = await api.api.taxonomy.terms.$get(
           { query: { kind: facet.kind } },
-          { init: { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } } },
+          {
+            init:
+              facet.kind === 'room'
+                ? { cache: 'no-store' }
+                : { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } },
+          },
         );
         if (!response.ok) return [facet.key, []] as const;
         const parsed = listTaxonomyResponseSchema.safeParse(await response.json());

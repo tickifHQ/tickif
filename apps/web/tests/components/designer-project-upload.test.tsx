@@ -10,6 +10,7 @@ const mock = vi.hoisted(() => ({
     replace: vi.fn(),
   },
   taxonomyGet: vi.fn(),
+  taxonomyRoomsPost: vi.fn(),
   projectGet: vi.fn(),
   projectPatch: vi.fn(),
   roomPatch: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       taxonomy: {
+        rooms: { $post: mock.taxonomyRoomsPost },
         terms: {
           $get: mock.taxonomyGet,
         },
@@ -472,15 +474,54 @@ describe('DesignerProjectUpload', () => {
     expect(screen.getByRole('button', { name: 'Delete Balcony' })).toBeInTheDocument();
   });
 
-  it('does not offer a custom room action that cannot succeed', async () => {
+  it('offers taxonomy rooms beyond the project type suggestions', async () => {
+    const taxonomyGet = mock.taxonomyGet.getMockImplementation()!;
+    mock.taxonomyGet.mockImplementation(async (request) => {
+      if (request.query.kind === 'room') {
+        return Response.json({
+          terms: [
+            {
+              id: '88888888-8888-4888-8888-888888888888',
+              label: 'Server Room',
+              slug: 'server-room',
+              parentId: null,
+            },
+          ],
+        });
+      }
+      return taxonomyGet(request);
+    });
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload />);
+    await user.click(await screen.findByRole('button', { name: /step 4 project images/i }));
+    await user.click(screen.getByRole('button', { name: /add new room type/i }));
+    await user.type(screen.getByPlaceholderText('Search room types'), 'Server');
+    await user.click(screen.getByRole('button', { name: 'Server Room' }));
+    expect(screen.getByRole('button', { name: 'Delete Server Room' })).toBeInTheDocument();
+  });
+
+  it('creates a missing room type and adds it to the project', async () => {
     const user = userEvent.setup();
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
 
     await user.click(await screen.findByRole('button', { name: /add new room type/i }));
     await user.type(screen.getByPlaceholderText('Search room types'), 'Observatory');
 
-    expect(screen.getByText(/no matching taxonomy-backed room type found/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /create new room type/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/no matching room type found/i)).toBeInTheDocument();
+    mock.taxonomyRoomsPost.mockResolvedValue(
+      Response.json({
+        id: '88888888-8888-4888-8888-888888888888',
+        label: 'Observatory',
+        slug: 'observatory',
+        parentId: null,
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Create “Observatory”' }));
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('Search room types')).not.toBeInTheDocument(),
+    );
+    expect(mock.taxonomyRoomsPost).toHaveBeenCalledWith({ json: { label: 'Observatory' } });
+    expect(screen.getByText('Observatory')).toBeInTheDocument();
   });
 
   it('opens ready images with the high-quality viewer URL', async () => {

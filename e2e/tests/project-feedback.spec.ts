@@ -80,3 +80,90 @@ test('project budget choices persist and room descriptions are absent from the e
     await fixture.cleanup();
   }
 });
+
+test('custom room types persist and appear as search filters', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const fixture = await createProjectVersionFixture();
+  const roomName = `Observatory ${fixture.target.id.slice(0, 8)}`;
+  let customRoomId: string | undefined;
+  try {
+    await db
+      .update(schema.project)
+      .set({ status: 'draft' })
+      .where(eq(schema.project.id, fixture.target.id));
+    await signInProjectAdmin(context, fixture.owner.phoneNumber);
+    const active = await context.request.post(
+      `${moderationApiUrl}/api/auth/organization/set-active`,
+      {
+        headers: { origin: webUrl },
+        data: { organizationId: fixture.organization.id },
+      },
+    );
+    expect(active.ok()).toBeTruthy();
+    await page.goto(`/designer/projects/upload?projectId=${fixture.target.id}`);
+    await page.getByRole('button', { name: 'Add new room type' }).click();
+    await page.getByPlaceholder('Search room types').fill(roomName);
+    await page.getByRole('button', { name: `Create “${roomName}”` }).click();
+    await expect(page.getByRole('button', { name: `Delete ${roomName}` })).toBeVisible();
+    const termsResponse = await context.request.get(
+      `${moderationApiUrl}/api/taxonomy/terms?kind=room`,
+    );
+    const terms = await termsResponse.json();
+    customRoomId = terms.terms.find(
+      (term: { label: string; id: string }) => term.label === roomName,
+    )?.id;
+    expect(customRoomId).toBeTruthy();
+    await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const response = await context.request.get(
+          `${moderationApiUrl}/api/projects/${fixture.target.id}`,
+        );
+        return projectDetailResponseSchema
+          .parse(await response.json())
+          .rooms.some((room) => room.roomTypeId === customRoomId);
+      })
+      .toBe(true);
+    await page.reload();
+    await expect(page.getByRole('button', { name: `Delete ${roomName}` })).toBeVisible();
+    const savedRoom = page.getByRole('button', { name: `Delete ${roomName}` });
+    for (const viewport of [
+      { name: 'desktop', width: 1440, height: 1000 },
+      { name: 'mobile', width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await savedRoom.scrollIntoViewIfNeeded();
+      await expect(savedRoom).toBeVisible();
+      await expect(page.getByText(roomName, { exact: true })).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await testInfo.attach(`custom-room-${viewport.name}`, {
+        body: await page.screenshot({
+          path: testInfo.outputPath(`custom-room-${viewport.name}.png`),
+        }),
+        contentType: 'image/png',
+      });
+    }
+
+    await db
+      .update(schema.project)
+      .set({ status: 'published' })
+      .where(eq(schema.project.id, fixture.target.id));
+    await db
+      .update(schema.projectRoom)
+      .set({ isLive: true })
+      .where(eq(schema.projectRoom.projectId, fixture.target.id));
+    const suggestions = await context.request.get(
+      `${moderationApiUrl}/api/search/suggest?q=${encodeURIComponent(roomName)}`,
+    );
+    expect(suggestions.ok()).toBeTruthy();
+    expect(await suggestions.text()).toContain(roomName);
+  } finally {
+    await fixture.cleanup();
+    if (customRoomId) await db.delete(schema.taxonomy).where(eq(schema.taxonomy.id, customRoomId));
+  }
+});

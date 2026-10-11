@@ -1,8 +1,4 @@
-import {
-  GooglePlacesError,
-  isGooglePlacesConfigured,
-  resolvePlaceId,
-} from '@repo/google-places';
+import { GooglePlacesError, isGooglePlacesConfigured, resolvePlaceId } from '@repo/google-places';
 import { enqueueGoogleReviewsRefresh } from '@repo/queue';
 import type { ConnectGooglePlaceInput, GoogleReviewsResponse } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
@@ -114,8 +110,8 @@ export const googleReviewsService = {
   },
 
   /**
-   * Manually re-fetch. Enqueues a background refresh and returns the current
-   * cached state (202-style); the UI re-reads after a short delay.
+   * Manually re-fetch. Mark pending before queueing so the UI polls for the
+   * worker result; fresh cached content remains visible during the refresh.
    */
   async refresh(caller: Caller): Promise<GoogleReviewsResponse> {
     if (!isGooglePlacesConfigured()) {
@@ -125,9 +121,23 @@ export const googleReviewsService = {
     const row = await googleReviewsRepository.findByProfileId(profile.id);
     if (!row) throw AppError.notFound('No Google location is connected');
     assertNotThrottled(row);
-    await googleReviewsRepository.touchAttempt(profile.id);
-    await enqueueGoogleReviewsRefresh({ profileId: profile.id });
-    return buildResponse(row);
+    const attemptAt = new Date();
+    const pending = await googleReviewsRepository.upsert(profile.id, {
+      placeId: row.placeId,
+      status: 'pending',
+      lastAttemptAt: attemptAt,
+      lastError: null,
+    });
+    try {
+      await enqueueGoogleReviewsRefresh({ profileId: profile.id });
+    } catch (error) {
+      await googleReviewsRepository.restoreRefresh(profile.id, attemptAt, {
+        status: row.status,
+        lastError: row.lastError,
+      });
+      throw error;
+    }
+    return buildResponse(pending);
   },
 
   /** Disconnect: drop the cache row entirely. */
