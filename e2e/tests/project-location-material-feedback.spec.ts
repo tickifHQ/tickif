@@ -5,6 +5,7 @@ import {
   createLocationResponseSchema,
   projectDetailResponseSchema,
   listProjectImagesResponseSchema,
+  listTaxonomyResponseSchema,
 } from '@repo/contracts';
 import { createProjectVersionFixture } from '../lib/project-version-fixtures';
 import { moderationApiUrl, signInProjectAdmin } from '../lib/project-moderation-fixtures';
@@ -62,13 +63,16 @@ test('custom city and area, commercial Hospital and material finish persist thro
         ];
       })
       .toEqual([location.city.slug, location.locality?.slug, 'commercial-workspace', 'hospital']);
-    const images = await context.request.get(
-      `${moderationApiUrl}/api/projects/${target.id}/images`,
-    );
-    expect(listProjectImagesResponseSchema.parse(await images.json()).items[0]).toMatchObject({
-      materialSlugs: ['lacquered-glass'],
-      finishSlugs: ['lacquered-glass'],
-    });
+    // Image metadata is saved after the project fields; wait for that persistence too.
+    await expect
+      .poll(async () => {
+        const images = await context.request.get(
+          `${moderationApiUrl}/api/projects/${target.id}/images`,
+        );
+        const image = listProjectImagesResponseSchema.parse(await images.json()).items[0];
+        return { materialSlugs: image?.materialSlugs, finishSlugs: image?.finishSlugs };
+      })
+      .toEqual({ materialSlugs: ['lacquered-glass'], finishSlugs: ['lacquered-glass'] });
     await page.reload();
     await expect(page.getByRole('combobox', { name: 'City', exact: true })).toHaveText(cityLabel);
     await expect(page.getByRole('combobox', { name: 'Locality / Area', exact: true })).toHaveText(
@@ -78,7 +82,9 @@ test('custom city and area, commercial Hospital and material finish persist thro
       'Hospital',
     );
     const cities = await context.request.get(`${moderationApiUrl}/api/taxonomy/terms?kind=city`);
-    expect((await cities.json()).terms).toEqual(expect.arrayContaining([location.city]));
+    expect(listTaxonomyResponseSchema.parse(await cities.json()).terms).toEqual(
+      expect.arrayContaining([location.city]),
+    );
   } finally {
     await fixture.cleanup();
     // Delete the city-scoped child before its parent; never touch seeded vocabulary.
