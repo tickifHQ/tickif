@@ -18,10 +18,22 @@ export const TAXONOMY_KIND_VALUES = [
   'size_band',
 ] as const;
 
-export const taxonomyKindSchema = z
-  .enum(TAXONOMY_KIND_VALUES)
-  .meta({ id: 'TaxonomyKind' });
+export const taxonomyKindSchema = z.enum(TAXONOMY_KIND_VALUES).meta({ id: 'TaxonomyKind' });
 export type TaxonomyKind = z.infer<typeof taxonomyKindSchema>;
+
+/** Runtime additions and release-changing catalogs must bypass client/server caches. */
+const freshTaxonomyKinds = new Set<string>([
+  'room',
+  'city',
+  'locality',
+  'material',
+  'finish',
+  'property_subtype',
+  'budget_band',
+]);
+export function taxonomyNeedsFreshRead(kind: string | null | undefined): boolean {
+  return kind != null && freshTaxonomyKinds.has(kind);
+}
 
 /** A single taxonomy term in the public response. */
 export const taxonomyTermSchema = z.object({
@@ -52,3 +64,56 @@ export const listTaxonomyQuerySchema = z
   })
   .meta({ id: 'ListTaxonomyQuery' });
 export type ListTaxonomyQuery = z.infer<typeof listTaxonomyQuerySchema>;
+
+/** Designer-created room types use the same vocabulary as tagging and search. */
+export const createRoomTypeSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+  })
+  .meta({ id: 'CreateRoomType' });
+export type CreateRoomTypeInput = z.infer<typeof createRoomTypeSchema>;
+
+const locationLabel = z
+  .string()
+  .trim()
+  .min(2)
+  .max(100)
+  .regex(/[\p{L}\p{N}]/u);
+/** Combined picker choices also exposed by the material discovery filter. */
+export const materialFinishSlugs = [
+  'laminate',
+  'acrylic-gloss',
+  'acrylic-matte',
+  'pu',
+  'membrane',
+  'veneer',
+  'glass',
+  'fabric',
+  'lacquered-glass',
+  'stone',
+  'metal',
+  'upvc',
+  'pvc',
+  'aluminium',
+] as const;
+export const createLocationSchema = z
+  .object({
+    citySlug: z
+      .string()
+      .max(80)
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      .optional(),
+    cityLabel: locationLabel.optional(),
+    localityLabel: locationLabel.optional(),
+  })
+  .refine((input) => Boolean(input.citySlug) !== Boolean(input.cityLabel), {
+    message: 'Provide either an existing city or a new city name.',
+  })
+  .meta({ id: 'CreateLocation' });
+export type CreateLocationInput = z.infer<typeof createLocationSchema>;
+export const createLocationResponseSchema = z
+  .object({
+    city: taxonomyTermSchema,
+    locality: taxonomyTermSchema.nullable(),
+  })
+  .meta({ id: 'CreateLocationResponse' });

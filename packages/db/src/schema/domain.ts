@@ -147,6 +147,7 @@ export const moderationActionEnum = pgEnum('moderation_action', [
   'reject',
   'unpublish',
   'metadata_corrected',
+  'image_removed',
   'archive',
   'restore',
   'delete',

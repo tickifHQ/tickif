@@ -50,6 +50,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { SocialProfileInput, socialProfileError } from '@/components/social-profile-confirmation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
@@ -1372,7 +1373,17 @@ export function DesignerPortfolioSettings({
 
                     {!googleAvailable ? (
                       <p className="text-[13px] text-muted-foreground">
-                        Google review fetching isn&rsquo;t enabled on this workspace yet.
+                        Google review fetching isn&rsquo;t enabled on this workspace yet.{' '}
+                        <a
+                          href={SUPPORT_WHATSAPP_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-4"
+                        >
+                          Contact Tickif support
+                        </a>{' '}
+                        to enable it. After fetching is enabled, return here to connect your Google
+                        Maps listing.
                       </p>
                     ) : googleConnection ? (
                       <div className="space-y-3">
@@ -1440,24 +1451,32 @@ export function DesignerPortfolioSettings({
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={googleRef}
-                          onChange={(e) => setGoogleRef(e.target.value)}
-                          placeholder="Google Maps link or business name"
-                          className="shadow-sm"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleConnectGoogle}
-                          disabled={isConnectingGoogle || !googleRef.trim()}
-                        >
-                          {isConnectingGoogle ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : null}
-                          Connect
-                        </Button>
+                      <div className="space-y-3">
+                        <p id="google-profile-help" className="text-[13px] text-muted-foreground">
+                          Open your business listing in Google Maps, select Share, then paste the
+                          copied link here. You can also enter the business name and city.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            aria-label="Google Business Profile"
+                            aria-describedby="google-profile-help"
+                            value={googleRef}
+                            onChange={(e) => setGoogleRef(e.target.value)}
+                            placeholder="Google Maps link or business name"
+                            className="shadow-sm"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleConnectGoogle}
+                            disabled={isConnectingGoogle || !googleRef.trim()}
+                          >
+                            {isConnectingGoogle ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : null}
+                            Connect
+                          </Button>
+                        </div>
                       </div>
                     )}
 
@@ -2037,7 +2056,7 @@ function ToggleableSection({
             type="button"
             onClick={onToggleExpanded}
             aria-expanded={expanded}
-            className="flex-1 text-left"
+            className="flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <h3 className="text-lg font-medium leading-relaxed text-foreground">{title}</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
@@ -2049,6 +2068,7 @@ function ToggleableSection({
               onClick={onToggleExpanded}
               aria-expanded={expanded}
               aria-label={`Toggle ${title} details`}
+              className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>

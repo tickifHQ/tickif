@@ -1,8 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
+import {
+  projectBudgetBands,
+  projectDetailResponseSchema,
+  type ListProjectImagesResponse,
+  type ProjectDetailResponse,
+} from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
+import { uploadProjectImage } from '../../src/lib/upload-project-image';
+
+vi.mock('../../src/lib/upload-project-image', () => ({
+  uploadProjectImage: vi.fn(async (url: string, file: File, progress: (value: number) => void) => {
+    progress(0);
+    const response = await fetch(url, { method: 'PUT', body: file });
+    if (!response.ok) throw new Error(`Could not upload ${file.name}.`);
+    progress(100);
+  }),
+}));
 
 const mock = vi.hoisted(() => ({
   router: {
@@ -10,6 +25,8 @@ const mock = vi.hoisted(() => ({
     replace: vi.fn(),
   },
   taxonomyGet: vi.fn(),
+  taxonomyRoomsPost: vi.fn(),
+  locationPost: vi.fn(),
   projectGet: vi.fn(),
   projectPatch: vi.fn(),
   roomPatch: vi.fn(),
@@ -35,6 +52,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       taxonomy: {
+        rooms: { $post: mock.taxonomyRoomsPost },
+        locations: { $post: mock.locationPost },
         terms: {
           $get: mock.taxonomyGet,
         },
@@ -79,6 +98,29 @@ describe('DesignerProjectUpload', () => {
     vi.clearAllMocks();
     mock.router.push.mockReset();
     mock.router.replace.mockReset();
+    mock.locationPost.mockImplementation(
+      async ({
+        json,
+      }: {
+        json: { cityLabel?: string; citySlug?: string; localityLabel?: string };
+      }) =>
+        Response.json({
+          city: {
+            id: '11111111-1111-4111-8111-111111111111',
+            label: json.cityLabel ?? 'Chennai',
+            slug: json.cityLabel ? 'pondicherry' : json.citySlug,
+            parentId: null,
+          },
+          locality: json.localityLabel
+            ? {
+                id: '22222222-2222-4222-8222-222222222222',
+                label: json.localityLabel,
+                slug: 'new-area',
+                parentId: '11111111-1111-4111-8111-111111111111',
+              }
+            : null,
+        }),
+    );
     mock.historyGet.mockImplementation(async () => Response.json({ items: [] }));
 
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
@@ -126,6 +168,12 @@ describe('DesignerProjectUpload', () => {
         },
       ],
       scope: [
+        {
+          id: '11111111-1111-4111-8111-111111111110',
+          label: 'Design',
+          slug: 'design',
+          parentId: null,
+        },
         {
           id: '11111111-1111-4111-8111-111111111105',
           label: 'Construction',
@@ -345,6 +393,62 @@ describe('DesignerProjectUpload', () => {
     expect(mock.roomPatch.mock.calls[0]![0].json).not.toHaveProperty('description');
   });
 
+  it('uses scoped Design budgets and saves the selected range without changing other scopes', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    mock.projectGet.mockImplementation(async () => Response.json(project));
+    mock.projectPatch.mockImplementation(async () => Response.json(project));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    const originalTaxonomy = mock.taxonomyGet.getMockImplementation()!;
+    mock.completenessGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({ complete: true, score: 100, missing: [], requirements: [] }),
+    });
+    mock.taxonomyGet.mockImplementation(async (input) =>
+      input.query.kind === 'budget_band'
+        ? Response.json({
+            terms: [
+              ...projectBudgetBands,
+              { slug: 'under-1l', label: 'Under ₹1L' },
+              { slug: '2l-4l', label: '₹2L–₹4L' },
+            ].map((band, index) => ({
+              ...band,
+              id: `11111111-1111-4111-8111-${String(index + 120).padStart(12, '0')}`,
+              parentId: null,
+            })),
+          })
+        : originalTaxonomy(input),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    const budget = screen.getByRole('combobox', { name: 'Cost range' });
+    await user.click(budget);
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(
+      projectBudgetBands.map((band) => band.label),
+    );
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Design' }));
+    await user.click(budget);
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Under ₹1L',
+      '₹2L–₹4L',
+      ...projectBudgetBands.slice(2).map((band) => band.label),
+    ]);
+    await user.click(screen.getByRole('option', { name: 'Under ₹1L' }));
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() =>
+      expect(mock.projectPatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({ scopeSlug: 'design', budgetBandSlug: 'under-1l' }),
+        }),
+      ),
+    );
+    await screen.findByText('Draft saved.');
+  });
+
   function selectWithOption(container: HTMLElement, optionLabel: string) {
     const fieldLabels: Record<string, string | RegExp> = {
       '₹5L - ₹15L': 'Cost range',
@@ -472,15 +576,54 @@ describe('DesignerProjectUpload', () => {
     expect(screen.getByRole('button', { name: 'Delete Balcony' })).toBeInTheDocument();
   });
 
-  it('does not offer a custom room action that cannot succeed', async () => {
+  it('offers taxonomy rooms beyond the project type suggestions', async () => {
+    const taxonomyGet = mock.taxonomyGet.getMockImplementation()!;
+    mock.taxonomyGet.mockImplementation(async (request) => {
+      if (request.query.kind === 'room') {
+        return Response.json({
+          terms: [
+            {
+              id: '88888888-8888-4888-8888-888888888888',
+              label: 'Server Room',
+              slug: 'server-room',
+              parentId: null,
+            },
+          ],
+        });
+      }
+      return taxonomyGet(request);
+    });
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload />);
+    await user.click(await screen.findByRole('button', { name: /step 4 project images/i }));
+    await user.click(screen.getByRole('button', { name: /add new room type/i }));
+    await user.type(screen.getByPlaceholderText('Search room types'), 'Server');
+    await user.click(screen.getByRole('button', { name: 'Server Room' }));
+    expect(screen.getByRole('button', { name: 'Delete Server Room' })).toBeInTheDocument();
+  });
+
+  it('creates a missing room type and adds it to the project', async () => {
     const user = userEvent.setup();
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
 
     await user.click(await screen.findByRole('button', { name: /add new room type/i }));
     await user.type(screen.getByPlaceholderText('Search room types'), 'Observatory');
 
-    expect(screen.getByText(/no matching taxonomy-backed room type found/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /create new room type/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/no matching room type found/i)).toBeInTheDocument();
+    mock.taxonomyRoomsPost.mockResolvedValue(
+      Response.json({
+        id: '88888888-8888-4888-8888-888888888888',
+        label: 'Observatory',
+        slug: 'observatory',
+        parentId: null,
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Create “Observatory”' }));
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('Search room types')).not.toBeInTheDocument(),
+    );
+    expect(mock.taxonomyRoomsPost).toHaveBeenCalledWith({ json: { label: 'Observatory' } });
+    expect(screen.getByText('Observatory')).toBeInTheDocument();
   });
 
   it('opens ready images with the high-quality viewer URL', async () => {
@@ -501,6 +644,48 @@ describe('DesignerProjectUpload', () => {
     expect(
       screen.queryByText('Draft loaded. You can continue editing from here.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('blocks classification edits until a slow saved-project request has hydrated the form', async () => {
+    const projectResponse: Response = await mock.projectGet();
+    mock.projectGet.mockReset();
+    let resolveProject: ((response: Response) => void) | undefined;
+    mock.projectGet.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveProject = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    const commercial = screen.getByRole('button', { name: 'Office / Commercial' });
+    expect(commercial).toBeDisabled();
+    await waitFor(() => expect(mock.projectGet).toHaveBeenCalled());
+    expect(commercial).toBeDisabled();
+    await user.click(commercial);
+    expect(
+      screen.queryByRole('combobox', { name: 'Commercial type' }),
+    ).not.toBeInTheDocument();
+
+    resolveProject?.(projectResponse);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    await waitFor(() => expect(commercial).toBeEnabled());
+    await user.click(commercial);
+    await user.click(screen.getByRole('combobox', { name: 'Commercial type' }));
+    expect(screen.getByRole('option', { name: 'Hospital' })).toBeVisible();
+  });
+
+  it('keeps an unhydrated saved draft disabled when loading fails and cannot save over it', async () => {
+    mock.projectGet.mockResolvedValue(Response.json({}, { status: 503 }));
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    expect(await screen.findByText('Could not load this project draft.')).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Save as draft' });
+    expect(save).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Office / Commercial' })).toBeDisabled();
+    await user.click(save);
+    expect(mock.createProject).not.toHaveBeenCalled();
+    expect(mock.projectPatch).not.toHaveBeenCalled();
   });
 
   it.each(['draft', 'submitted', 'in_review', 'changes_requested'] as const)(
@@ -811,7 +996,7 @@ describe('DesignerProjectUpload', () => {
       const { project } = await renderSubmittableDraft();
       render(<DesignerProjectUpload initialProjectId={project.id} />);
 
-      await screen.findByDisplayValue('2 BHK in Adyar');
+      await screen.findByDisplayValue('2 BHK in Adyar', {}, { timeout: 10_000 });
       await user.click(screen.getByRole('button', { name: /enter a custom city/i }));
       await user.type(screen.getByLabelText('City'), 'Pondicherry');
       await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
@@ -820,9 +1005,32 @@ describe('DesignerProjectUpload', () => {
       expect(mock.projectPatch).toHaveBeenCalledWith(
         expect.objectContaining({
           json: expect.objectContaining({
-            cityName: 'Pondicherry',
-            citySlug: null,
+            cityName: null,
+            citySlug: 'pondicherry',
             localitySlug: null,
+          }),
+        }),
+      );
+      expect(mock.locationPost).toHaveBeenCalledWith({ json: { cityLabel: 'Pondicherry' } });
+    });
+
+    it('saves a custom area under an existing city before previewing', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+      await screen.findByDisplayValue('2 BHK in Adyar', {}, { timeout: 10_000 });
+      await user.click(await screen.findByRole('button', { name: /enter a custom area/i }));
+      await user.type(screen.getByLabelText('Locality / Area'), 'New Area');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await screen.findByRole('dialog');
+      expect(mock.locationPost).toHaveBeenCalledWith({
+        json: { citySlug: 'chennai', localityLabel: 'New Area' },
+      });
+      expect(mock.projectPatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({
+            citySlug: 'chennai',
+            localitySlug: 'new-area',
           }),
         }),
       );
@@ -1532,6 +1740,7 @@ describe('DesignerProjectUpload batch recovery', () => {
   beforeEach(() => {
     // Reset accumulated calls from earlier blocks (implementations persist).
     vi.clearAllMocks();
+    mock.deleteImage.mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:project-image-preview');
     // Fresh single-use Response objects per test: the shared mocks from the
@@ -1744,6 +1953,73 @@ describe('DesignerProjectUpload batch recovery', () => {
     // The second file transferred fully instead of stalling at Processing.
     await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
     expect(screen.queryByText('second.jpg · Processing')).not.toBeInTheDocument();
+  });
+
+  it('keeps each preview mounted and reports its own transfer progress', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([true]);
+    mockImageList([
+      readyItem,
+      { ...readyItem, id: 'a1111111-1111-4111-8111-111111111111' },
+      { ...readyItem, id: 'a2222222-2222-4222-8222-222222222222' },
+    ]);
+    mock.listImagesGet.mockImplementationOnce(async () => imageListResponse([readyItem]));
+    let finishTransfer!: () => void;
+    let reportProgress!: (value: number) => void;
+    vi.mocked(uploadProjectImage).mockImplementationOnce(async (_url, _file, progress) => {
+      reportProgress = progress;
+      await new Promise<void>((resolve) => {
+        finishTransfer = resolve;
+      });
+    });
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+    await dropFiles([{ name: 'first.jpg' }, { name: 'second.jpg' }]);
+    await waitFor(() => expect(finishTransfer).toBeDefined());
+    const tile = screen.getByLabelText('first.jpg', { selector: 'li' });
+    act(() => reportProgress(42));
+    await waitFor(() =>
+      expect(tile.querySelector('[role="progressbar"]')).toHaveAttribute('aria-valuenow', '42'),
+    );
+    expect(
+      within(screen.getByLabelText('second.jpg', { selector: 'li' })).getByText('Queued'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('3 photos added · 1 queued · 1 uploading')).toBeInTheDocument();
+    await act(async () => finishTransfer());
+    await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('first.jpg', { selector: 'li' })).toBe(tile);
+  });
+
+  it('preserves queued previews and scroll when the first upload creates the draft', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([true]);
+    mockImageList([{ ...readyItem, id: 'a1111111-1111-4111-8111-111111111111' }]);
+    let finishDraft!: (response: Response) => void;
+    mock.createProject.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishDraft = resolve;
+        }),
+    );
+    render(<DesignerProjectUpload />);
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: /step 4 project images/i }));
+    const zone = screen
+      .getAllByText(/drag and drop files here or click to upload/i)[0]!
+      .closest('label')!;
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(['image'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    const tile = await screen.findByRole('listitem', { name: 'first.jpg' });
+    const detail = projectDetailResponseSchema.parse(await projectDraftResponse().json());
+    detail.rooms[0]!.name = 'Kitchen';
+    await act(async () => finishDraft(Response.json(detail)));
+    await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
+    expect(screen.getByRole('listitem', { name: 'first.jpg' })).toBe(tile);
+    expect(mock.router.replace).toHaveBeenCalledWith(
+      `/designer/projects/upload?projectId=${projectId}`,
+      { scroll: false },
+    );
   });
 
   it('retries a failed tile with its original file', async () => {
@@ -2114,7 +2390,9 @@ describe('DesignerProjectUpload floor area', () => {
 
   async function sizeInput() {
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
-    return screen.findByPlaceholderText('e.g. 1450');
+    const input = await screen.findByPlaceholderText('e.g. 1450');
+    await waitFor(() => expect(input).toBeEnabled());
+    return input;
   }
 
   it('rejects a negative area with field feedback and blocks the save', async () => {

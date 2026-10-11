@@ -26,7 +26,8 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
-  legacyProjectBudgetBands,
+  taxonomyTermSchema,
+  createLocationResponseSchema,
   listProjectImagesResponseSchema,
   listTaxonomyResponseSchema,
   projectCompletenessResponseSchema,
@@ -73,7 +74,9 @@ import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { ApartmentNameCombobox } from '@/components/apartment-name-combobox';
 import { ProjectImageGrid } from '@/components/project-image-grid';
+import { uploadProjectImage } from '@/lib/upload-project-image';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
+import { projectBudgetOptions } from '@/lib/project-budget-options';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
@@ -247,6 +250,7 @@ const roomTagOptions: TagComboboxOption[] = [
 ].map((tag) => ({ label: tag, value: tag }));
 
 const commercialTypeOptions: ProjectSubtypeOption[] = [
+  { slug: 'hospital', label: 'Hospital' },
   { slug: 'corporate-office', label: 'Corporate office' },
   { slug: 'it-tech-office', label: 'IT/Tech office' },
   { slug: 'co-working-space', label: 'Co-working space' },
@@ -665,6 +669,7 @@ function toProjectImagePreview(
     height: image.height,
     failureReason: image.failureReason ?? existing?.failureReason ?? null,
     transferError: image.failureReason ? undefined : existing?.transferError,
+    clientId: existing?.clientId,
     fileName: existing?.fileName ?? `Image ${index + 1}`,
     file: image.status === 'failed' ? undefined : existing?.file,
     previewUrl: image.previewUrl ?? existing?.previewUrl,
@@ -1146,12 +1151,22 @@ function RoomCard({
   // but must not inflate the added-photo count, with pending and failed
   // entries called out separately (E-281).
   const usableImages = room.images.filter((image) => image.status !== 'failed');
-  const processingCount = room.images.filter((image) => image.status === 'processing').length;
+  const processingCount = room.images.filter(
+    (image) => image.status === 'processing' && !image.transferState,
+  ).length;
+  const queuedCount = room.images.filter(
+    (image) => image.transferState === 'queued' && image.status !== 'failed',
+  ).length;
+  const transferringCount = room.images.filter(
+    (image) => image.transferState === 'uploading' && image.status !== 'failed',
+  ).length;
   const failedCount = room.images.length - usableImages.length;
   const photoSummary = [
     usableImages.length > 0
       ? `${usableImages.length} photo${usableImages.length === 1 ? '' : 's'} added`
       : 'No photos yet',
+    ...(queuedCount > 0 ? [`${queuedCount} queued`] : []),
+    ...(transferringCount > 0 ? [`${transferringCount} uploading`] : []),
     ...(processingCount > 0 ? [`${processingCount} processing`] : []),
     ...(failedCount > 0 ? [`${failedCount} failed`] : []),
   ].join(' · ');
@@ -1159,7 +1174,12 @@ function RoomCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-border/80 bg-background">
       <div className="flex items-start justify-between gap-4 px-5 py-4">
-        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={room.expanded}
+          className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           <div className={cn(typography.subsectionTitle, 'text-foreground')}>{room.title}</div>
           <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
             {photoSummary}
@@ -1170,7 +1190,7 @@ function RoomCard({
             <button
               type="button"
               onClick={onDelete}
-              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={`Delete ${room.title}`}
             >
               <Trash2 className="size-4" />
@@ -1179,8 +1199,9 @@ function RoomCard({
           <button
             type="button"
             onClick={onToggle}
-            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={`Toggle ${room.title}`}
+            aria-expanded={room.expanded}
           >
             <ChevronDown
               className={cn('size-4 transition-transform', room.expanded && 'rotate-180')}
@@ -1314,6 +1335,7 @@ export function DesignerProjectUpload({
   const [loadingTaxonomy, setLoadingTaxonomy] = useState(true);
   const [cities, setCities] = useState<TaxonomyTerm[]>([]);
   const [localities, setLocalities] = useState<TaxonomyTerm[]>([]);
+  const [customLocalityMode, setCustomLocalityMode] = useState(false);
   const [propertyTypes, setPropertyTypes] = useState<TaxonomyTerm[]>([]);
   const [propertySubtypes, setPropertySubtypes] = useState<TaxonomyTerm[]>([]);
   const [bhkOptions, setBhkOptions] = useState<TaxonomyTerm[]>([]);
@@ -1337,6 +1359,10 @@ export function DesignerProjectUpload({
   // — no extra request. Shown separately from the general decision note below.
   const [reviewComments, setReviewComments] = useState<ProjectReviewComment[]>([]);
   const [loadingProject, setLoadingProject] = useState(false);
+  const loadingEditor =
+    loadingTaxonomy ||
+    loadingProject ||
+    Boolean(initialProjectId && loadedProjectId !== initialProjectId);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
@@ -1369,6 +1395,8 @@ export function DesignerProjectUpload({
   });
   const [roomSearchOpen, setRoomSearchOpen] = useState(false);
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
+  const [creatingRoomType, setCreatingRoomType] = useState(false);
+  const [roomTypeError, setRoomTypeError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [sizeSqftError, setSizeSqftError] = useState<string | null>(null);
@@ -1422,15 +1450,8 @@ export function DesignerProjectUpload({
     [scopeTerms],
   );
   const budgetOptions = useMemo(
-    () => {
-      const options = budgetBandTerms.map((term) => ({ value: term.slug, label: term.label }));
-      const savedRange = legacyProjectBudgetBands.find((band) => band.slug === budgetBandSlug);
-      if (savedRange && !options.some((option) => option.value === savedRange.slug)) {
-        options.push({ value: savedRange.slug, label: savedRange.label });
-      }
-      return options;
-    },
-    [budgetBandTerms, budgetBandSlug],
+    () => projectBudgetOptions(budgetBandTerms, selectedScopes[0] ?? '', budgetBandSlug),
+    [budgetBandTerms, budgetBandSlug, selectedScopes],
   );
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),
@@ -1643,9 +1664,12 @@ export function DesignerProjectUpload({
   );
 
   async function loadTerms(kind: TaxonomyKind, parentId?: string) {
-    const response = await api.api.taxonomy.terms.$get({
-      query: parentId ? { kind, parentId } : { kind },
-    });
+    const response = await api.api.taxonomy.terms.$get(
+      {
+        query: parentId ? { kind, parentId } : { kind },
+      },
+      kind === 'room' ? { init: { cache: 'no-store' } } : undefined,
+    );
     if (!response.ok) {
       throw new Error(`Could not load ${kind} options.`);
     }
@@ -2031,8 +2055,9 @@ export function DesignerProjectUpload({
 
         const existingById = new Map(room.images.map((image) => [image.id, image]));
         const localPreviews = room.images.filter(isLocalPreviewImage);
+        const transferringIds = new Set(localPreviews.map((image) => image.reservedImageId));
         const roomServerImages = serverImages
-          .filter((image) => image.roomId === room.id)
+          .filter((image) => image.roomId === room.id && !transferringIds.has(image.id))
           .sort((left, right) => left.sortOrder - right.sortOrder)
           .map((image, index) => toProjectImagePreview(image, index, existingById.get(image.id)));
 
@@ -2291,7 +2316,7 @@ export function DesignerProjectUpload({
     setProjectName(value);
   }
 
-  function buildCreateProjectPayload() {
+  async function buildCreateProjectPayload() {
     if (!backendProjectSelection) {
       throw new Error(
         backendProjectSelectionError ||
@@ -2299,7 +2324,7 @@ export function DesignerProjectUpload({
       );
     }
 
-    return buildCreateProjectPayloadInput({
+    const payload = buildCreateProjectPayloadInput({
       projectName,
       selectedProjectTypeLabel,
       aboutProject,
@@ -2322,10 +2347,34 @@ export function DesignerProjectUpload({
       selectedProjectSubtypeLabel,
       selectedScopes,
     });
+    // Register custom locations once, then save canonical slugs so the same
+    // city/area can be selected in the homepage location filter.
+    if (customCityMode || (locality.trim() && !selectedLocality)) {
+      const response = await api.api.taxonomy.locations.$post({
+        json: {
+          ...(customCityMode ? { cityLabel: cityName.trim() } : { citySlug }),
+          ...(locality.trim() ? { localityLabel: locality.trim() } : {}),
+        },
+      });
+      const json: unknown = await response.json();
+      if (!response.ok) throw new Error(extractApiMessage(json, 'Could not save this location.'));
+      const location = parseApiPayload(
+        json,
+        createLocationResponseSchema,
+        'Could not read the saved location.',
+      );
+      return {
+        ...payload,
+        citySlug: location.city.slug,
+        cityName: undefined,
+        localitySlug: location.locality?.slug,
+      };
+    }
+    return payload;
   }
 
-  function buildUpdateProjectPayload(): UpdateProjectInput {
-    const createPayload = buildCreateProjectPayload();
+  async function buildUpdateProjectPayload(): Promise<UpdateProjectInput> {
+    const createPayload = await buildCreateProjectPayload();
     return {
       title: createPayload.title,
       description: aboutProject.trim() || null,
@@ -2351,7 +2400,7 @@ export function DesignerProjectUpload({
     if (ensureProjectPromiseRef.current) return ensureProjectPromiseRef.current;
 
     const promise = (async () => {
-      const payload = buildCreateProjectPayload();
+      const payload = await buildCreateProjectPayload();
 
       const response = await api.api.projects.$post({ json: payload });
       const payloadJson = await response.json();
@@ -2366,7 +2415,9 @@ export function DesignerProjectUpload({
         'Could not create the draft project.',
       );
       const attachedRooms = attachExistingProjectRoomsToDrafts(rooms, detail.rooms, roomTerms);
-      setRooms(attachedRooms);
+      // The request began before local previews were queued. Preserve the live
+      // room state while attaching server IDs instead of replacing it with that snapshot.
+      setRooms((current) => attachExistingProjectRoomsToDrafts(current, detail.rooms, roomTerms));
       setProjectId(detail.id);
       setLoadedProjectId(detail.id);
       setProjectStatus(detail.status);
@@ -2376,7 +2427,7 @@ export function DesignerProjectUpload({
       setRejectionReasonCode(detail.rejectionReasonCode);
       setRejectionReasonCodes(detail.rejectionReasonCodes);
       setReviewComments(detail.reviewComments);
-      router.replace(`/designer/projects/upload?projectId=${detail.id}`);
+      router.replace(`/designer/projects/upload?projectId=${detail.id}`, { scroll: false });
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
       ensureProjectPromiseRef.current = null;
@@ -2387,7 +2438,7 @@ export function DesignerProjectUpload({
   }
 
   async function syncProject(currentProjectId: string) {
-    const updatePayload = buildUpdateProjectPayload();
+    const updatePayload = await buildUpdateProjectPayload();
 
     const response = await api.api.projects[':id'].$patch({
       param: { id: currentProjectId },
@@ -2836,18 +2887,23 @@ export function DesignerProjectUpload({
         `Could not prepare upload for ${file.name}.`,
       );
       reservedImageId = uploaded.imageId;
+      updateRoom(roomClientId, (current) => ({
+        ...current,
+        images: current.images.map((image) =>
+          image.id === previewId ? { ...image, reservedImageId: uploaded.imageId } : image,
+        ),
+      }));
 
-      const storageResponse = await fetch(uploaded.uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type,
-        },
-        body: file,
+      await uploadProjectImage(uploaded.uploadUrl, file, (transferPercent) => {
+        updateRoom(roomClientId, (current) => ({
+          ...current,
+          images: current.images.map((image) =>
+            image.id === previewId
+              ? { ...image, transferState: 'uploading', transferPercent }
+              : image,
+          ),
+        }));
       });
-
-      if (!storageResponse.ok) {
-        throw new Error(`Could not upload ${file.name}.`);
-      }
 
       const commitResponse = await api.api.media[':imageId'].commit.$post({
         param: { imageId: uploaded.imageId },
@@ -2898,6 +2954,7 @@ export function DesignerProjectUpload({
           currentImage.id === previewId
             ? {
                 id: linkedImage.id,
+                clientId: currentImage.clientId ?? previewId,
                 status: updatedImage.status,
                 sortOrder: updatedImage.sortOrder,
                 width: updatedImage.width,
@@ -2925,7 +2982,12 @@ export function DesignerProjectUpload({
         ...current,
         images: current.images.map((currentImage) =>
           currentImage.id === previewId
-            ? { ...currentImage, status: 'failed', transferError: message }
+            ? {
+                ...currentImage,
+                status: 'failed',
+                transferState: undefined,
+                transferError: message,
+              }
             : currentImage,
         ),
       }));
@@ -2947,7 +3009,13 @@ export function DesignerProjectUpload({
       uploadError: '',
       images: current.images.map((currentImage) =>
         currentImage.id === previewId
-          ? { ...currentImage, status: 'processing', transferError: undefined }
+          ? {
+              ...currentImage,
+              status: 'processing',
+              transferState: 'queued',
+              transferPercent: 0,
+              transferError: undefined,
+            }
           : currentImage,
       ),
     }));
@@ -3024,6 +3092,8 @@ export function DesignerProjectUpload({
           preview: {
             id: `local-preview-${previewBatchId}-${index}`,
             status: 'processing',
+            transferState: 'queued',
+            transferPercent: 0,
             sortOrder: room.images.length + index,
             width: null,
             height: null,
@@ -3126,6 +3196,9 @@ export function DesignerProjectUpload({
   const availableRoomTemplates = useMemo(() => {
     const templatesBySlug = new Map<string, RoomTemplate>();
 
+    for (const term of roomTerms) {
+      templatesBySlug.set(term.slug, { slug: term.slug, title: term.label });
+    }
     for (const template of suggestedRooms) {
       templatesBySlug.set(template.slug, template);
     }
@@ -3136,7 +3209,7 @@ export function DesignerProjectUpload({
         (room) => room.title === template.title || room.roomSlug === template.slug,
       );
     });
-  }, [rooms, suggestedRooms]);
+  }, [rooms, suggestedRooms, roomTerms]);
   const normalizedRoomSearchQuery = useMemo(
     () => normalizeRoomSearchValue(roomSearchQuery),
     [roomSearchQuery],
@@ -3175,9 +3248,31 @@ export function DesignerProjectUpload({
       return left.title.localeCompare(right.title);
     });
   }, [availableRoomTemplates, normalizedRoomSearchQuery, roomAddOptions]);
+  async function createCustomRoomType() {
+    setCreatingRoomType(true);
+    setRoomTypeError('');
+    try {
+      const response = await api.api.taxonomy.rooms.$post({
+        json: { label: roomSearchQuery.trim() },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(extractApiMessage(payload, 'Could not create room type.'));
+      const term = parseApiPayload(payload, taxonomyTermSchema, 'Could not create room type.');
+      setRoomTerms((current) =>
+        current.some((item) => item.id === term.id) ? current : [...current, term],
+      );
+      handleRoomSearchSelect({ slug: term.slug, title: term.label });
+    } catch (error) {
+      setRoomTypeError(error instanceof Error ? error.message : 'Could not create room type.');
+    } finally {
+      setCreatingRoomType(false);
+    }
+  }
+
   function closeRoomSearch() {
     setRoomSearchOpen(false);
     setRoomSearchQuery('');
+    setRoomTypeError('');
   }
 
   function handleRoomSearchSelect(template: RoomTemplate) {
@@ -3297,7 +3392,7 @@ export function DesignerProjectUpload({
       ) : null}
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,50.3125rem)_19.8125rem]">
-        <fieldset disabled={reviewLocked} className="min-w-0 space-y-4 xl:pr-2">
+        <fieldset disabled={reviewLocked || loadingEditor} className="min-w-0 space-y-4 xl:pr-2">
           <SectionFrame
             step="Step 1"
             title="Project classification"
@@ -3419,6 +3514,7 @@ export function DesignerProjectUpload({
                           onChange={(value) => {
                             setCitySlug(value);
                             setLocality('');
+                            setCustomLocalityMode(false);
                           }}
                           options={cityOptions}
                           placeholder={loadingTaxonomy ? 'Loading…' : 'Select city'}
@@ -3440,21 +3536,40 @@ export function DesignerProjectUpload({
                       </>
                     )}
                   </div>
-                  {localityOptions.length > 0 ? (
-                    <SelectField
-                      label="Locality / Area"
-                      value={locality}
-                      onValueChange={setLocality}
-                      options={localityOptions}
-                      placeholder="e.g. Adyar, Koramangala"
-                      allowEmpty
-                    />
+                  {localityOptions.length > 0 && !customLocalityMode ? (
+                    <div className="space-y-1.5">
+                      <SelectField
+                        label="Locality / Area"
+                        value={locality}
+                        onValueChange={setLocality}
+                        options={localityOptions}
+                        placeholder="e.g. Adyar, Koramangala"
+                        allowEmpty
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomLocalityMode(true);
+                          setLocality('');
+                        }}
+                        className={cn(
+                          typography.bodySmall,
+                          'text-primary underline-offset-2 hover:underline',
+                        )}
+                      >
+                        Can&apos;t find your area? Enter a custom area
+                      </button>
+                    </div>
                   ) : (
                     <div className="space-y-1.5">
-                      <Label className={cn(typography.label, 'text-foreground')}>
+                      <Label
+                        htmlFor="project-custom-locality"
+                        className={cn(typography.label, 'text-foreground')}
+                      >
                         Locality / Area
                       </Label>
                       <Input
+                        id="project-custom-locality"
                         value={locality}
                         onChange={(event) => setLocality(event.target.value)}
                         placeholder="e.g. Adyar, Koramangala"
@@ -3863,6 +3978,29 @@ export function DesignerProjectUpload({
                 </span>
               </div>
 
+              {roomSearchQuery.trim() &&
+              !roomTerms.some(
+                (term) => normalizeRoomSearchValue(term.label) === normalizedRoomSearchQuery,
+              ) ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={creatingRoomType || roomSearchQuery.trim().length > 80}
+                  onClick={() => void createCustomRoomType()}
+                >
+                  {creatingRoomType ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  Create “{roomSearchQuery.trim()}”
+                </Button>
+              ) : null}
+              {roomTypeError ? (
+                <p role="alert" className="px-2 py-2 text-destructive">
+                  {roomTypeError}
+                </p>
+              ) : null}
               {roomSearchResults.length > 0 ? (
                 roomSearchResults.map((template) => (
                   <button
@@ -3881,7 +4019,7 @@ export function DesignerProjectUpload({
                 ))
               ) : (
                 <div className={cn('px-2 py-6 text-muted-foreground', typography.bodyMedium)}>
-                  No matching taxonomy-backed room type found.
+                  No matching room type found.
                 </div>
               )}
             </div>

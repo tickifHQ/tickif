@@ -39,16 +39,71 @@ export type AdminImageRecord = Omit<typeof schema.projectImage.$inferSelect, 'is
 export type AdminRoomRecord = Omit<typeof schema.projectRoom.$inferSelect, 'isLive'>;
 export type AdminModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
 export type AdminReviewCommentRecord = typeof schema.projectReviewComment.$inferSelect;
-export type AdminReviewCommentMutationResult =
-  | AdminReviewCommentRecord
-  | 'project_changed'
-  | null;
+export type AdminReviewCommentMutationResult = AdminReviewCommentRecord | 'project_changed' | null;
 
 type CorrectionPatch = Omit<AdminCorrectProjectInput, 'featuredAt'> & {
   featuredAt?: Date | null;
 };
 
 export const adminProjectsRepository = {
+  async removeImage(input: {
+    projectId: string;
+    imageId: string;
+    actorUserId: string;
+    expectedRevision: number;
+    expectedReviewerId: string | null;
+  }): Promise<AdminImageRecord | 'project_changed' | null> {
+    return db.transaction(async (tx) => {
+      const state = await readProjectAggregate(input.projectId, tx, true);
+      if (!state) return null;
+      const aggregate = state.current;
+      if (
+        aggregate.project.status !== 'in_review' ||
+        aggregate.project.moderationRevision !== input.expectedRevision ||
+        aggregate.project.reviewedBy !== input.expectedReviewerId
+      )
+        return 'project_changed';
+      const image = aggregate.images.find((candidate) => candidate.id === input.imageId);
+      if (!image) return null;
+      const previousIds = aggregate.images.map((candidate) => candidate.id);
+      aggregate.images = aggregate.images.filter((candidate) => candidate.id !== input.imageId);
+      if (aggregate.project.coverImageId === input.imageId) aggregate.project.coverImageId = null;
+      aggregate.project.moderationRevision += 1;
+      aggregate.project.updatedAt = new Date();
+      if (state.pending) {
+        // The approved graph still references these assets until promotion/discard.
+        await writePendingAggregate(tx, aggregate, aggregate.project.moderationRevision);
+      } else {
+        await tx
+          .update(schema.project)
+          .set({
+            coverImageId: aggregate.project.coverImageId,
+            moderationRevision: aggregate.project.moderationRevision,
+            updatedAt: aggregate.project.updatedAt,
+          })
+          .where(eq(schema.project.id, input.projectId));
+        await tx
+          .delete(schema.projectImage)
+          .where(
+            and(
+              eq(schema.projectImage.projectId, input.projectId),
+              eq(schema.projectImage.id, input.imageId),
+            ),
+          );
+      }
+      await tx.insert(schema.projectModerationEvent).values({
+        projectId: input.projectId,
+        actorUserId: input.actorUserId,
+        action: 'image_removed',
+        fromStatus: 'in_review',
+        toStatus: 'in_review',
+        fieldDiff: {
+          images: { from: previousIds, to: aggregate.images.map((candidate) => candidate.id) },
+        },
+      });
+      return state.pending ? { ...image, originalKey: '', derivatives: [] } : image;
+    });
+  },
   async findLiveVersion(projectId: string) {
     const state = await readProjectAggregate(projectId);
     return state?.pending ? state.live : null;
@@ -181,7 +236,10 @@ export const adminProjectsRepository = {
     return { items, total: count?.value ?? 0 };
   },
 
-  async findById(id: string, version: 'current' | 'live' = 'current'): Promise<AdminProjectRecord | null> {
+  async findById(
+    id: string,
+    version: 'current' | 'live' = 'current',
+  ): Promise<AdminProjectRecord | null> {
     const [row] = await db
       .select({
         project: schema.project,

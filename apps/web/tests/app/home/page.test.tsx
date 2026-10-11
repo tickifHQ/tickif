@@ -213,10 +213,7 @@ describe('HomePage', () => {
         .getByRole('button', { name: 'Filters' })
         .compareDocumentPosition(screen.getAllByRole('heading', { name: 'Test Project' })[0]!),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByRole('link', { name: 'Mumbai' })).toHaveAttribute(
-      'href',
-      '/?city=mumbai',
-    );
+    expect(screen.getByRole('link', { name: 'Mumbai' })).toHaveAttribute('href', '/?city=mumbai');
     expect(screen.getByRole('link', { name: 'Cosy living room' })).toHaveAttribute(
       'href',
       '/?room=living-room',
@@ -375,16 +372,31 @@ describe('HomePage', () => {
     expect(screen.getByRole('button', { name: 'Load more projects' })).toBeInTheDocument();
   });
 
-  it('revalidates taxonomy requests instead of refetching them on every render', async () => {
+  it('refreshes custom and release-changing catalogs while caching unchanged presets', async () => {
     render(await HomePage());
 
     const taxonomyCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
-      String(input).includes('/api/taxonomy/terms?kind=city'),
+      String(input).includes('/api/taxonomy/terms?kind=property_type'),
     );
 
     expect(taxonomyCall?.[1]).toEqual(
       expect.objectContaining({ next: { revalidate: 60 * 60 * 24 * 7 } }),
     );
+    for (const kind of ['city', 'locality', 'room', 'material', 'property_subtype', 'budget_band']) {
+      const locationCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
+        String(input).includes(`/api/taxonomy/terms?kind=${kind}`),
+      );
+      expect(locationCall?.[1]).toEqual(expect.objectContaining({ cache: 'no-store' }));
+    }
+  });
+
+  it('fetches room taxonomy fresh so designer-created types appear in filters', async () => {
+    render(await HomePage());
+    const taxonomyCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
+      String(input).includes('/api/taxonomy/terms?kind=room'),
+    );
+    expect(taxonomyCall?.[1]).toEqual(expect.objectContaining({ cache: 'no-store' }));
+    expect(taxonomyCall?.[1]).not.toHaveProperty('next');
   });
 
   it('SSR-renders an unfiltered deep-linked page instead of the page-one featured view', async () => {

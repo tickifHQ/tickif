@@ -49,6 +49,7 @@ import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
 import { SocialProfileInput, socialProfileError } from '@/components/social-profile-confirmation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
+import { useHydrated } from '@/lib/use-hydrated';
 
 type EntityType = OnboardDesignerInput['entityType'];
 
@@ -213,6 +214,7 @@ export function DesignerOnboarding({
   onClearDraft = clearOnboardingDraft,
 }: DesignerOnboardingProps) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const formId = useId();
   // E-298: seed every field from the server-side draft so re-entry (even from a
   // different device) resumes at the saved step with the saved values. Absent
@@ -607,6 +609,7 @@ export function DesignerOnboarding({
                       option.value === 'individual' ? 'right-5' : 'right-1'
                     }
                     selected={entityType === option.value}
+                    disabled={!hydrated}
                     title={option.title}
                     onClick={() => {
                       setEntityType(option.value);
@@ -1352,6 +1355,7 @@ function SocialInput({
 }
 
 function EntityChoiceCard({
+  disabled,
   description,
   descriptionClassName,
   icon: Icon,
@@ -1362,6 +1366,7 @@ function EntityChoiceCard({
   selected,
   title,
 }: {
+  disabled: boolean;
   description: string;
   descriptionClassName?: string;
   icon: typeof UserRound;
@@ -1375,6 +1380,7 @@ function EntityChoiceCard({
   return (
     <button
       type="button"
+      disabled={disabled}
       aria-pressed={selected}
       onClick={onClick}
       className={cn(

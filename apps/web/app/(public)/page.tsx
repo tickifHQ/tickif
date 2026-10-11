@@ -9,6 +9,7 @@ import {
   listTaxonomyResponseSchema,
   PLATFORM_ROLE,
   platformRoleSchema,
+  taxonomyNeedsFreshRead,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { getBillingCatalog } from '@/lib/billing-catalog';
@@ -60,7 +61,12 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
       try {
         const response = await api.api.taxonomy.terms.$get(
           { query: { kind: facet.kind } },
-          { init: { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } } },
+          {
+            init:
+              taxonomyNeedsFreshRead(facet.kind)
+                ? { cache: 'no-store' }
+                : { next: { revalidate: TAXONOMY_REVALIDATE_SECONDS } },
+          },
         );
         if (!response.ok) return [facet.key, []] as const;
         const parsed = listTaxonomyResponseSchema.safeParse(await response.json());

@@ -171,7 +171,7 @@ function makeRecommendationRow(
 // =============================================================================
 
 describe('projectsService.getPublicBySlug', () => {
-  it('only projects a fresh, connected, visible Google rating and count', async () => {
+  it('projects visible fresh Google ratings while connected or refreshing', async () => {
     vi.useFakeTimers().setSystemTime(new Date('2026-09-22T00:00:00Z'));
     vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue({
       project: makeProject({ coverImageId: null }),
@@ -234,6 +234,14 @@ describe('projectsService.getPublicBySlug', () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue({
       ...connectedRow,
       status: 'pending',
+    });
+    expect(
+      (await projectsService.getPublicBySlug('modern-apartment')).designer.googleRating,
+    ).toEqual({ rating: 4.7, reviewCount: 58 });
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue({
+      ...connectedRow,
+      status: 'pending',
+      lastFetchedAt: new Date('2026-08-01T00:00:00Z'),
     });
     expect(
       (await projectsService.getPublicBySlug('modern-apartment')).designer.googleRating,

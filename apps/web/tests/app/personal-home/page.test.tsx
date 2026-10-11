@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 const mock = vi.hoisted(() => ({
   requireActiveVisitor: vi.fn(),
   preferences: vi.fn(),
+  taxonomyGet: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`NEXT_REDIRECT:${path}`);
   }),
@@ -25,6 +26,7 @@ vi.mock('@/lib/auth-client', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     api: {
+      taxonomy: { terms: { $get: mock.taxonomyGet } },
       orgs: {
         context: { $put: vi.fn() },
         branches: { $get: vi.fn() },
@@ -83,8 +85,18 @@ vi.mock('@/components/public-header', () => ({
 import PersonalHomePage from '../../../app/(protected)/home/page';
 
 describe('PersonalHomePage', () => {
+  it('refreshes newly added locations and changed seeded catalogs in personalized filters', async () => {
+    await PersonalHomePage();
+    for (const kind of ['city', 'locality', 'room', 'material', 'property_subtype', 'budget_band']) {
+      expect(mock.taxonomyGet).toHaveBeenCalledWith(
+        { query: { kind } },
+        { init: { cache: 'no-store' } },
+      );
+    }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.taxonomyGet.mockResolvedValue({ ok: true, json: async () => ({ terms: [] }) });
     mock.preferences.mockResolvedValue({ preferences: null, filters: {} });
     mock.requireActiveVisitor.mockResolvedValue({
       user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'visitor', status: 'active' },

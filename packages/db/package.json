@@ -19,6 +19,10 @@
     "./seeds/taxonomy": {
       "types": "./src/seeds/taxonomy.ts",
       "default": "./src/seeds/taxonomy.ts"
+    },
+    "./seeds/project-locations": {
+      "types": "./src/seeds/project-locations.ts",
+      "default": "./src/seeds/project-locations.ts"
     }
   },
   "scripts": {

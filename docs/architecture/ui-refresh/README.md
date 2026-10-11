@@ -5,6 +5,15 @@ theme values, components, a crown presentation primitive and an interactive
 gallery now apply that reference. The user approved the component gallery on
 7 October 2026 for publication in the single shared phase PR. The real /d/[slug] profile composition is implemented locally and remains in phase 2 review.
 
+## Completed designer dashboard
+
+Once the tracked setup checklist is complete, the dashboard shows recent projects,
+project/enquiry totals, analytics and portfolio sharing. Its right rail no longer
+shows onboarding's unconditional project-review promise or "What happens next"
+heading. Outstanding identity verification keeps its own status and permitted
+action under "Verification"; completing setup does not imply KYC approval.
+Actual project-review totals remain in the overview metrics.
+
 ## Sources and coverage
 
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)
@@ -192,6 +201,20 @@ profile's 94px hero size to every screen heading.
 | Metadata           | 10px, JetBrains Mono                | commonly 1.2px |
 
 Use Inter for functional controls and keep dense table/form text legible.
+The designer project table follows [dashboard frame 14737:7634](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=14737-7634):
+36px body-font headers at 13px and 52 × 40px landscape thumbnails. A 175px
+minimum status column and 1216px table minimum preserve readable pending-change
+labels; narrower workspaces scroll the table instead of compressing its cells. Its detail
+cards retain the 300px width from [feedback frame 14740:3734](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=14740-3734),
+bounded by the viewport. These scoped measurements do not change shared table
+defaults. The newer feedback requirements retain the prominent View action,
+Copy/Duplicate menu and explicit pending-edit/live-version explanation.
+The labelled View action needs more room than the old three-icon Figma sample;
+columns therefore remain fluid above those minimums rather than fixing all six
+widths. Single-line headers also reserve enough space for ordinary date values.
+Portfolio section and project-room header controls share the semantic 2px
+keyboard focus ring with form controls; both room expansion triggers expose
+their expanded state.
 SF Pro, Arial, Menlo, and Lucida Grande in embedded map or symbol layers do not
 establish new global font roles. Exported artwork remains artwork.
 

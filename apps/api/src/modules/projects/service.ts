@@ -182,7 +182,7 @@ function toImageDeletion(row: ProjectImageDeletionRecord): DeleteProjectImageRes
   return { id: row.id, deleted: true };
 }
 
-async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
+export async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
   const keys = [
     ...new Set(
       [row.originalKey, ...row.derivatives.map((derivative) => derivative.key)].filter(

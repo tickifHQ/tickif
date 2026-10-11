@@ -1,4 +1,5 @@
 import {
+  materialFinishSlugs,
   createProjectSchema,
   imageFailureReason,
   type ImageFailureReason,
@@ -30,6 +31,11 @@ export type ProjectImagePreview = Pick<
    * processing failures arrive as `failureReason` instead.
    */
   transferError?: string;
+  /** Keep the preview DOM stable when its temporary ID becomes a persisted image ID. */
+  clientId?: string;
+  reservedImageId?: string;
+  transferState?: 'queued' | 'uploading';
+  transferPercent?: number;
 };
 
 export function isLocalPreviewImage(image: ProjectImagePreview) {
@@ -378,6 +384,9 @@ export function buildImageMetadata(input: {
     sortOrder: input.sortOrder,
     themeSlugs: input.designStyle ? [input.designStyle] : [],
     finishSlugs: input.materialFinish ? [input.materialFinish] : [],
+    ...(materialFinishSlugs.some((slug) => slug === input.materialFinish)
+      ? { materialSlugs: [input.materialFinish] }
+      : {}),
     tagSlugs: uniqueNonEmpty(input.tags.map(toSlug)),
   };
 }

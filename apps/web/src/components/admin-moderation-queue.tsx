@@ -46,6 +46,7 @@ import {
   Pencil,
   ShieldAlert,
   Tags,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
@@ -69,6 +70,7 @@ import {
   publishAdminProject,
   rejectAdminProject,
   requestAdminChanges,
+  removeAdminProjectImage,
   startAdminReview,
   unpublishAdminProject,
   type AdminModerationQueueTab,
@@ -305,6 +307,7 @@ function ReviewDetail({
 }) {
   const { project, liveVersion } = detail;
   const [actionIntent, setActionIntent] = useState<ActionIntent | null>(null);
+  const [imageToRemove, setImageToRemove] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [reasonCodes, setReasonCodes] = useState<ModerationReasonCode[]>([]);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -501,7 +504,7 @@ function ReviewDetail({
             <span className="text-xs text-muted-foreground">{detail.images.length} uploaded</span>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {detail.images.map((image) => {
+            {detail.images.map((image, index) => {
               const room = detail.rooms.find((candidate) => candidate.id === image.roomId);
               return (
                 <div key={image.id} className="group overflow-hidden rounded-lg border bg-muted/30">
@@ -531,6 +534,16 @@ function ReviewDetail({
                   <div className="space-y-1 px-3 py-2 text-xs">
                     <p className="font-medium text-foreground">{room?.name ?? 'Unassigned room'}</p>
                     <p className="text-muted-foreground">{image.status}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!canModerate || busyAction !== null}
+                      aria-label={`Remove image ${index + 1}`}
+                      onClick={() => setImageToRemove(image.id)}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden="true" /> Remove image
+                    </Button>
                     {image.duplicate ? (
                       <p className="flex items-center gap-1 text-warning-foreground">
                         <ShieldAlert className="size-3" /> Possible duplicate
@@ -827,6 +840,54 @@ function ReviewDetail({
           </Button>
         </div>
       </div>
+
+      <Dialog
+        open={imageToRemove !== null}
+        onOpenChange={(open) => !open && setImageToRemove(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove this image?</DialogTitle>
+            <DialogDescription>
+              Only this image will be removed from the review. Other images will stay.
+              {detail.pendingChanges
+                ? ' The approved version stays public until these changes are approved.'
+                : ''}
+              {project.coverImageId === imageToRemove
+                ? ' This is the cover image; the designer will need to choose a replacement before approval.'
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {imageToRemove ? (
+            <div
+              className="aspect-[4/3] rounded-lg bg-muted bg-cover bg-center"
+              role="img"
+              aria-label="Selected image to remove"
+              style={{
+                backgroundImage: `url("${detail.images.find((image) => image.id === imageToRemove)?.originalUrl ?? ''}")`,
+              }}
+            />
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImageToRemove(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busyAction !== null || !canModerate}
+              onClick={() => {
+                const imageId = imageToRemove;
+                if (!imageId) return;
+                setImageToRemove(null);
+                void perform('remove-image', () => removeAdminProjectImage(project.id, imageId));
+              }}
+            >
+              Remove image
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={actionIntent !== null} onOpenChange={(open) => !open && setActionIntent(null)}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">

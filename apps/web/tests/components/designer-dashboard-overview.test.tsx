@@ -283,9 +283,7 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.queryByText('Projects')).not.toBeInTheDocument();
     // The existing readiness state is unchanged.
     expect(screen.getByText(/not public yet/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: /complete your portfolio/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /complete your portfolio/i })).toBeInTheDocument();
   });
 
   // E-324: authoritative proof stats on the dashboard portfolio card.
@@ -687,8 +685,48 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.queryByText(/setup complete/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Complete portfolio' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/portfolio setup steps/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/what happens next/i)).toBeInTheDocument();
+    expect(screen.queryByText(/what happens next/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('We review your project')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /start verification/i })).toHaveAttribute(
+      'href',
+      '/designer/verification',
+    );
   });
+
+  it.each([
+    ['draft', 'Continue verification'],
+    ['pending', 'Verification in review'],
+    ['rejected', 'Update verification'],
+    ['expired', 'Renew verification'],
+  ] as const)(
+    'keeps the %s verification action without onboarding after setup',
+    (status, title) => {
+      render(
+        <DesignerDashboardOverview
+          canManageVerification
+          studioName="Completed studio"
+          studioLocation="Chennai"
+          portfolioUrl="https://tickif.com/d/completed-studio"
+          dashboard={{
+            ...dashboard,
+            portfolioBasicsComplete: true,
+            profileCompletion: { score: 100, missing: [] },
+            projects: { total: 3, published: 3, inReview: 0, draft: 0 },
+            verificationStatus: status,
+          }}
+        />,
+      );
+
+      expect(screen.getByTestId('post-setup-overview')).toBeInTheDocument();
+      expect(screen.queryByText(/what happens next/i)).not.toBeInTheDocument();
+      expect(screen.queryByText('We review your project')).not.toBeInTheDocument();
+      expect(screen.queryByText(/a human check, usually/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: new RegExp(title, 'i') })).toHaveAttribute(
+        'href',
+        '/designer/verification',
+      );
+    },
+  );
 
   it('keeps the completed dashboard useful when recent projects fail to load', () => {
     render(

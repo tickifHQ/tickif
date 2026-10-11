@@ -19,6 +19,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 );
 
 const requiredEntries: [file: string, title: string][] = [
+  [
+    'single-image-moderation.spec.ts',
+    'E-371 reviewer removes one image after confirmation and keeps the other originals',
+  ],
   ...[
     'account menu uses real personal data, working destinations, and resilient logout on desktop and mobile',
     'saved projects requires authentication',
@@ -39,9 +43,14 @@ const requiredEntries: [file: string, title: string][] = [
   ['project-photo-reorder.spec.ts', 'photo ordering persists with desktop mouse and keyboard'],
   ['project-photo-reorder.spec.ts', 'photo ordering persists with phone touch'],
   [
-    'project-feedback.spec.ts',
-    'project budget choices persist and room descriptions are absent from the editor',
+    'project-location-material-feedback.spec.ts',
+    'custom city and area, commercial Hospital and material finish persist through the editor',
   ],
+  [
+    'project-feedback.spec.ts',
+    'scope-specific project budget choices persist and room descriptions are absent from the editor',
+  ],
+  ['project-feedback.spec.ts', 'custom room types persist and appear as search filters'],
   ...[1440, 390].map((width): [string, string] => [
     'team-size.spec.ts',
     `company team-size ranges resume and persist through profile editing at ${width}px`,

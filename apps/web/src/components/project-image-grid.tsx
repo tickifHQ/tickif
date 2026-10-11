@@ -43,6 +43,14 @@ type ProjectImageGridProps = {
 const controlClass =
   'size-11 rounded-full border border-border/60 bg-background/95 text-foreground shadow-sm hover:bg-background focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
+function photoStatus(image: ProjectImagePreview) {
+  if (image.status === 'ready') return 'Ready';
+  if (image.status === 'failed') return 'Failed';
+  if (image.transferState === 'queued') return 'Queued';
+  if (image.transferState === 'uploading') return `Uploading ${image.transferPercent ?? 0}%`;
+  return 'Processing';
+}
+
 export function ProjectImageGrid(props: ProjectImageGridProps) {
   const { images, roomTitle, onMove } = props;
   const id = useId();
@@ -117,7 +125,7 @@ export function ProjectImageGrid(props: ProjectImageGridProps) {
           <ul aria-label={`${roomTitle} photos`} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {images.map((image, index) => (
               <SortablePhoto
-                key={image.id}
+                key={image.clientId ?? image.id}
                 coverImageId={props.coverImageId}
                 uploading={props.uploading}
                 onOpen={props.onOpen}
@@ -128,6 +136,7 @@ export function ProjectImageGrid(props: ProjectImageGridProps) {
                 image={image}
                 index={index}
                 disabled={disabled}
+                previewDisabled={saving}
               />
             ))}
           </ul>
@@ -154,7 +163,7 @@ function PhotoPreview({ image }: { image: ProjectImagePreview }) {
   return image.previewUrl ? (
     <div
       role="img"
-      aria-label={`${image.fileName} (${image.status === 'ready' ? 'Ready' : image.status === 'processing' ? 'Processing' : 'Failed'})`}
+      aria-label={`${image.fileName} (${photoStatus(image)})`}
       className="h-full w-full bg-cover bg-center"
       style={{ backgroundImage: `url(${image.previewUrl})` }}
     />
@@ -170,6 +179,7 @@ function SortablePhoto({
   image,
   index,
   disabled,
+  previewDisabled,
   canReorder,
   ...props
 }: Pick<
@@ -179,6 +189,7 @@ function SortablePhoto({
   image: ProjectImagePreview;
   index: number;
   disabled: boolean;
+  previewDisabled: boolean;
   canReorder: boolean;
 }) {
   const {
@@ -194,8 +205,7 @@ function SortablePhoto({
     disabled: disabled || !canReorder,
   });
   const isCover = props.coverImageId === image.id;
-  const statusLabel =
-    image.status === 'ready' ? 'Ready' : image.status === 'processing' ? 'Processing' : 'Failed';
+  const statusLabel = photoStatus(image);
   const failureDetail =
     image.transferError ??
     imageFailureMessage(image.failureReason) ??
@@ -220,10 +230,11 @@ function SortablePhoto({
           className="absolute inset-0 size-full select-none cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring"
           {...attributes}
           {...listeners}
-          aria-disabled={disabled}
+          aria-disabled={previewDisabled || !image.previewUrl}
           disabled={!image.previewUrl && !canReorder}
           onClick={() => {
-            if (image.previewUrl && !disabled) props.onOpen(image, statusLabel);
+            if (image.previewUrl && !previewDisabled && !isDragging)
+              props.onOpen(image, statusLabel);
           }}
           aria-label={`Open ${image.fileName}`}
         >
@@ -281,7 +292,21 @@ function SortablePhoto({
             <Trash2 className="size-4" />
           </Button>
         </div>
-        {image.status === 'processing' ? (
+        {image.status === 'processing' && image.transferState === 'uploading' ? (
+          <span
+            role="progressbar"
+            aria-label={`Uploading ${image.fileName}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={image.transferPercent ?? 0}
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-muted"
+          >
+            <span
+              className="block h-full bg-primary"
+              style={{ width: `${image.transferPercent ?? 0}%` }}
+            />
+          </span>
+        ) : image.status === 'processing' && !image.transferState ? (
           <span
             className="pointer-events-none absolute inset-x-0 bottom-0 h-1 animate-pulse bg-primary/70"
             aria-hidden="true"

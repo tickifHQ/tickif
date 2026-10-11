@@ -2,13 +2,12 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test, type BrowserContext } from '@playwright/test';
-import { db, eq, schema } from '@repo/db';
+import { and, db, eq, schema } from '@repo/db';
 import {
   assertTestDb,
   makeDesigner,
   makeOrganization,
   makeProject,
-  makeTaxonomy,
   makeUser,
 } from '@repo/db/testing';
 import { deleteObject, putObject } from '@repo/storage';
@@ -115,7 +114,19 @@ test.describe('E-278 portfolio publication readiness', () => {
   }
 
   async function completeDashboardSetup(seed: Awaited<ReturnType<typeof seedDesigner>>) {
-    const city = await makeTaxonomy({ kind: 'city', label: 'Chennai' });
+    // Reuse the canonical seed instead of leaking a duplicate-label synthetic city
+    // into other journeys' fresh location options.
+    const [city] = await db
+      .select({ id: schema.taxonomy.id })
+      .from(schema.taxonomy)
+      .where(
+        and(
+          eq(schema.taxonomy.kind, 'city'),
+          eq(schema.taxonomy.slug, 'chennai'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      );
+    if (!city) throw new Error('Portfolio setup requires the active seeded Chennai city.');
 
     await Promise.all([
       db.insert(schema.account).values({
@@ -399,6 +410,12 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByTestId('post-setup-overview')).toBeVisible();
       await expect(page.getByRole('progressbar', { name: 'Portfolio setup' })).toHaveCount(0);
       await expect(page.getByText('Setup complete', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('WHAT HAPPENS NEXT', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('We review your project', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: /start verification/i })).toHaveAttribute(
+        'href',
+        '/designer/verification',
+      );
       await expect(page.getByRole('heading', { name: 'Recent projects' })).toBeVisible();
       await expect(page.getByText(project.title, { exact: true })).toBeVisible();
       await expect(page.locator('[data-metric="total-projects"]')).toHaveText('1');

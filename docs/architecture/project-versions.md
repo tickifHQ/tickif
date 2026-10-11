@@ -10,6 +10,9 @@ Public project, image, discovery, recommendation and worker search reads use onl
 live rows. Internal project reads select pending content for the owning organization
 or superadmin and include `pendingChanges`, `liveStatus` and the approved version.
 Those properties are absent from public contracts and anonymous responses.
+The upload editor disables form controls while taxonomy and the selected saved
+project hydrate, so asynchronous loading cannot overwrite edits made during that
+interval. Editing becomes available only after that saved aggregate is loaded.
 Public detail fields and worker project search documents use read-only repeatable-read
 transactions, so an approval cannot mix old scalar values with the new gallery or tags.
 Signed URLs and related-project recommendations are built after the detail transaction.
@@ -37,6 +40,13 @@ Every mutation locks the canonical project row before reading pending state. Sub
 and in-review versions are locked against designer writes. Admin corrections use the
 pending revision for compare-and-swap and audit the pending before/after values.
 Submission and approval evaluate the selected version's images and cover.
+
+The deployment seed's [derived location classification](../adr/0010-saved-custom-location-classification.md)
+is a narrow exception for legacy `cityName` values that lack a canonical slug.
+It classifies live and pending locations independently under the same canonical
+lock without changing authored names, review state or timestamps. It never
+promotes pending content or modifies historical audit records. Ordinary authored
+location changes remain material edits.
 
 Pending edits and review transitions do not index. Approval writes one project index
 event in the same transaction and preserves the original slug, publish date and

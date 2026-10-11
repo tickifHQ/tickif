@@ -20,6 +20,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { AppError } from '../../lib/errors.js';
 import {
   buildCompleteness,
+  deleteImageObjects,
   transitionProject,
   validateProjectTaxonomy,
   type TransitionCaller,
@@ -175,6 +176,26 @@ function assertReviewOwner(project: AdminProjectRecord, caller: AdminCaller): vo
 }
 
 export const adminProjectsService = {
+  async removeImage(
+    projectId: string,
+    imageId: string,
+    caller: AdminCaller,
+  ): Promise<AdminModerationDetailResponse> {
+    const project = await adminProjectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+    assertReviewOwner(project, caller);
+    const image = await adminProjectsRepository.removeImage({
+      projectId,
+      imageId,
+      actorUserId: caller.userId,
+      expectedRevision: project.moderationRevision,
+      expectedReviewerId: project.reviewedBy,
+    });
+    if (image === 'project_changed') throw AppError.invalidTransition();
+    if (!image) throw AppError.notFound('Image not found');
+    await deleteImageObjects(image);
+    return this.getById(projectId);
+  },
   async list(
     query: AdminModerationQueueQuery,
     caller: AdminCaller,

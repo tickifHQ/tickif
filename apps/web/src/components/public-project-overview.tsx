@@ -257,6 +257,14 @@ export function PublicProjectOverview({
   ]
     .filter(Boolean)
     .join(', ');
+  const titleFacts = [
+    location,
+    project.buildingName,
+    project.specifications.propertySubtype?.label ?? project.specifications.propertyType?.label,
+    project.sizeSqft != null && project.sizeSqft > 0
+      ? `${project.sizeSqft.toLocaleString('en-IN')} sq.ft`
+      : null,
+  ].filter((fact): fact is string => Boolean(fact));
   const hasRecommendations = Object.values(project.recommendations).some(
     (recommendations) => recommendations.length > 0,
   );
@@ -290,11 +298,14 @@ export function PublicProjectOverview({
           <div className="min-w-0">
             <header className="flex flex-col gap-2">
               <h1 className="font-display text-3xl tracking-tight sm:text-4xl">{project.title}</h1>
-              {location || project.buildingName ? (
+              {titleFacts.length > 0 ? (
                 <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                  {location ? <span>{location}</span> : null}
-                  {location && project.buildingName ? <span aria-hidden>·</span> : null}
-                  {project.buildingName ? <span>{project.buildingName}</span> : null}
+                  {titleFacts.map((fact, index) => (
+                    <span key={index} className="inline-flex items-center gap-1.5">
+                      {index > 0 ? <span aria-hidden>·</span> : null}
+                      <span>{fact}</span>
+                    </span>
+                  ))}
                 </p>
               ) : null}
             </header>

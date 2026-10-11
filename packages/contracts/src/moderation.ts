@@ -14,6 +14,7 @@ export const moderationAction = z
     'reject',
     'unpublish',
     'metadata_corrected',
+    'image_removed',
     'archive',
     'restore',
     'delete',

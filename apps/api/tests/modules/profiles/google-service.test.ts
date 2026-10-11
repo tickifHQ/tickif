@@ -21,6 +21,7 @@ const repo = vi.hoisted(() => ({
   findByProfileId: vi.fn(),
   upsert: vi.fn(),
   touchAttempt: vi.fn(),
+  restoreRefresh: vi.fn(),
   delete: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ function cacheRow(overrides: Record<string, unknown> = {}) {
 describe('googleReviewsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queue.enqueueGoogleReviewsRefresh.mockResolvedValue(undefined);
     places.isGooglePlacesConfigured.mockReturnValue(true);
   });
 
@@ -67,7 +69,13 @@ describe('googleReviewsService', () => {
     it('resolves the reference, stores it pending, and enqueues a fetch', async () => {
       places.resolvePlaceId.mockResolvedValue('ChIJresolved');
       repo.upsert.mockResolvedValue(
-        cacheRow({ placeId: 'ChIJresolved', status: 'pending', rating: null, userRatingsTotal: null, lastFetchedAt: null }),
+        cacheRow({
+          placeId: 'ChIJresolved',
+          status: 'pending',
+          rating: null,
+          userRatingsTotal: null,
+          lastFetchedAt: null,
+        }),
       );
 
       const result = await googleReviewsService.connect({ reference: 'Studio Aakar' }, CALLER);
@@ -92,9 +100,9 @@ describe('googleReviewsService', () => {
 
     it('rejects when the feature is unavailable', async () => {
       places.isGooglePlacesConfigured.mockReturnValue(false);
-      await expect(
-        googleReviewsService.connect({ reference: 'x' }, CALLER),
-      ).rejects.toMatchObject({ status: 422 });
+      await expect(googleReviewsService.connect({ reference: 'x' }, CALLER)).rejects.toMatchObject({
+        status: 422,
+      });
     });
 
     it('throttles a rapid repeat connect without making a billable call', async () => {
@@ -128,11 +136,46 @@ describe('googleReviewsService', () => {
       await expect(googleReviewsService.refresh(CALLER)).rejects.toMatchObject({ status: 404 });
     });
 
-    it('enqueues a refresh when connected', async () => {
+    it('marks the connection pending before enqueuing a refresh', async () => {
       repo.findByProfileId.mockResolvedValue(cacheRow());
-      await googleReviewsService.refresh(CALLER);
-      expect(repo.touchAttempt).toHaveBeenCalledWith('profile-1');
+      repo.upsert.mockResolvedValue(cacheRow({ status: 'pending' }));
+      const result = await googleReviewsService.refresh(CALLER);
+      expect(result.connection?.status).toBe('pending');
+      expect(repo.upsert).toHaveBeenCalledWith(
+        'profile-1',
+        expect.objectContaining({
+          placeId: 'ChIJabc',
+          status: 'pending',
+          lastAttemptAt: expect.any(Date),
+        }),
+      );
       expect(queue.enqueueGoogleReviewsRefresh).toHaveBeenCalledWith({ profileId: 'profile-1' });
+    });
+
+    it.each(['error', 'stale'])(
+      'keeps polling possible when refreshing a %s connection',
+      async (status) => {
+        const lastFetchedAt = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+        repo.findByProfileId.mockResolvedValue(cacheRow({ status, lastFetchedAt }));
+        repo.upsert.mockResolvedValue(cacheRow({ status: 'pending', lastFetchedAt }));
+        const result = await googleReviewsService.refresh(CALLER);
+        expect(result.connection?.status).toBe('pending');
+        expect(result.connection?.rating).toBeNull();
+        expect(result.reviews).toEqual([]);
+      },
+    );
+
+    it('restores the previous connection when queueing fails', async () => {
+      const previous = cacheRow({ status: 'error', lastError: 'Google denied the request' });
+      const attemptAt = new Date();
+      repo.findByProfileId.mockResolvedValue(previous);
+      repo.upsert.mockResolvedValue(cacheRow({ status: 'pending', lastAttemptAt: attemptAt }));
+      queue.enqueueGoogleReviewsRefresh.mockRejectedValue(new Error('Redis unavailable'));
+      await expect(googleReviewsService.refresh(CALLER)).rejects.toThrow('Redis unavailable');
+      expect(repo.restoreRefresh).toHaveBeenCalledWith('profile-1', expect.any(Date), {
+        status: 'error',
+        lastError: 'Google denied the request',
+      });
     });
 
     it('throttles a rapid repeat refresh without enqueuing', async () => {
@@ -153,12 +196,43 @@ describe('googleReviewsService', () => {
       repo.findByProfileId.mockResolvedValue(
         cacheRow({
           reviews: [
-            { author: 'A', authorUrl: null, profilePhotoUrl: null, rating: 5, relativeTime: 'now', text: 'great', time: 1 },
+            {
+              author: 'A',
+              authorUrl: null,
+              profilePhotoUrl: null,
+              rating: 5,
+              relativeTime: 'now',
+              text: 'great',
+              time: 1,
+            },
           ],
         }),
       );
       const result = await googleReviewsService.get(CALLER);
       expect(result.connection?.status).toBe('connected');
+      expect(result.connection?.rating).toBe(4.8);
+      expect(result.reviews).toHaveLength(1);
+    });
+
+    it('keeps fresh cached ratings and reviews visible during refresh', async () => {
+      repo.findByProfileId.mockResolvedValue(
+        cacheRow({
+          status: 'pending',
+          reviews: [
+            {
+              author: 'A',
+              authorUrl: null,
+              profilePhotoUrl: null,
+              rating: 5,
+              relativeTime: 'now',
+              text: 'great',
+              time: 1,
+            },
+          ],
+        }),
+      );
+      const result = await googleReviewsService.get(CALLER);
+      expect(result.connection?.status).toBe('pending');
       expect(result.connection?.rating).toBe(4.8);
       expect(result.reviews).toHaveLength(1);
     });
@@ -169,7 +243,15 @@ describe('googleReviewsService', () => {
         cacheRow({
           lastFetchedAt: fortyDaysAgo,
           reviews: [
-            { author: 'A', authorUrl: null, profilePhotoUrl: null, rating: 5, relativeTime: 'old', text: 'x', time: 1 },
+            {
+              author: 'A',
+              authorUrl: null,
+              profilePhotoUrl: null,
+              rating: 5,
+              relativeTime: 'old',
+              text: 'x',
+              time: 1,
+            },
           ],
         }),
       );
