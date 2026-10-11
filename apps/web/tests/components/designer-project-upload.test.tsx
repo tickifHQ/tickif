@@ -658,21 +658,21 @@ describe('DesignerProjectUpload', () => {
     );
     const user = userEvent.setup();
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
-    const commercial = screen.getByRole('button', { name: 'Office / Commercial', exact: true });
+    const commercial = screen.getByRole('button', { name: 'Office / Commercial' });
     expect(commercial).toBeDisabled();
     await waitFor(() => expect(mock.projectGet).toHaveBeenCalled());
     expect(commercial).toBeDisabled();
     await user.click(commercial);
     expect(
-      screen.queryByRole('combobox', { name: 'Commercial type', exact: true }),
+      screen.queryByRole('combobox', { name: 'Commercial type' }),
     ).not.toBeInTheDocument();
 
     resolveProject?.(projectResponse);
     await screen.findByDisplayValue('2 BHK in Adyar');
     await waitFor(() => expect(commercial).toBeEnabled());
     await user.click(commercial);
-    await user.click(screen.getByRole('combobox', { name: 'Commercial type', exact: true }));
-    expect(screen.getByRole('option', { name: 'Hospital', exact: true })).toBeVisible();
+    await user.click(screen.getByRole('combobox', { name: 'Commercial type' }));
+    expect(screen.getByRole('option', { name: 'Hospital' })).toBeVisible();
   });
 
   it('keeps an unhydrated saved draft disabled when loading fails and cannot save over it', async () => {
@@ -680,9 +680,9 @@ describe('DesignerProjectUpload', () => {
     const user = userEvent.setup();
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
     expect(await screen.findByText('Could not load this project draft.')).toBeInTheDocument();
-    const save = screen.getByRole('button', { name: 'Save as draft', exact: true });
+    const save = screen.getByRole('button', { name: 'Save as draft' });
     expect(save).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Office / Commercial', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Office / Commercial' })).toBeDisabled();
     await user.click(save);
     expect(mock.createProject).not.toHaveBeenCalled();
     expect(mock.projectPatch).not.toHaveBeenCalled();
