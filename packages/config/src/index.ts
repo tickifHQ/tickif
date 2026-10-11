@@ -531,3 +531,24 @@ export const config: Config = parseConfig(process.env);
 export const isProduction = config.NODE_ENV === 'production';
 export const isDevelopment = config.NODE_ENV === 'development';
 export const isTest = config.NODE_ENV === 'test';
+
+/**
+ * Render a byte count as a human-readable size for user-facing messages, e.g.
+ * `15000000` → `"15 MB"`. Uses decimal units (1 MB = 1,000,000 bytes) so the
+ * output matches how limits like {@link Config.MEDIA_MAX_UPLOAD_BYTES} are
+ * configured. Never surface raw byte counts to users — always format them here.
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return `${bytes}`;
+  const units = ['bytes', 'KB', 'MB', 'GB', 'TB'] as const;
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1000 && unitIndex < units.length - 1) {
+    value /= 1000;
+    unitIndex += 1;
+  }
+  if (unitIndex === 0) return `${value} ${units[0]}`;
+  // One decimal place at most; drop a trailing ".0" so whole sizes read "15 MB".
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded} ${units[unitIndex]}`;
+}

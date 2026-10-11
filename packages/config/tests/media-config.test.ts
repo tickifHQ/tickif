@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseConfig } from '../src/index.js';
+import { formatBytes, parseConfig } from '../src/index.js';
 
 const environment = {
   NODE_ENV: 'production',
@@ -66,5 +66,34 @@ describe('production R2 endpoint', () => {
     expect(
       parseConfig({ ...environment, NODE_ENV, R2_ENDPOINT: 'http://localhost:9000' }).R2_ENDPOINT,
     ).toBe('http://localhost:9000');
+  });
+});
+
+describe('formatBytes', () => {
+  it('renders the media upload default as a human-readable size', () => {
+    // The limit users were shown as "15000000 bytes" now reads as "15 MB".
+    expect(formatBytes(15_000_000)).toBe('15 MB');
+  });
+
+  it.each([
+    [0, '0 bytes'],
+    [512, '512 bytes'],
+    [1_000, '1 KB'],
+    [5_000_000, '5 MB'],
+    [10_000_000, '10 MB'],
+    [1_000_000_000, '1 GB'],
+    [1_000_000_000_000, '1 TB'],
+  ])('formats %d bytes as %s', (bytes, expected) => {
+    expect(formatBytes(bytes)).toBe(expected);
+  });
+
+  it('rounds to at most one decimal place and keeps the largest unit', () => {
+    expect(formatBytes(1_500_000)).toBe('1.5 MB');
+    expect(formatBytes(1_234_567)).toBe('1.2 MB');
+  });
+
+  it('falls back to the raw value for invalid input', () => {
+    expect(formatBytes(-1)).toBe('-1');
+    expect(formatBytes(Number.NaN)).toBe('NaN');
   });
 });
