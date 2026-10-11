@@ -67,6 +67,15 @@ coverage gate.
 - `marketplace-journey.spec.ts`: individual onboarding, editor uploads through
   presigned URLs, real worker derivatives, publication, visitor onboarding and
   discovery, persistent saves and project views, enquiry, lead response and billing access.
+- `upload-scroll.spec.ts`: fresh draft creation through the rendered file chooser,
+  a three-image batch, and the real workspace `main.scrollTop` plus Step 4 position
+  before/after picker focus, queued previews, URL creation and Ready. Preview nodes
+  and grid position survive the draft creation response. The existing marketplace
+  journey also measures the inner scroller; `window.scrollY` cannot prove this shell's
+  scroll continuity. Baselines wait for finite section-opening transitions; geometry
+  allows at most one CSS pixel for browser rounding. These local checks do not
+  explain the separate 100px staging movement observed on 2026-10-11; native staging
+  re-verification remains required.
 - `organization-access.spec.ts`: real invitations, acceptance, role changes,
   context switching and forbidden cross-organization mutations.
 - `organization-workflows.spec.ts`: projects, leads, profile, portfolio,
