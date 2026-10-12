@@ -62,7 +62,7 @@ catalog:
   '@opentelemetry/exporter-metrics-otlp-proto': 0.222.0
   '@opentelemetry/instrumentation': 0.222.0
   '@opentelemetry/instrumentation-http': 0.222.0
-  '@opentelemetry/instrumentation-undici': ^0.32.0
+  '@opentelemetry/instrumentation-undici': ^0.33.0
   '@opentelemetry/instrumentation-pg': ^0.74.0
   '@opentelemetry/instrumentation-ioredis': ^0.70.0
   # 2.x requires BullMQ 6; preserve this workspace's existing BullMQ 5 semantics.
