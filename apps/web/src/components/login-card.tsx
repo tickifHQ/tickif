@@ -138,7 +138,11 @@ function LoginWelcomePanel({
       <div className="relative flex flex-col gap-5">
         <Badge
           variant="outline"
-          className="w-fit gap-2 whitespace-normal border-transparent bg-primary/20 text-surface-inverse-foreground"
+          className={cn(
+            typography.labelSm,
+            'w-fit gap-2 whitespace-normal border-transparent bg-primary/20 text-surface-inverse-foreground',
+            !landing && 'order-last md:order-none',
+          )}
         >
           {landing ? (
             <Bookmark className="size-3.5 shrink-0" aria-hidden="true" />
@@ -148,15 +152,28 @@ function LoginWelcomePanel({
           {landing ? 'Keep your favourite homes close' : 'Discover real homes and their designers'}
         </Badge>
         <div className="flex flex-col gap-3">
-          <h2 className="font-display text-2xl font-medium leading-tight tracking-tight md:text-section">
+          <h2 className="pr-10 font-display text-2xl font-medium leading-tight tracking-tight md:pr-0 md:text-section">
             {landing ? 'Don’t lose the homes you lingered on' : 'Welcome to Tickif'}
           </h2>
-          <p className="text-sm leading-relaxed text-surface-inverse-foreground/65">
+          {!landing && (
+            <p className={cn(typography.bodySm, 'text-surface-inverse-foreground/65 md:hidden')}>
+              {loginMode === 'designer'
+                ? 'Your work deserves to be discovered.'
+                : 'Keep your favourite homes close.'}
+            </p>
+          )}
+          <p
+            className={cn(
+              typography.bodySm,
+              'text-surface-inverse-foreground/65',
+              !landing && 'hidden md:block',
+            )}
+          >
             {landing
               ? 'Save homes you love and connect with their designers. Your next idea is worth keeping.'
               : loginMode === 'designer'
                 ? 'One link to share your work, get discovered, and turn views into real enquiries.'
-                : 'Save the homes you love, discover the designers behind them, and enquire when you’re ready.'}
+                : 'Save the homes you love, message designers, and send enquiries directly.'}
           </p>
         </div>
         {landing && projects?.length ? (
@@ -485,7 +502,11 @@ export function LoginCard({
                 aria-label="Close"
                 variant="ghost"
                 size="icon"
-                className="size-11 shrink-0 md:size-8"
+                className={cn(
+                  'size-11 shrink-0 md:size-8',
+                  presentation === 'default' &&
+                    'absolute right-3 top-3 z-10 text-primary-soft md:static md:text-muted-foreground',
+                )}
               >
                 <X className="size-4" aria-hidden="true" />
               </Button>
@@ -498,17 +519,23 @@ export function LoginCard({
                 className="w-full gap-5"
                 onValueChange={(val) => setLoginMode(val as LoginMode)}
               >
-                <TabsList className="grid w-full grid-cols-2 rounded-lg">
+                <TabsList className="grid h-14 w-full grid-cols-2 rounded-lg p-1 md:h-11">
                   <TabsTrigger
                     value="browsing"
-                    className="min-w-0 gap-1.5 rounded-md px-1 text-xs sm:px-3 sm:text-sm"
+                    className={cn(
+                      typography.labelMd,
+                      'min-h-12 min-w-0 gap-1.5 rounded-md px-1 text-xs/4.5 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-3 sm:text-sm/4.5 md:min-h-0',
+                    )}
                   >
                     <House className="size-4" aria-hidden="true" />
                     I'm browsing
                   </TabsTrigger>
                   <TabsTrigger
                     value="designer"
-                    className="min-w-0 gap-1.5 rounded-md px-1 text-xs sm:px-3 sm:text-sm"
+                    className={cn(
+                      typography.labelMd,
+                      'min-h-12 min-w-0 gap-1.5 rounded-md px-1 text-xs/4.5 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-3 sm:text-sm/4.5 md:min-h-0',
+                    )}
                   >
                     <Ruler className="size-4" aria-hidden="true" />
                     I'm a designer
@@ -545,7 +572,7 @@ export function LoginCard({
                       size="lg"
                       onClick={handleSendOtp}
                       disabled={loading || !toE164PhoneNumber(selectedCountry, phone)}
-                      className="w-full cursor-pointer"
+                      className={cn(typography.labelLg, 'w-full cursor-pointer')}
                     >
                       {loading ? 'Sending…' : 'Get OTP'}
                       <ArrowRight data-icon="inline-end" aria-hidden="true" />
@@ -665,7 +692,7 @@ export function LoginCard({
                     </p>
                   )}
 
-                  <p className="text-center text-xs leading-5 text-muted-foreground">
+                  <p className={cn(typography.bodyXs, 'text-center text-muted-foreground')}>
                     By continuing you agree to Tickif's{' '}
                     <Link
                       href="/company/terms"
@@ -719,7 +746,7 @@ export function LoginCard({
   }
 
   return (
-    <Card className="mx-auto w-full max-w-4xl gap-0 p-2 shadow-floating-card">
+    <Card className="relative mx-auto w-full max-w-4xl gap-0 p-2 shadow-floating-card">
       <div className="flex min-w-0 flex-col md:flex-row">
         <LoginWelcomePanel
           presentation={presentation}
