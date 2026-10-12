@@ -270,7 +270,9 @@ for (const viewport of [
       expect(icon).not.toBeNull();
       expect(icon!.x).toBeGreaterThanOrEqual(bounds!.x);
       expect(icon!.x + icon!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
-      expect(await tab.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await tab.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
       const action = page.getByRole('button', {
         name: mode === "I'm browsing" ? 'Get OTP' : 'Login',
         exact: true,
