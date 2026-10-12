@@ -68,7 +68,6 @@ for (const viewport of [
       const firstDigit = page.getByRole('textbox', { name: 'OTP digit 1', exact: true });
       await expect(firstDigit).toBeVisible();
       await firstDigit.fill(await phoneCode(phone));
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.getByRole('button', { name: '4 BHK+' }).click();

@@ -4,15 +4,27 @@ import { typography } from '@repo/ui/lib/typography';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Asterisk, Bookmark, Calendar, House, Mail, MessageSquare, Users, X } from 'lucide-react';
+import {
+  ArrowRight,
+  Bookmark,
+  Calendar,
+  House,
+  Mail,
+  MessageSquare,
+  Ruler,
+  Users,
+  X,
+} from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
+import type { FeedProject } from '@repo/contracts';
+import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
 import { Card } from '@repo/ui/components/card';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Separator } from '@repo/ui/components/separator';
-import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
 import { VisitorLoginContinuation } from '@/components/visitor-login-continuation';
 import { OtpInput } from '@/components/otp-input';
 import { OtpVerificationPanel } from '@/components/otp-verification-panel';
@@ -52,12 +64,11 @@ function GoogleSignInButton({
 }) {
   return (
     <Button
+      type="button"
       variant="outline"
+      size="lg"
       shape="rounded"
-      className={cn(
-        typography.labelLg,
-        'h-12 w-full cursor-pointer border-auth-field-border bg-card text-base shadow-(--auth-field-shadow) md:h-10 md:text-sm md:leading-[18px] md:tracking-[-0.002em]',
-      )}
+      className="w-full cursor-pointer border-auth-field-border bg-card shadow-(--auth-field-shadow)"
       disabled={loading}
       onClick={onClick}
     >
@@ -101,6 +112,89 @@ const designerFeatures = [
   { icon: Calendar, title: 'Turn visitors into clients' },
 ] as const;
 
+function LoginWelcomePanel({
+  presentation,
+  loginMode,
+  projects,
+}: {
+  presentation: 'default' | 'landing';
+  loginMode: LoginMode;
+  projects?: FeedProject[];
+}) {
+  const landing = presentation === 'landing';
+  const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
+  return (
+    <aside
+      data-slot="login-welcome"
+      className="relative flex w-full flex-col justify-between gap-6 overflow-hidden rounded-card bg-auth-welcome p-6 text-surface-inverse-foreground md:w-5/12 md:shrink-0 md:p-8"
+    >
+      <img
+        src="/ui/visitor-welcome/glow.svg"
+        alt=""
+        width={420}
+        height={420}
+        className="pointer-events-none absolute -left-40 -top-44"
+      />
+      <div className="relative flex flex-col gap-5">
+        <Badge
+          variant="outline"
+          className="w-fit gap-2 whitespace-normal border-transparent bg-primary/20 text-surface-inverse-foreground"
+        >
+          {landing ? (
+            <Bookmark className="size-3.5 shrink-0" aria-hidden="true" />
+          ) : (
+            <Users className="size-3.5 shrink-0" aria-hidden="true" />
+          )}
+          {landing ? 'Keep your favourite homes close' : 'Discover real homes and their designers'}
+        </Badge>
+        <div className="flex flex-col gap-3">
+          <h2 className="font-display text-2xl font-medium leading-tight tracking-tight md:text-section">
+            {landing ? 'Don’t lose the homes you lingered on' : 'Welcome to Tickif'}
+          </h2>
+          <p className="text-sm leading-relaxed text-surface-inverse-foreground/65">
+            {landing
+              ? 'Save homes you love and connect with their designers. Your next idea is worth keeping.'
+              : loginMode === 'designer'
+                ? 'One link to share your work, get discovered, and turn views into real enquiries.'
+                : 'Save the homes you love, discover the designers behind them, and enquire when you’re ready.'}
+          </p>
+        </div>
+        {landing && projects?.length ? (
+          <div className="hidden gap-2 md:flex" aria-label="Explore these published homes">
+            {projects.map((project) => (
+              <img
+                key={project.id}
+                src={project.coverImageUrl!}
+                alt={project.title}
+                width={80}
+                height={100}
+                loading="lazy"
+                className="h-24 min-w-0 flex-1 rounded-lg object-cover"
+              />
+            ))}
+          </div>
+        ) : !landing ? (
+          <ul className="hidden flex-col gap-5 md:flex">
+            {features.map(({ icon: Icon, title }) => (
+              <li
+                key={title}
+                data-testid={`feature-${title.toLowerCase().replace(/\s+/g, '-')}`}
+                className="flex items-center gap-3 text-sm"
+              >
+                <Icon className="size-4 shrink-0 text-primary-soft" aria-hidden="true" />
+                {title}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <p className="relative hidden text-xs leading-5 text-surface-inverse-foreground/65 md:block">
+        Explore published projects · Connect with designers
+      </p>
+    </aside>
+  );
+}
+
 export function LoginCard({
   presentation = 'default',
   initialMode = 'browsing',
@@ -118,6 +212,7 @@ export function LoginCard({
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
+  const verifyInFlight = useRef(false);
   const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
   const handleClose = onClose ?? (() => router.push('/'));
 
@@ -127,12 +222,6 @@ export function LoginCard({
   const [emailOtp, setEmailOtp] = useState<OtpDigits>(['', '', '', '', '', '']);
   const [emailCooldown, setEmailCooldown] = useState(0);
   const [emailMessage, setEmailMessage] = useState('');
-
-  const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
-  const promoSubtitle =
-    loginMode === 'designer'
-      ? 'One link to share your work, get discovered, and turn views into real enquiries.'
-      : 'Save the homes you love, message designers, and send enquiries directly.';
 
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;
@@ -203,18 +292,20 @@ export function LoginCard({
     }
   }
 
-  async function handleVerify() {
+  async function handleVerify(digits = code) {
+    if (verifyInFlight.current || loading) return;
     const fullPhone = toE164PhoneNumber(selectedCountry, phone);
     if (!fullPhone) {
       setError(`Enter a valid phone number for ${selectedCountry.name}`);
       return;
     }
-    const otp = code.join('');
+    const otp = digits.join('');
     if (otp.length !== 6) {
       setError('Enter the full 6-digit OTP');
       return;
     }
     setError('');
+    verifyInFlight.current = true;
     setLoading(true);
     try {
       const { error } = await authClient.phoneNumber.verify({ phoneNumber: fullPhone, code: otp });
@@ -228,6 +319,7 @@ export function LoginCard({
       setError(err instanceof Error ? err.message : 'Invalid or expired OTP');
       setCode(['', '', '', '', '', '']);
     } finally {
+      verifyInFlight.current = false;
       setLoading(false);
     }
   }
@@ -372,126 +464,9 @@ export function LoginCard({
 
   function renderPhoneStep() {
     return (
-      <div className="relative flex flex-col overflow-hidden md:flex-row">
-        {/* Left: Brand / Promo Panel */}
-        {presentation === 'landing' ? (
-          <div className="relative flex flex-col justify-between gap-3 overflow-hidden rounded-card bg-linear-to-br from-surface-inverse to-secondary-foreground p-5 text-surface-inverse-foreground md:w-[42%] md:shrink-0 md:gap-5 md:px-8 md:pb-7 md:pt-8 lg:w-[404px]">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -top-48 left-40 size-[420px] rounded-full bg-primary/10"
-            />
-            <p
-              className={cn(
-                typography.labelSm,
-                'relative flex w-fit items-center gap-2 rounded-full bg-primary/15 px-3 py-2 text-primary-soft',
-              )}
-            >
-              <Bookmark className="size-3.5" aria-hidden /> Keep your favourite homes close
-            </p>
-            <h2
-              className={cn(
-                typography.headingH2,
-                'relative text-2xl leading-7 md:text-[32px] md:leading-[38px]',
-              )}
-            >
-              Don’t lose the homes you lingered on
-            </h2>
-            {previewProjects?.length ? (
-              <div
-                className="relative hidden gap-2 md:flex"
-                aria-label="Explore these published homes"
-              >
-                {previewProjects.map((project) => (
-                  <img
-                    key={project.id}
-                    src={project.coverImageUrl!}
-                    alt={project.title}
-                    width={80}
-                    height={100}
-                    loading="lazy"
-                    className="h-[100px] min-w-0 flex-1 rounded-lg object-cover"
-                  />
-                ))}
-              </div>
-            ) : null}
-            <p className={cn(typography.bodySm, 'relative text-surface-inverse-foreground/75')}>
-              Save homes you love and connect with their designers. Your next idea is worth keeping.
-            </p>
-            <div
-              className={cn(
-                typography.monoXs,
-                'relative hidden border-t border-primary-soft/25 pt-3 uppercase text-primary-soft md:block',
-              )}
-            >
-              Save your favourites · Find your designer
-            </div>
-          </div>
-        ) : (
-          <div className="flex w-full flex-col justify-between gap-4 rounded-xl bg-auth-welcome px-5 py-5 text-surface-inverse-foreground md:my-1 md:ml-1 md:w-[315px] md:shrink-0 md:px-6 md:py-8">
-            <div className="flex flex-col gap-3 md:gap-5">
-              <div className="order-last flex w-fit items-center gap-1.5 text-primary-soft md:order-none md:rounded md:bg-success/10 md:px-2 md:py-0.5">
-                <Users className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className={typography.labelSm}>Discover real homes and their designers</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <h2
-                  className={cn(
-                    typography.headingH2,
-                    'pr-10 text-[28px] leading-8 md:pr-0 md:text-[32px] md:leading-[38px]',
-                  )}
-                >
-                  Welcome to Tickif
-                </h2>
-                <p
-                  className={cn(typography.bodySm, 'text-surface-inverse-foreground/75 md:hidden')}
-                >
-                  {loginMode === 'designer'
-                    ? 'Your work deserves to be discovered.'
-                    : 'Keep your favourite homes close.'}
-                </p>
-                <p
-                  className={cn(
-                    typography.bodySm,
-                    'hidden text-surface-inverse-foreground/75 md:block',
-                  )}
-                >
-                  {promoSubtitle}
-                </p>
-                <div className="mt-6 hidden flex-col gap-3 md:flex">
-                  {features.map((f) => {
-                    const Icon = f.icon;
-                    return (
-                      <div
-                        key={f.title}
-                        data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
-                        className="flex items-center gap-2.5"
-                      >
-                        <Icon className="size-4 shrink-0 text-primary-soft" aria-hidden="true" />
-                        <p className={typography.labelMd}>{f.title}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            <p
-              className={cn(
-                typography.body2xs,
-                'mt-6 hidden text-surface-inverse-foreground/75 md:block',
-              )}
-            >
-              Explore published projects · Connect with designers
-            </p>
-          </div>
-        )}
-
+      <>
         {/* Right: Form Panel */}
-        <div
-          className={cn(
-            'flex w-full min-w-0 flex-col px-5 py-5 md:flex-1 md:py-8',
-            presentation === 'landing' ? 'md:px-8 md:min-h-[460px]' : 'md:px-6',
-          )}
-        >
+        <div className="flex w-full min-w-0 flex-col p-5 sm:p-8 md:flex-1">
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -505,15 +480,12 @@ export function LoginCard({
                 ) : null}
               </div>
               <Button
+                type="button"
                 onClick={handleClose}
                 aria-label="Close"
                 variant="ghost"
                 size="icon"
-                className={cn(
-                  'size-11 shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground md:size-8',
-                  presentation === 'default' &&
-                    'absolute right-3 top-3 z-10 text-primary-soft hover:bg-surface-inverse hover:text-surface-inverse-foreground md:static md:z-auto md:text-muted-foreground md:hover:bg-accent md:hover:text-foreground',
-                )}
+                className="size-11 shrink-0 md:size-8"
               >
                 <X className="size-4" aria-hidden="true" />
               </Button>
@@ -523,209 +495,177 @@ export function LoginCard({
               <Tabs
                 defaultValue={initialMode}
                 value={loginMode}
-                className="w-full"
+                className="w-full gap-5"
                 onValueChange={(val) => setLoginMode(val as LoginMode)}
               >
-                <TabsList className="h-14 w-full rounded-lg p-1.5 md:h-11 [&>button]:rounded-md">
+                <TabsList className="grid w-full grid-cols-2 rounded-lg">
                   <TabsTrigger
                     value="browsing"
-                    className={cn(
-                      typography.labelMd,
-                      'min-w-0 flex-1 flex-col gap-1 px-2 focus-visible:ring-inset focus-visible:ring-offset-0 md:flex-row md:gap-1.5',
-                    )}
+                    className="min-w-0 gap-1.5 rounded-md px-1 text-xs sm:px-3 sm:text-sm"
                   >
                     <House className="size-4" aria-hidden="true" />
                     I'm browsing
                   </TabsTrigger>
                   <TabsTrigger
                     value="designer"
-                    className={cn(
-                      typography.labelMd,
-                      'min-w-0 flex-1 flex-col gap-1 px-2 focus-visible:ring-inset focus-visible:ring-offset-0 md:flex-row md:gap-1.5',
-                    )}
+                    className="min-w-0 gap-1.5 rounded-md px-1 text-xs sm:px-3 sm:text-sm"
                   >
-                    <Asterisk className="size-4" aria-hidden="true" />
+                    <Ruler className="size-4" aria-hidden="true" />
                     I'm a designer
                   </TabsTrigger>
                 </TabsList>
 
-                <div className="relative mt-4 w-full">
-                  <div>
-                    {/* ─── Browsing tab: Phone OTP ─── */}
-                    <div
-                      className={cn(
-                        'w-full flex-col gap-3',
-                        loginMode === 'browsing' ? 'flex' : 'hidden',
-                      )}
-                      hidden={loginMode !== 'browsing'}
-                      inert={loginMode !== 'browsing'}
-                      aria-hidden={loginMode !== 'browsing'}
-                    >
-                      <div className="flex flex-col gap-1.5">
-                        <PhoneNumberInput
-                          id="phone"
-                          phone={phone}
-                          selectedCountry={selectedCountry}
-                          onPhoneChange={(value) => {
-                            setPhone(value);
-                            setError('');
-                          }}
-                          onSelectedCountryChange={(country) => {
-                            setSelectedCountry(country);
-                            setError('');
-                          }}
-                          onEnter={handleSendOtp}
-                          placeholder={presentation === 'landing' ? 'Mobile number' : '9123456789'}
-                          disabled={loading}
-                          inputClassName={cn(typography.bodyMd, 'h-13 md:h-11 md:text-base')}
-                          wrapperClassName="rounded-lg border-auth-field-border bg-card shadow-(--auth-field-shadow)"
-                          countryButtonClassName="min-h-13 border-auth-field-divider bg-transparent text-base md:min-h-11 md:text-sm"
-                        />
-                      </div>
-
-                      <Button
-                        type="button"
-                        variant={presentation === 'landing' ? 'default' : 'fancy'}
-                        size="fancy"
-                        onClick={handleSendOtp}
-                        disabled={loading || !toE164PhoneNumber(selectedCountry, phone)}
-                        className={cn(
-                          typography.labelLg,
-                          'h-12 w-full cursor-pointer md:h-10',
-                          presentation === 'landing' && 'h-12 rounded-full',
-                        )}
-                      >
-                        {loading ? 'Sending…' : 'Get OTP'}
-                      </Button>
-                    </div>
-
-                    {/* ─── Designer tab: Google SSO + Email OTP ─── */}
-                    <div
-                      className={cn(
-                        'w-full flex-col gap-4',
-                        loginMode === 'designer' ? 'flex' : 'hidden',
-                      )}
-                      hidden={loginMode !== 'designer'}
-                      inert={loginMode !== 'designer'}
-                      aria-hidden={loginMode !== 'designer'}
-                    >
-                      <GoogleSignInButton
-                        label="Continue with Google"
-                        loading={loading}
-                        onClick={handleGoogleLogin}
+                <div className="flex min-w-0 flex-col gap-4">
+                  {/* ─── Browsing tab: Phone OTP ─── */}
+                  <TabsContent value="browsing" className="flex min-w-0 flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <PhoneNumberInput
+                        id="phone"
+                        phone={phone}
+                        selectedCountry={selectedCountry}
+                        onPhoneChange={(value) => {
+                          setPhone(value);
+                          setError('');
+                        }}
+                        onSelectedCountryChange={(country) => {
+                          setSelectedCountry(country);
+                          setError('');
+                        }}
+                        onEnter={handleSendOtp}
+                        placeholder={presentation === 'landing' ? 'Mobile number' : '9123456789'}
+                        disabled={loading}
+                        inputClassName={cn(typography.bodyMd, 'h-13 md:h-11 md:text-base')}
+                        wrapperClassName="rounded-lg border-auth-field-border bg-card shadow-(--auth-field-shadow)"
+                        countryButtonClassName="min-h-13 border-auth-field-divider bg-transparent text-base md:min-h-11 md:text-sm"
                       />
-
-                      <OrSeparator className="my-2" />
-
-                      {emailOtpStep === 'email' ? (
-                        <>
-                          <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="designer-email">Email</Label>
-                            <div className="relative">
-                              <Mail
-                                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                                aria-hidden="true"
-                              />
-                              <Input
-                                id="designer-email"
-                                type="email"
-                                value={designerEmail}
-                                onChange={(e) => {
-                                  setDesignerEmail(e.target.value);
-                                  setError('');
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleEmailOtpSend();
-                                }}
-                                placeholder="you@example.com"
-                                className={cn(
-                                  typography.bodyMd,
-                                  'h-13 border-auth-field-border pl-10 shadow-(--auth-field-shadow) hover:border-border-strong focus-visible:ring-inset focus-visible:ring-offset-0 md:h-10 md:text-base',
-                                )}
-                                disabled={loading}
-                                autoComplete="email"
-                              />
-                            </div>
-                          </div>
-
-                          <Button
-                            type="button"
-                            variant="fancy"
-                            size="fancy"
-                            className={cn(
-                              typography.labelLg,
-                              'h-12 w-full cursor-pointer text-base md:h-10 md:text-sm md:leading-[18px] md:tracking-[-0.002em]',
-                            )}
-                            disabled={loading || !designerEmail.trim()}
-                            onClick={handleEmailOtpSend}
-                          >
-                            {loading ? 'Sending…' : 'Login'}
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          {emailMessage && (
-                            <p className="rounded-md bg-green-50 p-2 text-center text-sm text-green-700">
-                              {emailMessage}
-                            </p>
-                          )}
-
-                          <OtpInput
-                            value={emailOtp}
-                            onChange={(v) => {
-                              setEmailOtp(v);
-                              setError('');
-                            }}
-                            onComplete={handleEmailOtpVerify}
-                            disabled={loading}
-                          />
-
-                          <Button
-                            type="button"
-                            variant="fancy"
-                            size="fancy"
-                            className={cn(
-                              typography.labelLg,
-                              'h-12 w-full cursor-pointer text-base md:h-10 md:text-sm md:leading-[18px] md:tracking-[-0.002em]',
-                            )}
-                            disabled={loading || emailOtp.some((d) => !d)}
-                            onClick={handleEmailOtpVerify}
-                          >
-                            {loading ? 'Verifying…' : 'Verify'}
-                          </Button>
-
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <button
-                              type="button"
-                              className="text-primary underline-offset-2 hover:underline"
-                              onClick={() => {
-                                setEmailOtpStep('email');
-                                setError('');
-                                setEmailMessage('');
-                                setEmailOtp(['', '', '', '', '', '']);
-                              }}
-                            >
-                              Change email
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleEmailOtpResend}
-                              disabled={emailCooldown > 0 || loading}
-                              className="underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
-                            >
-                              {emailCooldown > 0
-                                ? `Resend in ${formatTimer(emailCooldown)}`
-                                : 'Resend code'}
-                            </button>
-                          </div>
-                        </>
-                      )}
                     </div>
-                  </div>
 
-                  {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+                    <Button
+                      type="button"
+                      size="lg"
+                      onClick={handleSendOtp}
+                      disabled={loading || !toE164PhoneNumber(selectedCountry, phone)}
+                      className="w-full cursor-pointer"
+                    >
+                      {loading ? 'Sending…' : 'Get OTP'}
+                      <ArrowRight data-icon="inline-end" aria-hidden="true" />
+                    </Button>
+                  </TabsContent>
 
-                  <p className={cn(typography.bodyXs, 'mt-5 text-center text-muted-foreground')}>
+                  {/* ─── Designer tab: Google SSO + Email OTP ─── */}
+                  <TabsContent value="designer" className="flex min-w-0 flex-col gap-4">
+                    <GoogleSignInButton
+                      label="Continue with Google"
+                      loading={loading}
+                      onClick={handleGoogleLogin}
+                    />
+
+                    <OrSeparator className="my-2" />
+
+                    {emailOtpStep === 'email' ? (
+                      <>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="designer-email">Email</Label>
+                          <div className="relative">
+                            <Mail
+                              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                            <Input
+                              id="designer-email"
+                              type="email"
+                              value={designerEmail}
+                              onChange={(e) => {
+                                setDesignerEmail(e.target.value);
+                                setError('');
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleEmailOtpSend();
+                              }}
+                              placeholder="you@example.com"
+                              className="border-auth-field-border pl-10 shadow-(--auth-field-shadow) hover:border-auth-field-border focus-visible:ring-inset focus-visible:ring-offset-0"
+                              disabled={loading}
+                              autoComplete="email"
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="lg"
+                          className="w-full cursor-pointer"
+                          disabled={loading || !designerEmail.trim()}
+                          onClick={handleEmailOtpSend}
+                        >
+                          {loading ? 'Sending…' : 'Login'}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {emailMessage && (
+                          <p
+                            role="status"
+                            className="rounded-md bg-success-lighter p-2 text-center text-sm text-success"
+                          >
+                            {emailMessage}
+                          </p>
+                        )}
+
+                        <OtpInput
+                          value={emailOtp}
+                          onChange={(v) => {
+                            setEmailOtp(v);
+                            setError('');
+                          }}
+                          onComplete={handleEmailOtpVerify}
+                          disabled={loading}
+                        />
+
+                        <Button
+                          type="button"
+                          size="lg"
+                          className="w-full cursor-pointer"
+                          disabled={loading || emailOtp.some((d) => !d)}
+                          onClick={handleEmailOtpVerify}
+                        >
+                          {loading ? 'Verifying…' : 'Verify'}
+                        </Button>
+
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <button
+                            type="button"
+                            className="text-primary underline-offset-2 hover:underline"
+                            onClick={() => {
+                              setEmailOtpStep('email');
+                              setError('');
+                              setEmailMessage('');
+                              setEmailOtp(['', '', '', '', '', '']);
+                            }}
+                          >
+                            Change email
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleEmailOtpResend}
+                            disabled={emailCooldown > 0 || loading}
+                            className="underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
+                          >
+                            {emailCooldown > 0
+                              ? `Resend in ${formatTimer(emailCooldown)}`
+                              : 'Resend code'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </TabsContent>
+
+                  {error && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {error}
+                    </p>
+                  )}
+
+                  <p className="text-center text-xs leading-5 text-muted-foreground">
                     By continuing you agree to Tickif's{' '}
                     <Link
                       href="/company/terms"
@@ -751,7 +691,7 @@ export function LoginCard({
             </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -767,6 +707,8 @@ export function LoginCard({
         onVerify={handleVerify}
         onResend={handleResend}
         onCancel={handleCancelOtp}
+        onClose={handleClose}
+        presentation="login"
         loading={loading}
         resendDisabled={cooldown > 0}
         resendLabel={cooldown > 0 ? `Resend in ${formatTimer(cooldown)}` : 'Resend'}
@@ -777,17 +719,15 @@ export function LoginCard({
   }
 
   return (
-    <Card
-      className={cn(
-        'mx-auto w-full overflow-hidden',
-        step === 'otp'
-          ? 'max-w-[33.8125rem] shadow-xl'
-          : presentation === 'landing'
-            ? 'max-w-[862px] rounded-card p-2 shadow-floating-card'
-            : 'max-w-[760px]',
-      )}
-    >
-      {step === 'otp' ? renderOtpStep() : renderPhoneStep()}
+    <Card className="mx-auto w-full max-w-4xl gap-0 p-2 shadow-floating-card">
+      <div className="flex min-w-0 flex-col md:flex-row">
+        <LoginWelcomePanel
+          presentation={presentation}
+          loginMode={loginMode}
+          projects={previewProjects}
+        />
+        {step === 'otp' ? renderOtpStep() : renderPhoneStep()}
+      </div>
     </Card>
   );
 }

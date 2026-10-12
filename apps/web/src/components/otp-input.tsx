@@ -7,16 +7,22 @@ import { cn } from '@repo/ui/lib/utils';
 interface OtpInputProps {
   value: string[];
   onChange: (value: string[]) => void;
-  onComplete?: () => void;
+  onComplete?: (value: string[]) => void;
+  autoSubmit?: boolean;
+  ariaInvalid?: boolean;
+  ariaDescribedBy?: string;
   disabled?: boolean;
   length?: number;
-  variant?: 'default' | 'verification';
+  variant?: 'default' | 'verification' | 'login';
 }
 
 export function OtpInput({
   value,
   onChange,
   onComplete,
+  autoSubmit = false,
+  ariaInvalid,
+  ariaDescribedBy,
   disabled = false,
   length = 6,
   variant = 'default',
@@ -27,6 +33,17 @@ export function OtpInput({
     inputRefs.current[0]?.focus();
   }, []);
 
+  useEffect(() => {
+    if (!disabled && value.every((digit) => !digit)) inputRefs.current[0]?.focus();
+  }, [disabled, value]);
+
+  function updateValue(next: string[]) {
+    onChange(next);
+    if (autoSubmit && next.length === length && next.every((digit) => /^\d$/.test(digit))) {
+      onComplete?.(next);
+    }
+  }
+
   function handleChange(index: number, inputValue: string) {
     const digits = inputValue.replace(/\D/g, '');
 
@@ -34,9 +51,9 @@ export function OtpInput({
     if (digits.length > 1) {
       const next = [...value];
       for (let i = 0; i < length; i++) {
-        next[i] = digits[i] ?? next[i] ?? '';
+        next[i] = digits[i] ?? '';
       }
-      onChange(next);
+      updateValue(next);
       const focusIndex = Math.min(digits.length, length - 1);
       inputRefs.current[focusIndex]?.focus();
       return;
@@ -44,11 +61,11 @@ export function OtpInput({
 
     // Single digit typed
     const digit = digits.slice(0, 1);
-    if (digit && digit !== value[index]) {
+    if (digit !== value[index]) {
       const next = [...value];
       next[index] = digit;
-      onChange(next);
-      if (index < length - 1) {
+      updateValue(next);
+      if (digit && index < length - 1) {
         inputRefs.current[index + 1]?.focus();
       }
     }
@@ -62,7 +79,7 @@ export function OtpInput({
     for (let i = 0; i < length; i++) {
       next[i] = pasted[i] ?? '';
     }
-    onChange(next);
+    updateValue(next);
     const focusIndex = Math.min(pasted.length, length - 1);
     inputRefs.current[focusIndex]?.focus();
   }
@@ -81,8 +98,12 @@ export function OtpInput({
       }
       return;
     }
-    if (e.key === 'Enter' && value.every((d) => d)) {
-      onComplete?.();
+    if (
+      e.key === 'Enter' &&
+      value.length === length &&
+      value.every((digit) => /^\d$/.test(digit))
+    ) {
+      onComplete?.(value);
     }
   }
 
@@ -90,7 +111,11 @@ export function OtpInput({
     <div
       className={cn(
         'flex w-full justify-center',
-        variant === 'verification' ? 'gap-2.5' : 'gap-1.5 px-2',
+        variant === 'verification'
+          ? 'gap-2.5'
+          : variant === 'login'
+            ? 'gap-1.5 sm:gap-2.5'
+            : 'gap-1.5 px-2',
       )}
     >
       {Array.from({ length }, (_, i) => (
@@ -104,6 +129,8 @@ export function OtpInput({
           maxLength={length}
           value={value[i] ?? ''}
           aria-label={`OTP digit ${i + 1}`}
+          aria-invalid={ariaInvalid || undefined}
+          aria-describedby={ariaDescribedBy}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
@@ -112,7 +139,10 @@ export function OtpInput({
             'min-w-0 flex-1 text-center font-medium',
             variant === 'verification'
               ? 'h-18 rounded-xl px-2 py-5 font-display text-2xl leading-8 focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 focus-visible:ring-offset-0'
-              : 'h-12 rounded-lg text-xl',
+              : variant === 'login'
+                ? 'h-14 rounded-lg px-1 font-display text-2xl sm:h-16 focus-visible:ring-offset-0'
+                : 'h-12 rounded-lg text-xl',
+            variant === 'login' && value[i] && 'bg-secondary/40',
           )}
           disabled={disabled}
           autoComplete="one-time-code"

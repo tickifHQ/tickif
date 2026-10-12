@@ -31,6 +31,28 @@ vi.mock('@/lib/auth-client', () => ({
 }));
 
 describe('LoginCard', () => {
+  it('keeps only the active tab panel in layout so the card hugs its content', async () => {
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+    expect(screen.queryByPlaceholderText('you@example.com')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+    expect(screen.queryByRole('textbox', { name: /phone/i })).not.toBeInTheDocument();
+  });
+
+  it('retains the welcome panel through phone verification and permits editing the number', async () => {
+    mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
+    expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
+    expect(screen.getByText('We sent a 6-digit code to')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit phone number' }));
+    expect(screen.getByRole('textbox', { name: /phone/i })).toHaveValue('9876543210');
+  });
+
   it('keeps the landing login connected to OTP without invented counts or reviews', () => {
     render(<LoginCard presentation="landing" />);
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
@@ -61,9 +83,8 @@ describe('LoginCard', () => {
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Get OTP' })).toHaveClass(
-      'bg-button-fancy',
-      'text-button-fancy-foreground',
-      'shadow-button-fancy',
+      'bg-primary',
+      'text-primary-foreground',
     );
   });
 
@@ -123,7 +144,7 @@ describe('LoginCard', () => {
     expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
     const browsingPanel = screen
       .getByRole('button', { name: 'Get OTP' })
-      .closest('[aria-hidden="false"]');
+      .closest('[role="tabpanel"]');
     expect(browsingPanel).not.toBeNull();
     expect(within(browsingPanel as HTMLElement).queryByText('OR')).not.toBeInTheDocument();
     expect(screen.getByText(/By continuing you agree/)).toHaveTextContent(
@@ -152,9 +173,8 @@ describe('LoginCard', () => {
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Login$/i })).toHaveClass(
-      'bg-button-fancy',
-      'text-button-fancy-foreground',
-      'shadow-button-fancy',
+      'bg-primary',
+      'text-primary-foreground',
     );
   });
 
@@ -301,7 +321,7 @@ describe('LoginCard', () => {
       const verification = screen.getByTestId('phone-otp-verification');
       const digitInputs = screen.getAllByRole('textbox');
 
-      expect(verification.querySelector('.lucide-badge-check')).toBeInTheDocument();
+      expect(verification.querySelector('.lucide-shield-check')).toBeInTheDocument();
       expect(verification.querySelector('.lucide-mail')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Close verification' })).toBeInTheDocument();
       expect(
@@ -314,19 +334,19 @@ describe('LoginCard', () => {
       ).toBeInTheDocument();
       expect(digitInputs).toHaveLength(6);
       digitInputs.forEach((input) => {
-        expect(input).toHaveClass('h-18', 'rounded-xl', 'font-display', 'text-2xl');
+        expect(input).toHaveClass('h-14', 'sm:h-16', 'rounded-lg', 'font-display', 'text-2xl');
       });
     });
 
-    it('returns to the phone form from the verification close button', async () => {
+    it('closes the modal from the verification close button', async () => {
       const user = userEvent.setup();
-      render(<LoginCard />);
+      const onClose = vi.fn();
+      render(<LoginCard onClose={onClose} />);
       await goToOtpStep(user);
 
       await user.click(screen.getByRole('button', { name: 'Close verification' }));
 
-      expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
-      expect(screen.queryByTestId('phone-otp-verification')).not.toBeInTheDocument();
+      expect(onClose).toHaveBeenCalledOnce();
     });
 
     it('shows the sent phone number', async () => {
@@ -349,8 +369,7 @@ describe('LoginCard', () => {
       render(<LoginCard />);
       await goToOtpStep(user);
       await fillOtp(user, '123456');
-      await user.click(screen.getByRole('button', { name: 'Continue' }));
-      expect(screen.getByText('Signed in')).toBeInTheDocument();
+      expect(await screen.findByText('Signed in')).toBeInTheDocument();
       expect(mock.router.replace).not.toHaveBeenCalled();
     });
 
@@ -363,8 +382,56 @@ describe('LoginCard', () => {
       render(<LoginCard />);
       await goToOtpStep(user);
       await fillOtp(user, '123456');
-      await user.click(screen.getByRole('button', { name: 'Continue' }));
-      expect(screen.getByText('Invalid or expired OTP')).toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Invalid or expired OTP');
+      expect(
+        screen.getAllByRole('textbox').every((input) => (input as HTMLInputElement).value === ''),
+      ).toBe(true);
+    });
+
+    it('allows a fresh six-digit retry after a verification network failure', async () => {
+      mock.verify.mockRejectedValueOnce(new Error('Connection lost'));
+      mock.verify.mockResolvedValueOnce({ data: null, error: null });
+      const onSuccess = vi.fn();
+      const user = userEvent.setup();
+      render(<LoginCard onSuccess={onSuccess} />);
+      await goToOtpStep(user);
+      await fillOtp(user, '123456');
+      expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost');
+      expect(screen.getAllByRole('textbox')[0]).toHaveAttribute('aria-invalid', 'true');
+      await fillOtp(user, '654321');
+      await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+      expect(mock.verify).toHaveBeenLastCalledWith({
+        phoneNumber: '+919876543210',
+        code: '654321',
+      });
+    });
+
+    it('does not submit twice while automatic verification is pending', async () => {
+      let finish!: (result: { data: null; error: null }) => void;
+      mock.verify.mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      );
+      const onSuccess = vi.fn();
+      const user = userEvent.setup();
+      render(<LoginCard onSuccess={onSuccess} />);
+      await goToOtpStep(user);
+      await fillOtp(user, '123456');
+      expect(screen.getByRole('button', { name: 'Verifying…' })).toBeDisabled();
+      await user.keyboard('{Enter}');
+      expect(mock.verify).toHaveBeenCalledOnce();
+      finish({ data: null, error: null });
+      await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    });
+
+    it('keeps resend disabled during the cooldown and describes the real expiry', async () => {
+      const user = userEvent.setup();
+      render(<LoginCard />);
+      await goToOtpStep(user);
+      expect(screen.getByRole('button', { name: /Resend in/ })).toBeDisabled();
+      expect(screen.getByText(/Codes expire in 5 minutes/)).toBeInTheDocument();
+      expect(screen.queryByText(/SMS instead/)).not.toBeInTheDocument();
     });
 
     it('hides browsing form during OTP step', async () => {
@@ -376,11 +443,11 @@ describe('LoginCard', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('returns to phone step on Cancel click', async () => {
+    it('returns to phone step on Edit click', async () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await user.click(screen.getByRole('button', { name: 'Edit phone number' }));
       expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
     });
 
@@ -391,8 +458,7 @@ describe('LoginCard', () => {
       render(<LoginCard onSuccess={onSuccess} />);
       await goToOtpStep(user);
       await fillOtp(user, '123456');
-      await user.click(screen.getByRole('button', { name: 'Continue' }));
-      expect(onSuccess).toHaveBeenCalled();
+      await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
     });
   });
 });
