@@ -524,7 +524,7 @@ export function LoginCard({
                     value="browsing"
                     className={cn(
                       typography.labelMd,
-                      'min-h-12 min-w-0 gap-1.5 rounded-md px-1 text-xs/4.5 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-3 sm:text-sm/4.5 md:min-h-0',
+                      'min-h-12 min-w-0 flex-col gap-1 rounded-md px-1 text-xs/4.5 focus-visible:ring-inset focus-visible:ring-offset-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm/4.5 md:min-h-0',
                     )}
                   >
                     <House className="size-4" aria-hidden="true" />
@@ -534,7 +534,7 @@ export function LoginCard({
                     value="designer"
                     className={cn(
                       typography.labelMd,
-                      'min-h-12 min-w-0 gap-1.5 rounded-md px-1 text-xs/4.5 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-3 sm:text-sm/4.5 md:min-h-0',
+                      'min-h-12 min-w-0 flex-col gap-1 rounded-md px-1 text-xs/4.5 focus-visible:ring-inset focus-visible:ring-offset-0 sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm/4.5 md:min-h-0',
                     )}
                   >
                     <Ruler className="size-4" aria-hidden="true" />
