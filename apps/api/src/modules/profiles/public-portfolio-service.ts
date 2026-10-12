@@ -109,6 +109,19 @@ function groupExperienceCenters(
     }));
 }
 
+function googleActionsFor(
+  placeId: string | null | undefined,
+  query: string,
+): PublicPortfolioResponse['googleActions'] {
+  if (!placeId) return null;
+  const encodedPlaceId = encodeURIComponent(placeId);
+  const encodedQuery = encodeURIComponent(query);
+  return {
+    readAllUrl: `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${encodedPlaceId}`,
+    writeReviewUrl: `https://search.google.com/local/writereview?placeid=${encodedPlaceId}`,
+  };
+}
+
 export const publicPortfolioService = {
   /**
    * GET /api/portfolios/{slug} — the public portfolio page payload.
@@ -241,6 +254,10 @@ export const publicPortfolioService = {
           }
         : { websiteUrl: null, instagramHandle: null, linkedinHandle: null, youtubeHandle: null },
       testimonial,
+      googleActions: googleActionsFor(
+        google?.summary.placeId,
+        [profile.displayName, allCities[0]].filter(Boolean).join(', '),
+      ),
       reviewVisibility: {
         tickif: {
           reviews: tickifSettings.showReviews,

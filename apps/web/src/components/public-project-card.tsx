@@ -2,8 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { DesignerProjectCard } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
-import { cn } from '@repo/ui/lib/utils';
-import { Star } from 'lucide-react';
+import { ArrowUpRight, Bookmark, Star } from 'lucide-react';
 import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
 import { ProjectViewCount } from '@/components/project-view-count';
 
@@ -19,12 +18,14 @@ export function PublicProjectCard({
   presentation = 'portfolio',
   destination = 'image',
   showRating = false,
+  fallbackBudgetLabel = null,
 }: {
   project: DesignerProjectCard;
   studioName: string;
   presentation?: 'portfolio' | 'recommendation';
   destination?: 'image' | 'project';
   showRating?: boolean;
+  fallbackBudgetLabel?: string | null;
 }) {
   const location = [project.locality, project.city]
     .filter((part): part is string => !!part)
@@ -38,17 +39,60 @@ export function PublicProjectCard({
     presentation === 'recommendation'
       ? [project.bhk, project.theme].filter((value): value is string => Boolean(value)).join(' · ')
       : project.propertyType;
-  const budget = project.budget ? formatCompactBudgetLabel(project.budget) : null;
+  const budget = project.budget ? formatCompactBudgetLabel(project.budget) : fallbackBudgetLabel;
+
+  if (presentation === 'portfolio') {
+    const portfolioMeta = [
+      project.bhk ?? project.propertyType,
+      project.locality ?? project.city,
+      project.sizeSqft != null ? `${project.sizeSqft.toLocaleString('en-IN')} sq ft` : null,
+      project.completionYear,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    return (
+      <article className="profile-project-card">
+        <Link href={href} className="group block" aria-label={`View ${project.title}`}>
+          <div className="profile-project-media">
+            {project.coverImageUrl ? (
+              <Image
+                src={project.coverImageUrl}
+                alt={`${project.title} by ${studioName}`}
+                fill
+                unoptimized
+                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              />
+            ) : null}
+            {budget ? <span className="profile-project-budget">{budget}</span> : null}
+            <span className="profile-project-save" aria-hidden="true">
+              <Bookmark className="size-4" />
+            </span>
+            <span className="profile-project-caption">
+              <span className="min-w-0">
+                <h3 className="profile-project-title">{project.title}</h3>
+                {portfolioMeta ? (
+                  <span className="profile-project-meta">{portfolioMeta}</span>
+                ) : null}
+              </span>
+              <span className="profile-project-go" aria-hidden="true">
+                <ArrowUpRight className="size-4" />
+              </span>
+            </span>
+          </div>
+        </Link>
+        <div className="mt-3 flex">
+          <ProjectViewCount projectId={project.id} />
+        </div>
+      </article>
+    );
+  }
 
   return (
-    <article className={cn(presentation === 'portfolio' && 'profile-project-card')}>
+    <article>
       <Link href={href} className="group block">
-        <div
-          className={cn(
-            'relative overflow-hidden bg-muted',
-            presentation === 'portfolio' ? 'aspect-4/3 rounded-xl' : 'aspect-4/5 rounded-sm',
-          )}
-        >
+        <div className="relative aspect-4/5 overflow-hidden rounded-sm bg-muted">
           {project.coverImageUrl ? (
             <Image
               src={project.coverImageUrl}
@@ -60,11 +104,11 @@ export function PublicProjectCard({
               className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
             />
           ) : null}
-          {project.completionYear && presentation !== 'portfolio' ? (
+          {project.completionYear ? (
             <Badge
               variant="inverse"
               shape="square"
-              size={presentation === 'recommendation' ? 'compact' : 'default'}
+              size="compact"
               textStyle="code"
               className="absolute left-3 top-3"
             >
@@ -85,52 +129,21 @@ export function PublicProjectCard({
             </Badge>
           ) : null}
         </div>
-        <div className={cn('px-0.5', presentation === 'recommendation' ? 'pt-4' : 'pt-3.5')}>
-          {metadata && presentation !== 'portfolio' ? (
+        <div className="px-0.5 pt-4">
+          {metadata ? (
             <p
-              className={cn(
-                'font-mono tracking-widest text-muted-foreground uppercase',
-                presentation === 'recommendation' ? 'text-2xs' : 'text-xs',
-              )}
+              className="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
             >
               {metadata}
             </p>
           ) : null}
           <div className="flex items-baseline justify-between gap-3">
-            <h3
-              className={cn(
-                'text-lg font-medium',
-                presentation === 'recommendation' ? 'mt-1.5 leading-relaxed' : 'mt-1',
-              )}
-            >
+            <h3 className="mt-1.5 text-lg leading-relaxed font-medium">
               {project.title}
             </h3>
-            {presentation === 'portfolio' && project.completionYear ? (
-              <span className="shrink-0 text-sm text-muted-foreground">
-                {project.completionYear}
-              </span>
-            ) : null}
           </div>
-          {presentation === 'portfolio' ? (
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              {[
-                project.bhk ?? project.propertyType,
-                location,
-                project.sizeSqft != null
-                  ? `${project.sizeSqft.toLocaleString('en-IN')} sq ft`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          ) : null}
-          <div
-            className={cn(
-              'mt-1 flex items-start justify-between gap-4 text-sm text-muted-foreground',
-              presentation === 'recommendation' && 'font-medium leading-none',
-            )}
-          >
-            {presentation !== 'portfolio' && location ? <p>{location}</p> : <span />}
+          <div className="mt-1 flex items-start justify-between gap-4 text-sm leading-none font-medium text-muted-foreground">
+            {location ? <p>{location}</p> : <span />}
             {budget ? <p className="shrink-0 text-right">{budget}</p> : null}
           </div>
         </div>

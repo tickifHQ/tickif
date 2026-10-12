@@ -3,10 +3,10 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import type { ExperienceCenter, PublicPortfolioResponse } from '@repo/contracts';
-import { MapPin, Navigation, Phone, MessageSquare } from 'lucide-react';
+import { CalendarDays, Clock3, MapPin, Star } from 'lucide-react';
 import { GoogleMapEmbed, googleMapEmbedUrl } from '@repo/ui/components/google-map-embed';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@repo/ui/components/tabs';
-import { EnquiryCta } from '@/components/enquiry-cta';
+import { formatRating } from '@/lib/public-portfolio-view';
 
 function mapsLink(centre: ExperienceCenter) {
   if (googleMapEmbedUrl(centre.mapsUrl)) {
@@ -28,7 +28,6 @@ function mapsLink(centre: ExperienceCenter) {
 export function ProfileExperienceCentres({
   centres,
   portfolio,
-  loginHref,
 }: {
   centres: ExperienceCenter[];
   portfolio: PublicPortfolioResponse;
@@ -38,14 +37,12 @@ export function ProfileExperienceCentres({
   const centre = centres[Number(selected)];
   if (!centre) return null;
   const mapsHref = mapsLink(centre);
-  const phone = centre.phone?.trim();
-  const digits = phone?.replace(/\D/g, '');
-  const callHref = digits ? `tel:${phone?.startsWith('+') ? '+' : ''}${digits}` : null;
   const preview =
     portfolio.heroCoverUrl ??
     portfolio.projects.projects.find((project) => project.coverImageUrl)?.coverImageUrl;
-  const location = [centre.city, centre.state].filter(Boolean).join(', ');
   const states = [...new Set(centres.map((item) => item.state))];
+  const googleRating = portfolio.stats.google;
+  const centreTitle = `${portfolio.displayName} Experience Centre`;
 
   return (
     <Tabs
@@ -110,84 +107,59 @@ export function ProfileExperienceCentres({
               unoptimized
               className="h-full w-full object-cover"
             />
-            <figcaption>Studio portfolio</figcaption>
           </figure>
         ) : null}
         <header className="profile-centre-heading">
-          <h3>{centre.name}</h3>
-          <p>
-            {location}
-            {centre.postalCode ? ` · ${centre.postalCode}` : ''}
+          <h3>{centreTitle}</h3>
+          <p>{[centre.city, centre.state].filter(Boolean).join(', ')}</p>
+          {googleRating && googleRating.reviewCount > 0 ? (
+            <div className="profile-centre-rating">
+              <strong>{formatRating(googleRating.rating)}</strong>
+              <span aria-label={`${formatRating(googleRating.rating)} out of 5`}>
+                {Array.from({ length: 5 }, (_, index) => (
+                  <Star
+                    key={index}
+                    aria-hidden="true"
+                    className={index < Math.round(googleRating.rating) ? 'is-filled' : undefined}
+                  />
+                ))}
+              </span>
+              <em>({googleRating.reviewCount})</em>
+              <i aria-hidden="true">·</i>
+              <b>Interior design showroom</b>
+            </div>
+          ) : null}
+          <p className="profile-centre-hours">
+            Open <span>· Closes 7 pm</span>
           </p>
         </header>
-        <Tabs key={selected} defaultValue="overview" className="profile-centre-content">
-          <TabsList
-            variant="line"
-            aria-label="Centre information"
-            className="profile-centre-detail-tabs"
-          >
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            {portfolio.bio ? <TabsTrigger value="about">About the studio</TabsTrigger> : null}
-          </TabsList>
-          <TabsContent value="overview">
-            <div className="profile-centre-detail-row">
-              <MapPin className="size-5 shrink-0" aria-hidden="true" />
+        <div className="profile-centre-content">
+          <div className="profile-centre-detail-row">
+            <MapPin className="size-5 shrink-0" aria-hidden="true" />
+            {mapsHref ? (
+              <a href={mapsHref} target="_blank" rel="noopener noreferrer nofollow">
+                {centre.address}
+                {centre.postalCode ? <span className="block">{centre.postalCode}</span> : null}
+              </a>
+            ) : (
               <address className="not-italic">
                 {centre.address}
                 {centre.postalCode ? <span className="block">{centre.postalCode}</span> : null}
               </address>
-            </div>
-            {callHref && phone ? (
-              <div className="profile-centre-detail-row">
-                <Phone className="size-5 shrink-0" aria-hidden="true" />
-                <a href={callHref} className="break-all underline-offset-4 hover:underline">
-                  {phone}
-                </a>
-              </div>
-            ) : null}
-            {mapsHref ? (
-              <div className="profile-centre-detail-row">
-                <Navigation className="size-5 shrink-0" aria-hidden="true" />
-                <a
-                  href={mapsHref}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Open in Maps
-                </a>
-              </div>
-            ) : null}
-            <div className="profile-centre-detail-row">
-              <MessageSquare className="size-5 shrink-0" aria-hidden="true" />
-              <div>
-                <p>Ask the studio about visiting</p>
-                <EnquiryCta
-                  context={{
-                    type: 'designer',
-                    designerName: portfolio.displayName,
-                    designerLocation: location,
-                    designerLogoUrl: portfolio.logoUrl,
-                  }}
-                  designerProfileId={portfolio.profileId}
-                  loginHref={loginHref}
-                  variant="link"
-                  className="h-auto justify-start p-0"
-                >
-                  Enquire →
-                </EnquiryCta>
-              </div>
-            </div>
-          </TabsContent>
-          {portfolio.bio ? (
-            <TabsContent
-              value="about"
-              className="px-[22px] py-5 text-sm leading-relaxed whitespace-pre-wrap break-words"
-            >
-              {portfolio.bio}
-            </TabsContent>
-          ) : null}
-        </Tabs>
+            )}
+          </div>
+          <div className="profile-centre-detail-row">
+            <Clock3 className="size-5 shrink-0" aria-hidden="true" />
+            <p>
+              <strong>Open</strong>
+              <span> · Closes 7 pm</span>
+            </p>
+          </div>
+          <div className="profile-centre-detail-row">
+            <CalendarDays className="size-5 shrink-0" aria-hidden="true" />
+            <p>Visits by appointment</p>
+          </div>
+        </div>
       </aside>
     </Tabs>
   );
