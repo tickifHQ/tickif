@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { savedProjectStateSchema, savedProjectsStateResponseSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
-import { Bookmark, Check, Share2 } from 'lucide-react';
+import { Bookmark, BookmarkCheck, BookmarkOff, Check, Share2 } from 'lucide-react';
+import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -19,7 +20,7 @@ export function ProjectActions({
   projectId: string;
   loginHref: string;
   canonicalUrl: string;
-  presentation?: 'default' | 'save';
+  presentation?: 'default' | 'save' | 'visitor-save';
 }) {
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const hydrated = useHydrated();
@@ -119,14 +120,22 @@ export function ProjectActions({
 
   const saveLabel = isSaved ? 'Remove saved project' : 'Save project';
 
-  if (presentation === 'save')
+  const visitorSave = presentation === 'visitor-save';
+  if (presentation === 'save' || visitorSave)
     return (
-      <div className="relative">
+      <div className={cn('relative', visitorSave && 'pointer-events-none')}>
         <Button
           type="button"
-          variant={isSaved ? 'default' : 'neutral'}
-          size="icon"
-          className="size-9 rounded-full bg-card text-foreground shadow-sm"
+          variant={visitorSave ? 'project-save' : isSaved ? 'default' : 'neutral'}
+          size={visitorSave ? 'project-save' : 'icon'}
+          className={cn(
+            visitorSave
+              ? 'group/save pointer-events-auto'
+              : 'size-9 rounded-full bg-card text-foreground shadow-sm',
+            visitorSave &&
+              !isSaved &&
+              '[@media(hover:hover)_and_(pointer:fine)]:pointer-events-none [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:pointer-events-auto [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:pointer-events-auto [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus-visible:pointer-events-auto [@media(hover:hover)_and_(pointer:fine)]:focus-visible:opacity-100',
+          )}
           aria-label={
             !hydrated || isSessionPending
               ? 'Save project'
@@ -135,22 +144,63 @@ export function ProjectActions({
                 : saveLabel
           }
           aria-pressed={isSaved}
+          aria-busy={isSaving}
           disabled={!hydrated || isSessionPending || isSaveStateLoading || isSaving}
           onClick={() => (session ? void toggleSaved() : setLoginOpen(true))}
         >
-          <img
-            src="/images/landing/bookmarks.svg"
-            alt=""
-            className="dark:brightness-0 dark:invert"
-          />
-          {isSaved ? (
+          {visitorSave && isSaved ? (
+            <>
+              <span aria-hidden className="grid">
+                <BookmarkCheck
+                  aria-hidden
+                  data-icon="inline-start"
+                  className="col-start-1 row-start-1 group-hover/save:invisible group-focus-visible/save:invisible"
+                />
+                <BookmarkOff
+                  aria-hidden
+                  data-icon="inline-start"
+                  className="invisible col-start-1 row-start-1 group-hover/save:visible group-focus-visible/save:visible"
+                />
+              </span>
+              <span aria-hidden>
+                <span className="group-hover/save:hidden group-focus-visible/save:hidden">
+                  Saved
+                </span>
+                <span className="hidden group-hover/save:inline group-focus-visible/save:inline">
+                  Unsave
+                </span>
+              </span>
+            </>
+          ) : (
+            <>
+              {visitorSave ? (
+                <>
+                  <span aria-hidden data-slot="project-save-icon">
+                    <span data-slot="project-save-icon-motion">
+                      <Bookmark aria-hidden data-icon="inline-start" />
+                    </span>
+                  </span>
+                  <span aria-hidden data-slot="project-save-label">
+                    Save
+                  </span>
+                </>
+              ) : (
+                <Bookmark
+                  aria-hidden
+                  data-icon="inline-start"
+                  fill={isSaved ? 'currentColor' : 'none'}
+                />
+              )}
+            </>
+          )}
+          {!visitorSave && isSaved ? (
             <span className="absolute -right-1 -top-1 size-3 rounded-full bg-primary" aria-hidden />
           ) : null}
         </Button>
         {saveError ? (
           <p
             role="status"
-            className="absolute right-0 top-full z-10 mt-2 w-48 rounded-lg bg-card p-3 text-xs text-destructive shadow-sm"
+            className="absolute right-0 top-full z-10 mt-2 w-48 max-w-[calc(100cqw-(var(--spacing)*5))] rounded-lg bg-card p-3 text-xs text-destructive shadow-sm"
           >
             {saveError}
           </p>

@@ -14,6 +14,7 @@ import {
   type NormalizedFeedItem,
 } from './mapper.js';
 import { projectsRepository } from '../projects/repository.js';
+import { withPublicStudioLogos } from '../projects/public-studio-logos.js';
 import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
 import type { DiscoveryFeedFilters } from './constants.js';
 import { denseFacetDistribution } from './facets.js';
@@ -71,7 +72,9 @@ async function toCards(items: NormalizedFeedItem[]) {
     projectsRepository.findTaxonomyLabels(collectTaxonomyPairs(items)),
     projectsRepository.findLocalityLabels(localityPairs),
   ]);
-  return Promise.all(items.map((item) => toDiscoveryCard(item, labels, localityLabels)));
+  return withPublicStudioLogos(
+    await Promise.all(items.map((item) => toDiscoveryCard(item, labels, localityLabels))),
+  );
 }
 
 async function normalizePostgresRows(
@@ -119,6 +122,7 @@ export function logFallbackEvent(reason: string, context: { sort: string }): voi
 
 interface DiscoveryService {
   getFeed(query: DiscoveryFeedQuery): Promise<DiscoveryFeedResponse>;
+  getFollowingFeed(userId: string, query: DiscoveryFeedQuery): Promise<DiscoveryFeedResponse>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,6 +130,32 @@ interface DiscoveryService {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const discoveryService: DiscoveryService = {
+  /** Account scope is mandatory and never relaxed into public discovery results. */
+  async getFollowingFeed(userId, query) {
+    const { sort, page, limit, q, ...filters } = query;
+    const [result, vocabulary, facetCounts] = await Promise.all([
+      discoveryRepository.listFeedFallback({
+        followedByUserId: userId,
+        q,
+        filterBy: filters,
+        sortBy: SORT_POSTGRES[sort],
+        limit: limit + 1,
+        offset: (page - 1) * limit,
+      }),
+      discoveryRepository.listFacetVocabulary(),
+      discoveryRepository.countFeedFacets(filters, q, userId),
+    ]);
+    return {
+      items: await toCards(await normalizePostgresRows(result.rows.slice(0, limit))),
+      page,
+      limit,
+      hasMore: result.rows.length > limit,
+      source: 'db',
+      facetDistribution: denseFacetDistribution(vocabulary, facetCounts),
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+  },
   /**
    * Get the discovery feed with automatic fallback from Typesense to Postgres.
    *

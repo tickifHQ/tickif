@@ -381,6 +381,13 @@ function feedProjectColumns<TAlias extends string>(
   };
 }
 
+const publicStudioIsVerified = sql<boolean>`exists (
+  select 1 from ${schema.verificationApplication}
+  where ${schema.verificationApplication.organizationId} = ${schema.designerProfile.orgId}
+    and ${schema.verificationApplication.status} = ${VERIFICATION_APPLICATION_STATUS.VERIFIED}
+    and ${schema.verificationApplication.expiresAt} > now()
+)`;
+
 /** Shared joined projection for every public project-detail entry point. */
 const publicProjectReadColumns = {
   project: schema.project,
@@ -396,12 +403,7 @@ const publicProjectReadColumns = {
   designerFirmType: schema.designerProfile.firmType,
   designerFoundedYear: schema.designerProfile.foundedYear,
   designerYearsExperience: schema.designerProfile.yearsExperience,
-  designerIsKycVerified: sql<boolean>`exists (
-    select 1 from ${schema.verificationApplication}
-    where ${schema.verificationApplication.organizationId} = ${schema.designerProfile.orgId}
-      and ${schema.verificationApplication.status} = ${VERIFICATION_APPLICATION_STATUS.VERIFIED}
-      and ${schema.verificationApplication.expiresAt} > now()
-  )`,
+  designerIsKycVerified: publicStudioIsVerified,
 };
 
 export type DuplicateProjectParams = {
@@ -426,6 +428,38 @@ function escapeLikePattern(value: string): string {
 }
 
 export const projectsRepository = {
+  async findPublicStudioVerification(projectIds: string[]): Promise<Map<string, boolean>> {
+    if (projectIds.length === 0) return new Map();
+    const rows = await db
+      .select({ projectId: schema.project.id, verified: publicStudioIsVerified })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .where(
+        and(
+          inArray(schema.project.id, [...new Set(projectIds)]),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      );
+    return new Map(rows.map((row) => [row.projectId, row.verified]));
+  },
+  /** Batch public-only identity media; never resolve an unpublished/inactive studio's logo. */
+  async findPublicStudioLogoKeys(projectIds: string[]): Promise<Map<string, string>> {
+    if (projectIds.length === 0) return new Map();
+    const rows = await db
+      .select({ projectId: schema.project.id, key: schema.designerProfile.logoImageId })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .where(
+        and(
+          inArray(schema.project.id, [...new Set(projectIds)]),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+          isNotNull(schema.designerProfile.logoImageId),
+        ),
+      );
+    return new Map(rows.flatMap((row) => (row.key ? [[row.projectId, row.key] as const] : [])));
+  },
   async findLiveByIdWithRooms(
     id: string,
   ): Promise<{ project: ProjectRecord; rooms: ProjectRoomRecord[] } | null> {
@@ -712,10 +746,38 @@ export const projectsRepository = {
     );
   },
 
+  async findPublicEnquiryCovers(projectIds: string[]) {
+    if (!projectIds.length) return [];
+    return db
+      .select({
+        projectId: schema.project.id,
+        status: schema.projectImage.status,
+        derivatives: schema.projectImage.derivatives,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(
+        schema.projectImage,
+        and(
+          eq(schema.project.coverImageId, schema.projectImage.id),
+          eq(schema.projectImage.isLive, true),
+          eq(schema.projectImage.projectId, schema.project.id),
+        ),
+      )
+      .where(
+        and(
+          inArray(schema.project.id, projectIds),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      );
+  },
+
   /**
    * Batch-resolve display labels for non-hierarchical taxonomy pairs (city, budget_band,
-   * bhk, scope, property_subtype — unique by `(kind, slug)`). Filters `is_active` so the
-   * public feed hides retired terms, matching the taxonomy module's read policy. Localities
+   * bhk, scope, property_subtype — unique by `(kind, slug)`). Retired budget bands
+   * retain their saved display labels; all other kinds must be active. Selection
+   * endpoints and new budget assignments remain active-only. Localities
    * are NOT resolvable here (slug is only unique within a parent city) — use
    * `findLocalityLabels`. Keyed `${kind}:${slug}`; unresolved pairs are simply absent.
    */
@@ -733,7 +795,7 @@ export const projectsRepository = {
       .from(schema.taxonomy)
       .where(
         and(
-          eq(schema.taxonomy.isActive, true),
+          or(eq(schema.taxonomy.isActive, true), eq(schema.taxonomy.kind, 'budget_band')),
           or(
             ...unique.map((p) =>
               and(eq(schema.taxonomy.kind, p.kind), eq(schema.taxonomy.slug, p.slug)),
@@ -1540,6 +1602,7 @@ export const projectsRepository = {
   async taxonomyExists(
     kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
     value: { id: string } | { slug: string },
+    options: { activeOnly?: boolean } = {},
   ): Promise<boolean> {
     const where =
       'id' in value
@@ -1548,7 +1611,7 @@ export const projectsRepository = {
     const [row] = await db
       .select({ id: schema.taxonomy.id })
       .from(schema.taxonomy)
-      .where(where)
+      .where(and(where, options.activeOnly ? eq(schema.taxonomy.isActive, true) : undefined))
       .limit(1);
     return !!row;
   },

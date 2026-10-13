@@ -1,11 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { Badge } from '@repo/ui/components/badge';
+import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+import { InitialsAvatar } from '@/components/initials-avatar';
 import { cn } from '@repo/ui/lib/utils';
 import { typography } from '@repo/ui/lib/typography';
 import type { FeedProject } from '@repo/contracts';
 import { ProjectActions } from '@/components/project-actions';
 import { formatCompactBudgetLabel } from '../lib/format-budget-label';
+import { BadgeCheck } from 'lucide-react';
 
 const FALLBACK_WIDTH = 480;
 const FALLBACK_HEIGHT = 600;
@@ -22,8 +27,9 @@ export function ShowcaseCard({
 }: {
   project: FeedProject;
   priority?: boolean;
-  presentation?: 'default' | 'landing';
+  presentation?: 'default' | 'landing' | 'visitor';
 }) {
+  const compact = presentation !== 'default';
   const { imageWidth, imageHeight } = project;
   const hasImageDimensions =
     imageWidth !== null && imageWidth > 0 && imageHeight !== null && imageHeight > 0;
@@ -31,21 +37,35 @@ export function ShowcaseCard({
   const placeholderHeight = hasImageDimensions ? imageHeight : FALLBACK_HEIGHT;
   const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
-  const budgetLabel = project.budget ? formatCompactBudgetLabel(project.budget) : null;
+  const budgetLabel = project.budget?.trim()
+    ? formatCompactBudgetLabel(project.budget.trim())
+    : null;
 
   return (
     <article
-      className={`group @container relative break-inside-avoid ${presentation === 'landing' ? 'mb-6' : 'mb-4 overflow-hidden rounded-xl bg-muted'}`}
+      className={cn(
+        'group @container relative break-inside-avoid',
+        compact ? 'mb-6' : 'mb-4 overflow-hidden rounded-xl bg-muted',
+      )}
     >
       <Link href={href} className="block">
         <div
           className={
-            presentation === 'landing'
-              ? 'relative h-[240px] overflow-hidden rounded-2xl bg-muted ring-1 ring-inset ring-border sm:h-[285px]'
-              : ''
+            presentation === 'visitor'
+              ? 'relative aspect-4/5 overflow-hidden rounded-2xl bg-muted ring-1 ring-inset ring-border'
+              : presentation === 'landing'
+                ? 'relative h-[240px] overflow-hidden rounded-2xl bg-muted ring-1 ring-inset ring-border sm:h-[285px]'
+                : ''
           }
         >
-          {project.coverImageUrl ? (
+          {presentation === 'visitor' ? (
+            <VisitorCover
+              key={project.coverImageUrl}
+              project={project}
+              priority={priority}
+              budgetLabel={budgetLabel}
+            />
+          ) : project.coverImageUrl ? (
             <img
               src={project.coverImageUrl}
               alt={project.title}
@@ -82,7 +102,7 @@ export function ShowcaseCard({
             </div>
           )}
 
-          {budgetLabel ? (
+          {budgetLabel && presentation !== 'visitor' ? (
             <span
               className={
                 presentation === 'landing'
@@ -97,9 +117,15 @@ export function ShowcaseCard({
             </span>
           ) : null}
         </div>
-        {presentation === 'landing' ? (
+        {compact ? (
           <div className="mt-2 space-y-1 px-0.5">
-            <h3 className={cn(typography.labelMd, 'truncate text-xs @min-[14rem]:text-sm')}>
+            <h3
+              className={cn(
+                typography.labelMd,
+                'truncate',
+                presentation === 'landing' && 'text-xs @min-[14rem]:text-sm',
+              )}
+            >
               {project.title}
             </h3>
             <div
@@ -108,8 +134,36 @@ export function ShowcaseCard({
                 'flex min-w-0 items-center gap-1.5 text-muted-foreground',
               )}
             >
+              {presentation === 'visitor' ? (
+                <>
+                  <DesignerLogoAvatar
+                    logoUrl={project.studioLogoUrl}
+                    alt=""
+                    sizePx={18}
+                    className="size-4.5"
+                    fallback={
+                      <InitialsAvatar
+                        seed={project.studio}
+                        fallbackSeed="Studio"
+                        alt=""
+                        size={18}
+                      />
+                    }
+                  />
+                  <span className="truncate">{project.studio}</span>
+                  {project.studioIsVerified === true ? (
+                    <BadgeCheck
+                      role="img"
+                      aria-label="Verified studio"
+                      className="size-3.5 shrink-0 fill-primary text-primary-foreground"
+                    />
+                  ) : null}
+                </>
+              ) : null}
               {location ? (
-                <span className="truncate text-foreground-subtle">{location}</span>
+                <span className="truncate text-muted-foreground">
+                  {presentation === 'visitor' ? `· ${project.locality || project.city}` : location}
+                </span>
               ) : null}
             </div>
           </div>
@@ -126,16 +180,90 @@ export function ShowcaseCard({
           </div>
         )}
       </Link>
-      {presentation === 'landing' ? (
-        <div className="absolute right-2.5 top-2.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+      {compact ? (
+        <div
+          className={cn(
+            'absolute right-2.5 top-2.5',
+            presentation === 'visitor' && 'pointer-events-none',
+            presentation !== 'visitor' &&
+              'opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100',
+          )}
+        >
           <ProjectActions
             projectId={project.id}
             loginHref={`/login?callbackURL=${encodeURIComponent(href)}`}
             canonicalUrl={href}
-            presentation="save"
+            presentation={presentation === 'visitor' ? 'visitor-save' : 'save'}
           />
         </div>
       ) : null}
     </article>
+  );
+}
+
+function VisitorCover({
+  project,
+  priority,
+  budgetLabel,
+}: {
+  project: FeedProject;
+  priority: boolean;
+  budgetLabel: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showImage = !!project.coverImageUrl && !failed;
+  return (
+    <>
+      {!showImage ? (
+        <div
+          role="img"
+          aria-label={`${project.title} image unavailable`}
+          className="grid size-full place-items-center bg-muted p-4 text-center text-xs text-muted-foreground"
+        >
+          Image coming soon
+        </div>
+      ) : (
+        <img
+          src={project.coverImageUrl ?? undefined}
+          alt={project.title}
+          width={project.imageWidth || FALLBACK_WIDTH}
+          height={project.imageHeight || FALLBACK_HEIGHT}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
+          decoding="async"
+          draggable={false}
+          className="h-full w-full select-none object-cover"
+          onError={() => setFailed(true)}
+          onContextMenu={(event) => event.preventDefault()}
+        />
+      )}
+      <div
+        data-slot="project-media-footer"
+        className="pointer-events-none absolute inset-x-2.5 bottom-2.5 flex flex-wrap items-end justify-between gap-x-2 gap-y-1"
+      >
+        {budgetLabel ? (
+          <Badge
+            variant="project-budget"
+            size="media"
+            title={budgetLabel}
+            className="max-w-full truncate"
+          >
+            {budgetLabel}
+          </Badge>
+        ) : null}
+        {showImage ? (
+          <span
+            aria-hidden="true"
+            data-slot="project-watermark"
+            className={cn(
+              typography.monoXs,
+              'pointer-events-none ml-auto select-none text-project-watermark opacity-[var(--project-watermark-opacity)] [text-shadow:var(--project-watermark-shadow)]',
+            )}
+          >
+            TICKIF
+          </span>
+        ) : null}
+      </div>
+    </>
   );
 }

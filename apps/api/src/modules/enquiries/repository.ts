@@ -1,9 +1,11 @@
 import { and, db, desc, eq, schema, sql } from '@repo/db';
-import type { EnquiryStatus } from '@repo/contracts';
+import type { EnquiryCounts, EnquiryStatus } from '@repo/contracts';
 
 export type EnquiryRecord = typeof schema.enquiry.$inferSelect;
 
 export type EnquiryViewRecord = EnquiryRecord & {
+  readThrough: string;
+  hasUnreadActivity: boolean;
   designerDisplayName: string;
   designerLogoImageId: string | null;
   designerAddress: string | null;
@@ -55,6 +57,13 @@ function enquiryViewQuery() {
       timeline: schema.enquiry.timeline,
       status: schema.enquiry.status,
       leadId: schema.enquiry.leadId,
+      viewedAt: schema.enquiry.viewedAt,
+      contactedAt: schema.enquiry.contactedAt,
+      lastMessageAt: schema.enquiry.lastMessageAt,
+      activityReadAt: schema.enquiry.activityReadAt,
+      // PostgreSQL microseconds must survive the JavaScript Date boundary.
+      readThrough: sql<string>`to_char(greatest(${schema.enquiry.createdAt}, ${schema.enquiry.viewedAt}, ${schema.enquiry.lastMessageAt}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+      hasUnreadActivity: sql<boolean>`${schema.enquiry.activityReadAt} is null or greatest(${schema.enquiry.createdAt}, ${schema.enquiry.viewedAt}, ${schema.enquiry.lastMessageAt}) > ${schema.enquiry.activityReadAt}`,
       createdAt: schema.enquiry.createdAt,
       updatedAt: schema.enquiry.updatedAt,
       designerDisplayName: schema.designerProfile.displayName,
@@ -71,6 +80,16 @@ function enquiryViewQuery() {
 }
 
 export const enquiriesRepository = {
+  async counts(requesterId: string): Promise<EnquiryCounts> {
+    const [counts] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        unread: sql<number>`count(*) filter (where ${schema.enquiry.activityReadAt} is null or greatest(${schema.enquiry.createdAt}, ${schema.enquiry.viewedAt}, ${schema.enquiry.lastMessageAt}) > ${schema.enquiry.activityReadAt})::int`,
+      })
+      .from(schema.enquiry)
+      .where(eq(schema.enquiry.requesterId, requesterId));
+    return counts ?? { total: 0, unread: 0 };
+  },
   async findById(id: string): Promise<EnquiryViewRecord | null> {
     const [row] = await enquiryViewQuery().where(eq(schema.enquiry.id, id)).limit(1);
     return row ?? null;
@@ -135,7 +154,10 @@ export const enquiriesRepository = {
     const [items, [count]] = await Promise.all([
       enquiryViewQuery()
         .where(where)
-        .orderBy(desc(schema.enquiry.createdAt), desc(schema.enquiry.id))
+        .orderBy(
+          sql`greatest(${schema.enquiry.createdAt}, ${schema.enquiry.viewedAt}, ${schema.enquiry.lastMessageAt}) desc`,
+          desc(schema.enquiry.id),
+        )
         .limit(params.limit)
         .offset(params.offset),
       db

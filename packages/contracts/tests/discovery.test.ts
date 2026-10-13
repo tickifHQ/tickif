@@ -24,6 +24,21 @@ const card = {
 };
 
 describe('discovery contracts', () => {
+  it('accepts explicit studio verification and older cards, without coercing trust claims', () => {
+    for (const studioIsVerified of [true, false])
+      expect(feedProjectSchema.safeParse({ ...card, studioIsVerified }).success).toBe(true);
+    expect(feedProjectSchema.safeParse(card).success).toBe(true);
+    expect(feedProjectSchema.safeParse({ ...card, studioIsVerified: 'true' }).success).toBe(false);
+  });
+  it('supports public studio logos while accepting older cached cards', () => {
+    expect(
+      feedProjectSchema.safeParse({ ...card, studioLogoUrl: 'https://media.example/logo.png' })
+        .success,
+    ).toBe(true);
+    expect(feedProjectSchema.safeParse({ ...card, studioLogoUrl: null }).success).toBe(true);
+    expect(feedProjectSchema.safeParse(card).success).toBe(true);
+    expect(feedProjectSchema.safeParse({ ...card, studioLogoUrl: 'invalid' }).success).toBe(false);
+  });
   it('uses the canonical public project card schema', () => {
     expect(discoveryCardSchema).toBe(feedProjectSchema);
     expect(discoveryCardSchema.safeParse(card).success).toBe(true);

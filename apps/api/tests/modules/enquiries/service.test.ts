@@ -7,6 +7,7 @@ vi.mock('../../../src/modules/enquiries/repository.js', () => ({
     findDesignerEligibility: vi.fn(),
     list: vi.fn(),
     createWithLead: vi.fn(),
+    counts: vi.fn(),
   },
 }));
 
@@ -21,6 +22,20 @@ const caller = {
 };
 
 const designerProfileId = '22222222-2222-4222-8222-222222222222';
+
+describe('enquiriesService.counts', () => {
+  it('uses only the authenticated requester for counts', async () => {
+    vi.mocked(enquiriesRepository.counts).mockResolvedValue({ total: 21, unread: 4 });
+    expect(await enquiriesService.counts(caller)).toEqual({ total: 21, unread: 4 });
+    expect(enquiriesRepository.counts).toHaveBeenCalledWith(caller.userId);
+  });
+  it('never reads counts for a suspended caller', async () => {
+    await expect(enquiriesService.counts({ ...caller, isBanned: true })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(enquiriesRepository.counts).not.toHaveBeenCalled();
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

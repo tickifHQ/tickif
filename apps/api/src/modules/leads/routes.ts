@@ -9,6 +9,11 @@ import {
   listLeadsQuerySchema,
   listLeadsResponseSchema,
   updateLeadSchema,
+  enquiryThreadSchema,
+  enquiryMessageSchema,
+  enquiryMessagesQuerySchema,
+  enquiryActivityResultSchema,
+  sendEnquiryMessageSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireOrganizationContext } from '../../lib/auth-middleware.js';
@@ -138,6 +143,65 @@ const updateRoute = createRoute({
   },
 });
 
+const viewedRoute = createRoute({
+  method: 'post',
+  path: '/{id}/viewed',
+  tags: ['Leads'],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireOrganizationContext] as const,
+  request: { params: leadIdParamSchema },
+  responses: {
+    200: {
+      description: 'Enquiry viewed',
+      content: { 'application/json': { schema: enquiryActivityResultSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Forbidden'),
+    404: errorJson('Lead not found'),
+    422: errorJson('Select a branch'),
+  },
+});
+const messagesRoute = createRoute({
+  method: 'get',
+  path: '/{id}/messages',
+  tags: ['Leads'],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireOrganizationContext] as const,
+  request: { params: leadIdParamSchema, query: enquiryMessagesQuerySchema },
+  responses: {
+    200: {
+      description: 'Studio enquiry thread',
+      content: { 'application/json': { schema: enquiryThreadSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Forbidden'),
+    404: errorJson('Lead not found'),
+    422: errorJson('Select a branch'),
+  },
+});
+const messageRoute = createRoute({
+  method: 'post',
+  path: '/{id}/messages',
+  tags: ['Leads'],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireOrganizationContext] as const,
+  request: {
+    params: leadIdParamSchema,
+    body: { content: { 'application/json': { schema: sendEnquiryMessageSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Studio message sent',
+      content: { 'application/json': { schema: enquiryMessageSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Forbidden'),
+    404: errorJson('Enquiry not found'),
+    409: errorJson('Closed enquiry or idempotency conflict'),
+    422: errorJson('Invalid message or branch'),
+  },
+});
+
 export const leadsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -166,6 +230,34 @@ export const leadsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const { id } = c.req.valid('param');
     const result = await leadsService.getById(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 200);
+  })
+  .openapi(viewedRoute, async (c) =>
+    c.json(
+      await leadsService.viewed(c.req.valid('param').id, caller(c.get('user'), c.get('session'))),
+      200,
+    ),
+  )
+  .openapi(messagesRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      await leadsService.messages(
+        c.req.valid('param').id,
+        c.req.valid('query'),
+        caller(c.get('user'), c.get('session')),
+      ),
+      200,
+    );
+  })
+  .openapi(messageRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      await leadsService.message(
+        c.req.valid('param').id,
+        c.req.valid('json'),
+        caller(c.get('user'), c.get('session')),
+      ),
+      200,
+    );
   })
   .openapi(updateRoute, async (c) => {
     const { id } = c.req.valid('param');

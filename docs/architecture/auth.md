@@ -8,7 +8,13 @@ and mounted into the API. We do not hand-roll sessions, OTP, or OAuth.
 The shared `AccountMenu` is used by public, personal, designer and admin headers.
 It follows Figma nodes `16123:68132` (menu) and `16123:68176` (logout confirmation)
 in file `WJhOguDptAwt2735BS2WMG`, retaining the existing role/context settings links.
-The unsupported Boards and Following entries are omitted. Active customers get
+Boards and Following menu entries remain omitted. Visitor home now has a separate
+following rail, a real-count Following feed tab and `/home/following` surface;
+see [ADR 0011](../adr/0011-visitor-following-and-enquiry-milestones.md).
+The whole Boards capability, including its Save to board picker, is explicitly
+deferred from the visitor home revamp. The existing flat saved-project flow
+remains in scope; see [ADR 0014](../adr/0014-visitor-boards-deferral.md).
+Active customers get
 Saved projects and Enquiries with real counts; only personal visitors get My home
 profile. Phone numbers are masked, phone-auth placeholder names use the safe
 Account label, generated phone-auth email addresses are never displayed, and
@@ -301,9 +307,30 @@ cache behavior, error handling, and preview-count limitations.
 Phone sign-in keeps pending personal visitors in the welcome dialog. Direct
 `/onboarding` visits render the same home/location form. Save and Skip both
 complete onboarding before resuming an explicit callback or entering `/home`.
-Active visitors can reopen `/onboarding` to edit their preferences. Bare `/home`
+Active visitors edit preferences in an in-page customization dialog. Bare `/home`
 resolves saved defaults into an explicit filter URL; `feed=custom` keeps a cleared
 or edited feed from silently reapplying those defaults.
+
+The signed-in `/home` discovery composition follows Figma `16123:62324`. It
+reuses public search/filter/feed controls with a visitor presentation, real
+account activity and the existing similar-project API. Independent private reads
+are uncached, cookie-scoped and partially recoverable. Following uses a private
+session-scoped Postgres feed with shared discovery mapping, filters and scoped
+facets; public discovery remains session-independent. Unsupported Figma trust,
+sponsorship and phone-call tracking claims remain omitted. See the
+[visitor feed guide](../guides/visitor-feed-preferences.md) for URL semantics,
+recommendation placement and supported/unsupported surfaces.
+
+Saving personal account settings refetches Better Auth through the `useSession`
+hook with `disableCookieCache: true`, then refreshes the server-rendered page.
+The hook updates the shared reactive session used by header labels and initials
+avatars; an imperative `getSession` read alone does not update those consumers.
+The name persists through the existing revision-checked personal-account API,
+without changing sign-in identifiers, account scope or authentication policy.
+The display-name editor treats the generated phone-OTP name as unset, using the
+same identity helper as the account menu. Real names remain editable. The sign-in
+phone is shown separately as read-only account information, never submitted with
+personal-detail edits. A visitor must enter a valid name before saving changes.
 
 ### Public sign-in presentation
 

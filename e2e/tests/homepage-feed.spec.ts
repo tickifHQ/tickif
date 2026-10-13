@@ -26,7 +26,7 @@ const projectDocuments: ProjectSearchDocument[] = Array.from(
     propertySubtypeSlug: null,
     scopeSlug: 'full-home',
     bhkSlug: '3-bhk',
-    budgetBandSlug: '15l-35l',
+    budgetBandSlug: 'upscale',
     sizeSqft: 1200,
     themes: ['modern'],
     materials: [],

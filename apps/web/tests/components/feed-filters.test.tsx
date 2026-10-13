@@ -14,6 +14,153 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('FeedFilters', () => {
+  it('clears visitor criteria without escaping the private Following scope', () => {
+    mock.params = new URLSearchParams('view=following&q=teak&city=chennai&page=2');
+    render(<FeedFilters presentation="visitor" />);
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filters/ }), { button: 0 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Clear all' }));
+    expect(mock.push).toHaveBeenLastCalledWith('/?view=following&q=teak');
+  });
+  it.each([
+    { label: 'right', x: 260, expected: 60 },
+    { label: 'left', x: 60, expected: -40 },
+    { label: 'already visible', x: 150, expected: 0 },
+  ])('reveals a $label focused visitor category within its own rail', ({ x, expected }) => {
+    render(
+      <FeedFilters
+        presentation="visitor"
+        options={{ room: [{ slug: 'living-room', label: 'Living room' }] }}
+      />,
+    );
+    const rail = screen.getByRole('group', { name: 'Feed categories' });
+    const category = screen.getByRole('button', { name: 'Living rooms' });
+    vi.spyOn(rail, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 0, 200, 46));
+    vi.spyOn(category, 'getBoundingClientRect').mockReturnValue(new DOMRect(x, 0, 100, 38));
+    rail.scrollLeft = 100;
+    fireEvent.focus(category);
+    expect(rail.scrollLeft).toBe(100 + expected);
+    expect(mock.push).not.toHaveBeenCalled();
+  });
+
+  it('scrolls only visitor photo chips while keeping feed views, divider and the reused Filters control outside', () => {
+    mock.params = new URLSearchParams('city=chennai&room=living-room');
+    render(
+      <FeedFilters
+        presentation="visitor"
+        options={{ room: [{ slug: 'living-room', label: 'Living room' }] }}
+      />,
+    );
+    const rail = screen.getByRole('group', { name: 'Feed categories' });
+    expect(rail).toHaveClass('overflow-x-auto', 'overscroll-x-contain');
+    const filters = screen.getByRole('button', { name: /^Filters/ });
+    expect(rail).not.toContainElement(filters);
+    expect(rail).not.toContainElement(screen.getByRole('button', { name: 'For you' }));
+    expect(filters.querySelector('svg.lucide-sliders-horizontal')).not.toBeNull();
+    expect(screen.queryByLabelText('Applied filters')).toBeNull();
+    const living = screen.getByRole('button', { name: 'Living rooms' });
+    expect(living).toHaveClass('h-9.5', 'pl-1', 'pr-3.5', 'bg-card');
+    expect(living).toHaveAttribute('aria-pressed', 'true');
+    expect(living.querySelector('img')).toHaveAttribute('src', '/images/landing/filter-living.png');
+    expect(
+      screen.getByRole('group', { name: 'Feed views' }).querySelector('[data-slot=separator]'),
+    ).toHaveAttribute('data-orientation', 'vertical');
+  });
+
+  it('keeps For you compact and keyboard accessible when no categories are available', () => {
+    render(<FeedFilters presentation="visitor" forYouActive />);
+    const forYou = screen.getByRole('button', { name: 'For you' });
+    expect(forYou).toHaveClass('h-9.5', 'px-3.5');
+    expect(forYou).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('group', { name: 'Feed views' }).querySelector('[data-slot=separator]'),
+    ).toBeNull();
+  });
+
+  it('reuses the multi-select dropdown in the visitor view and clears its view mode without dropping search', async () => {
+    mock.params = new URLSearchParams('city=chennai&view=nearby&q=teak');
+    render(
+      <FeedFilters
+        presentation="visitor"
+        options={{
+          city: [{ slug: 'chennai', label: 'Chennai' }],
+          material: [{ slug: 'wood', label: 'Wood' }],
+        }}
+        facetDistribution={{ materials: { wood: 3 } }}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filters/ }), { button: 0 });
+    fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'Material' }), {
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Wood/ }));
+    expect(mock.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Apply/ }));
+    expect(mock.push).toHaveBeenLastCalledWith('/?view=nearby&q=teak&city=chennai&material=wood');
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filters/ }), { button: 0 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Clear all' }));
+    expect(mock.push).toHaveBeenLastCalledWith('/?q=teak');
+  });
+
+  it('deselects a visitor category without losing the query, home or location filters', () => {
+    mock.params = new URLSearchParams('q=teak&city=chennai&bhk=3-bhk&room=living-room&page=3');
+    render(
+      <FeedFilters
+        presentation="visitor"
+        options={{ room: [{ slug: 'living-room', label: 'Living room' }] }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Living rooms' }));
+    expect(mock.push).toHaveBeenCalledWith('/?q=teak&city=chennai&bhk=3-bhk');
+  });
+  it('groups only known under-10L budget bands and never includes a crossing range', () => {
+    mock.params = new URLSearchParams({ city: 'chennai', room: 'living-room' });
+    render(
+      <FeedFilters
+        presentation="visitor"
+        options={{
+          budgetBand: [
+            { slug: 'budget', label: 'Under ₹5L' },
+            { slug: '5l-10l', label: '₹5L - ₹10L' },
+            { slug: 'moderate', label: '₹5L - ₹15L' },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Under ₹10L' }));
+    expect(mock.push).toHaveBeenCalledWith('/?city=chennai&budgetBand=budget%2C5l-10l');
+  });
+  it('restores the saved feed through For you and keeps additional views outside the chip scroller', () => {
+    render(
+      <FeedFilters
+        presentation="visitor"
+        forYouActive
+        leadingActions={<a href="/home?feed=custom&view=following">Following 2</a>}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'For you' }));
+    expect(mock.push).toHaveBeenCalledWith('/home');
+    expect(screen.getByRole('group', { name: 'Feed categories' })).not.toContainElement(
+      screen.getByRole('link', { name: 'Following 2' }),
+    );
+  });
+  it('switches visitor categories exclusively while keeping home and location filters', () => {
+    mock.params = new URLSearchParams({
+      city: 'chennai',
+      bhk: '3-bhk',
+      budgetBand: 'budget,5l-10l',
+      view: 'nearby',
+    });
+    render(
+      <FeedFilters
+        presentation="visitor"
+        options={{ room: [{ slug: 'modular-kitchen', label: 'Kitchen' }] }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchens' }));
+    expect(mock.push).toHaveBeenCalledWith(
+      '/?view=nearby&city=chennai&bhk=3-bhk&room=modular-kitchen',
+    );
+  });
   it('keeps landing room categories in design order with thumbnails, even when empty', () => {
     render(
       <FeedFilters
@@ -65,10 +212,10 @@ describe('FeedFilters', () => {
     });
     fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /3 BHK/ }));
 
-    expect(screen.getByRole('button', { name: /Apply/ })).toHaveTextContent('(2)');
+    expect(screen.getByRole('menuitem', { name: /Apply/ })).toHaveTextContent('(2)');
     expect(mock.push).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Apply/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Apply/ }));
     expect(mock.push).toHaveBeenCalledWith('/?city=mumbai&bhk=3bhk');
   });
 
@@ -89,7 +236,7 @@ describe('FeedFilters', () => {
     fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'City' }), {
       pointerType: 'mouse',
     });
-    expect(screen.getByRole('button', { name: 'Apply' })).not.toHaveTextContent('(0)');
+    expect(screen.getByRole('menuitem', { name: 'Apply' })).not.toHaveTextContent('(0)');
     expect(await screen.findByRole('menuitemcheckbox', { name: /Mumbai/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
@@ -200,7 +347,7 @@ describe('FeedFilters', () => {
       pointerType: 'mouse',
     });
     fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Sunlit/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Apply/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Apply/ }));
 
     expect(mock.push).toHaveBeenCalledWith('/?tag=sunlit');
   });

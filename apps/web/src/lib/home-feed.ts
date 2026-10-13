@@ -13,6 +13,7 @@ import {
 } from '@/lib/feed-params';
 
 export type HomeFeedRequest = {
+  scope?: 'following';
   filters: FeedFilterState;
   query: string;
   sort?: 'recent' | 'featured';
@@ -34,6 +35,8 @@ type SearchLabelMaps = Pick<
  */
 type HomeFeedFetchOptions = {
   searchLabels?: SearchLabelMaps | Promise<SearchLabelMaps>;
+  /** Server-only forwarding; never serialized into HomeFeedRequest. */
+  cookie?: string;
 };
 
 /**
@@ -70,6 +73,30 @@ export async function fetchHomeFeedPage(
 ): Promise<HomeFeedPage> {
   const limit = HOME_FEED_PAGE_SIZE;
 
+  if (request.scope === 'following') {
+    const response = await api.api.following.feed.$get(
+      {
+        query: {
+          sort: request.sort ?? 'recent',
+          page,
+          limit,
+          ...(request.query ? { q: request.query } : {}),
+          ...toDiscoveryFeedFilters(request.filters),
+        },
+      },
+      {
+        init: {
+          cache: 'no-store',
+          ...(options.cookie !== undefined ? { headers: { cookie: options.cookie } } : {}),
+        },
+      },
+    );
+    if (!response.ok) throw new Error(`Following request failed with status ${response.status}.`);
+    const parsed = discoveryFeedResponseSchema.safeParse(await response.json());
+    if (!parsed.success) throw new Error('Following returned an invalid response.');
+    return parsed.data;
+  }
+
   if (request.query) {
     const responsePromise = api.api.search.$get(
       {
@@ -100,13 +127,18 @@ export async function fetchHomeFeedPage(
         slug: hit.slug,
         title: hit.title,
         studio: hit.designerName,
+        studioLogoUrl: hit.studioLogoUrl ?? null,
+        studioIsVerified: hit.studioIsVerified === true,
         city: labelFromSlug(hit.citySlug, labels.cityLabelsBySlug) ?? hit.cityName ?? null,
         // Localities are not a homepage facet, so there is no label map to consult.
         locality: labelFromSlug(hit.localitySlug),
         // Search documents carry no aggregate rating; the card hides a zero-review score.
         rating: 0,
         reviewCount: 0,
-        budget: labelFromSlug(hit.budgetBandSlug, labels.budgetLabelsBySlug),
+        budget:
+          hit.budgetBandLabel !== undefined
+            ? hit.budgetBandLabel
+            : (hit.budgetBandSlug && labels.budgetLabelsBySlug?.[hit.budgetBandSlug]) || null,
         tags: [
           labelFromSlug(hit.bhkSlug, labels.bhkLabelsBySlug),
           ...hit.themes.map((theme) => labelFromSlug(theme, labels.themeLabelsBySlug)),

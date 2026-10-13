@@ -2,6 +2,7 @@ import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 import { cn } from '../lib/utils';
+import { typography } from '../lib/typography';
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap py-0 text-sm leading-none font-medium transition-[color,background-color,border-color,box-shadow,transform] active:translate-y-px motion-reduce:transform-none motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*="size-"])]:size-4 [&_svg]:shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
@@ -22,17 +23,35 @@ const buttonVariants = cva(
         outline: 'border border-border-strong bg-transparent text-foreground hover:bg-muted',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
+        'discovery-tab':
+          'text-foreground hover:bg-accent aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:bg-foreground/90 aria-[current=page]:bg-foreground aria-[current=page]:text-background aria-[current=page]:hover:bg-foreground/90',
+        'discovery-category':
+          'border border-foreground/10 bg-card text-foreground hover:bg-accent aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background aria-pressed:hover:bg-foreground/90',
+        'project-save':
+          'project-save-control relative overflow-hidden bg-project-save text-project-save-foreground shadow-button-neutral focus-visible:ring-inset aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:shadow-none aria-pressed:hover:bg-primary-hover',
         link: 'text-primary underline-offset-4 hover:underline',
+        'muted-link': 'text-muted-foreground underline underline-offset-4 hover:text-foreground',
       },
       size: {
         default: 'h-11 px-5',
-        compact: 'h-8 gap-1.5 px-2.5 text-[13px]/none [&_svg]:size-[15px]',
-        fancy: 'h-10 gap-1 px-2.5 text-sm/none [&_svg]:size-[15px]',
+        compact: 'h-8 gap-1.5 px-2.5 text-[13px]/none [&_svg]:size-3.75',
+        navigation: [
+          'h-10 gap-1.5 px-3 [&_svg:not([class*="size-"])]:size-3.75',
+          typography.labelSm,
+        ],
+        fancy: 'h-10 gap-1 px-2.5 text-sm/none [&_svg]:size-3.75',
+        'hero-search': ['h-13.5 px-4 sm:px-6', typography.labelLg],
         sm: 'h-9 px-3',
+        'discovery-tab': 'h-9.5 gap-1.5 px-3.5 leading-4.5 tracking-normal',
+        'discovery-category': 'h-9.5 gap-2 pl-1 pr-3.5 leading-4.5 tracking-normal',
+        'project-save':
+          'h-8 min-w-8 gap-1.5 px-3 text-sm leading-4.5 [&_svg:not([class*="size-"])]:size-3.5 [@media(hover:none)]:h-11 [@media(hover:none)]:min-w-11',
         xs: 'h-8 gap-1.5 px-2.5',
+        inline: 'min-h-6 gap-1 px-0 text-sm leading-4.5 [&_svg]:size-3.5',
         lg: 'h-12.5 px-6 text-base/none',
         xl: 'h-16 px-8 text-base/none',
         icon: 'size-11',
+        'icon-xs': 'size-6 [&_svg:not([class*="size-"])]:size-3.5',
         'icon-sm': 'size-8',
       },
       shape: {

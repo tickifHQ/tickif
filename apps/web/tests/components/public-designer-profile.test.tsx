@@ -193,6 +193,13 @@ vi.mock('@/lib/api', () => ({
       enquiries: {
         check: { $get: mocks.checkEnquiry },
       },
+      following: {
+        ':designerProfileId': {
+          $get: vi.fn(async ({ param }: { param: { designerProfileId: string } }) =>
+            Response.json({ designerProfileId: param.designerProfileId, following: false }),
+          ),
+        },
+      },
     },
   },
 }));
@@ -304,6 +311,25 @@ describe('PublicDesignerProfile — preservation (sections render regardless of 
 describe('PublicDesignerProfile', () => {
   afterEach(() => {
     mocks.session = null;
+  });
+
+  it('places Follow before the hero enquiry and between the sharing actions', () => {
+    const { container } = render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+    const hero = screen.getByRole('region', { name: 'Portfolio hero' });
+    const follow = within(hero).getByRole('button', { name: 'Follow Anika Spaces' });
+    const enquire = within(hero).getByRole('button', { name: 'Enquire' });
+    expect(follow.compareDocumentPosition(enquire) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const copy = screen.getByRole('button', { name: 'Copy link' });
+    const sharing = copy.parentElement!;
+    const shareFollow = within(sharing).getByRole('button', { name: 'Follow Anika Spaces' });
+    const send = within(sharing).getByRole('button', { name: 'Send enquiry' });
+    expect(
+      send.compareDocumentPosition(shareFollow) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      shareFollow.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.querySelectorAll('button[aria-label="Follow Anika Spaces"]')).toHaveLength(2);
   });
 
   it('provides working portfolio navigation and a back-to-top link', () => {

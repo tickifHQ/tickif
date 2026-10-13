@@ -9,11 +9,13 @@ import {
   type SearchProjectsResponse,
   type TaxonomyTerm,
   type VisitorFeedPreferences,
+  type VisitorFeedPreferencesResponse,
   type VisitorHomeType,
 } from '@repo/contracts';
 import { ArrowRight, LoaderCircle, X } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
+import { DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
@@ -21,6 +23,7 @@ import { api } from '@/lib/api';
 import { readApiErrorMessage } from '@/lib/api-response';
 import { authClient } from '@/lib/auth-client';
 import { visitorFeedHref } from '@/lib/visitor-feed';
+import { cn } from '@repo/ui/lib/utils';
 
 const EMPTY_PREFERENCES: VisitorFeedPreferences = {
   homeType: null,
@@ -35,13 +38,21 @@ const HOME_OPTIONS: { value: VisitorHomeType; label: string }[] = [
   { value: 'villa', label: 'Villa' },
 ];
 
-export function VisitorOnboardingForm({
-  initialPreferences = null,
-  callbackPath,
-}: {
+type VisitorOnboardingFormProps = {
   initialPreferences?: VisitorFeedPreferences | null;
-  callbackPath?: string;
-}) {
+} & (
+  | { mode?: 'onboarding'; callbackPath?: string }
+  | {
+      mode: 'edit';
+      onCancel: () => void;
+      onSaved: (saved: VisitorFeedPreferencesResponse) => void;
+      onSavingChange: (saving: boolean) => void;
+    }
+);
+
+export function VisitorOnboardingForm(props: VisitorOnboardingFormProps) {
+  const { initialPreferences = null } = props;
+  const editing = props.mode === 'edit';
   const [preferences, setPreferences] = useState(initialPreferences ?? EMPTY_PREFERENCES);
   const [locations, setLocations] = useState<{
     cities: TaxonomyTerm[];
@@ -66,7 +77,9 @@ export function VisitorOnboardingForm({
             { init: { signal: controller.signal } },
           );
           if (!response.ok) throw new Error('Locations unavailable');
-          return listTaxonomyResponseSchema.parse(await response.json()).terms;
+          const parsed = listTaxonomyResponseSchema.safeParse(await response.json());
+          if (!parsed.success) throw new Error('Locations unavailable');
+          return parsed.data.terms;
         }),
       );
       if (!controller.signal.aborted) setLocations({ cities: cities!, localities: localities! });
@@ -95,8 +108,9 @@ export function VisitorOnboardingForm({
           { init: { signal: controller.signal, cache: 'no-store' } },
         );
         if (!response.ok) throw new Error('Preview unavailable');
-        const result = searchProjectsResponseSchema.parse(await response.json());
-        if (!controller.signal.aborted) setPreview(result);
+        const parsed = searchProjectsResponseSchema.safeParse(await response.json());
+        if (!parsed.success) throw new Error('Preview unavailable');
+        if (!controller.signal.aborted) setPreview(parsed.data);
       } catch {
         // The feed remains available when the optional search preview is unavailable.
       } finally {
@@ -149,6 +163,7 @@ export function VisitorOnboardingForm({
   async function save(input: VisitorFeedPreferences) {
     if (saving) return;
     setSaving(true);
+    if (props.mode === 'edit') props.onSavingChange(true);
     setError('');
     try {
       const response = await api.api.visitors.me['feed-preferences'].$put({ json: input });
@@ -156,9 +171,14 @@ export function VisitorOnboardingForm({
         throw new Error(
           await readApiErrorMessage(response, 'Could not save your preferences. Please try again.'),
         );
-      const saved = visitorFeedPreferencesResponseSchema.parse(await response.json());
-      await authClient.getSession({ query: { disableCookieCache: true } });
-      window.location.assign(callbackPath ?? visitorFeedHref(saved.filters));
+      const parsed = visitorFeedPreferencesResponseSchema.safeParse(await response.json());
+      if (!parsed.success) throw new Error('Could not confirm your preferences. Please try again.');
+      if (props.mode === 'edit') {
+        props.onSaved(parsed.data);
+      } else {
+        await authClient.getSession({ query: { disableCookieCache: true } });
+        window.location.assign(props.callbackPath ?? visitorFeedHref(parsed.data.filters));
+      }
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -166,11 +186,173 @@ export function VisitorOnboardingForm({
           : 'Could not save your preferences. Please try again.',
       );
       setSaving(false);
+    } finally {
+      if (props.mode === 'edit') {
+        setSaving(false);
+        props.onSavingChange(false);
+      }
     }
   }
 
+  const form = (
+    <form
+      className={cn('flex min-w-0 flex-col', !editing && 'p-5 sm:p-6 md:min-h-117.5 md:pl-8')}
+      aria-busy={saving}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save(preferences);
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        {editing ? (
+          <DialogTitle>Edit customization</DialogTitle>
+        ) : (
+          <h1 className="font-display text-lg font-medium">You’re in — welcome!</h1>
+        )}
+        {!editing ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Skip setup"
+            disabled={saving}
+            onClick={() => void save(EMPTY_PREFERENCES)}
+          >
+            <X aria-hidden className="size-4" />
+          </Button>
+        ) : null}
+      </div>
+      {editing ? (
+        <DialogDescription className="mt-3 leading-5">
+          Update your home and location to tune the projects in your feed.
+        </DialogDescription>
+      ) : (
+        <p className="mt-3 text-sm leading-5 text-muted-foreground">
+          Two quick answers and your feed starts showing homes like yours.
+        </p>
+      )}
+      <fieldset disabled={saving} className="mt-6">
+        <legend className="mb-2.5 text-sm font-medium">What’s your home?</legend>
+        <div className="grid grid-cols-5 gap-1.5">
+          {HOME_OPTIONS.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={homeType === option.value ? 'default' : 'outline'}
+              aria-pressed={homeType === option.value}
+              className="h-10 rounded-lg px-1 text-xs shadow-none"
+              onClick={() =>
+                setPreferences({
+                  ...preferences,
+                  homeType: homeType === option.value ? null : option.value,
+                })
+              }
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </fieldset>
+      <div className="mt-5">
+        <div>
+          {locations ? (
+            <SelectField
+              label="Where is it?"
+              placeholder="Choose city or locality"
+              value={locationValue}
+              options={locationOptions}
+              onValueChange={selectLocation}
+              disabled={saving}
+              allowEmpty
+            />
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="welcome-location">Where is it?</Label>
+              <Input id="welcome-location" disabled placeholder="Loading locations…" />
+            </div>
+          )}
+        </div>
+        <div className="mt-2 min-h-7">
+          {locationError ? (
+            <p className="text-xs text-destructive">
+              Could not load locations.{' '}
+              <button type="button" className="underline" onClick={() => setAttempt(attempt + 1)}>
+                Retry
+              </button>
+            </p>
+          ) : city && localities.length ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                In {city.label}:
+              </span>
+              {localities
+                .filter((term) => term.slug !== localitySlug)
+                .slice(0, 3)
+                .map((term) => (
+                  <button
+                    key={term.id}
+                    type="button"
+                    disabled={saving}
+                    className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => selectLocation(term.id)}
+                  >
+                    {term.label}
+                  </button>
+                ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <div
+        className="mt-3 flex min-h-14 items-center gap-3 rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary"
+        aria-live="polite"
+      >
+        {matchingPreview?.hits.some((hit) => hit.coverImageUrl) ? (
+          <div className="flex shrink-0 -space-x-3">
+            {matchingPreview.hits
+              .filter((hit) => hit.coverImageUrl)
+              .map((hit) => (
+                <img
+                  key={hit.id}
+                  src={hit.coverImageUrl!}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="size-8 rounded-md border-2 border-card object-cover"
+                />
+              ))}
+          </div>
+        ) : null}
+        <p>{previewMessage}</p>
+      </div>
+      <p role={error ? 'alert' : undefined} className="min-h-12 pt-2 text-xs text-destructive">
+        {error}
+      </p>
+      <div className="mt-auto flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={saving}
+          onClick={() => (props.mode === 'edit' ? props.onCancel() : void save(EMPTY_PREFERENCES))}
+        >
+          {editing ? 'Cancel' : 'Skip'}
+        </Button>
+        <Button type="submit" disabled={saving} className="h-12 px-5">
+          {editing ? 'Save changes' : 'Show my feed'}
+          {saving ? (
+            <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
+          ) : !editing ? (
+            <ArrowRight aria-hidden className="size-4" />
+          ) : null}
+        </Button>
+      </div>
+    </form>
+  );
+
+  if (editing) return form;
   return (
-    <Card className="mx-auto grid w-full max-w-[836px] gap-0 rounded-card p-2 shadow-floating-card md:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+    <Card className="mx-auto grid w-full max-w-209 gap-0 rounded-card p-2 shadow-floating-card md:grid-cols-[minmax(0,23.75rem)_minmax(0,1fr)]">
       <aside className="relative flex flex-col overflow-hidden rounded-card bg-linear-to-br from-surface-inverse to-secondary-foreground p-6 text-surface-inverse-foreground md:p-8">
         <img
           src="/ui/visitor-welcome/glow.svg"
@@ -183,7 +365,7 @@ export function VisitorOnboardingForm({
           <p className="mb-5 w-fit rounded-lg bg-primary/15 px-3 py-2 text-xs text-primary-soft">
             Your next home starts here
           </p>
-          <h2 className="font-display text-2xl font-medium tracking-tight md:text-[32px] md:leading-[38px]">
+          <h2 className="font-display text-2xl font-medium tracking-tight md:text-section md:leading-9.5">
             Welcome to Tickif
           </h2>
           <p className="mt-3 text-sm leading-5 text-surface-inverse-foreground/65">
@@ -207,146 +389,7 @@ export function VisitorOnboardingForm({
           Real homes. Ideas for your own.
         </p>
       </aside>
-      <form
-        className="flex min-w-0 flex-col p-5 sm:p-6 md:min-h-[470px] md:pl-8"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save(preferences);
-        }}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="font-display text-lg font-medium">You’re in — welcome!</h1>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Skip setup"
-            disabled={saving}
-            onClick={() => void save(EMPTY_PREFERENCES)}
-            className="size-7"
-          >
-            <X className="size-4" />
-          </Button>
-        </div>
-        <p className="mt-3 text-sm leading-5 text-muted-foreground">
-          Two quick answers and your feed starts showing homes like yours.
-        </p>
-        <fieldset disabled={saving} className="mt-6">
-          <legend className="mb-2.5 text-sm font-medium">What’s your home?</legend>
-          <div className="grid grid-cols-5 gap-1.5">
-            {HOME_OPTIONS.map((option) => (
-              <Button
-                key={option.value}
-                type="button"
-                variant={homeType === option.value ? 'default' : 'outline'}
-                aria-pressed={homeType === option.value}
-                className="h-10 rounded-lg px-1 text-xs shadow-none"
-                onClick={() =>
-                  setPreferences({
-                    ...preferences,
-                    homeType: homeType === option.value ? null : option.value,
-                  })
-                }
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-        </fieldset>
-        <div className="mt-5">
-          <div>
-            {locations ? (
-              <SelectField
-                label="Where is it?"
-                placeholder="Choose city or locality"
-                value={locationValue}
-                options={locationOptions}
-                onValueChange={selectLocation}
-                disabled={saving}
-                allowEmpty
-              />
-            ) : (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="welcome-location">Where is it?</Label>
-                <Input id="welcome-location" disabled placeholder="Loading locations…" />
-              </div>
-            )}
-          </div>
-          <div className="mt-2 min-h-7">
-            {locationError ? (
-              <p className="text-xs text-destructive">
-                Could not load locations.{' '}
-                <button type="button" className="underline" onClick={() => setAttempt(attempt + 1)}>
-                  Retry
-                </button>
-              </p>
-            ) : city && localities.length ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  In {city.label}:
-                </span>
-                {localities
-                  .filter((term) => term.slug !== localitySlug)
-                  .slice(0, 3)
-                  .map((term) => (
-                    <button
-                      key={term.id}
-                      type="button"
-                      disabled={saving}
-                      className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => selectLocation(term.id)}
-                    >
-                      {term.label}
-                    </button>
-                  ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-        <div
-          className="mt-3 flex min-h-14 items-center gap-3 rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary"
-          aria-live="polite"
-        >
-          {matchingPreview?.hits.some((hit) => hit.coverImageUrl) ? (
-            <div className="flex shrink-0 -space-x-3">
-              {matchingPreview.hits
-                .filter((hit) => hit.coverImageUrl)
-                .map((hit) => (
-                  <img
-                    key={hit.id}
-                    src={hit.coverImageUrl!}
-                    alt=""
-                    width={32}
-                    height={32}
-                    className="size-8 rounded-md border-2 border-card object-cover"
-                  />
-                ))}
-            </div>
-          ) : null}
-          <p>{previewMessage}</p>
-        </div>
-        <p role={error ? 'alert' : undefined} className="min-h-12 pt-2 text-xs text-destructive">
-          {error}
-        </p>
-        <div className="mt-auto flex items-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={saving}
-            onClick={() => void save(EMPTY_PREFERENCES)}
-          >
-            Skip
-          </Button>
-          <Button type="submit" disabled={saving} className="h-12 px-5">
-            Show my feed
-            {saving ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <ArrowRight className="size-4" />
-            )}
-          </Button>
-        </div>
-      </form>
+      {form}
     </Card>
   );
 }

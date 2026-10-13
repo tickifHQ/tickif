@@ -45,6 +45,7 @@ onlyBuiltDependencies:
 # Centralized dependency versions (pnpm catalog).
 # Reference in package.json as "catalog:".
 catalog:
+  '@base-ui/react': ^1.9.0
   '@dnd-kit/core': ^6.3.1
   '@dnd-kit/sortable': ^10.0.0
   '@dnd-kit/utilities': ^3.2.2

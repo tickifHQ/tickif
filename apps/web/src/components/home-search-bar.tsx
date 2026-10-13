@@ -1,12 +1,13 @@
 'use client';
 
 import { typography } from '@repo/ui/lib/typography';
+import { cn } from '@repo/ui/lib/utils';
 
 import Link from 'next/link';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowRight, History, Search, X } from 'lucide-react';
+import { ArrowRight, History, MapPin, Search, X } from 'lucide-react';
 import {
   recentSearchesSchema,
   listTaxonomyResponseSchema,
@@ -14,6 +15,7 @@ import {
   type SearchSuggestResponse,
 } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
+import { Badge } from '@repo/ui/components/badge';
 import {
   Select,
   SelectContent,
@@ -93,6 +95,7 @@ type HomeSearchBarProps = {
    */
   basePath?: string;
   cities?: FeedFacetOption[];
+  showShortcut?: boolean;
 };
 
 /** Homepage search entry with blended project/designer suggestions after a 150 ms debounce. */
@@ -101,6 +104,7 @@ export function HomeSearchBar({
   variant = 'default',
   basePath = '/',
   cities = [],
+  showShortcut = false,
 }: HomeSearchBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -273,10 +277,144 @@ export function HomeSearchBar({
 
   const shellClassName =
     variant === 'hero'
-      ? 'min-h-[72px] rounded-full border-border bg-card shadow-home-search sm:pl-6'
+      ? 'min-h-18 rounded-full border-border bg-card shadow-home-search sm:pl-6'
       : variant === 'header'
-        ? 'h-[42px] rounded-full border-transparent bg-foreground/5 pl-1.5'
+        ? 'h-10.5 rounded-full bg-foreground/5 pl-1.25 pr-1.5'
         : 'border-border bg-background shadow-home-search';
+
+  const queryControls = (
+    <>
+      {variant === 'hero' ? (
+        <Search aria-hidden className="hidden size-6 shrink-0 text-muted-foreground sm:block" />
+      ) : variant === 'header' ? (
+        <button
+          type="submit"
+          aria-label="Search from header"
+          className="relative shrink-0 rounded-full before:absolute before:-inset-1.5 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Search aria-hidden className="size-3.75 text-muted-foreground" />
+        </button>
+      ) : (
+        <Search className="size-4 shrink-0 text-primary" aria-hidden />
+      )}
+      <input
+        ref={inputRef}
+        type="search"
+        name="q"
+        autoComplete="off"
+        value={query}
+        onChange={(event) => {
+          const nextQuery = event.target.value;
+          setQuery(nextQuery);
+          setSuggestions(EMPTY_SUGGESTIONS);
+          setIsLoading(nextQuery.trim().length > 0);
+          setIsFocused(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setIsFocused(false);
+            return;
+          }
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            setIsFocused(true);
+            handleDropdownKeys(event);
+          }
+        }}
+        placeholder={
+          variant === 'header'
+            ? 'Kitchens, 3BHK, studios…'
+            : variant === 'hero'
+              ? 'Kitchens, 3BHK, teak pooja units…'
+              : 'Search interiors, construction, a style, or a city…'
+        }
+        aria-label="Search homes"
+        aria-keyshortcuts={variant === 'header' ? 'Control+k Meta+k' : undefined}
+        className={cn(
+          'min-w-0 flex-1 appearance-none bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden',
+          variant === 'header'
+            ? ['h-7.5', typography.labelMd]
+            : variant === 'hero'
+              ? ['h-9', typography.bodyLg, 'text-base sm:text-lg']
+              : 'h-9 text-sm',
+        )}
+      />
+      {query.length > 0 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-primary hover:bg-transparent hover:text-primary"
+          aria-label="Clear search"
+          onClick={() => {
+            setQuery('');
+            setSuggestions(EMPTY_SUGGESTIONS);
+            setIsLoading(false);
+            runSearch('');
+          }}
+        >
+          <X aria-hidden />
+        </Button>
+      ) : null}
+    </>
+  );
+  const citySelector = (
+    <>
+      {variant !== 'default' && cities.length > 0 ? (
+        <Select
+          value={city || '__all_cities'}
+          onValueChange={(value) => setCity(value === '__all_cities' ? '' : value)}
+        >
+          <SelectTrigger
+            aria-label={variant === 'header' ? 'Header search city' : 'Search city'}
+            variant={variant === 'header' ? 'navigation' : 'default'}
+            className={
+              variant === 'header'
+                ? 'max-w-36 shrink-0'
+                : `${typography.labelLg} h-7 max-w-28 shrink-0 gap-2 rounded-none border-0 border-l border-border bg-transparent px-2 shadow-none sm:max-w-44 sm:px-4`
+            }
+          >
+            {variant === 'header' ? (
+              <MapPin aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+            ) : (
+              <span
+                aria-hidden
+                className="hidden size-2 shrink-0 rounded-full bg-primary sm:block"
+              />
+            )}
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all_cities">All cities</SelectItem>
+            {city === MULTIPLE_CITIES ? (
+              <SelectItem value={MULTIPLE_CITIES} disabled>
+                Multiple cities
+              </SelectItem>
+            ) : null}
+            {cities.map((option) => (
+              <SelectItem key={option.slug} value={option.slug} data-value={option.slug}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+    </>
+  );
+  const shortcut = (
+    <>
+      {showShortcut && variant === 'header' ? (
+        <Badge
+          asChild
+          variant="neutral"
+          shape="square"
+          size="shortcut"
+          className="hidden shrink-0 text-muted-foreground xl:inline-flex"
+        >
+          <kbd aria-label="Command or Control plus K">⌘K</kbd>
+        </Badge>
+      ) : null}
+    </>
+  );
 
   return (
     <form
@@ -289,130 +427,37 @@ export function HomeSearchBar({
       }}
     >
       <div
-        className={`flex items-center gap-3 border py-1.5 pr-1.5 ${variant === 'header' ? '' : 'pl-4'} ${variant === 'default' ? 'rounded-xl' : 'rounded-full'} ${shellClassName}`}
-      >
-        {variant === 'hero' ? (
-          <img
-            src="/images/landing/search.svg"
-            alt=""
-            className="hidden shrink-0 sm:block dark:brightness-0 dark:invert"
-          />
-        ) : variant === 'header' ? (
-          <button type="submit" aria-label="Search from header" className="shrink-0 rounded-full">
-            <img
-              src="/images/landing/header-search.svg"
-              alt=""
-              className="dark:brightness-0 dark:invert"
-            />
-          </button>
-        ) : (
-          <Search className="size-4 shrink-0 text-primary" aria-hidden />
+        className={cn(
+          'flex items-center',
+          shellClassName,
+          variant !== 'header' && [
+            'gap-3 border py-1.5 pr-1.5 pl-4',
+            variant === 'default' ? 'rounded-xl' : 'rounded-full',
+          ],
         )}
-        <input
-          ref={inputRef}
-          type="search"
-          name="q"
-          autoComplete="off"
-          value={query}
-          onChange={(event) => {
-            const nextQuery = event.target.value;
-            setQuery(nextQuery);
-            setSuggestions(EMPTY_SUGGESTIONS);
-            setIsLoading(nextQuery.trim().length > 0);
-            setIsFocused(true);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              setIsFocused(false);
-              return;
-            }
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-              setIsFocused(true);
-              handleDropdownKeys(event);
-            }
-          }}
-          placeholder={
-            variant === 'header'
-              ? 'Kitchens, 3BHK, studios…'
-              : variant === 'hero'
-                ? 'Kitchens, 3BHK, teak pooja units…'
-                : 'Search interiors, construction, a style, or a city…'
-          }
-          aria-label="Search homes"
-          className={`h-9 min-w-0 flex-1 appearance-none bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${variant === 'hero' ? `${typography.bodyLg} text-base sm:text-lg` : variant === 'header' ? typography.labelMd : 'text-sm'}`}
-        />
-        {query.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0 rounded-full p-0 text-primary shadow-none hover:bg-transparent hover:text-primary"
-            aria-label="Clear search"
-            onClick={() => {
-              setQuery('');
-              setSuggestions(EMPTY_SUGGESTIONS);
-              setIsLoading(false);
-              runSearch('');
-            }}
-          >
-            <X className="size-3.5" aria-hidden />
-          </Button>
-        ) : null}
-        {variant !== 'default' && cities.length > 0 ? (
-          <Select
-            value={city || '__all_cities'}
-            onValueChange={(value) => setCity(value === '__all_cities' ? '' : value)}
-          >
-            <SelectTrigger
-              aria-label={variant === 'header' ? 'Header search city' : 'Search city'}
-              className={
-                variant === 'header'
-                  ? `${typography.labelMd} order-first h-[30px] max-w-36 shrink-0 gap-1.5 rounded-full border-0 bg-card px-2.5 shadow-sm [&>svg]:hidden`
-                  : `${typography.labelLg} h-7 max-w-28 shrink-0 gap-2 rounded-none border-0 border-l border-border bg-transparent px-2 shadow-none sm:max-w-44 sm:px-4 [&>svg]:hidden`
-              }
-            >
-              {variant === 'header' ? (
-                <img
-                  src="/images/landing/map-pin.svg"
-                  alt=""
-                  className="dark:brightness-0 dark:invert"
-                />
-              ) : (
-                <span
-                  aria-hidden
-                  className="hidden size-2 shrink-0 rounded-full bg-primary sm:block"
-                />
-              )}
-              <SelectValue />
-              <img
-                src={`/images/landing/${variant === 'header' ? 'chevron-down' : 'chevrons-up-down'}.svg`}
-                alt=""
-                className="ml-auto shrink-0 dark:brightness-0 dark:invert"
-              />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all_cities">All cities</SelectItem>
-              {city === MULTIPLE_CITIES ? (
-                <SelectItem value={MULTIPLE_CITIES} disabled>
-                  Multiple cities
-                </SelectItem>
-              ) : null}
-              {cities.map((option) => (
-                <SelectItem key={option.slug} value={option.slug}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
+      >
+        {variant === 'header' ? (
+          <>
+            {citySelector}
+            <div className="flex h-7.5 min-w-0 flex-1 items-center gap-2 pl-3 pr-1">
+              {queryControls}
+              {shortcut}
+            </div>
+          </>
+        ) : (
+          <>
+            {queryControls}
+            {citySelector}
+          </>
+        )}
         {variant === 'hero' ? (
           <Button
             type="submit"
-            size="lg"
-            className={`landing-lift h-[54px] shrink-0 gap-2 rounded-full px-4 sm:px-6 ${typography.labelLg}`}
+            size="hero-search"
+            className="landing-lift shrink-0"
             aria-label="Search"
           >
-            <img src="/images/landing/search-light.svg" alt="" className="dark:brightness-0" />
+            <Search aria-hidden data-icon="inline-start" />
             <span className="hidden sm:inline">Search</span>
           </Button>
         ) : variant !== 'header' ? (
@@ -429,7 +474,7 @@ export function HomeSearchBar({
           ref={dropdownRef}
           role="group"
           aria-label={showRecentSearches ? 'Recent searches' : 'Search suggestions'}
-          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg"
+          className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg"
           onMouseDown={(event) => event.preventDefault()}
           onKeyDown={handleDropdownKeys}
         >
@@ -437,7 +482,7 @@ export function HomeSearchBar({
             <section aria-labelledby={`${listboxId}-recent`}>
               <p
                 id={`${listboxId}-recent`}
-                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+                className={cn(typography.searchLabel, 'px-2 py-1 text-muted-foreground')}
               >
                 Recent searches
               </p>
@@ -461,7 +506,7 @@ export function HomeSearchBar({
             <section aria-labelledby={`${listboxId}-projects`}>
               <p
                 id={`${listboxId}-projects`}
-                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+                className={cn(typography.searchLabel, 'px-2 py-1 text-muted-foreground')}
               >
                 Projects
               </p>
@@ -502,7 +547,7 @@ export function HomeSearchBar({
             <section aria-labelledby={`${listboxId}-filters`}>
               <p
                 id={`${listboxId}-filters`}
-                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+                className={cn(typography.searchLabel, 'px-2 py-1 text-muted-foreground')}
               >
                 Filters
               </p>
@@ -530,7 +575,10 @@ export function HomeSearchBar({
             <section aria-labelledby={`${listboxId}-designers`}>
               <p
                 id={`${listboxId}-designers`}
-                className="mt-1 border-t border-border px-2 pb-1 pt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+                className={cn(
+                  typography.searchLabel,
+                  'mt-1 border-t border-border px-2 pb-1 pt-2 text-muted-foreground',
+                )}
               >
                 Designers
               </p>

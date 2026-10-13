@@ -72,6 +72,9 @@ export const projectHitSchema = z
     designerId: z.string(),
     designerSlug: z.string().nullable(),
     designerName: z.string(),
+    /** Current public studio logo, resolved independently of the search projection. */
+    studioLogoUrl: z.url().nullable().optional(),
+    studioIsVerified: z.boolean().optional(),
     citySlug: z.string().nullable(),
     cityName: z.string().nullable().optional(),
     localitySlug: z.string().nullable(),
@@ -80,6 +83,8 @@ export const projectHitSchema = z
     scopeSlug: z.string().nullable(),
     bhkSlug: z.string().nullable(),
     budgetBandSlug: z.string().nullable(),
+    /** Saved taxonomy label, including retired bands. Absent on older responses. */
+    budgetBandLabel: z.string().nullable().optional(),
     sizeSqft: z.number().nullable(),
     themes: z.array(z.string()),
     materials: z.array(z.string()),

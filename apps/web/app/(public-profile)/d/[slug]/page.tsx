@@ -4,6 +4,7 @@ import { cache, Suspense } from 'react';
 import { createReviewSchema, listPublishedReviewsQuerySchema } from '@repo/contracts';
 import { TickifReviewsSection } from '@/components/tickif-reviews-section';
 import { PublicDesignerProfile } from '@/components/public-designer-profile';
+import { FollowingPortfolioVisit } from '@/components/following-portfolio-visit';
 import { LegacyProfileReviewEntry } from '@/components/legacy-profile-review-entry';
 import { fetchPublicPortfolio } from '@/lib/public-portfolio-api';
 import { strapline, studioLocation, studioType } from '@/lib/public-portfolio-view';
@@ -17,7 +18,11 @@ type PublicDesignerProfilePageProps = {
  * `generateMetadata` and the page body both need the payload. `cache` dedupes
  * them into a single request per render.
  */
-const getPortfolio = cache(fetchPublicPortfolio);
+const getPortfolio = cache(async (slug: string) => {
+  const followingSeenThrough = new Date().toISOString();
+  const portfolio = await fetchPublicPortfolio(slug);
+  return portfolio ? { ...portfolio, followingSeenThrough } : null;
+});
 
 /**
  * Resolve the portfolio, or leave the request via `notFound()` / `redirect()`.
@@ -102,6 +107,10 @@ export default async function PublicDesignerProfilePage({
   const showTickifReview = (booking.success && Boolean(booking.data)) || query?.review === 'tickif';
   return (
     <>
+      <FollowingPortfolioVisit
+        designerProfileId={portfolio.profileId}
+        seenThrough={portfolio.followingSeenThrough}
+      />
       {!showTickifReview ? <LegacyProfileReviewEntry /> : null}
       <PublicDesignerProfile
         portfolio={portfolio}

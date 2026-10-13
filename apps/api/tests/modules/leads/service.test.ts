@@ -23,9 +23,20 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: { getCapabilities: vi.fn() },
 }));
 
+vi.mock('../../../src/modules/enquiries/activity-repository.js', () => ({
+  enquiryActivityRepository: {
+    viewed: vi.fn(),
+    byLead: vi.fn(),
+    messages: vi.fn(),
+    send: vi.fn(),
+  },
+}));
+
 const { leadsService } = await import('../../../src/modules/leads/service.js');
 const { leadsRepository } = await import('../../../src/modules/leads/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
+const { enquiryActivityRepository } =
+  await import('../../../src/modules/enquiries/activity-repository.js');
 
 const caller = {
   userId: 'user_1',
@@ -73,6 +84,90 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
   vi.mocked(leadsRepository.findActiveMemberIds).mockResolvedValue(['member_1']);
+});
+
+describe('lead enquiry activity access', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const input = {
+    body: 'Please share your plans.',
+    requestId: '22222222-2222-4222-8222-222222222222',
+  };
+
+  it('allows an assigned reader to view their lead but never send studio replies', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ assignedMemberId: 'member_1' }),
+    );
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
+    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue({ id, status: 'open' });
+    vi.mocked(enquiryActivityRepository.messages).mockResolvedValue([]);
+    vi.mocked(enquiryActivityRepository.viewed).mockResolvedValue(true);
+    expect(await leadsService.messages(id, { page: 1, limit: 20 }, caller)).toMatchObject({
+      canReply: false,
+    });
+    expect(await leadsService.viewed(id, caller)).toEqual({ acknowledged: true });
+    await expect(leadsService.message(id, input, caller)).rejects.toMatchObject({ status: 403 });
+    expect(enquiryActivityRepository.send).not.toHaveBeenCalled();
+  });
+
+  it('blocks an unassigned reader and a different branch before reading messages', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ assignedMemberId: 'other_member' }),
+    );
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
+    await expect(leadsService.messages(id, { page: 1, limit: 20 }, caller)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      leadsService.viewed(id, { ...caller, activeTeamId: 'other_team' }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(enquiryActivityRepository.byLead).not.toHaveBeenCalled();
+    expect(enquiryActivityRepository.viewed).not.toHaveBeenCalled();
+  });
+
+  it('returns no invented thread for a lead without an enquiry', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue(null);
+    expect(await leadsService.messages(id, { page: 1, limit: 20 }, caller)).toEqual({
+      enquiryId: null,
+      canReply: false,
+      hasMore: false,
+      messages: [],
+    });
+    expect(enquiryActivityRepository.messages).not.toHaveBeenCalled();
+  });
+
+  it('keeps closed and spam leads read-only, with bounded message pagination', async () => {
+    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue({ id, status: 'open' });
+    const message = {
+      id,
+      body: input.body,
+      createdAt: new Date('2026-10-12T00:00:00Z'),
+      readThrough: '2026-10-12T00:00:00.000000Z',
+    };
+    vi.mocked(enquiryActivityRepository.messages).mockResolvedValue([message, message]);
+    for (const status of ['closed', 'spam'] as const) {
+      vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow({ status }));
+      expect(await leadsService.messages(id, { page: 2, limit: 1 }, caller)).toMatchObject({
+        canReply: false,
+        hasMore: true,
+        messages: [{ id, body: input.body, createdAt: message.createdAt.toISOString() }],
+      });
+    }
+    expect(enquiryActivityRepository.messages).toHaveBeenCalledWith(id, 2, 1);
+  });
+
+  it.each([
+    ['missing', 404],
+    ['closed', 409],
+    ['conflict', 409],
+  ] as const)(
+    'maps a %s repository result without claiming a reply was sent',
+    async (kind, status) => {
+      vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+      vi.mocked(enquiryActivityRepository.send).mockResolvedValue({ kind });
+      await expect(leadsService.message(id, input, caller)).rejects.toMatchObject({ status });
+    },
+  );
 });
 
 describe('leadsService.list', () => {

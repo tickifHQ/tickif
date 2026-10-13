@@ -61,10 +61,17 @@ for (const width of [852, 516, 489, 390, 320]) {
       const welcome = dialog.getByRole('heading', { name: 'Welcome to Tickif' });
       const welcomeBox = await welcome.boundingBox();
       const closeButton = dialog.getByRole('button', { name: 'Close', exact: true });
-      // Measure the touch target after the dialog's opening scale animation settles.
-      await expect
-        .poll(async () => Math.round((await closeButton.boundingBox())!.height))
-        .toBeGreaterThanOrEqual(44);
+      // Geometry assertions must use the settled dialog, not an intermediate
+      // frame of its opening scale animation. Keep the actual 44px requirement.
+      await dialog.evaluate(async (element) => {
+        await Promise.all(
+          element
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+            .map((animation) => animation.finished.catch(() => undefined)),
+        );
+      });
+      expect((await closeButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       const closeBox = await closeButton.boundingBox();
       expect(closeBox!.y).toBeLessThanOrEqual(welcomeBox!.y);
       await expect(

@@ -7,6 +7,12 @@ import {
   errorResponseSchema,
   listEnquiriesQuerySchema,
   listEnquiriesResponseSchema,
+  enquiryIdParamSchema,
+  enquiryThreadSchema,
+  enquiryMessagesQuerySchema,
+  enquiryReadSchema,
+  enquiryActivityResultSchema,
+  enquiryCountsSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireCustomerAccess as requireAuth } from '../../lib/auth-middleware.js';
@@ -72,6 +78,23 @@ const listMineRoute = createRoute({
   },
 });
 
+const countsRoute = createRoute({
+  method: 'get',
+  path: '/counts',
+  tags: ['Enquiries'],
+  summary: 'Private total and unread enquiry counts across all pages',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Enquiry counts',
+      content: { 'application/json': { schema: enquiryCountsSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Forbidden'),
+  },
+});
+
 const checkRoute = createRoute({
   method: 'get',
   path: '/check',
@@ -91,16 +114,83 @@ const checkRoute = createRoute({
   },
 });
 
+const messagesRoute = createRoute({
+  method: 'get',
+  path: '/{id}/messages',
+  tags: ['Enquiries'],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: enquiryIdParamSchema, query: enquiryMessagesQuerySchema },
+  responses: {
+    200: {
+      description: 'Studio messages for the requester',
+      content: { 'application/json': { schema: enquiryThreadSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Forbidden'),
+    404: errorJson('Enquiry not found'),
+    422: errorJson('Invalid request'),
+  },
+});
+const readRoute = createRoute({
+  method: 'post',
+  path: '/{id}/read',
+  tags: ['Enquiries'],
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    params: enquiryIdParamSchema,
+    body: { content: { 'application/json': { schema: enquiryReadSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Read activity acknowledged',
+      content: { 'application/json': { schema: enquiryActivityResultSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Forbidden'),
+    404: errorJson('Enquiry not found'),
+    422: errorJson('Invalid request'),
+  },
+});
+
 export const enquiriesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
+  .openapi(countsRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(await enquiriesService.counts(caller(c.get('user'))), 200);
+  })
   .openapi(createEnquiryRoute, async (c) => {
     const result = await enquiriesService.create(c.req.valid('json'), caller(c.get('user')));
     return c.json(result, 201);
   })
   .openapi(listMineRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
     const result = await enquiriesService.listMine(c.req.valid('query'), caller(c.get('user')));
     return c.json(result, 200);
+  })
+  .openapi(messagesRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      await enquiriesService.messages(
+        c.req.valid('param').id,
+        c.req.valid('query'),
+        caller(c.get('user')),
+      ),
+      200,
+    );
+  })
+  .openapi(readRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      await enquiriesService.read(
+        c.req.valid('param').id,
+        c.req.valid('json').through,
+        caller(c.get('user')),
+      ),
+      200,
+    );
   })
   .openapi(checkRoute, async (c) => {
     const result = await enquiriesService.check(c.req.valid('query'), caller(c.get('user')));

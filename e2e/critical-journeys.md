@@ -53,7 +53,9 @@ coverage gate.
   Google callback account creation and denied consent; unfinished designer setup
   can be deferred, resumed and completed without granting premature workspace access.
 - `visitor-feed-preferences.spec.ts`: desktop and phone welcome forms, saved home
-  and location filters, reload and Clear all, editing, callback preservation and Skip.
+  and location filters, reload and Explore reset, on-page customization editing,
+  Cancel/Escape draft discard and focus restoration, retryable edit saves, same-document
+  feed updates and short-screen modal scrolling, callback preservation and Skip.
   Visitor contact details and local validation remain covered in personal settings.
 - `single-image-moderation.spec.ts`: claimed reviewer confirms one image removal,
   cancellation leaves all images intact, the other originals remain accessible,
@@ -91,6 +93,13 @@ in `e2e/scripts/coverage.ts`;
 missing, filtered, skipped, retried or failed tests fail the gate. Screenshots and failed-run traces are in `test-results/e2e` and
 uploaded as the `critical-e2e-evidence` workflow artifact. The repository's ordinary
 CI independently runs typecheck, lint, unit/integration tests and builds.
+
+Geometry checks wait for finite opening animations to finish before measuring
+touch targets; they retain the actual 44px minimum rather than rounding an
+intermediate frame. Welcome/customization captures use `caret: 'initial'` so
+Playwright does not temporarily add inline caret styles to inputs in a streamed
+header that may still be hydrating. Console checks continue to reject real
+hydration errors.
 
 The Browser plugin is not available in this environment; these checks use the
 repository's Playwright Chromium runner.
@@ -137,3 +146,10 @@ dependent feature PRs were still in flight. After those dependencies landed, the
 14 E2E-focused commits were replayed onto `main` at `e142a04`; the PR diff contains
 the harness, coverage changes, and direct worker runtime declarations required by
 the built E2E launcher. The synthetic integration branch is not a deployment source.
+
+- `visitor-following-enquiries.spec.ts`: real follow/unfollow identity, profile
+  count and account-scoped Following feed, look-ahead pagination and the Figma
+  three-dot load-more state with reduced motion,
+  update acknowledgement and cached Back navigation, visitor enquiry, studio
+  viewed/message milestones, failed send retry with retained draft, requester-only
+  read acknowledgement, and phone/tablet/desktop overflow checks.

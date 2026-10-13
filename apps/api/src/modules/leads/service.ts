@@ -8,10 +8,14 @@ import type {
   ListLeadsQuery,
   ListLeadsResponse,
   UpdateLeadInput,
+  EnquiryMessagesQuery,
+  EnquiryThread,
+  SendEnquiryMessage,
 } from '@repo/contracts';
 import { ORGANIZATION_ACCESS_SCOPE } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
+import { enquiryActivityRepository } from '../enquiries/activity-repository.js';
 import {
   leadsRepository,
   type LeadDetailRecord,
@@ -168,6 +172,60 @@ async function resolveTargetOrganization(
 }
 
 export const leadsService = {
+  async viewed(id: string, caller: Caller) {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const row = await leadsRepository.findById(id);
+    if (!row) throw AppError.notFound('Lead not found');
+    await assertLeadAccess(caller, row, true);
+    return { acknowledged: await enquiryActivityRepository.viewed(id, row.organizationId) };
+  },
+  async messages(id: string, query: EnquiryMessagesQuery, caller: Caller): Promise<EnquiryThread> {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const lead = await leadsRepository.findById(id);
+    if (!lead) throw AppError.notFound('Lead not found');
+    const access = await assertLeadAccess(caller, lead, true);
+    const enquiry = await enquiryActivityRepository.byLead(id);
+    if (!enquiry) return { enquiryId: null, messages: [], hasMore: false, canReply: false };
+    const rows = await enquiryActivityRepository.messages(
+      enquiry.id,
+      query.limit + 1,
+      (query.page - 1) * query.limit,
+    );
+    return {
+      enquiryId: enquiry.id,
+      messages: rows
+        .slice(0, query.limit)
+        .map(({ id, body, createdAt }) => ({ id, body, createdAt: createdAt.toISOString() })),
+      hasMore: rows.length > query.limit,
+      canReply:
+        access.scope === ORGANIZATION_ACCESS_SCOPE.FULL &&
+        enquiry.status !== 'closed' &&
+        lead.status !== 'closed' &&
+        lead.status !== 'spam',
+    };
+  },
+  async message(id: string, input: SendEnquiryMessage, caller: Caller) {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const lead = await leadsRepository.findById(id);
+    if (!lead) throw AppError.notFound('Lead not found');
+    const access = await assertLeadAccess(caller, lead, true);
+    if (access.scope !== ORGANIZATION_ACCESS_SCOPE.FULL) throw AppError.forbidden();
+    const result = await enquiryActivityRepository.send(
+      id,
+      lead.organizationId,
+      caller.userId,
+      input,
+    );
+    if (result.kind === 'missing') throw AppError.notFound('Enquiry not found');
+    if (result.kind === 'closed') throw AppError.conflict('This enquiry is closed');
+    if (result.kind === 'conflict')
+      throw AppError.conflict('This message request was already used');
+    return {
+      id: result.message.id,
+      body: result.message.body,
+      createdAt: result.message.createdAt.toISOString(),
+    };
+  },
   async list(query: ListLeadsQuery, caller: Caller): Promise<ListLeadsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);

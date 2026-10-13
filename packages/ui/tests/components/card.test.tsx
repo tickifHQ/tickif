@@ -9,6 +9,20 @@ import {
 } from '../../src/components/card';
 
 describe('Card', () => {
+  it('supports a compact inline summary without changing default card geometry', () => {
+    render(
+      <Card variant="summary" radius="summary" size="inline" data-testid="summary">
+        Enquiry
+      </Card>,
+    );
+    expect(screen.getByTestId('summary')).toHaveClass(
+      'rounded-summary',
+      'shadow-summary-card',
+      'py-2',
+      'pl-2',
+      'pr-4',
+    );
+  });
   it('renders card sections with provided content', () => {
     render(
       <Card>

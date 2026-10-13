@@ -2,6 +2,21 @@ import type { ProjectSearchDocument } from '@repo/search';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SearchProjectsResponse } from '@repo/contracts';
 import { app } from '../../../src/app.js';
+import type * as ProjectsRepositoryModule from '../../../src/modules/projects/repository.js';
+
+vi.mock('../../../src/modules/projects/repository.js', async (importOriginal) => {
+  const original = await importOriginal<typeof ProjectsRepositoryModule>();
+  return {
+    ...original,
+    projectsRepository: {
+      ...original.projectsRepository,
+      findPublicStudioLogoKeys: vi.fn(async () => new Map<string, string>()),
+      findTaxonomyLabels: vi.fn(
+        async () => new Map<string, string>([['budget_band:upscale', '₹15L - ₹35L']]),
+      ),
+    },
+  };
+});
 
 // Mock the repository layer to avoid Typesense dependency
 vi.mock('../../../src/modules/search/repository.js', () => ({
@@ -97,6 +112,19 @@ beforeEach(() => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/search', () => {
+  it('resolves saved budget labels for search hits and leaves unknown budgets null', async () => {
+    vi.mocked(repository.searchProjects).mockResolvedValue(
+      mockProjectSearchResult([
+        mockProjectDocument({ budgetBandSlug: 'upscale' }),
+        mockProjectDocument({ id: 'unknown', budgetBandSlug: 'missing' }),
+        mockProjectDocument({ id: 'empty', budgetBandSlug: null }),
+      ]),
+    );
+    const res = await get('/api/search?q=test');
+    expect(res.status).toBe(200);
+    const body = await json<SearchProjectsResponse>(res);
+    expect(body.hits.map((hit) => hit.budgetBandLabel)).toEqual(['₹15L - ₹35L', null, null]);
+  });
   describe('basic search with q parameter', () => {
     it('returns search results for a valid query', async () => {
       const doc = mockProjectDocument({ title: 'Modern Living Room' });
@@ -491,7 +519,7 @@ describe('GET /api/search - Fallback Ladder', () => {
   });
 
   it('drops localitySlug first in fallback order', async () => {
-    const docAfterRelax = mockProjectDocument();
+    const docAfterRelax = mockProjectDocument({ budgetBandSlug: 'upscale' });
     vi.mocked(repository.searchProjects)
       .mockResolvedValueOnce(mockProjectSearchResult([])) // Initial with all filters
       .mockResolvedValueOnce(mockProjectSearchResult([docAfterRelax])); // After dropping localitySlug
@@ -506,7 +534,7 @@ describe('GET /api/search - Fallback Ladder', () => {
   });
 
   it('drops filters in correct order: localitySlug, budgetBandSlug, themes, bhkSlug', async () => {
-    const docAfterRelax = mockProjectDocument();
+    const docAfterRelax = mockProjectDocument({ budgetBandSlug: 'upscale' });
     vi.mocked(repository.searchProjects)
       .mockResolvedValueOnce(mockProjectSearchResult([])) // Initial
       .mockResolvedValueOnce(mockProjectSearchResult([])) // After dropping localitySlug
@@ -522,6 +550,7 @@ describe('GET /api/search - Fallback Ladder', () => {
     const body = await json<SearchProjectsResponse>(res);
     expect(body.fallback).toBe('relaxed');
     expect(body.relaxedFilters).toEqual(['localitySlug', 'budgetBandSlug', 'themes', 'bhkSlug']);
+    expect(body.hits[0]?.budgetBandLabel).toBe('₹15L - ₹35L');
   });
 
   it('includes only dropped filters in relaxedFilters array', async () => {
@@ -566,7 +595,7 @@ describe('GET /api/search - Postgres Fallback', () => {
         propertySubtypeSlug: 'apartment',
         scopeSlug: 'full-home',
         bhkSlug: '2-bhk',
-        budgetBandSlug: 'budget',
+        budgetBandSlug: 'upscale',
         sizeSqft: 1000,
         themes: ['modern'],
         materials: ['wood'],
@@ -586,6 +615,7 @@ describe('GET /api/search - Postgres Fallback', () => {
     expect(body.fallback).toBe('recent_in_city');
     expect(body.hits).toHaveLength(1);
     expect(body.hits[0]?.title).toBe('Recent Project in City');
+    expect(body.hits[0]?.budgetBandLabel).toBe('₹15L - ₹35L');
     expect(repository.recentProjectsInCity).toHaveBeenCalledWith('mumbai', 24);
   });
 

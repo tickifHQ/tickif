@@ -93,7 +93,6 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     await expect(page).toHaveURL('/designer/dashboard');
 
     await page.goto(`/d/${profile.slug}`);
-    await page.waitForLoadState('networkidle');
     await expect(
       page.getByRole('heading', { name: organization.name, exact: true }).first(),
     ).toBeVisible();

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PersonalSettingsForm } from '../../src/components/personal-settings-form';
 
@@ -7,13 +7,17 @@ const mock = vi.hoisted(() => ({
   patch: vi.fn(),
   get: vi.fn(),
   refresh: vi.fn(),
-  getSession: vi.fn(),
+  refetchSession: vi.fn(),
 }));
 vi.mock('@/lib/api', () => ({
   api: { api: { 'personal-account': { me: { $patch: mock.patch, $get: mock.get } } } },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
-vi.mock('@/lib/auth-client', () => ({ authClient: { getSession: mock.getSession } }));
+vi.mock('@/lib/auth-client', () => ({
+  authClient: {
+    useSession: () => ({ refetch: mock.refetchSession }),
+  },
+}));
 const original = {
   name: 'Original Name',
   address: 'Old address',
@@ -27,10 +31,57 @@ const original = {
 const saved = { ...original, name: 'New Name', address: null, revision: 'b'.repeat(64) };
 beforeEach(() => {
   vi.clearAllMocks();
-  mock.getSession.mockResolvedValue({});
+  mock.refetchSession.mockResolvedValue(undefined);
 });
 
 describe('personal settings', () => {
+  it.each(['+919876543210', '+91 98765 43210', '(+91) 98765-43210'])(
+    'keeps the generated phone name %s out of the editable display name',
+    (name) => {
+      render(<PersonalSettingsForm initialAccount={{ ...original, name }} />);
+      expect(screen.getByLabelText('Display name')).toHaveValue('');
+      expect(screen.getByPlaceholderText('Enter your name')).toBeRequired();
+      expect(screen.getByText('+919876543210 (Verified)')).toHaveRole('definition');
+      expect(screen.getAllByRole('textbox')).toHaveLength(3);
+      expect(screen.getByText('All changes are saved.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    },
+  );
+
+  it('saves a new visitor name without submitting or changing the sign-in phone', async () => {
+    const user = userEvent.setup();
+    mock.patch.mockResolvedValue(Response.json(saved));
+    render(<PersonalSettingsForm initialAccount={{ ...original, name: original.phoneNumber }} />);
+    await user.type(screen.getByLabelText('Display name'), saved.name);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Personal settings saved.');
+    expect(mock.patch).toHaveBeenCalledWith({
+      json: {
+        name: saved.name,
+        address: original.address,
+        whatsappNumber: null,
+        revision: original.revision,
+      },
+    });
+    expect(screen.getByLabelText('Display name')).toHaveValue(saved.name);
+    expect(screen.getByText('+919876543210 (Verified)')).toHaveRole('definition');
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('keeps a generated name blank after reloading a conflicting save', async () => {
+    const user = userEvent.setup();
+    const placeholder = { ...original, name: original.phoneNumber };
+    mock.patch.mockResolvedValueOnce(Response.json({}, { status: 409 }));
+    mock.get.mockResolvedValue(Response.json({ ...placeholder, revision: saved.revision }));
+    render(<PersonalSettingsForm initialAccount={placeholder} />);
+    await user.type(screen.getByLabelText('Display name'), saved.name);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await user.click(await screen.findByRole('button', { name: 'Reload latest settings' }));
+    await waitFor(() => expect(screen.getByLabelText('Display name')).toHaveValue(''));
+    expect(screen.getByText('All changes are saved.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
   it('loads persisted values and displays contact verification without editable identities', () => {
     render(<PersonalSettingsForm initialAccount={original} />);
     expect(screen.getByRole('heading', { name: 'Personal details' })).toBeInTheDocument();
@@ -73,6 +124,11 @@ describe('personal settings', () => {
     expect(mock.patch).toHaveBeenCalledWith({
       json: { name: saved.name, address: null, whatsappNumber: null, revision: original.revision },
     });
+    await waitFor(() =>
+      expect(mock.refetchSession).toHaveBeenCalledWith({
+        query: { disableCookieCache: true },
+      }),
+    );
     expect(mock.refresh).toHaveBeenCalled();
     view.unmount();
     render(<PersonalSettingsForm initialAccount={saved} />);
@@ -90,8 +146,22 @@ describe('personal settings', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Your changes are still here');
     expect(screen.getByLabelText('Personal address (optional)')).toHaveValue('New address');
+    expect(mock.refetchSession).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByRole('status')).toHaveTextContent('saved');
+  });
+  it('keeps a confirmed save when refreshing the account display is temporarily unavailable', async () => {
+    const user = userEvent.setup();
+    mock.patch.mockResolvedValue(Response.json(saved));
+    mock.refetchSession.mockRejectedValueOnce(new Error('Network unavailable'));
+    render(<PersonalSettingsForm initialAccount={original} />);
+    await user.clear(screen.getByLabelText('Display name'));
+    await user.type(screen.getByLabelText('Display name'), saved.name);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Personal settings saved.');
+    await waitFor(() => expect(mock.refresh).toHaveBeenCalled());
+    expect(screen.getByLabelText('Display name')).toHaveValue(saved.name);
+    expect(mock.patch).toHaveBeenCalledOnce();
   });
   it('blocks stale saves and reloads the current revision before accepting edits', async () => {
     const user = userEvent.setup();

@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
 import { cn } from '../lib/utils';
 import { controlStyles, controlTextStyles } from '../lib/control-styles';
+import { typography } from '../lib/typography';
 
 const Select = SelectPrimitive.Root;
 
@@ -15,8 +16,10 @@ const SelectValue = SelectPrimitive.Value;
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
+    variant?: 'default' | 'navigation';
+  }
+>(({ className, children, variant = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     data-slot="select-trigger"
@@ -24,13 +27,23 @@ const SelectTrigger = React.forwardRef<
       controlStyles,
       controlTextStyles,
       'flex h-11 items-center justify-between gap-2 whitespace-nowrap px-3.5 py-0 text-left data-[placeholder]:text-muted-foreground [&>span]:min-w-0 [&>span]:truncate',
+      variant === 'navigation' && [
+        'h-8 w-auto gap-1.5 rounded-full border-0 bg-card px-2.5 shadow-xs',
+        typography.labelMd,
+      ],
       className,
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      <ChevronDown
+        aria-hidden="true"
+        className={cn(
+          'shrink-0 text-muted-foreground',
+          variant === 'navigation' ? 'size-3' : 'size-4',
+        )}
+      />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));

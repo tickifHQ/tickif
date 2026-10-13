@@ -25,6 +25,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/legacy-profile-review-entry', () => ({
   LegacyProfileReviewEntry: () => null,
 }));
+vi.mock('@/components/following-portfolio-visit', () => ({ FollowingPortfolioVisit: () => null }));
 
 vi.mock('@/components/public-designer-profile', () => ({
   PublicDesignerProfile: ({ portfolio }: { portfolio: { displayName: string } }) => (

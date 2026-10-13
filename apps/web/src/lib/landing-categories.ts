@@ -1,5 +1,6 @@
 import type { FeedFacetOptions } from '@/components/feed-filters';
 import type { FeedFilterKey } from '@/lib/feed-params';
+import { projectBudgetBands, designProjectBudgetBands } from '@repo/contracts';
 
 type LandingCategory = { facet: FeedFilterKey; slug: string; label: string; image: string };
 
@@ -30,6 +31,29 @@ const shortcuts: LandingCategory[] = [
 
 export function landingCategories(options: FeedFacetOptions) {
   return categories.filter(({ facet, slug }) => options[facet]?.some((term) => term.slug === slug));
+}
+
+/** Same artwork as public discovery, backed only by active taxonomy values. */
+export function visitorCategories(options: FeedFacetOptions) {
+  const rooms = landingCategories(options).filter((category) => category.facet === 'room');
+  const slugs = [...projectBudgetBands, ...designProjectBudgetBands]
+    .filter((band) => band.max !== null && band.max <= 1_000_000)
+    .filter((band) => options.budgetBand?.some((term) => term.slug === band.slug))
+    .map((band) => band.slug);
+  return [
+    ...rooms,
+    ...(slugs.length
+      ? [
+          {
+            facet: 'budgetBand' as const,
+            slug: 'under-10l',
+            slugs,
+            label: 'Under ₹10L',
+            image: 'filter-budget.png',
+          },
+        ]
+      : []),
+  ];
 }
 
 export function landingShortcuts(options: FeedFacetOptions) {

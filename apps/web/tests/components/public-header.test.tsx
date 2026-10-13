@@ -9,12 +9,72 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/account-menu', () => ({
-  AccountMenu: ({ showProfileSettings }: { showProfileSettings?: boolean }) => (
-    <div data-profile-settings={String(showProfileSettings ?? false)}>Account menu</div>
+  AccountMenu: ({
+    showProfileSettings,
+    avatarTone,
+  }: {
+    showProfileSettings?: boolean;
+    avatarTone?: string;
+  }) => (
+    <div data-profile-settings={String(showProfileSettings ?? false)} data-avatar-tone={avatarTone}>
+      Account menu
+    </div>
   ),
 }));
 
 describe('PublicHeader', () => {
+  it('uses identical visitor navigation typography for current and inactive links', () => {
+    pathname = '/home';
+    render(<PublicHeader visitor isAuthenticated userRole="visitor" />);
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    for (const label of ['For you', 'Explore', 'Designers']) {
+      expect(within(nav).getByText(label)).toHaveClass('text-sm', 'leading-[18px]', 'py-2');
+    }
+    expect(nav).toHaveClass('gap-0.5');
+  });
+  it('does not override DiceBear identity colors in the visitor header', () => {
+    render(<PublicHeader visitor isAuthenticated userRole="visitor" />);
+    expect(screen.getByText('Account menu')).not.toHaveAttribute('data-avatar-tone');
+  });
+  it('scopes the warm translucent background and subtle divider to the visitor header', () => {
+    const view = render(<PublicHeader visitor />);
+    expect(screen.getByRole('banner')).toHaveClass(
+      'bg-visitor-header-background',
+      'border-account-menu-divider',
+    );
+    view.rerender(<PublicHeader />);
+    expect(screen.getByRole('banner')).toHaveClass('bg-background/90', 'border-border');
+    expect(screen.getByRole('banner')).not.toHaveClass('bg-visitor-header-background');
+  });
+  it('renders one visitor search slot for all viewport sizes', () => {
+    render(
+      <PublicHeader
+        visitor
+        isAuthenticated
+        userRole="visitor"
+        visitorSearch={<input type="search" aria-label="Visitor search" />}
+      />,
+    );
+    expect(screen.getAllByRole('searchbox', { name: 'Visitor search' })).toHaveLength(1);
+  });
+  it('keeps signed-in Explore on the custom feed instead of redirecting to saved defaults', () => {
+    pathname = '/home';
+    render(<PublicHeader visitor isAuthenticated userRole="visitor" />);
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(nav).getByText('For you')).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: 'Explore' })).toHaveAttribute(
+      'href',
+      '/home?feed=custom&view=explore',
+    );
+    expect(within(nav).queryByText('Cities')).toBeNull();
+  });
+  it('marks Explore as selected without changing navigation on other public surfaces', () => {
+    pathname = '/home';
+    render(<PublicHeader visitor visitorView="explore" isAuthenticated userRole="visitor" />);
+    expect(
+      within(screen.getByRole('navigation', { name: 'Primary' })).getByText('Explore'),
+    ).toHaveAttribute('aria-current', 'page');
+  });
   beforeEach(() => {
     pathname = '/';
   });

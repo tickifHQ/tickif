@@ -1005,6 +1005,50 @@ describe('GET /api/projects/portfolio', () => {
 });
 
 describe('POST /api/projects', () => {
+  it('blocks retired budget assignments on create and edit while retaining saved values', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002048');
+    await makeTaxonomy({
+      kind: 'budget_band',
+      slug: 'upscale',
+      label: '₹15L - ₹35L',
+      isActive: false,
+    });
+    await makeTaxonomy({ kind: 'budget_band', slug: 'luxury', label: '₹35L+', isActive: false });
+    await makeTaxonomy({ kind: 'budget_band', slug: '10l-20l', label: '₹10L - ₹20L' });
+    const rejected = await requestJson('/api/projects', 'POST', cookie, {
+      title: 'New project',
+      budgetBandSlug: 'upscale',
+    });
+    expect(rejected.status).toBe(422);
+    const created = await requestJson('/api/projects', 'POST', cookie, {
+      title: 'Current budget',
+      budgetBandSlug: '10l-20l',
+    });
+    expect(created.status).toBe(201);
+    const saved = await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      budgetBandSlug: 'upscale',
+    });
+    for (const patch of [{ description: 'Updated description' }, { budgetBandSlug: 'upscale' }]) {
+      const response = await requestJson(`/api/projects/${saved.id}`, 'PATCH', cookie, patch);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ budgetBandSlug: 'upscale' });
+    }
+    const changedRetired = await requestJson(`/api/projects/${saved.id}`, 'PATCH', cookie, {
+      budgetBandSlug: 'luxury',
+    });
+    expect(changedRetired.status).toBe(422);
+    const changedActive = await requestJson(`/api/projects/${saved.id}`, 'PATCH', cookie, {
+      budgetBandSlug: '10l-20l',
+    });
+    expect(changedActive.status).toBe(200);
+    const restoredRetired = await requestJson(`/api/projects/${saved.id}`, 'PATCH', cookie, {
+      budgetBandSlug: 'upscale',
+    });
+    expect(restoredRetired.status).toBe(422);
+  });
+
   it('rejects unauthenticated requests with 401', async () => {
     const res = await client.api.projects.$post({
       json: { title: 'New Project' },

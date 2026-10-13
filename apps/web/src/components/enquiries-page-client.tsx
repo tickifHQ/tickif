@@ -1,37 +1,73 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
-import { MessageSquare } from 'lucide-react';
-import type { EnquiryResponse, ListEnquiriesResponse } from '@repo/contracts';
+import { Circle, MessageSquare } from 'lucide-react';
+import { listEnquiriesResponseSchema, type EnquiryResponse } from '@repo/contracts';
+import { Button } from '@repo/ui/components/button';
+import { EnquiryThread } from '@/components/enquiry-thread';
+import { EnquiryProgress, enquiryReadThrough } from '@/components/enquiry-progress';
 import { api } from '@/lib/api';
+import { latestEnquiryReadWatermark } from '@/lib/enquiry-read-watermark';
 
 export function EnquiriesPageClient() {
   const [enquiries, setEnquiries] = useState<EnquiryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [retry, setRetry] = useState(0);
+  const [error, setError] = useState(false);
+  const requested = useSearchParams().get('enquiryId');
 
   useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError(false);
     async function load() {
       try {
-        const res = await api.api.enquiries.mine.$get({ query: { status: 'all' } });
-        if (res.ok) {
-          const data: ListEnquiriesResponse = await res.json();
-          setEnquiries(data.items);
-          if (data.items.length > 0 && !selectedId) {
-            setSelectedId(data.items[0]!.id);
-          }
-        }
+        const res = await api.api.enquiries.mine.$get(
+          { query: { status: 'all', page, limit: 12 } },
+          { init: { signal: controller.signal, cache: 'no-store' } },
+        );
+        if (!res.ok) throw new Error('Could not load enquiries');
+        const parsed = listEnquiriesResponseSchema.safeParse(await res.json());
+        if (!parsed.success) throw new Error('Invalid enquiries');
+        if (controller.signal.aborted) return;
+        setEnquiries(parsed.data.items);
+        setTotalPages(parsed.data.totalPages);
+        setSelectedId(
+          (previous) =>
+            parsed.data.items.find((item) => item.id === requested)?.id ??
+            parsed.data.items.find((item) => item.id === previous)?.id ??
+            parsed.data.items[0]?.id ??
+            null,
+        );
       } catch {
-        // silently fail
+        if (!controller.signal.aborted) setError(true);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     void load();
-  }, []);
+    return () => controller.abort();
+  }, [page, retry, requested]);
 
   const selected = enquiries.find((e) => e.id === selectedId) ?? null;
+  const markRead = useCallback((id: string, through: string) => {
+    const acknowledged = latestEnquiryReadWatermark([through]);
+    if (!acknowledged) return;
+    setEnquiries((items) =>
+      items.map((item) => {
+        if (item.id !== id || !item.activity?.isNew) return item;
+        const loaded = latestEnquiryReadWatermark([enquiryReadThrough(item)]);
+        // A delayed acknowledgement cannot clear a newer loaded update.
+        if (!loaded || loaded > acknowledged) return item;
+        return { ...item, activity: { ...item.activity, isNew: false } };
+      }),
+    );
+  }, []);
 
   if (loading) {
     return (
@@ -41,6 +77,15 @@ export function EnquiriesPageClient() {
     );
   }
 
+  if (error)
+    return (
+      <div role="status" className="mx-auto flex max-w-xl flex-col items-start gap-3 p-6">
+        <p>Could not load your enquiries. Please try again.</p>
+        <Button type="button" onClick={() => setRetry((value) => value + 1)}>
+          Retry
+        </Button>
+      </div>
+    );
   if (enquiries.length === 0) {
     return (
       <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-[1512px] flex-col items-center justify-center gap-3 px-6">
@@ -54,9 +99,9 @@ export function EnquiriesPageClient() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-[1512px]">
+    <div className="mx-auto flex h-[calc(100dvh-4rem)] min-h-0 max-w-screen-2xl flex-col md:flex-row">
       {/* Sidebar */}
-      <aside className="w-80 shrink-0 overflow-y-auto border-r border-border">
+      <aside className="max-h-60 w-full shrink-0 overflow-y-auto border-b border-border md:max-h-none md:w-80 md:border-b-0 md:border-r">
         <div className="px-4 py-4">
           <p className="font-mono text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Your Enquiries
@@ -67,6 +112,7 @@ export function EnquiriesPageClient() {
             <button
               key={enquiry.id}
               type="button"
+              aria-pressed={selectedId === enquiry.id}
               onClick={() => setSelectedId(enquiry.id)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
                 selectedId === enquiry.id
@@ -97,17 +143,46 @@ export function EnquiriesPageClient() {
                   </p>
                 )}
               </div>
+              {enquiry.activity?.isNew ? (
+                <>
+                  <Circle aria-hidden className="size-2 shrink-0 fill-primary text-primary" />
+                  <span className="sr-only">Unread updates</span>
+                </>
+              ) : null}
             </button>
           ))}
         </div>
+        <nav aria-label="Enquiry pages" className="flex gap-2 p-3">
+          {page > 1 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setPage((value) => value - 1)}
+            >
+              Previous
+            </Button>
+          ) : null}
+          {page < totalPages ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setPage((value) => value + 1)}
+            >
+              Next
+            </Button>
+          ) : null}
+        </nav>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
         {selected ? (
           <div className="mx-auto max-w-2xl">
+            <EnquiryProgress enquiry={selected} />
             {/* Header */}
-            <div className="flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3">
               <DesignerLogoAvatar
                 logoUrl={selected.designerProfile.logoUrl}
                 alt={`${selected.designerProfile.displayName} logo`}
@@ -132,6 +207,12 @@ export function EnquiriesPageClient() {
               </div>
             </div>
 
+            <EnquiryThread
+              key={selected.id}
+              target={{ kind: 'visitor', id: selected.id }}
+              readThrough={enquiryReadThrough(selected)}
+              onRead={markRead}
+            />
             {/* Enquiry details */}
             <div className="mt-6 space-y-4 rounded-xl border border-border p-5">
               <div>

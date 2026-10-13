@@ -23,4 +23,5 @@ export const typography = {
   monoXs: 'font-mono font-medium text-[10px] leading-3 tracking-[0.06em]',
   monoSm: 'font-mono font-medium text-[11px] leading-[14px] tracking-[0.06em]',
   monoMd: 'font-mono font-medium text-xs leading-4 tracking-[0.04em]',
+  searchLabel: 'font-mono font-normal text-search-label uppercase',
 } as const;

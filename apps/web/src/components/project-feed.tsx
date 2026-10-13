@@ -1,10 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Children,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { cn } from '@repo/ui/lib/utils';
 import { SearchX } from 'lucide-react';
 import { EmptyState } from '@repo/ui/components/empty-state';
 import { Button } from '@repo/ui/components/button';
 import { Reveal } from '@repo/ui/components/reveal';
+import { LoadingDots } from '@repo/ui/components/loading-dots';
+import { typography } from '@repo/ui/lib/typography';
 import { FeedPagination } from '@/components/feed-pagination';
 import { ShowcaseCard } from '@/components/showcase-card';
 import { TryFilterCard, type FeedFilterSuggestion } from '@/components/try-filter-card';
@@ -33,7 +45,9 @@ const FILTER_LABELS: Record<string, string> = {
 type ProjectFeedProps = {
   initialPage: HomeFeedPage;
   request: HomeFeedRequest;
-  presentation?: 'default' | 'landing';
+  presentation?: 'default' | 'landing' | 'visitor';
+  /** Server-rendered recommendations between the initial page and appended discovery pages. */
+  afterInitialPage?: ReactNode;
   infinite?: boolean;
   autoLoad?: boolean;
   showTryFilter?: boolean;
@@ -160,7 +174,7 @@ function FeedEntryCard({
 }: {
   entry: FeedEntry;
   hasActiveCriteria: boolean;
-  presentation?: 'default' | 'landing';
+  presentation?: 'default' | 'landing' | 'visitor';
 }) {
   return entry.kind === 'try-filter' ? (
     <TryFilterCard suggestions={entry.suggestions} hasActiveCriteria={hasActiveCriteria} />
@@ -189,11 +203,15 @@ function StableMasonry({
 }: {
   entries: FeedEntry[];
   hasActiveCriteria: boolean;
-  presentation?: 'default' | 'landing';
+  presentation?: 'default' | 'landing' | 'visitor';
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState<number | null>(null);
-  const columnCountClasses = `${MASONRY_COLUMN_COUNT_CLASS_NAME} ${presentation === 'landing' ? 'min-[90rem]:[--masonry-columns:6]' : ''}`;
+  const columnCountClasses = cn(
+    MASONRY_COLUMN_COUNT_CLASS_NAME,
+    presentation === 'landing' && 'min-[90rem]:[--masonry-columns:6]',
+    presentation === 'visitor' && 'xl:[--masonry-columns:6]',
+  );
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -225,7 +243,7 @@ function StableMasonry({
     () =>
       visibleColumnCount === null
         ? null
-        : distributeEntries(entries, visibleColumnCount, presentation === 'landing'),
+        : distributeEntries(entries, visibleColumnCount, presentation !== 'default'),
     [visibleColumnCount, entries, presentation],
   );
 
@@ -234,7 +252,12 @@ function StableMasonry({
       <div
         ref={containerRef}
         data-masonry-feed
-        className={`${MASONRY_FALLBACK_CLASS_NAME} ${presentation === 'landing' ? 'min-[90rem]:columns-6' : ''} ${columnCountClasses}`}
+        className={cn(
+          MASONRY_FALLBACK_CLASS_NAME,
+          presentation === 'landing' && 'min-[90rem]:columns-6',
+          presentation === 'visitor' && 'xl:columns-6',
+          columnCountClasses,
+        )}
       >
         {entries.map((entry) => (
           <FeedEntryCard
@@ -280,7 +303,7 @@ function relaxedFilterMessage(filters: string[]): string {
   return `We broadened your results by relaxing ${labels.join(', ')}.`;
 }
 
-function stableCoverImageUrl(value: string | null): string | null {
+function stableMediaUrl(value: string | null | undefined): string | null | undefined {
   if (!value) return value;
 
   try {
@@ -300,9 +323,12 @@ function initialFeedKey(initialPage: HomeFeedPage): string {
   return JSON.stringify([
     initialPage.page,
     initialPage.hasMore,
-    initialPage.items.map(({ coverImageUrl, ...item }) => [
+    initialPage.items.map(({ coverImageUrl, studioLogoUrl, ...item }) => [
       item,
-      stableCoverImageUrl(coverImageUrl),
+      // Signing credentials rotate without changing either media asset. Keep
+      // fresh render URLs in props while comparing their stable identities.
+      stableMediaUrl(coverImageUrl),
+      stableMediaUrl(studioLogoUrl),
     ]),
   ]);
 }
@@ -314,6 +340,7 @@ export function ProjectFeed(props: ProjectFeedProps) {
   // changes the query, filters, sort, or starting page. A material server-data
   // refresh also starts a new feed instead of keeping outdated cards.
   const feedKey = JSON.stringify([
+    props.request.scope,
     props.request.query,
     props.request.sort ?? 'recent',
     ...FEED_FILTER_KEYS.map((key) => [...(props.request.filters[key] ?? [])].sort()),
@@ -333,7 +360,9 @@ function ProjectFeedResults({
   filterCardPlacementSeed = 0,
   paginationParams,
   paginationBase = '/',
+  afterInitialPage,
 }: ProjectFeedProps) {
+  const initialPageExtras = Children.toArray(afterInitialPage);
   const [appendedPages, setAppendedPages] = useState<RenderedFeedPage[]>([]);
   const [page, setPage] = useState(initialPage.page);
   const [hasMore, setHasMore] = useState(initialPage.hasMore);
@@ -426,18 +455,39 @@ function ProjectFeedResults({
         <EmptyState
           className="py-20"
           icon={<SearchX className="size-5" aria-hidden />}
-          title={request.query ? 'No matching projects' : 'No projects found'}
+          title={
+            request.query
+              ? 'No matching projects'
+              : request.scope === 'following'
+                ? 'No followed projects yet'
+                : 'No projects found'
+          }
           description={
             request.query
               ? `We could not find projects matching “${request.query}”. Try a broader search or remove a filter.`
-              : 'Try removing a filter or check back when more projects are published.'
+              : request.scope === 'following'
+                ? 'Follow designers to see their published homes here, or remove a filter to see more.'
+                : 'Try removing a filter or check back when more projects are published.'
           }
           action={
             <Button asChild variant="outline" size="sm">
-              <a href={paginationBase}>Clear search and filters</a>
+              <a
+                href={
+                  request.scope === 'following'
+                    ? hasActiveCriteria
+                      ? '/home?feed=custom&view=following'
+                      : '/designers'
+                    : paginationBase
+                }
+              >
+                {request.scope === 'following' && !hasActiveCriteria
+                  ? 'Find designers'
+                  : 'Clear search and filters'}
+              </a>
             </Button>
           }
         />
+        {initialPageExtras}
         {!infinite ? (
           <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={null} />
         ) : null}
@@ -488,26 +538,54 @@ function ProjectFeedResults({
       ) : null}
 
       <StableMasonry
-        entries={entries}
+        entries={
+          afterInitialPage
+            ? entries.filter(
+                (entry) => entry.kind === 'try-filter' || entry.page === initialPage.page,
+              )
+            : entries
+        }
         hasActiveCriteria={hasActiveCriteria}
         presentation={presentation}
       />
+      {initialPageExtras}
+      {afterInitialPage && appendedPages.length > 0 ? (
+        <StableMasonry
+          entries={entries.filter(
+            (entry) => entry.kind === 'project' && entry.page !== initialPage.page,
+          )}
+          hasActiveCriteria={hasActiveCriteria}
+          presentation={presentation}
+        />
+      ) : null}
 
       {canLoadMore ? (
         <div
           ref={sentinelRef}
-          className="flex min-h-24 items-center justify-center"
-          aria-live="polite"
+          className={cn(
+            'flex items-center justify-center',
+            presentation === 'visitor' ? 'pt-12 pb-18' : 'min-h-24',
+          )}
+          aria-live={presentation === 'visitor' ? undefined : 'polite'}
         >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void loadNextPage()}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Loading more projects…' : 'Load more projects'}
-          </Button>
+          {isLoading && presentation === 'visitor' ? (
+            <div role="status" className="flex flex-col items-center gap-2.5">
+              <LoadingDots />
+              <span className={cn(typography.monoSm, 'uppercase text-muted-foreground')}>
+                Loading more homes for you
+              </span>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void loadNextPage()}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading more projects…' : 'Load more projects'}
+            </Button>
+          )}
         </div>
       ) : null}
 

@@ -24,6 +24,15 @@ const options = {
 };
 
 describe('feed-page-helpers', () => {
+  it('retains the private following scope in search and pagination links', () => {
+    expect(
+      feedPageLink(
+        { feed: 'custom', view: 'following', q: 'calm', room: 'living-room' },
+        2,
+        '/home',
+      ),
+    ).toBe('/home?feed=custom&view=following&q=calm&room=living-room&page=2');
+  });
   it('keeps cleared personal filters and locality/subtype in pagination URLs', () => {
     expect(
       feedPageLink({ feed: 'custom', locality: 'adyar', propertySubtype: 'villa' }, 2, '/home'),
