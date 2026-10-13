@@ -1054,12 +1054,23 @@
   background: currentColor;
 }
 .designer-profile .profile-story blockquote {
+  --profile-quote-font-size: 44px;
+  display: flex;
+  width: 100%;
+  height: 192px;
+  flex-shrink: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
   max-width: 850px;
   margin: 28px auto 32px;
   font-family: var(--font-heading);
-  font-size: 44px;
-  line-height: 48px;
+  font-size: var(--profile-quote-font-size);
+  line-height: 1.15;
   letter-spacing: -0.025em;
+}
+.designer-profile .profile-story blockquote > span {
+  width: 100%;
+  margin-block: auto;
 }
 .designer-profile .profile-story-author {
   display: flex;
@@ -2573,9 +2584,9 @@
     border-radius: 24px;
   }
   .designer-profile .profile-story blockquote {
+    --profile-quote-font-size: 28px;
+    height: 224px;
     margin-block: 24px;
-    font-size: 28px;
-    line-height: 32px;
     letter-spacing: -0.025em;
   }
   .designer-profile .profile-story-pill,

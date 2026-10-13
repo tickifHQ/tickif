@@ -20,6 +20,7 @@ import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-ct
 import { ConsultationCta } from '@/components/consultation-cta';
 import { PublicProjectGallery } from '@/components/public-project-gallery';
 import { ProfileClientRatings } from '@/components/profile-client-ratings';
+import { ProfileTestimonialQuote } from '@/components/profile-testimonial-quote';
 import { ProfileExperienceCentres } from '@/components/profile-experience-centres';
 import {
   GoogleBrandIcon,
@@ -666,15 +667,7 @@ function StorySection({ portfolio }: SectionProps) {
           <span aria-hidden="true" />
           {noteMeta}
         </p>
-        <blockquote>
-          <span aria-hidden="true" className="profile-punctuation">
-            “
-          </span>
-          {quote}
-          <span aria-hidden="true" className="profile-punctuation">
-            ”
-          </span>
-        </blockquote>
+        <ProfileTestimonialQuote quote={quote} />
         {author ? (
           <footer className="profile-story-author">
             <ClientNoteAvatar author={author} avatarUrl={avatarUrl} />

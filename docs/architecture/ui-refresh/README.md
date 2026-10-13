@@ -16,6 +16,13 @@ Actual project-review totals remain in the overview metrics.
 
 ## Sources and coverage
 
+Public portfolio client/studio notes display at most 60 whitespace-separated
+words, with an ellipsis for longer copy; saved testimonial content is preserved.
+The quote has a 192px desktop / 224px mobile height and fits its font from the
+responsive 44px / 28px maximum down to 16px when its container changes size or
+fonts load. Exceptional overflow remains scrollable at the readable minimum;
+the author stays outside the quote area.
+
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)
 uses a 1512px canvas. A 390px mobile frame, `15885:4109`, exists on the same
 Portfolio page; use it rather than inventing the profile's mobile composition.
