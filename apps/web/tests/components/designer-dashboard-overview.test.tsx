@@ -1,12 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProfileDashboardResponse, ProjectListItem } from '@repo/contracts';
 import { DesignerDashboardOverview } from '../../src/components/designer-dashboard-overview';
 
+const refresh = vi.hoisted(() => vi.fn());
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
-    refresh: vi.fn(),
+    refresh,
   }),
 }));
 
@@ -81,6 +84,7 @@ describe('DesignerDashboardOverview', () => {
   );
 
   beforeEach(() => {
+    refresh.mockReset();
     window.sessionStorage.clear();
   });
 
@@ -871,7 +875,136 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.queryByText('33%')).not.toBeInTheDocument();
   });
 
-  it('surfaces completion loading failures without replacing them with a fake empty state', () => {
+  it.each([true, false])(
+    'does not diagnose setup or show fallback metrics when the summary fails (completed: %s)',
+    (completed) => {
+      render(
+        <DesignerDashboardOverview
+          studioName="Livspace"
+          studioLocation="Chennai"
+          portfolioUrl="https://tickif.com/d/livspace"
+          dashboard={dashboard}
+          dashboardError="Could not load dashboard summary."
+          completion={{
+            score: completed ? 100 : 0,
+            missing: [],
+            steps: [
+              { key: 'org-created', label: 'Create your organization', done: completed },
+              { key: 'profile-completed', label: 'Complete your profile', done: completed },
+              {
+                key: 'first-project-uploaded',
+                label: 'Upload your first project',
+                done: completed,
+              },
+            ],
+          }}
+        />,
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not load dashboard summary');
+      expect(screen.getByText('Your dashboard summary is temporarily unavailable.')).toBeVisible();
+      expect(
+        screen.queryByText("Let's get your portfolio ready to go live."),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId('post-setup-overview')).not.toBeInTheDocument();
+      expect(screen.queryByText('Complete portfolio basics')).not.toBeInTheDocument();
+      expect(screen.queryByText('Total projects')).not.toBeInTheDocument();
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /start verification/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /copy link/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    { write: false, edit: false },
+    { write: true, edit: false },
+    { write: false, edit: true },
+    { write: true, edit: true },
+  ])('keeps recovery navigation permission-aware (%j)', ({ write, edit }) => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+        dashboardError="Could not load dashboard summary."
+        canWriteProjects={write}
+        canEditOrganization={edit}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'View projects' })).toHaveAttribute(
+      'href',
+      '/designer/projects',
+    );
+    const addProject = screen.queryByRole('link', { name: 'Add project' });
+    const managePortfolio = screen.queryByRole('link', { name: 'Manage portfolio' });
+    if (write) expect(addProject).toHaveAttribute('href', '/designer/projects/new');
+    else expect(addProject).not.toBeInTheDocument();
+    if (edit) expect(managePortfolio).toHaveAttribute('href', '/designer/portfolio');
+    else expect(managePortfolio).not.toBeInTheDocument();
+  });
+
+  it('retries failed summaries and restores the real overview only after a successful response', async () => {
+    const user = userEvent.setup();
+    const props = {
+      studioName: 'Livspace',
+      studioLocation: 'Chennai',
+      portfolioUrl: 'https://tickif.com/d/livspace',
+      dashboard: {
+        ...dashboard,
+        portfolioBasicsComplete: true,
+        projects: { total: 1, published: 1, inReview: 0, draft: 0 },
+      },
+    };
+    const { rerender } = render(
+      <DesignerDashboardOverview {...props} dashboardError="Could not load dashboard summary." />,
+    );
+    expect(screen.queryByTestId('post-setup-overview')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alert')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    rerender(<DesignerDashboardOverview {...props} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('post-setup-overview')).toBeVisible();
+    expect(screen.getByText('Total projects')).toBeVisible();
+  });
+
+  it('announces a pending retry and prevents duplicate requests without changing its visible label', async () => {
+    const user = userEvent.setup();
+    let finishRefresh: (() => void) | undefined;
+    refresh.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRefresh = resolve;
+        }),
+    );
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+        dashboardError="Could not load dashboard summary."
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    const pendingButton = screen.getByRole('button', { name: 'Retrying dashboard summary' });
+    expect(pendingButton).toBeDisabled();
+    expect(pendingButton).toHaveTextContent('Retry');
+    expect(screen.getByRole('alert')).toHaveAttribute('aria-busy', 'true');
+    await user.click(pendingButton);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => finishRefresh?.());
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('surfaces summary loading failures without replacing them with a fake empty state', () => {
     render(
       <DesignerDashboardOverview
         canWriteProjects

@@ -181,5 +181,8 @@ CI artifacts. Keep only deliberately referenced documentation images in Git.
 
 - AAA (arrange-act-assert); test **behavior, not implementation**.
 - Deterministic: no real time/network/random in unit tests; use factories.
+- Measure geometry after finite opening animations settle, using their `finished`
+  promises. Keep size bounds strict; do not use fixed sleeps, test retries or
+  rounded dimensions to mask transient animation measurements.
 - Never point a test at the dev/prod database.
 - `pnpm test` green before "done"; `pnpm test:e2e` before merging user-facing flows.

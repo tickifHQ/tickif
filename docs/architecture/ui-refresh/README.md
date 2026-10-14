@@ -14,6 +14,13 @@ heading. Outstanding identity verification keeps its own status and permitted
 action under "Verification"; completing setup does not imply KYC approval.
 Actual project-review totals remain in the overview metrics.
 
+If the dashboard summary cannot be loaded, setup and metric data are unknown,
+not incomplete or zero. A neutral recovery card replaces both onboarding and the
+overview until a successful retry. It refreshes the authenticated route and keeps
+project navigation available, with project creation and portfolio editing gated
+by the current organization's capabilities. It does not infer publication or
+verification eligibility from completion data or a fallback summary.
+
 ## Sources and coverage
 
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)
