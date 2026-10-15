@@ -1,7 +1,7 @@
 vi.mock('@/components/project-actions', () => ({
   ProjectActions: () => <button aria-label="Save project" />,
 }));
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { DesignerProjectCard, DiscoveryCard, FeedProject } from '@repo/contracts';
 import { PublicProjectCard } from '../../src/components/public-project-card';
@@ -61,6 +61,132 @@ const discoveryProject: DiscoveryCard = {
 };
 
 describe('ShowcaseCard', () => {
+  it('places the accessible Lucide verification tick beside the verified studio name', () => {
+    render(
+      <ShowcaseCard project={{ ...feedProject, studioIsVerified: true }} presentation="visitor" />,
+    );
+    const tick = screen.getByLabelText('Verified studio');
+    expect(tick).toHaveClass(
+      'lucide-badge-check',
+      'size-3.5',
+      'shrink-0',
+      'fill-primary',
+      'text-primary-foreground',
+    );
+    const studio = screen.getByText(feedProject.studio);
+    expect(studio.nextElementSibling).toBe(tick);
+  });
+  it.each([false, undefined])(
+    'does not badge unverified or unknown studios (%s)',
+    (studioIsVerified) => {
+      render(
+        <ShowcaseCard project={{ ...feedProject, studioIsVerified }} presentation="visitor" />,
+      );
+      expect(screen.queryByLabelText('Verified studio')).toBeNull();
+    },
+  );
+  it('shows a real compact budget and decorative card branding without replacing image bytes', () => {
+    render(
+      <ShowcaseCard project={{ ...feedProject, budget: '₹40L - ₹50L' }} presentation="visitor" />,
+    );
+    const budget = screen.getByText('₹40–50L');
+    expect(budget).toHaveAttribute('data-slot', 'badge');
+    expect(budget).toHaveClass('bg-project-budget', 'font-mono');
+    expect(budget.parentElement).toHaveClass('absolute', 'bottom-2.5', 'inset-x-2.5', 'flex-wrap');
+    expect(screen.getByText('TICKIF')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText('TICKIF')).toHaveClass('pointer-events-none', 'ml-auto');
+    expect(screen.getByRole('img', { name: feedProject.title })).toHaveAttribute(
+      'src',
+      feedProject.coverImageUrl,
+    );
+    expect(screen.getByRole('link')).not.toHaveAccessibleName(/TICKIF/);
+  });
+
+  it.each([null, '', '   '])('does not invent a budget for %s', (budget) => {
+    const { container } = render(
+      <ShowcaseCard project={{ ...feedProject, budget }} presentation="visitor" />,
+    );
+    expect(container.querySelector('[data-slot="badge"]')).toBeNull();
+  });
+
+  it('does not put a photo watermark over the visitor missing-image fallback', () => {
+    const { rerender } = render(<ShowcaseCard project={feedProject} presentation="visitor" />);
+    expect(screen.getByText('TICKIF')).toBeInTheDocument();
+    fireEvent.error(screen.getByRole('img', { name: feedProject.title }));
+    expect(screen.queryByText('TICKIF')).toBeNull();
+    rerender(
+      <ShowcaseCard
+        project={{ ...feedProject, coverImageUrl: 'https://images.example.com/replaced.jpg' }}
+        presentation="visitor"
+      />,
+    );
+    expect(screen.getByText('TICKIF')).toBeInTheDocument();
+  });
+
+  it('shows the supplied studio logo and falls back to initials if it fails', () => {
+    const logoProject = { ...feedProject, studioLogoUrl: 'https://images.example.com/studio.png' };
+    const { container, rerender } = render(
+      <ShowcaseCard project={logoProject} presentation="visitor" />,
+    );
+    const logo = container.querySelector('img[src="https://images.example.com/studio.png"]');
+    expect(logo).toBeInTheDocument();
+    fireEvent.error(logo!);
+    const fallback = container.querySelector('img[src^="data:image/svg+xml"]');
+    expect(fallback).toBeInTheDocument();
+    expect(decodeURIComponent(fallback!.getAttribute('src')!)).toContain('>SA</text>');
+    rerender(
+      <ShowcaseCard
+        project={{ ...logoProject, studioLogoUrl: 'https://images.example.com/replaced.png' }}
+        presentation="visitor"
+      />,
+    );
+    expect(
+      container.querySelector('img[src="https://images.example.com/replaced.png"]'),
+    ).toBeInTheDocument();
+  });
+  it('shows real studio metadata and save actions in the visitor feed without trust claims', () => {
+    const { container } = render(<ShowcaseCard project={feedProject} presentation="visitor" />);
+    expect(screen.getByText('Studio A')).toBeInTheDocument();
+    expect(screen.getByText('· Bandra')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save project' })).toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveAttribute('href', `/image/${feedProject.coverImageId}`);
+    expect(screen.queryByText(/verified|sponsored|following/i)).toBeNull();
+    expect(screen.getByRole('img', { name: feedProject.title }).parentElement).toHaveClass(
+      'aspect-4/5',
+    );
+    expect(container.querySelector('.sm\\:opacity-0')).toBeNull();
+  });
+
+  it('keeps a visitor card useful when its cover and location are missing', () => {
+    render(
+      <ShowcaseCard
+        project={{ ...feedProject, coverImageUrl: null, city: null, locality: null }}
+        presentation="visitor"
+      />,
+    );
+    expect(
+      screen.getByRole('img', { name: `${feedProject.title} image unavailable` }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Studio A')).toBeInTheDocument();
+    expect(screen.queryByText('Bandra')).toBeNull();
+  });
+  it('falls back when a visitor cover fails to load and recovers for a new source', () => {
+    const { rerender } = render(<ShowcaseCard project={feedProject} presentation="visitor" />);
+    fireEvent.error(screen.getByRole('img', { name: feedProject.title }));
+    expect(
+      screen.getByRole('img', { name: `${feedProject.title} image unavailable` }),
+    ).toBeInTheDocument();
+    rerender(
+      <ShowcaseCard
+        project={{ ...feedProject, coverImageUrl: 'https://images.example.com/new-cover.jpg' }}
+        presentation="visitor"
+      />,
+    );
+    expect(screen.getByRole('img', { name: feedProject.title })).toHaveAttribute(
+      'src',
+      'https://images.example.com/new-cover.jpg',
+    );
+  });
   it('keeps landing metadata location-only, matching the compact discovery cards', () => {
     render(<ShowcaseCard project={feedProject} presentation="landing" />);
     expect(screen.queryByText('3 BHK')).not.toBeInTheDocument();

@@ -3,17 +3,43 @@ import { describe, expect, it } from 'vitest';
 import { DesignerLogoAvatar } from '../../src/components/designer-logo-avatar';
 
 describe('DesignerLogoAvatar', () => {
-  it.each([null, '/broken.png'])('keeps decorative fallback initials out of link names (%s)', (logoUrl) => {
+  it('fills a project thumbnail only when the caller explicitly requests cover fitting', async () => {
     render(
-      <a href="/d/studio-one">
-        <DesignerLogoAvatar logoUrl={logoUrl} alt="" sizePx={40} fallback="ST" />
-        Studio One
-      </a>,
+      <DesignerLogoAvatar
+        logoUrl="/project-cover.jpg"
+        alt="Project thumbnail"
+        fit="cover"
+        sizePx={52}
+        fallback="ST"
+      />,
     );
-    if (logoUrl) fireEvent.error(screen.getByAltText(''));
-    expect(screen.getByRole('link')).toHaveAccessibleName('Studio One');
+    const image = screen.getByRole('img');
+    Object.defineProperties(image, {
+      naturalWidth: { value: 1280 },
+      naturalHeight: { value: 960 },
+    });
+    await act(async () => {
+      fireEvent.load(image);
+    });
+    expect(image).toHaveClass('object-cover');
+    expect(image.style.transform).toBe('');
+    fireEvent.error(image);
     expect(screen.getByText('ST')).toBeVisible();
   });
+  it.each([null, '/broken.png'])(
+    'keeps decorative fallback initials out of link names (%s)',
+    (logoUrl) => {
+      render(
+        <a href="/d/studio-one">
+          <DesignerLogoAvatar logoUrl={logoUrl} alt="" sizePx={40} fallback="ST" />
+          Studio One
+        </a>,
+      );
+      if (logoUrl) fireEvent.error(screen.getByAltText(''));
+      expect(screen.getByRole('link')).toHaveAccessibleName('Studio One');
+      expect(screen.getByText('ST')).toBeVisible();
+    },
+  );
 
   it('preserves logo proportions inside the same stable circular frame', () => {
     render(

@@ -25,6 +25,7 @@
     "react-dom": "catalog:"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-checkbox": "catalog:",
     "@radix-ui/react-dialog": "catalog:",
@@ -55,11 +56,11 @@
     "@testing-library/user-event": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "eslint": "^9.18.0",
     "happy-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

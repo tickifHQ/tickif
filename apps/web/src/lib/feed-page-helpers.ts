@@ -36,6 +36,8 @@ export function canonicalFeedParams(
 ): FeedPageSearchParams {
   const result: FeedPageSearchParams = {};
   if (params.feed === 'custom') result.feed = 'custom';
+  if (params.view === 'nearby' || params.view === 'explore' || params.view === 'following')
+    result.view = params.view;
   const query = parseFeedQuery(params.q);
   if (query) result.q = query;
 

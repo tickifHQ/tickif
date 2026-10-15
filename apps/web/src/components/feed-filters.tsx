@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
@@ -11,10 +12,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
-import { landingCategories } from '@/lib/landing-categories';
-import { X, Funnel } from 'lucide-react';
+import { landingCategories, visitorCategories } from '@/lib/landing-categories';
+import { Button } from '@repo/ui/components/button';
+import { Separator } from '@repo/ui/components/separator';
+import { cn } from '@repo/ui/lib/utils';
+import { X, Funnel, SlidersHorizontal } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FocusEvent, type ReactNode } from 'react';
 import {
   FEED_FACET_DEFINITIONS,
   parseFeedParams,
@@ -37,6 +41,7 @@ type FeedFilterTag = {
   label: string;
   count?: number;
   image?: string;
+  slugs?: string[];
 };
 
 function stableTagOrder(tag: Pick<FeedFilterTag, 'facet' | 'slug'>) {
@@ -49,7 +54,9 @@ function stableTagOrder(tag: Pick<FeedFilterTag, 'facet' | 'slug'>) {
 }
 
 type FeedFiltersProps = {
-  presentation?: 'default' | 'landing';
+  presentation?: 'default' | 'landing' | 'visitor';
+  leadingActions?: ReactNode;
+  forYouActive?: boolean;
   options?: FeedFacetOptions;
   facetDistribution?: FeedFacetDistribution;
 };
@@ -66,11 +73,27 @@ function hrefFor(pathname: string, state: FeedFilterState, current: URLSearchPar
   return query ? `${pathname}?${query}` : pathname;
 }
 
+function revealFocusedCategory(event: FocusEvent<HTMLDivElement>) {
+  const rail = event.currentTarget;
+  const category = event.target;
+  if (!(category instanceof HTMLElement) || category === rail) return;
+  const railBounds = rail.getBoundingClientRect();
+  const categoryBounds = category.getBoundingClientRect();
+  const style = getComputedStyle(rail);
+  const left = railBounds.left + (parseFloat(style.paddingLeft) || 0);
+  const right = railBounds.right - (parseFloat(style.paddingRight) || 0);
+  // Scroll this rail only, preserving the page and adjacent fixed controls.
+  if (categoryBounds.right > right) rail.scrollLeft += categoryBounds.right - right;
+  else if (categoryBounds.left < left) rail.scrollLeft += categoryBounds.left - left;
+}
+
 /** Taxonomy-driven filter controls with shareable URL state and applied chips. */
 export function FeedFilters({
   options = {},
   facetDistribution = {},
   presentation = 'default',
+  leadingActions,
+  forYouActive = false,
 }: FeedFiltersProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -93,6 +116,7 @@ export function FeedFilters({
 
   const suggestedTags = useMemo<FeedFilterTag[]>(() => {
     if (presentation === 'landing') return landingCategories(options);
+    if (presentation === 'visitor') return visitorCategories(options);
     const candidates = FEED_FACET_DEFINITIONS.flatMap((facet) => {
       const distribution = facetDistribution[facet.apiKey];
       return (options[facet.key] ?? []).map((option) => ({
@@ -140,10 +164,30 @@ export function FeedFilters({
 
   function clearAll() {
     setActiveSuggestion(null);
+    if (presentation === 'visitor') {
+      const empty = parseFeedParams(new URLSearchParams());
+      const params = serializeFeedParams(empty, currentParams);
+      params.delete('page');
+      if (currentParams.get('view') !== 'following') params.delete('view');
+      if (pathname === '/home') params.set('feed', 'custom');
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+      setDraft(empty);
+      setIsOpen(false);
+      return;
+    }
     update(parseFeedParams(new URLSearchParams()));
   }
 
   function selectSuggestion(tag: FeedFilterTag) {
+    const values = tag.slugs ?? [tag.slug];
+    if (presentation === 'visitor') {
+      const isSelected = values.every((value) => selected[tag.facet].includes(value));
+      const next: FeedFilterState = { ...selected, room: [], budgetBand: [] };
+      if (!isSelected) next[tag.facet] = values;
+      update(next);
+      return;
+    }
     const trackedSuggestion =
       activeSuggestion && selected[activeSuggestion.facet].includes(activeSuggestion.slug)
         ? activeSuggestion
@@ -172,13 +216,14 @@ export function FeedFilters({
 
     const isSameSuggestion =
       previousSuggestion?.facet === tag.facet && previousSuggestion.slug === tag.slug;
-    const isSelectedFilter = !previousSuggestion && next[tag.facet].includes(tag.slug);
+    const isSelectedFilter =
+      !previousSuggestion && values.every((value) => next[tag.facet].includes(value));
 
     if (isSameSuggestion || isSelectedFilter) {
-      next[tag.facet] = next[tag.facet].filter((slug) => slug !== tag.slug);
+      next[tag.facet] = next[tag.facet].filter((slug) => !values.includes(slug));
       setActiveSuggestion(null);
     } else {
-      next[tag.facet] = [...new Set([...next[tag.facet], tag.slug])];
+      next[tag.facet] = [...new Set([...next[tag.facet], ...values])];
       setActiveSuggestion({ facet: tag.facet, slug: tag.slug });
     }
 
@@ -186,8 +231,14 @@ export function FeedFilters({
   }
 
   return (
-    <div className="min-w-0 max-w-full space-y-3">
-      <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex min-w-0 max-w-full flex-col gap-3">
+      <div
+        className={
+          presentation === 'visitor'
+            ? 'flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:flex-nowrap'
+            : 'flex min-w-0 max-w-full items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        }
+      >
         <DropdownMenu
           open={isOpen}
           onOpenChange={(nextOpen) => {
@@ -196,20 +247,34 @@ export function FeedFilters({
           }}
         >
           <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={`inline-flex shrink-0 items-center gap-1.5 border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${presentation === 'landing' ? 'order-last sticky right-0 z-10 ml-auto h-[38px] rounded-full bg-card !text-sm' : 'rounded-md py-1'}`}
-            >
-              {presentation === 'landing' ? (
-                <img src="/images/landing/filter-adjustments.svg" alt="" />
-              ) : (
+            {presentation === 'visitor' || presentation === 'landing' ? (
+              <Button
+                type="button"
+                variant="discovery-category"
+                size="discovery-tab"
+                className={cn(
+                  'order-last shrink-0 text-muted-foreground',
+                  presentation === 'landing' && 'sticky right-0 z-10 ml-auto',
+                )}
+              >
+                <SlidersHorizontal aria-hidden data-icon="inline-start" />
+                Filters{applied.length > 0 ? ` (${applied.length})` : null}
+              </Button>
+            ) : (
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
                 <Funnel className="size-3.5" aria-hidden />
-              )}
-              Filters
-              {applied.length > 0 ? ` (${applied.length})` : null}
-            </button>
+                Filters
+                {applied.length > 0 ? ` (${applied.length})` : null}
+              </button>
+            )}
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
+          <DropdownMenuContent
+            align="start"
+            className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-64 overflow-y-auto"
+          >
             <DropdownMenuLabel>Filter projects</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {FEED_FACET_DEFINITIONS.map((facet) => {
@@ -223,7 +288,7 @@ export function FeedFilters({
                     <span>{facet.label}</span>
                     {count > 0 ? ` (${count})` : null}
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="w-60">
+                  <DropdownMenuSubContent className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-60 overflow-y-auto">
                     <DropdownMenuLabel>{facet.label}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <div className="max-h-[26rem] overflow-y-auto">
@@ -264,64 +329,133 @@ export function FeedFilters({
               );
             })}
             <DropdownMenuSeparator />
-            <div className="flex justify-end px-1 py-1">
-              <button
-                type="button"
-                onClick={applyDraft}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-              >
-                Apply{draftCount > 0 ? ` (${draftCount})` : null}
-              </button>
+            <div className="flex justify-end gap-2 px-1 py-1">
+              {presentation === 'visitor' ? (
+                <DropdownMenuItem asChild onSelect={clearAll}>
+                  <Button type="button" variant="ghost" size="sm">
+                    Clear all
+                  </Button>
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem asChild onSelect={applyDraft}>
+                <Button type="button" size="sm">
+                  Apply{draftCount > 0 ? ` (${draftCount})` : null}
+                </Button>
+              </DropdownMenuItem>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-        {presentation !== 'landing' ? (
-          <span className="h-6 w-px shrink-0 bg-border" aria-hidden />
-        ) : null}
-        <button
-          type="button"
-          aria-pressed={applied.length === 0}
-          onClick={clearAll}
-          className={`inline-flex shrink-0 items-center rounded-full border px-3 text-xs transition-colors ${presentation === 'landing' ? 'h-[38px] px-4 !text-sm font-medium' : 'py-1'} ${
-            applied.length === 0
-              ? presentation === 'landing'
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-primary bg-primary text-primary-foreground'
-              : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
-          }`}
-        >
-          All
-        </button>
-        {suggestedTags.map((tag) => {
-          const isSelected = selected[tag.facet].includes(tag.slug);
-          return (
-            <button
-              key={`${tag.facet}-${tag.slug}`}
+        {presentation === 'visitor' ? (
+          <div
+            role="group"
+            aria-label="Feed views"
+            className="flex w-full shrink-0 flex-wrap items-center gap-2 p-1 sm:w-auto sm:flex-nowrap"
+          >
+            <Button
               type="button"
-              aria-pressed={isSelected}
-              onClick={() => selectSuggestion(tag)}
-              className={`inline-flex shrink-0 items-center rounded-full border px-3 text-xs transition-colors ${presentation === 'landing' ? 'h-[38px] gap-2 pl-1 pr-4 !text-sm font-medium' : 'py-1'} ${
-                isSelected
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-foreground hover:bg-accent'
+              variant="discovery-tab"
+              size="discovery-tab"
+              onClick={() => router.push('/home')}
+              aria-pressed={forYouActive}
+              className="shrink-0"
+            >
+              For you
+            </Button>
+            {leadingActions}
+            {suggestedTags.length > 0 ? (
+              <Separator
+                orientation="vertical"
+                className="bg-foreground/12 data-[orientation=vertical]:h-6"
+              />
+            ) : null}
+          </div>
+        ) : null}
+        <div
+          role={presentation === 'visitor' ? 'group' : undefined}
+          aria-label={presentation === 'visitor' ? 'Feed categories' : undefined}
+          onFocusCapture={presentation === 'visitor' ? revealFocusedCategory : undefined}
+          className={
+            presentation === 'visitor'
+              ? 'flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+              : 'contents'
+          }
+        >
+          {presentation === 'default' ? (
+            <span className="h-6 w-px shrink-0 bg-border" aria-hidden />
+          ) : null}
+          {presentation !== 'visitor' ? (
+            <button
+              type="button"
+              aria-pressed={applied.length === 0}
+              onClick={clearAll}
+              className={`inline-flex shrink-0 items-center rounded-full border px-3 text-xs transition-colors ${presentation === 'landing' ? 'h-[38px] px-4 !text-sm font-medium' : 'py-1'} ${
+                applied.length === 0
+                  ? presentation === 'landing'
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
-              {tag.image ? (
-                <img
-                  src={`/images/landing/${tag.image}`}
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="size-7 rounded-full object-cover"
-                />
-              ) : null}
-              {tag.label}
+              All
             </button>
-          );
-        })}
+          ) : null}
+          {presentation !== 'visitor' ? leadingActions : null}
+          {suggestedTags.map((tag) => {
+            const isSelected = (tag.slugs ?? [tag.slug]).every((slug) =>
+              selected[tag.facet].includes(slug),
+            );
+            if (presentation === 'visitor')
+              return (
+                <Button
+                  key={`${tag.facet}-${tag.slug}`}
+                  type="button"
+                  variant="discovery-category"
+                  size="discovery-category"
+                  className="shrink-0"
+                  aria-pressed={isSelected}
+                  onClick={() => selectSuggestion(tag)}
+                >
+                  {tag.image ? (
+                    <img
+                      src={`/images/landing/${tag.image}`}
+                      alt=""
+                      width={28}
+                      height={28}
+                      className="size-7 rounded-full object-cover"
+                    />
+                  ) : null}
+                  {tag.label}
+                </Button>
+              );
+            return (
+              <button
+                key={`${tag.facet}-${tag.slug}`}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => selectSuggestion(tag)}
+                className={`inline-flex shrink-0 items-center rounded-full border px-3 text-xs transition-colors ${presentation === 'landing' ? 'h-[38px] gap-2 pl-1 pr-4 !text-sm font-medium' : 'py-1'} ${
+                  isSelected
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-foreground hover:bg-accent'
+                }`}
+              >
+                {tag.image ? (
+                  <img
+                    src={`/images/landing/${tag.image}`}
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="size-7 rounded-full object-cover"
+                  />
+                ) : null}
+                {tag.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {applied.length > 0 ? (
+      {presentation !== 'visitor' && applied.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2" aria-label="Applied filters">
           {applied.map(({ facet, slug }) => (
             <button

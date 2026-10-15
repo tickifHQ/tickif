@@ -52,6 +52,7 @@ import {
 } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
+import { withPublicStudioLogos } from './public-studio-logos.js';
 import { orgsService } from '../orgs/service.js';
 import { googleReviewsRepository } from '../profiles/google-repository.js';
 import { readState } from '../profiles/google-mapper.js';
@@ -918,7 +919,8 @@ export async function validateProjectTaxonomy(
   existing?: Pick<
     ProjectRecord,
     'citySlug' | 'localitySlug' | 'propertyTypeSlug' | 'propertySubtypeSlug'
-  >,
+  > &
+    Partial<Pick<ProjectRecord, 'budgetBandSlug'>>,
 ): Promise<void> {
   if (
     input.propertyTypeSlug !== undefined &&
@@ -994,7 +996,12 @@ export async function validateProjectTaxonomy(
   if (
     input.budgetBandSlug !== undefined &&
     input.budgetBandSlug !== null &&
-    !(await projectsRepository.taxonomyExists('budget_band', { slug: input.budgetBandSlug }))
+    input.budgetBandSlug !== existing?.budgetBandSlug &&
+    !(await projectsRepository.taxonomyExists(
+      'budget_band',
+      { slug: input.budgetBandSlug },
+      { activeOnly: true },
+    ))
   ) {
     throw AppError.unprocessable('Invalid budgetBandSlug');
   }
@@ -1618,7 +1625,19 @@ export const projectsService = {
       }),
     );
 
-    return { projects, page, limit, hasMore };
+    return { projects: await withPublicStudioLogos(projects), page, limit, hasMore };
+  },
+
+  async publicEnquiryCovers(projectIds: string[]) {
+    const rows = await projectsRepository.findPublicEnquiryCovers([...new Set(projectIds)]);
+    return new Map(
+      await Promise.all(
+        rows.map(
+          async (row) =>
+            [row.projectId, await coverImageUrl(row, 'public').catch(() => null)] as const,
+        ),
+      ),
+    );
   },
 
   async getById(id: string, caller?: Caller): Promise<ProjectDetailResponse> {
@@ -2264,6 +2283,6 @@ export const projectsService = {
       }),
     );
 
-    return { projects };
+    return { projects: await withPublicStudioLogos(projects) };
   },
 };

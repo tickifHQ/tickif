@@ -8,16 +8,18 @@ type DesignerLogoAvatarProps = {
   logoUrl: string | null | undefined;
   alt: string;
   sizePx: number;
+  fit?: 'logo' | 'cover';
   className?: string;
   fallback: ReactNode;
   testId?: string;
 };
 
-/** Studio-only display: preserve saved square crops and fit legacy artwork in a stable frame. */
+/** Preserve studio artwork by default; project thumbnails explicitly opt into cover fitting. */
 export function DesignerLogoAvatar({
   logoUrl,
   alt,
   sizePx,
+  fit = 'logo',
   className,
   fallback,
   testId,
@@ -32,7 +34,14 @@ export function DesignerLogoAvatar({
       )}
     >
       {logoUrl ? (
-        <LogoImage key={logoUrl} logoUrl={logoUrl} alt={alt} sizePx={sizePx} fallback={fallback} />
+        <LogoImage
+          key={`${logoUrl}:${fit}`}
+          logoUrl={logoUrl}
+          alt={alt}
+          sizePx={sizePx}
+          fit={fit}
+          fallback={fallback}
+        />
       ) : (
         fallback
       )}
@@ -45,8 +54,9 @@ function LogoImage({
   logoUrl,
   alt,
   sizePx,
+  fit,
   fallback,
-}: Pick<DesignerLogoAvatarProps, 'alt' | 'sizePx' | 'fallback'> & { logoUrl: string }) {
+}: Pick<DesignerLogoAvatarProps, 'alt' | 'sizePx' | 'fallback' | 'fit'> & { logoUrl: string }) {
   const [failed, setFailed] = useState(false);
   const [scale, setScale] = useState(1);
   if (failed) return fallback;
@@ -59,7 +69,10 @@ function LogoImage({
       height={sizePx}
       // Signed URLs rotate; skip the optimizer without changing the stored source or crop.
       unoptimized
-      className="absolute inset-0 size-full object-contain"
+      className={cn(
+        'absolute inset-0 size-full',
+        fit === 'cover' ? 'object-cover' : 'object-contain',
+      )}
       style={scale === 1 ? undefined : { transform: `scale(${scale})` }}
       onError={() => setFailed(true)}
       onLoad={(event) => {
@@ -67,7 +80,7 @@ function LogoImage({
         // Square files are the saved crop. Non-square legacy artwork fits inside
         // the circle, including its corners, rather than being clipped at the rim.
         setScale(
-          width > 0 && height > 0 && width !== height
+          fit !== 'cover' && width > 0 && height > 0 && width !== height
             ? Math.max(width, height) / Math.hypot(width, height)
             : 1,
         );

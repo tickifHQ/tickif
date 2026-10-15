@@ -4,6 +4,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { typography } from '@repo/ui/lib/typography';
 import { PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
+import { Separator } from '@repo/ui/components/separator';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
@@ -16,11 +17,19 @@ export function PublicHeader({
   isAuthenticated = false,
   userRole = null,
   landing = false,
+  visitor = false,
+  visitorSearch,
+  visitorActivity,
+  visitorView,
 }: {
   contextSwitcher?: ReactNode;
   isAuthenticated?: boolean;
   userRole?: string | null;
   landing?: boolean;
+  visitor?: boolean;
+  visitorSearch?: ReactNode;
+  visitorActivity?: ReactNode;
+  visitorView?: 'explore' | 'nearby' | 'following';
 }) {
   const listYourWorkHref =
     isAuthenticated && userRole === PLATFORM_ROLE.VISITOR
@@ -28,14 +37,37 @@ export function PublicHeader({
       : getListYourWorkHref({ isAuthenticated, userRole });
 
   return (
-    <header className="relative z-40 border-b border-border bg-background/90 backdrop-blur-md">
+    <header
+      className={cn(
+        'relative z-40 border-b backdrop-blur-md',
+        visitor
+          ? 'border-account-menu-divider bg-visitor-header-background xl:h-18'
+          : 'border-border bg-background/90',
+      )}
+    >
       <div
-        className={`flex w-full items-center justify-between gap-4 px-5 ${landing ? 'h-[72px] sm:px-8 lg:px-12' : 'h-14 sm:px-6'}`}
+        className={cn(
+          'flex w-full items-center justify-between gap-3 px-5',
+          visitor
+            ? 'min-h-18 flex-wrap py-3 sm:px-8 lg:px-12 xl:h-full xl:min-h-0 xl:flex-nowrap xl:py-0'
+            : landing
+              ? 'h-18 sm:px-8 lg:px-12'
+              : 'h-14 sm:px-6',
+        )}
       >
-        <div className="flex items-center gap-6 lg:gap-9">
-          <Link href="/" className="inline-flex items-center rounded-lg p-2">
-            {landing ? (
-              <span className="inline-flex items-center gap-3" aria-label="Tickif">
+        <div className={cn('flex items-center gap-6 lg:gap-9', visitor && 'shrink-0')}>
+          <Link
+            href="/"
+            className={cn(
+              'inline-flex items-center rounded-lg',
+              visitor ? 'p-navigation-logo' : 'p-2',
+            )}
+          >
+            {landing || visitor ? (
+              <span
+                className={cn('inline-flex items-center', visitor ? 'gap-3.25' : 'gap-3')}
+                aria-label="Tickif"
+              >
                 <img src="/images/landing/logo-mark.svg" alt="" />
                 <img
                   src="/images/landing/logo-word.svg"
@@ -47,49 +79,68 @@ export function PublicHeader({
               <TickifBrandLogo />
             )}
           </Link>
-          <PublicNavigation landing={landing} />
+          <PublicNavigation landing={landing} visitor={visitor} visitorView={visitorView} />
         </div>
-
-        <div className="flex items-center gap-2.5">
-          {contextSwitcher}
-          {landing ? (
-            <div className="hidden w-[470px] xl:block">
-              <Suspense>
-                <LandingHeaderSearch />
-              </Suspense>
+        <div
+          className={
+            visitorSearch ? 'contents xl:flex xl:min-w-0 xl:items-center xl:gap-2' : 'contents'
+          }
+        >
+          {visitorSearch ? (
+            <div className="order-last w-full min-w-0 xl:order-none xl:w-117.5">
+              {visitorSearch}
             </div>
           ) : null}
-          {listYourWorkHref ? (
-            <Button
-              asChild
-              variant={landing ? 'ghost' : 'neutral'}
-              size={landing ? 'sm' : 'xs'}
-              className={cn('hidden sm:inline-flex', landing && typography.labelMd)}
-            >
-              <Link href={listYourWorkHref}>
-                {!landing ? <ListChevronsUpDown className="size-4" aria-hidden /> : null}
-                {landing ? 'List your projects' : 'List your work'}
-              </Link>
-            </Button>
-          ) : null}
-          {isAuthenticated ? (
-            <AccountMenu showProfileSettings={userRole === PLATFORM_ROLE.DESIGNER} />
-          ) : (
-            <Button
-              asChild
-              variant={landing ? 'default' : 'inverted'}
-              size={landing ? 'sm' : 'compact'}
-              className={landing ? typography.labelMd : undefined}
-            >
-              <Link href="/login">
-                {!landing ? <UserRound className="size-4" aria-hidden /> : null}
-                {landing ? 'Log in' : 'Sign in'}
-              </Link>
-            </Button>
-          )}
+          <div className={cn('flex items-center', visitor ? 'shrink-0 gap-2' : 'gap-2.5')}>
+            {contextSwitcher}
+            {visitorActivity ? <div className="hidden sm:block">{visitorActivity}</div> : null}
+            {landing ? (
+              <div className="hidden w-117.5 xl:block">
+                <Suspense>
+                  <LandingHeaderSearch />
+                </Suspense>
+              </div>
+            ) : null}
+            {listYourWorkHref ? (
+              <Button
+                asChild
+                variant={landing ? 'ghost' : 'neutral'}
+                size={landing ? 'sm' : 'xs'}
+                className={cn('hidden sm:inline-flex', landing && typography.labelMd)}
+              >
+                <Link href={listYourWorkHref}>
+                  {!landing ? <ListChevronsUpDown className="size-4" aria-hidden /> : null}
+                  {landing ? 'List your projects' : 'List your work'}
+                </Link>
+              </Button>
+            ) : null}
+            {isAuthenticated ? (
+              <>
+                {visitor && visitorActivity ? (
+                  <Separator
+                    orientation="vertical"
+                    className="hidden bg-foreground/10 data-[orientation=vertical]:h-5 sm:block"
+                  />
+                ) : null}
+                <AccountMenu showProfileSettings={userRole === PLATFORM_ROLE.DESIGNER} />
+              </>
+            ) : (
+              <Button
+                asChild
+                variant={landing ? 'default' : 'inverted'}
+                size={landing ? 'sm' : 'compact'}
+                className={landing ? typography.labelMd : undefined}
+              >
+                <Link href="/login">
+                  {!landing ? <UserRound className="size-4" aria-hidden /> : null}
+                  {landing ? 'Log in' : 'Sign in'}
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-      <PublicNavigation mobile landing={landing} />
+      <PublicNavigation mobile landing={landing} visitor={visitor} visitorView={visitorView} />
     </header>
   );
 }

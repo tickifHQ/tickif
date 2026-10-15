@@ -689,6 +689,10 @@ export const enquiry = pgTable(
     timeline: text('timeline'),
     status: enquiryStatusEnum('status').default('open').notNull(),
     leadId: uuid('lead_id').references(() => lead.id, { onDelete: 'set null' }),
+    viewedAt: timestamp('viewed_at', { withTimezone: true }),
+    contactedAt: timestamp('contacted_at', { withTimezone: true }),
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
+    activityReadAt: timestamp('activity_read_at', { withTimezone: true }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -696,7 +700,27 @@ export const enquiry = pgTable(
     index('enquiry_requester_idx').on(t.requesterId),
     index('enquiry_designer_profile_idx').on(t.designerProfileId),
     index('enquiry_organization_idx').on(t.organizationId),
+    index('enquiry_lead_idx').on(t.leadId),
     index('enquiry_requester_designer_status_idx').on(t.requesterId, t.designerProfileId, t.status),
+  ],
+);
+
+export const enquiryMessage = pgTable(
+  'enquiry_message',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    enquiryId: uuid('enquiry_id')
+      .notNull()
+      .references(() => enquiry.id, { onDelete: 'cascade' }),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    requestId: uuid('request_id').notNull(),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('enquiry_message_order_idx').on(t.enquiryId, t.createdAt, t.id),
+    index('enquiry_message_author_idx').on(t.authorId),
+    uniqueIndex('enquiry_message_request_idx').on(t.enquiryId, t.requestId),
   ],
 );
 

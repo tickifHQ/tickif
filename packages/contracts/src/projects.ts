@@ -414,6 +414,10 @@ export const feedProjectSchema = z
     slug: z.string(),
     title: z.string(),
     studio: z.string(),
+    /** Saved public studio logo; optional for older cached card responses. */
+    studioLogoUrl: z.url().nullable().optional(),
+    /** Current public KYC verification; absent older responses are not verified. */
+    studioIsVerified: z.boolean().optional(),
     city: z.string().nullable(),
     locality: z.string().nullable(),
     rating: z.number(),

@@ -29,10 +29,21 @@
   --type-section-leading: 1.2;
   --type-section-tracking: -0.03em;
   --type-metadata-size: 0.625rem;
+  --type-search-label-size: 0.6875rem;
   --type-metadata-leading: 1.5;
   --type-metadata-tracking: 0.12em;
 
   --background: #ffffff;
+  --visitor-home-background: var(--account-menu-subtle);
+  /* Figma visitor greeting, 16123:66391. */
+  --visitor-preference: #eae7df;
+  --summary-radius: 1.125rem;
+  --summary-card-shadow: 0 8px 24px -10px rgba(13, 26, 20, 0.06);
+  --visitor-header-background: color-mix(in srgb, var(--visitor-home-background) 88%, transparent);
+  --navigation-logo-padding: 0.65rem;
+  /* Figma terracotta #c2603a is darkened only for readable small-label contrast. */
+  --badge-terracotta: #bc5935;
+  --badge-terracotta-foreground: #ffffff;
   --foreground: #171612;
   --foreground-secondary: #4a473f;
   --foreground-subtle: #8a867a;
@@ -112,6 +123,16 @@
   --button-neutral-foreground: #171612;
   --button-neutral-hover: #e2ece4;
   --button-neutral-shadow: 0 1px 2px rgba(23, 22, 18, 0.06);
+  /* Figma image-overlay Save control, 16123:66650; shared by both unsaved states. */
+  --project-save: rgba(255, 255, 255, 0.94);
+  --project-save-foreground: #171612;
+  /* Figma visitor feed card footer, 16123:62426. */
+  --project-budget: rgba(255, 255, 255, 0.92);
+  --project-budget-foreground: #171612;
+  --project-budget-blur: 6px;
+  --project-watermark: #ffffff;
+  --project-watermark-opacity: 0.72;
+  --project-watermark-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
   --button-inverted: #171612;
   --button-inverted-foreground: #f4f0e8;
   --button-inverted-hover: #2e2c26;
@@ -175,6 +196,12 @@
 .dark,
 [data-theme='tickif'].dark {
   --background: #111c17;
+  --visitor-home-background: var(--account-menu-subtle);
+  --visitor-preference: var(--muted);
+  --summary-card-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.28);
+  --visitor-header-background: color-mix(in srgb, var(--visitor-home-background) 88%, transparent);
+  --badge-terracotta: var(--account-logout-icon-foreground);
+  --badge-terracotta-foreground: var(--background);
   --foreground: #f4f0e8;
   --foreground-secondary: #d7d2c5;
   --foreground-subtle: #bbb6a8;
@@ -242,6 +269,10 @@
   --button-neutral-foreground: #f4f0e8;
   --button-neutral-hover: #2d4437;
   --button-neutral-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  --project-save: color-mix(in srgb, var(--card) 94%, transparent);
+  --project-save-foreground: var(--foreground);
+  --project-budget: color-mix(in srgb, var(--card) 92%, transparent);
+  --project-budget-foreground: var(--foreground);
   --button-inverted: #f4f0e8;
   --button-inverted-foreground: #0f3326;
   --button-inverted-hover: #ffffff;

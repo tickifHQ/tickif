@@ -21,41 +21,59 @@ const itemClassName =
 export function PublicNavigation({
   mobile = false,
   landing = false,
+  visitor = false,
+  visitorView,
 }: {
   mobile?: boolean;
   landing?: boolean;
+  visitor?: boolean;
+  visitorView?: 'explore' | 'nearby' | 'following';
 }) {
   const pathname = usePathname();
-  const items = landing
+  const items = visitor
     ? [
-        { href: '/', label: 'Explore' },
-        { href: '/#browse-by-room', label: 'Rooms' },
-        { href: '/#browse-by-city', label: 'Cities' },
+        { href: '/home', label: 'For you' },
+        { href: '/home?feed=custom&view=explore', label: 'Explore' },
         { href: '/designers', label: 'Designers' },
       ]
-    : mobile
-      ? mobileNavigationItems
-      : navigationItems;
+    : landing
+      ? [
+          { href: '/', label: 'Explore' },
+          { href: '/#browse-by-room', label: 'Rooms' },
+          { href: '/#browse-by-city', label: 'Cities' },
+          { href: '/designers', label: 'Designers' },
+        ]
+      : mobile
+        ? mobileNavigationItems
+        : navigationItems;
 
   return (
     <nav
       aria-label={mobile ? 'Mobile primary' : 'Primary'}
       className={
         mobile
-          ? 'flex flex-wrap items-center gap-2 px-5 pb-3 md:hidden'
-          : 'hidden items-center gap-1 md:flex'
+          ? cn('flex flex-wrap items-center gap-2 px-5 pb-3', visitor ? 'lg:hidden' : 'md:hidden')
+          : cn('hidden items-center', visitor ? 'gap-0.5 lg:flex' : 'gap-1 md:flex')
       }
     >
       {items.map((item) => {
-        if (isCurrentPath(pathname, item.href)) {
+        const current =
+          visitor && pathname === '/home' && item.label !== 'Designers'
+            ? visitorView === 'explore'
+              ? item.label === 'Explore'
+              : item.label === 'For you'
+            : isCurrentPath(pathname, item.href);
+        if (current) {
           return (
             <span
               key={item.label}
               aria-current="page"
               className={cn(
                 itemClassName,
-                landing && typography.labelSm,
-                landing ? 'bg-foreground/6 text-foreground' : 'bg-accent text-foreground',
+                visitor ? [typography.labelMd, 'py-2'] : landing && typography.labelSm,
+                landing || visitor
+                  ? 'rounded-full bg-foreground/6 text-foreground'
+                  : 'bg-accent text-foreground',
               )}
             >
               {item.label}
@@ -69,7 +87,8 @@ export function PublicNavigation({
             href={item.href}
             className={cn(
               itemClassName,
-              landing && typography.labelMd,
+              (landing || visitor) && typography.labelMd,
+              visitor && 'rounded-full py-2',
               'hover:bg-accent hover:text-foreground',
             )}
           >

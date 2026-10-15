@@ -33,6 +33,7 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
 }));
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
+    findPublicStudioLogoKeys: vi.fn(async () => new Map<string, string>()),
     findTaxonomyLabels: vi.fn(async () => new Map<string, string>()),
     findLocalityLabels: vi.fn(async () => new Map<string, string>()),
   },
@@ -88,6 +89,39 @@ const postgresRow = {
 };
 
 describe('discoveryService', () => {
+  it('keeps private following searches scoped without relaxation or Typesense and trims its look-ahead row', async () => {
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
+      rows: [postgresRow, { ...postgresRow, id: '22222222-2222-4222-8222-222222222222' }],
+    });
+    const result = await discoveryService.getFollowingFeed('visitor', {
+      ...query,
+      limit: 1,
+      q: 'calm',
+      citySlug: 'mumbai',
+    });
+    expect(result.items.map((item) => item.id)).toEqual([postgresRow.id]);
+    expect(result).toMatchObject({
+      hasMore: true,
+      source: 'db',
+      fallback: 'none',
+      relaxedFilters: [],
+    });
+    expect(discoveryRepository.listFeedFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        followedByUserId: 'visitor',
+        limit: 2,
+        offset: 0,
+        q: 'calm',
+        filterBy: { citySlug: 'mumbai' },
+      }),
+    );
+    expect(discoveryRepository.countFeedFacets).toHaveBeenCalledWith(
+      { citySlug: 'mumbai' },
+      'calm',
+      'visitor',
+    );
+    expect(discoveryRepository.searchFeed).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(log, 'info').mockImplementation(() => {});
@@ -212,7 +246,7 @@ describe('discoveryService', () => {
       hasMore: false,
       relaxedFilters: [],
     });
-    const logged = vi.mocked(log.info).mock.calls.map((call) => (call[0] as Record<string, unknown>));
+    const logged = vi.mocked(log.info).mock.calls.map((call) => call[0] as Record<string, unknown>);
     expect(logged).toContainEqual(
       expect.objectContaining({ type: 'discovery.fallback', reason: 'recent_in_city' }),
     );
@@ -297,7 +331,7 @@ describe('discoveryService', () => {
     const result = await discoveryService.getFeed(query);
 
     expect(result.source).toBe('db');
-    const logged = vi.mocked(log.info).mock.calls.map((call) => (call[0] as Record<string, unknown>));
+    const logged = vi.mocked(log.info).mock.calls.map((call) => call[0] as Record<string, unknown>);
     expect(logged).toContainEqual(
       expect.objectContaining({ type: 'discovery.fallback', reason: 'Connection refused' }),
     );
@@ -309,7 +343,7 @@ describe('discoveryService', () => {
 
     await discoveryService.getFeed(query);
 
-    const logged = vi.mocked(log.info).mock.calls.map((call) => (call[0] as Record<string, unknown>));
+    const logged = vi.mocked(log.info).mock.calls.map((call) => call[0] as Record<string, unknown>);
     expect(logged).toContainEqual(expect.objectContaining({ reason: 'unknown' }));
   });
 });

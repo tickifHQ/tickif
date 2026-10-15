@@ -11,6 +11,7 @@ const cardVariants = cva('border bg-card text-card-foreground shadow-card', {
       subtle: 'border-surface-subtle-border bg-surface-subtle text-secondary-foreground',
       inverse: 'border-transparent bg-surface-inverse text-surface-inverse-foreground',
       ghost: 'border-transparent bg-transparent shadow-none',
+      summary: 'border-account-menu-border shadow-summary-card',
     },
     radius: {
       card: 'rounded-card',
@@ -19,19 +20,29 @@ const cardVariants = cva('border bg-card text-card-foreground shadow-card', {
       xl: 'rounded-xl',
       '2xl': 'rounded-2xl',
       '3xl': 'rounded-3xl',
+      summary: 'rounded-summary',
+    },
+    size: {
+      default: '',
+      inline: 'py-2 pl-2 pr-4',
     },
   },
   defaultVariants: {
     variant: 'default',
     radius: 'card',
+    size: 'default',
   },
 });
 
 type CardProps = ComponentProps<'div'> & VariantProps<typeof cardVariants>;
 
-export function Card({ className, radius, variant, ...props }: CardProps) {
+export function Card({ className, radius, size, variant, ...props }: CardProps) {
   return (
-    <div data-slot="card" className={cn(cardVariants({ radius, variant, className }))} {...props} />
+    <div
+      data-slot="card"
+      className={cn(cardVariants({ radius, size, variant, className }))}
+      {...props}
+    />
   );
 }
 

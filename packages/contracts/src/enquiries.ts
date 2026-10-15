@@ -9,6 +9,15 @@ export const enquiryStatusSchema = z
   .meta({ id: 'EnquiryStatus' });
 export type EnquiryStatus = z.infer<typeof enquiryStatusSchema>;
 
+export const enquiryCountsSchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    unread: z.number().int().nonnegative(),
+  })
+  .refine((counts) => counts.unread <= counts.total, 'Unread count cannot exceed total')
+  .meta({ id: 'EnquiryCounts' });
+export type EnquiryCounts = z.infer<typeof enquiryCountsSchema>;
+
 export const enquiryListStatusSchema = z
   .enum(['all', 'open', 'responded', 'closed'])
   .default('all')
@@ -54,12 +63,62 @@ const enquiryDesignerSchema = z.object({
   location: z.string().nullable(),
 });
 
+export const enquiryActivitySchema = z
+  .object({
+    viewedAt: z.string().datetime().nullable(),
+    contactedAt: z.string().datetime().nullable(),
+    lastMessageAt: z.string().datetime().nullable(),
+    // Opaque full-precision watermark: clients must not round-trip it through Date.
+    readThrough: z.string().datetime().optional(),
+    isNew: z.boolean(),
+  })
+  .meta({ id: 'EnquiryActivity' });
+export const enquiryMessageSchema = z
+  .object({
+    id: z.uuid(),
+    body: z.string(),
+    createdAt: z.string().datetime(),
+  })
+  .meta({ id: 'EnquiryMessage' });
+export const sendEnquiryMessageSchema = z
+  .object({
+    body: z.string().trim().min(1).max(2000),
+    requestId: z.uuid(),
+  })
+  .meta({ id: 'SendEnquiryMessage' });
+export const enquiryThreadSchema = z
+  .object({
+    enquiryId: z.uuid().nullable(),
+    messages: z.array(enquiryMessageSchema),
+    hasMore: z.boolean(),
+    canReply: z.boolean(),
+    readThrough: z.string().datetime().nullable().optional(),
+  })
+  .meta({ id: 'EnquiryThread' });
+export const enquiryMessagesQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  })
+  .meta({ id: 'EnquiryMessagesQuery' });
+export const enquiryReadSchema = z
+  .object({ through: z.string().datetime() })
+  .meta({ id: 'EnquiryRead' });
+export const enquiryActivityResultSchema = z
+  .object({ acknowledged: z.boolean() })
+  .meta({ id: 'EnquiryActivityResult' });
+export type SendEnquiryMessage = z.infer<typeof sendEnquiryMessageSchema>;
+export type EnquiryMessagesQuery = z.infer<typeof enquiryMessagesQuerySchema>;
+export type EnquiryThread = z.infer<typeof enquiryThreadSchema>;
+
 export const enquiryResponseSchema = z
   .object({
     id: z.uuid(),
     designerProfile: enquiryDesignerSchema,
     referredProjectId: z.uuid().nullable(),
     referredProjectTitle: z.string().nullable(),
+    referredProjectImageUrl: z.url().nullable().optional(),
+    activity: enquiryActivitySchema.optional(),
     subject: z.string(),
     description: z.string(),
     templateUsed: z.string().nullable(),

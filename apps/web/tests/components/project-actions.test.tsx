@@ -54,20 +54,84 @@ function response(body: unknown, status = 200) {
 }
 
 describe('ProjectActions', () => {
-  it('opens sign-in for the anonymous landing bookmark without showing other actions', () => {
+  it('uses an accessible expandable visitor bookmark and persistent saved pill', async () => {
+    mocks.session = { user: { id: 'visitor' } };
     render(
       <ProjectActions
         projectId="11111111-1111-4111-8111-111111111111"
         loginHref="/login"
         canonicalUrl="/projects/p1"
-        presentation="save"
+        presentation="visitor-save"
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in to save project' }));
-    expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Share project' })).toBeNull();
-    expect(mocks.saveProject).not.toHaveBeenCalled();
+    const button = await screen.findByRole('button', { name: 'Save project' });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(button).toHaveClass('bg-project-save', 'h-8', 'min-w-8');
+    expect(button).toHaveClass('[@media(hover:hover)_and_(pointer:fine)]:opacity-0');
+    expect(button.querySelector('[data-slot="project-save-label"]')).toHaveTextContent('Save');
+    fireEvent.click(button);
+    const saved = await screen.findByRole('button', { name: 'Remove saved project' });
+    expect(saved).toHaveAttribute('aria-pressed', 'true');
+    expect(saved).toHaveClass('aria-pressed:bg-primary');
+    expect(saved).not.toHaveClass('[@media(hover:hover)_and_(pointer:fine)]:opacity-0');
+    expect(saved).toHaveTextContent('Saved');
+    expect(saved).toHaveTextContent('Unsave');
+    expect(saved.querySelector('svg.lucide-bookmark-check')).toHaveAttribute('aria-hidden', 'true');
+    expect(saved.querySelector('svg.lucide-bookmark-off')).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(saved);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save project' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+    expect(mocks.unsaveProject).toHaveBeenCalledTimes(1);
   });
+
+  it('retains the visitor saved pill after a failed unsave and allows retry', async () => {
+    mocks.session = { user: { id: 'visitor' } };
+    mocks.getSavedState.mockResolvedValue(
+      response({ savedProjectIds: ['11111111-1111-4111-8111-111111111111'] }),
+    );
+    mocks.unsaveProject.mockResolvedValueOnce(response({}, 500));
+    render(
+      <ProjectActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        loginHref="/login"
+        canonicalUrl="/projects/p1"
+        presentation="visitor-save"
+      />,
+    );
+    const saved = await screen.findByRole('button', { name: 'Remove saved project' });
+    await waitFor(() => expect(saved).toBeEnabled());
+    fireEvent.click(saved);
+    expect(await screen.findByRole('status')).toHaveTextContent('Please try again');
+    expect(saved).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(saved);
+    await screen.findByRole('button', { name: 'Save project' });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it.each(['save', 'visitor-save'] as const)(
+    'opens sign-in for an anonymous %s bookmark without showing other actions',
+    (presentation) => {
+      render(
+        <ProjectActions
+          projectId="11111111-1111-4111-8111-111111111111"
+          loginHref="/login"
+          canonicalUrl="/projects/p1"
+          presentation={presentation}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in to save project' }));
+      expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Share project' })).toBeNull();
+      expect(mocks.saveProject).not.toHaveBeenCalled();
+      const bookmark = screen.getByRole('button', { name: 'Sign in to save project' });
+      expect(bookmark.querySelector('img')).toBeNull();
+      expect(bookmark.querySelector('svg.lucide-bookmark')).toHaveAttribute('aria-hidden', 'true');
+    },
+  );
 
   it('saves through the API and synchronizes repeated landing cards', async () => {
     mocks.session = { user: { id: 'user-1' } };
@@ -91,6 +155,9 @@ describe('ProjectActions', () => {
       expect(screen.getAllByRole('button', { name: 'Remove saved project' })).toHaveLength(2),
     );
     expect(mocks.saveProject).toHaveBeenCalledWith({ param: { projectId: props.projectId } });
+    for (const button of screen.getAllByRole('button', { name: 'Remove saved project' })) {
+      expect(button.querySelector('svg.lucide-bookmark')).toHaveAttribute('fill', 'currentColor');
+    }
   });
   beforeEach(() => {
     mocks.session = null;
@@ -110,6 +177,8 @@ describe('ProjectActions', () => {
     ['authenticated', 'default'],
     ['anonymous', 'save'],
     ['authenticated', 'save'],
+    ['anonymous', 'visitor-save'],
+    ['authenticated', 'visitor-save'],
   ] as const)(
     'hydrates pending server markup with a cached %s session in the %s presentation',
     async (identity, presentation) => {

@@ -84,7 +84,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
         citySlug: 'mumbai',
         propertyTypeSlug: 'apartment',
         scopeSlug: 'full-home',
-        budgetBandSlug: 'upscale',
+        budgetBandSlug: '20l-30l',
       },
     });
     expect(create.ok(), await create.text()).toBeTruthy();

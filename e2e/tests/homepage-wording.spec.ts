@@ -50,7 +50,14 @@ for (const viewport of [
     expect(cityHref).toMatch(/^\/\?city=/);
     const cityName = await cityLinks.getByRole('link').first().innerText();
     await page.getByRole('combobox', { name: 'Search city', exact: true }).click();
-    await page.getByRole('option', { name: cityName, exact: true }).click();
+    // Labels can repeat for custom locations. The browse link carries the
+    // canonical taxonomy slug, so select that exact option rather than a label.
+    const citySlug = new URL(cityHref!, page.url()).searchParams.get('city');
+    expect(citySlug).not.toBeNull();
+    await page
+      .getByRole('option', { name: cityName, exact: true })
+      .and(page.locator(`[data-value="${citySlug}"]`))
+      .click();
     await page.getByRole('main').getByRole('button', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(cityHref!);
     await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();

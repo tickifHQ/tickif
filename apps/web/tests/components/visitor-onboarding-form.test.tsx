@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { visitorFeedFilters, type VisitorFeedPreferences } from '@repo/contracts';
 import { VisitorOnboardingForm } from '../../src/components/visitor-onboarding-form';
+import { Dialog, DialogContent } from '@repo/ui/components/dialog';
 
 const mock = vi.hoisted(() => ({
   save: vi.fn(),
@@ -51,6 +52,49 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('visitor welcome form', () => {
+  it('reuses the fields in edit mode without welcome content or onboarding navigation', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    const onCancel = vi.fn();
+    const onSavingChange = vi.fn();
+    render(
+      <Dialog open>
+        <DialogContent showCloseButton={false}>
+          <VisitorOnboardingForm
+            mode="edit"
+            initialPreferences={{ homeType: '3-bhk', citySlug: 'chennai', localitySlug: 'adyar' }}
+            onSaved={onSaved}
+            onCancel={onCancel}
+            onSavingChange={onSavingChange}
+          />
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Edit customization' })).toBeInTheDocument();
+    expect(screen.queryByText('Welcome to Tickif')).toBeNull();
+    expect(screen.queryByText('Show my feed')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull();
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('Adyar, Chennai'));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(mock.save).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Villa' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(onSaved).toHaveBeenCalledWith({
+        preferences: { homeType: 'villa', citySlug: 'chennai', localitySlug: 'adyar' },
+        filters: visitorFeedFilters({
+          homeType: 'villa',
+          citySlug: 'chennai',
+          localitySlug: 'adyar',
+        }),
+      }),
+    );
+    expect(onSavingChange.mock.calls).toEqual([[true], [false]]);
+    expect(mock.session).not.toHaveBeenCalled();
+    expect(mock.assign).not.toHaveBeenCalled();
+  });
+
   it('saves 4 BHK+ and a locality before navigating to the matching feed', async () => {
     const user = userEvent.setup();
     render(<VisitorOnboardingForm />);

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
   publicImageDetailResponseSchema,
@@ -14,6 +14,8 @@ import {
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
+import { projectsRepository } from '../../../src/modules/projects/repository.js';
+import { discoveryRepository } from '../../../src/modules/discovery/repository.js';
 
 /** Designers only surface in the feed when active — factory defaults to draft. */
 const activeDesigner = (overrides: Partial<typeof schema.designerProfile.$inferInsert> = {}) =>
@@ -78,6 +80,41 @@ async function getFeed(query = '') {
 }
 
 describe('GET /api/projects/feed', () => {
+  it('shows the saved retired budget in public cards and project details', async () => {
+    await makeTaxonomy({
+      kind: 'budget_band',
+      slug: 'upscale',
+      label: '₹15L - ₹35L',
+      isActive: false,
+    });
+    const designer = await activeDesigner();
+    const project = await makePublishedProject(designer.id, { budgetBandSlug: 'upscale' });
+    await attachReadyCover(project.id);
+    const { res, body } = await getFeed();
+    expect(res.status).toBe(200);
+    expect(body.projects[0]).toMatchObject({ id: project.id, budget: '₹15L - ₹35L' });
+    const detail = await app.request(`/api/projects/public/${project.id}`);
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({
+      specifications: { budgetBand: { slug: 'upscale', label: '₹15L - ₹35L' } },
+    });
+    const search = vi
+      .spyOn(discoveryRepository, 'searchFeed')
+      .mockRejectedValue(new Error('Test search outage'));
+    try {
+      const discovery = await app.request('/api/discovery/feed');
+      expect(discovery.status).toBe(200);
+      expect(await discovery.json()).toMatchObject({
+        items: [expect.objectContaining({ id: project.id, budget: '₹15L - ₹35L' })],
+      });
+    } finally {
+      search.mockRestore();
+    }
+    // A pending replacement budget must not leak into the approved public card.
+    await projectsRepository.updateDraft(project.id, { budgetBandSlug: '10l-20l' });
+    expect((await getFeed()).body.projects[0]?.budget).toBe('₹15L - ₹35L');
+  });
+
   it('serves published projects with full card metadata to an unauthenticated caller', async () => {
     await seedFeedTaxonomy();
     const designer = await activeDesigner({

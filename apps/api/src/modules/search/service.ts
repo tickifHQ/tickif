@@ -21,9 +21,12 @@ import type {
   SearchSuggestQuery,
   SearchSuggestResponse,
   ProjectSearchFallback,
+  ProjectHit,
 } from '@repo/contracts';
 import { PROJECT_QUERY_BY, DESIGNER_QUERY_BY } from '@repo/search';
 import * as repository from './repository.js';
+import { withPublicStudioLogos } from '../projects/public-studio-logos.js';
+import { projectsRepository } from '../projects/repository.js';
 import { buildProjectFilter, buildDesignerFilter } from './filter-builder.js';
 import {
   mapProjectHit,
@@ -81,7 +84,12 @@ interface SearchZeroResultsEvent {
 function logSearchQuery(event: SearchQueryEvent): void {
   try {
     const { q, filters, ...fields } = event;
-    log.info({ ...fields, event: event.type, queryLength: q.length, filterKeys: Object.keys(filters) });
+    log.info({
+      ...fields,
+      event: event.type,
+      queryLength: q.length,
+      filterKeys: Object.keys(filters),
+    });
   } catch {
     // Fire-and-forget: never throw to callers
   }
@@ -94,7 +102,12 @@ function logSearchQuery(event: SearchQueryEvent): void {
 function logZeroResults(event: SearchZeroResultsEvent): void {
   try {
     const { q, filters, ...fields } = event;
-    log.info({ ...fields, event: event.type, queryLength: q.length, filterKeys: Object.keys(filters) });
+    log.info({
+      ...fields,
+      event: event.type,
+      queryLength: q.length,
+      filterKeys: Object.keys(filters),
+    });
   } catch {
     // Fire-and-forget: never throw to callers
   }
@@ -144,9 +157,7 @@ function extractDesignerFilters(
 /**
  * Count non-undefined filter values.
  */
-function hasFilters(
-  filters: Record<string, string | string[] | undefined>,
-): boolean {
+function hasFilters(filters: Record<string, string | string[] | undefined>): boolean {
   return Object.values(filters).some((v) => v !== undefined);
 }
 
@@ -169,6 +180,25 @@ function toLoggableFilters(
 // Service Methods
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Resolve saved labels in one batch, independently of active selection options. */
+async function withPublicProjectMetadata(items: ProjectHit[]): Promise<ProjectHit[]> {
+  if (items.length === 0) return items;
+  const [withLogos, labels] = await Promise.all([
+    withPublicStudioLogos(items),
+    projectsRepository.findTaxonomyLabels(
+      items.flatMap((item) =>
+        item.budgetBandSlug ? [{ kind: 'budget_band' as const, slug: item.budgetBandSlug }] : [],
+      ),
+    ),
+  ]);
+  return withLogos.map((item) => ({
+    ...item,
+    budgetBandLabel: item.budgetBandSlug
+      ? (labels.get(`budget_band:${item.budgetBandSlug}`) ?? null)
+      : null,
+  }));
+}
+
 export async function recordSearchActivity(input: {
   actorUserId: string | null;
   endpoint: 'projects' | 'designers';
@@ -184,9 +214,7 @@ export async function recordSearchActivity(input: {
  * 2. If zero results and filters present: progressively drop filters
  * 3. If still zero results and citySlug present: fall back to Postgres recent projects
  */
-export async function searchProjects(
-  query: SearchProjectsQuery,
-): Promise<SearchProjectsResponse> {
+export async function searchProjects(query: SearchProjectsQuery): Promise<SearchProjectsResponse> {
   const startTime = Date.now();
   const filters = extractProjectFilters(query);
   const mutableFilters = { ...filters };
@@ -213,7 +241,7 @@ export async function searchProjects(
   // Check if we have results or no filters to relax
   if (result.hits.length > 0 || !hasFilters(filters)) {
     // Map hits and return
-    const hits = await Promise.all(result.hits.map(mapProjectHit));
+    const hits = await withPublicProjectMetadata(await Promise.all(result.hits.map(mapProjectHit)));
 
     // Log search event
     logSearchQuery({
@@ -270,7 +298,9 @@ export async function searchProjects(
 
       if (result.hits.length > 0) {
         fallback = 'relaxed';
-        const hits = await Promise.all(result.hits.map(mapProjectHit));
+        const hits = await withPublicProjectMetadata(
+          await Promise.all(result.hits.map(mapProjectHit)),
+        );
 
         // Log search event with fallback info
         logSearchQuery({
@@ -304,19 +334,16 @@ export async function searchProjects(
 
   // Postgres fallback: recent projects in city
   if (query.citySlug) {
-    const citySlug = Array.isArray(query.citySlug)
-      ? query.citySlug[0]
-      : query.citySlug;
+    const citySlug = Array.isArray(query.citySlug) ? query.citySlug[0] : query.citySlug;
 
     if (citySlug) {
-      const recentProjects = await repository.recentProjectsInCity(
-        citySlug,
-        query.limit,
-      );
+      const recentProjects = await repository.recentProjectsInCity(citySlug, query.limit);
 
       if (recentProjects.length > 0) {
         fallback = 'recent_in_city';
-        const hits = await Promise.all(recentProjects.map(mapRecentProject));
+        const hits = await withPublicProjectMetadata(
+          await Promise.all(recentProjects.map(mapRecentProject)),
+        );
 
         // Log search event with Postgres fallback
         logSearchQuery({
@@ -349,7 +376,7 @@ export async function searchProjects(
   }
 
   // No results found even after all fallbacks
-  const hits = await Promise.all(result.hits.map(mapProjectHit));
+  const hits = await withPublicProjectMetadata(await Promise.all(result.hits.map(mapProjectHit)));
 
   logSearchQuery({
     type: 'search.query',
@@ -475,9 +502,7 @@ export async function searchDesigners(
  *
  * Uses multiSearch to query both collections in a single request.
  */
-export async function suggest(
-  query: SearchSuggestQuery,
-): Promise<SearchSuggestResponse> {
+export async function suggest(query: SearchSuggestQuery): Promise<SearchSuggestResponse> {
   const startTime = Date.now();
 
   // Execute multi-search

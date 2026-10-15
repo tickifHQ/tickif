@@ -13,6 +13,22 @@ const terms = [
 ];
 
 describe('scope-specific cost ranges', () => {
+  it.each(['', 'design', 'construction'])(
+    'never offers retired budgets to new %s projects',
+    (scope) => {
+      const options = projectBudgetOptions(terms, scope, '');
+      for (const band of legacyProjectBudgetBands) {
+        expect(options.some((option) => option.value === band.slug)).toBe(false);
+      }
+    },
+  );
+
+  it('retains the saved retired range even when active terms no longer include it', () => {
+    expect(projectBudgetOptions(projectBudgetBands, '', 'upscale').at(-1)).toEqual({
+      value: 'upscale',
+      label: '₹15L - ₹35L',
+    });
+  });
   it('offers the requested first two ranges for Design and preserves the remaining six', () => {
     expect(projectBudgetOptions(terms, 'design', '').map((term) => term.value)).toEqual([
       'under-1l',

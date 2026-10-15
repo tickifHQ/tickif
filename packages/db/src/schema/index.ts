@@ -4,3 +4,4 @@ export * from './search.js';
 export * from './retention.js';
 export * from './project-engagement.js';
 export * from './billing.js';
+export * from './following.js';

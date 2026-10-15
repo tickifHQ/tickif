@@ -10,6 +10,9 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/lib/home-feed', () => ({
   fetchHomeFeedPage: mock.fetchHomeFeedPage,
 }));
+vi.mock('@/components/project-actions', () => ({
+  ProjectActions: () => <button type="button" aria-label="Save project" />,
+}));
 
 import { ProjectFeed } from '../../src/components/project-feed';
 import type { FeedFilterSuggestion } from '../../src/components/try-filter-card';
@@ -59,6 +62,76 @@ function filterSuggestion(index: number): FeedFilterSuggestion {
 }
 
 describe('ProjectFeed', () => {
+  it('shows the three-dot Figma loader only while a visitor page is loading and retains retry', async () => {
+    let reject!: (error: Error) => void;
+    mock.fetchHomeFeedPage.mockImplementationOnce(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('first', 'First project')],
+          page: 1,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+        presentation="visitor"
+        autoLoad={false}
+      />,
+    );
+    expect(screen.queryByText('Loading more homes for you')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    const loader = screen.getByRole('status');
+    expect(loader).toHaveTextContent('Loading more homes for you');
+    expect(loader.querySelectorAll('svg.lucide-circle')).toHaveLength(3);
+    await act(async () => reject(new Error('Offline')));
+    expect(screen.queryByText('Loading more homes for you')).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load');
+    expect(screen.getByRole('button', { name: 'Load more projects' })).toBeEnabled();
+  });
+  it('keeps recommendations between the initial page and appended pages', async () => {
+    mock.fetchHomeFeedPage.mockResolvedValue({
+      items: [card('second', 'Second project')],
+      page: 2,
+      hasMore: false,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    });
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('first', 'First project')],
+          page: 1,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+        presentation="visitor"
+        autoLoad={false}
+        afterInitialPage={<h2>Saved recommendations</h2>}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    await screen.findByText('Second project');
+    const heading = screen.getByRole('heading', { name: 'Saved recommendations' });
+    expect(
+      screen.getByText('First project').compareDocumentPosition(heading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      heading.compareDocumentPosition(screen.getByText('Second project')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
   beforeEach(() => {
     vi.resetAllMocks();
     mock.observerOptions.length = 0;
@@ -197,6 +270,121 @@ describe('ProjectFeed', () => {
       refreshedImageUrl,
     );
   });
+
+  it.each([
+    { label: 'public', scope: undefined },
+    { label: 'following', scope: 'following' },
+  ] as const)(
+    'keeps appended cards when studio-logo signatures rotate in the $label feed',
+    async ({ scope }) => {
+      const initialCard = {
+        ...card('project-1', 'First Project'),
+        studioLogoUrl:
+          'https://storage.example.com/studios/first.webp?variant=avatar&X-Amz-Date=20261013T000000Z&X-Amz-Signature=old',
+      };
+      const initialPage: HomeFeedPage = {
+        items: [initialCard],
+        page: 1,
+        hasMore: true,
+        facetDistribution: {},
+        fallback: 'none',
+        relaxedFilters: [],
+      };
+      mock.fetchHomeFeedPage.mockResolvedValue({
+        ...initialPage,
+        items: [card('project-2', 'Second Project')],
+        page: 2,
+        hasMore: false,
+      });
+      const request = { filters, query: '', scope };
+      const { container, rerender } = render(
+        <ProjectFeed
+          initialPage={initialPage}
+          request={request}
+          presentation="visitor"
+          autoLoad={false}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+      await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+
+      const refreshedLogoUrl =
+        'https://storage.example.com/studios/first.webp?X-Amz-Signature=new&variant=avatar&X-Amz-Date=20261013T010000Z';
+      rerender(
+        <ProjectFeed
+          initialPage={{
+            ...initialPage,
+            items: [{ ...initialCard, studioLogoUrl: refreshedLogoUrl }],
+          }}
+          request={{ ...request }}
+          presentation="visitor"
+          autoLoad={false}
+        />,
+      );
+
+      expect(screen.getAllByRole('article')).toHaveLength(2);
+      expect(screen.getByText('Second Project')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Load more projects' })).not.toBeInTheDocument();
+      expect(container.querySelector('img[src*="/studios/first.webp"]')).toHaveAttribute(
+        'src',
+        refreshedLogoUrl,
+      );
+    },
+  );
+
+  it.each([
+    ['path', 'https://storage.example.com/studios/replaced.webp?variant=avatar'],
+    ['host', 'https://other-storage.example.com/studios/first.webp?variant=avatar'],
+    ['variant', 'https://storage.example.com/studios/first.webp?variant=full'],
+    ['removed', null],
+    ['missing', undefined],
+  ] as const)(
+    'resets appended cards when the studio logo is %s',
+    async (_change, studioLogoUrl) => {
+      const initialCard = {
+        ...card('project-1', 'First Project'),
+        studioLogoUrl:
+          'https://storage.example.com/studios/first.webp?variant=avatar&X-Amz-Signature=old',
+      };
+      const initialPage: HomeFeedPage = {
+        items: [initialCard],
+        page: 1,
+        hasMore: true,
+        facetDistribution: {},
+        fallback: 'none',
+        relaxedFilters: [],
+      };
+      mock.fetchHomeFeedPage.mockResolvedValue({
+        ...initialPage,
+        items: [card('project-2', 'Second Project')],
+        page: 2,
+        hasMore: false,
+      });
+      const request = { filters, query: '' };
+      const { rerender } = render(
+        <ProjectFeed
+          initialPage={initialPage}
+          request={request}
+          presentation="visitor"
+          autoLoad={false}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+      await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+
+      rerender(
+        <ProjectFeed
+          initialPage={{ ...initialPage, items: [{ ...initialCard, studioLogoUrl }] }}
+          request={request}
+          presentation="visitor"
+          autoLoad={false}
+        />,
+      );
+      expect(screen.getAllByRole('article')).toHaveLength(1);
+      expect(screen.queryByText('Second Project')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Load more projects' })).toBeEnabled();
+    },
+  );
 
   it.each(['query', 'sort', 'page', 'refresh'] as const)(
     'resets appended pages when %s changes',

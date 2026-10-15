@@ -56,6 +56,26 @@ const suggestions = {
 };
 
 describe('HomeSearchBar', () => {
+  it.each(['header', 'hero'] as const)(
+    'uses Lucide controls in the %s search presentation',
+    (variant) => {
+      const { container } = render(
+        <HomeSearchBar variant={variant} cities={[{ slug: 'chennai', label: 'Chennai' }]} />,
+      );
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector('svg.lucide-search')).toHaveAttribute('aria-hidden', 'true');
+      expect(
+        screen.getByRole('combobox').querySelector('svg.lucide-chevron-down'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('combobox')).not.toHaveClass('[&>svg]:hidden');
+      if (variant === 'header') {
+        expect(screen.getByRole('combobox').querySelector('svg.lucide-map-pin')).toHaveAttribute(
+          'aria-hidden',
+          'true',
+        );
+      }
+    },
+  );
   it('submits the selected API city together with the query and preserves other filters', async () => {
     vi.useRealTimers();
     mock.params = new URLSearchParams('room=kitchen&page=3');
@@ -65,6 +85,27 @@ describe('HomeSearchBar', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'teak' } });
     fireEvent.submit(screen.getByRole('search'));
     expect(mock.push).toHaveBeenCalledWith('/?room=kitchen&city=chennai&q=teak');
+  });
+  it('keeps duplicate city labels distinguishable by their taxonomy value', async () => {
+    vi.useRealTimers();
+    render(
+      <HomeSearchBar
+        variant="hero"
+        cities={[
+          { slug: 'chennai', label: 'Chennai' },
+          { slug: 'chennai-custom', label: 'Chennai' },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('combobox', { name: 'Search city' }));
+    const options = await screen.findAllByRole('option', { name: 'Chennai' });
+    expect(options.map((option) => option.getAttribute('data-value'))).toEqual([
+      'chennai',
+      'chennai-custom',
+    ]);
+    fireEvent.click(options[0]!);
+    fireEvent.submit(screen.getByRole('search'));
+    expect(mock.push).toHaveBeenCalledWith('/?city=chennai');
   });
   beforeEach(() => {
     vi.useFakeTimers();

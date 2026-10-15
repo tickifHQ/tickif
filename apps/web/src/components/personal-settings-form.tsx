@@ -16,11 +16,15 @@ import { Field, FieldGroup, FieldLabel, FieldDescription } from '@repo/ui/compon
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { readApiErrorMessage } from '@/lib/api-response';
+import { visibleAccountName } from '@/lib/account-identity';
 
 export function PersonalSettingsForm({ initialAccount }: { initialAccount: PersonalAccount }) {
   const router = useRouter();
+  const { refetch: refetchSession } = authClient.useSession();
   const [account, setAccount] = useState(initialAccount);
-  const [name, setName] = useState(initialAccount.name);
+  const [name, setName] = useState(
+    () => visibleAccountName(initialAccount.name, initialAccount.phoneNumber) ?? '',
+  );
   const [address, setAddress] = useState(initialAccount.address ?? '');
   const [whatsappNumber, setWhatsappNumber] = useState(initialAccount.whatsappNumber ?? '');
   const [busy, setBusy] = useState(false);
@@ -29,13 +33,13 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
   const [conflict, setConflict] = useState(false);
   const [invalidFields, setInvalidFields] = useState<string[]>([]);
   const dirty =
-    name !== account.name ||
+    name !== (visibleAccountName(account.name, account.phoneNumber) ?? '') ||
     address !== (account.address ?? '') ||
     whatsappNumber !== (account.whatsappNumber ?? '');
 
   function acceptAccount(value: PersonalAccount) {
     setAccount(value);
-    setName(value.name);
+    setName(visibleAccountName(value.name, value.phoneNumber) ?? '');
     setAddress(value.address ?? '');
     setWhatsappNumber(value.whatsappNumber ?? '');
     setInvalidFields([]);
@@ -105,8 +109,9 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
       }
       acceptAccount(parsed.data);
       setSaved(true);
-      // The account name is also rendered by session consumers in the header.
-      await authClient.getSession({ query: { disableCookieCache: true } }).catch(() => undefined);
+      // Unlike getSession(), the hook's refetch updates the shared reactive identity
+      // used by every header, dropdown and initials avatar, not just the cookie.
+      await refetchSession({ query: { disableCookieCache: true } }).catch(() => undefined);
       router.refresh();
     } catch {
       setError('Could not confirm your save. Your changes are still here. Please try again.');
@@ -132,6 +137,7 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
                 <Input
                   id="personal-name"
                   autoComplete="name"
+                  placeholder="Enter your name"
                   required
                   minLength={2}
                   maxLength={100}

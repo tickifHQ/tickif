@@ -38,6 +38,17 @@ vi.mock('@/lib/account-menu-data', () => ({
 }));
 
 describe('AccountMenu', () => {
+  it('keeps the original DiceBear initials image for visitor accounts', () => {
+    mock.session = {
+      user: { name: 'Meera Rao', email: null, role: 'visitor', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    render(<AccountMenu />);
+    const trigger = screen.getByRole('button', { name: 'Open account menu for Meera Rao' });
+    const source = trigger.querySelector('img')?.getAttribute('src');
+    expect(source).toMatch(/^data:image\/svg\+xml/);
+    expect(decodeURIComponent(source ?? '')).toContain('>MR<');
+  });
   it('registers an empty status region before the first request starts', () => {
     const container = document.createElement('div');
     container.innerHTML = renderToString(

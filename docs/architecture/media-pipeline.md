@@ -81,6 +81,12 @@ SVG assets and composites them into image bytes without a runtime font dependenc
 The `wm-v6` revision gives this treatment new immutable URLs. Originals stay private
 and unchanged; the embedded identifier below is independent of the visible marks.
 
+Visitor feed thumbnails also display the small decorative TICKIF card label from
+Figma 16123:62426 so it remains visible after thumbnail cropping. This is a
+presentation-only overlay on loaded images, not a replacement for the embedded
+branding or identifier. It changes no image bytes, processing revisions or
+backfill requirements, and is omitted on the missing-image fallback.
+
 New uploads produce both WebP and AVIF variants at the updated encoding quality.
 AVIF uses quality 65 with explicit CPU effort 2; WebP uses quality 88.
 [ADR 0009](../adr/0009-media-encoding-effort.md) records the CPU-effort tradeoff

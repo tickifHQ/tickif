@@ -83,6 +83,7 @@ interface SearchFeedParams {
 }
 
 interface ListFeedFallbackParams {
+  followedByUserId?: string;
   q?: string;
   filterBy: DiscoveryFeedFilters;
   sortBy: DiscoverySortPostgres;
@@ -141,10 +142,18 @@ const FACET_TAXONOMY_KINDS: (typeof schema.taxonomyKindEnum.enumValues)[number][
  * of that predicate for the same reason: a text-narrowed page with unnarrowed counts would
  * label itself with facet values it cannot reach.
  */
-function feedVisibilityWhere(filters: DiscoveryFeedFilters, q?: string) {
+function feedVisibilityWhere(filters: DiscoveryFeedFilters, q?: string, followedByUserId?: string) {
   return and(
     eq(schema.project.status, 'published'),
     eq(schema.designerProfile.status, 'active'),
+    ...(followedByUserId
+      ? [
+          sql`exists (select 1 from ${schema.designerFollow}
+            where ${schema.designerFollow.userId} = ${followedByUserId}
+              and ${schema.designerFollow.designerProfileId} = ${schema.project.designerId})`,
+          sql`(${schema.project.publishedAt} is null or ${schema.project.publishedAt} <= now())`,
+        ]
+      : []),
     ...(q ? [feedTextMatch(q)] : []),
     ...projectFeedFilterClauses(filters),
   );
@@ -284,7 +293,7 @@ export const discoveryRepository = {
   async listFeedFallback(params: ListFeedFallbackParams): Promise<PostgresListResult> {
     const cover = alias(schema.projectImage, 'cover');
 
-    const where = feedVisibilityWhere(params.filterBy, params.q);
+    const where = feedVisibilityWhere(params.filterBy, params.q, params.followedByUserId);
 
     const rows = await db
       .select({
@@ -418,7 +427,11 @@ export const discoveryRepository = {
    *
    * `q` is applied to the CTE as well, so a text-narrowed page gets text-narrowed counts.
    */
-  async countFeedFacets(filters: DiscoveryFeedFilters, q?: string): Promise<FacetDistribution> {
+  async countFeedFacets(
+    filters: DiscoveryFeedFilters,
+    q?: string,
+    followedByUserId?: string,
+  ): Promise<FacetDistribution> {
     const result = await db.execute<{ field: string; value: string | null; count: number }>(sql`
       with visible as (
         select
@@ -433,7 +446,7 @@ export const discoveryRepository = {
         from ${schema.project}
         inner join ${schema.designerProfile}
           on ${eq(schema.project.designerId, schema.designerProfile.id)}
-        where ${feedVisibilityWhere(filters, q)}
+        where ${feedVisibilityWhere(filters, q, followedByUserId)}
       )
       select 'citySlug' as field, city_slug as value, count(*)::int as count
         from visible where city_slug is not null group by city_slug

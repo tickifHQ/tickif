@@ -32,8 +32,17 @@
   --text-metadata: var(--type-metadata-size);
   --text-metadata--line-height: var(--type-metadata-leading);
   --text-metadata--letter-spacing: var(--type-metadata-tracking);
+  --text-search-label: var(--type-search-label-size);
+  --text-search-label--line-height: var(--type-metadata-leading);
+  --text-search-label--letter-spacing: var(--type-metadata-tracking);
 
   --color-background: var(--background);
+  --color-visitor-home-background: var(--visitor-home-background);
+  --color-visitor-preference: var(--visitor-preference);
+  --color-visitor-header-background: var(--visitor-header-background);
+  --spacing-navigation-logo: var(--navigation-logo-padding);
+  --color-badge-terracotta: var(--badge-terracotta);
+  --color-badge-terracotta-foreground: var(--badge-terracotta-foreground);
   --color-foreground: var(--foreground);
   --color-foreground-secondary: var(--foreground-secondary);
   --color-foreground-subtle: var(--foreground-subtle);
@@ -96,6 +105,11 @@
   --color-auth-field-divider: var(--auth-field-divider);
   --color-ring: var(--ring);
   --color-button-neutral: var(--button-neutral);
+  --color-project-save: var(--project-save);
+  --color-project-save-foreground: var(--project-save-foreground);
+  --color-project-budget: var(--project-budget);
+  --color-project-budget-foreground: var(--project-budget-foreground);
+  --color-project-watermark: var(--project-watermark);
   --color-button-neutral-foreground: var(--button-neutral-foreground);
   --color-button-neutral-hover: var(--button-neutral-hover);
   --color-button-inverted: var(--button-inverted);
@@ -119,6 +133,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-card: var(--card-radius);
+  --radius-summary: var(--summary-radius);
   --radius-feature: var(--feature-radius);
   --radius-popover: var(--popover-radius);
   --radius-account-menu: var(--account-menu-radius);
@@ -126,6 +141,7 @@
   --radius-checkbox: var(--checkbox-radius);
   --shadow-button-primary: var(--button-primary-shadow);
   --shadow-card: var(--card-shadow);
+  --shadow-summary-card: var(--summary-card-shadow);
   --shadow-popover: var(--popover-shadow);
   --shadow-account-menu: var(--account-menu-shadow);
   --shadow-location-card: var(--location-card-shadow);

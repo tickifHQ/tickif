@@ -16,6 +16,7 @@ import {
 import { Card } from '@repo/ui/components/card';
 import { RecognitionBadge } from '@repo/ui/components/recognition-badge';
 import { CopyLinkButton } from '@/components/copy-link-button';
+import { FollowDesignerButton, FollowDesignerProvider } from '@/components/follow-designer-button';
 import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-cta';
 import { ConsultationCta } from '@/components/consultation-cta';
 import { PublicProjectGallery } from '@/components/public-project-gallery';
@@ -471,6 +472,12 @@ function HeroSection({ portfolio, view }: SectionProps) {
           </dl>
 
           <div className="flex flex-wrap items-center gap-3">
+            <FollowDesignerButton
+              designerProfileId={portfolio.profileId}
+              designerName={portfolio.displayName}
+              loginHref={view.loginHref}
+              size="lg"
+            />
             <EnquiryCta
               context={{
                 type: 'designer',
@@ -898,6 +905,13 @@ function ShareSection({ portfolio, view }: SectionProps) {
                 className="profile-share-copy-button"
               />
             </div>
+            <FollowDesignerButton
+              designerProfileId={portfolio.profileId}
+              designerName={portfolio.displayName}
+              loginHref={view.loginHref}
+              size="lg"
+              className="h-11.5"
+            />
             <EnquiryCta
               context={{
                 type: 'designer',
@@ -1263,34 +1277,36 @@ export function PublicDesignerProfile({
   const props: SectionProps = { portfolio, view };
 
   return (
-    <EnquiryAvailabilityProvider designerProfileId={portfolio.profileId}>
-      <main
-        id="profile-top"
-        className="designer-profile min-h-screen bg-background text-foreground"
-        style={portfolioAccentStyle(portfolio.accentColor)}
-      >
-        <ProfileMotion />
-        <ProfileNavigation {...props} />
-        {portfolio.sections.hero ? <HeroSection {...props} /> : <StudioBar {...props} />}
-        {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
-          <CredentialsSection {...props} />
-        ) : null}
-        <PortfolioSection {...props} />
-        {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
-        <ReviewsSection {...props} />
-        {tickifReviews}
-        <ExperienceCentersSection {...props} />
-        {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
-        <ConsultationSection {...props} />
-        <ProfileFooter {...props} />
-        <ProfileFloatingEnquiry
-          designerProfileId={portfolio.profileId}
-          designerName={portfolio.displayName}
-          logoUrl={portfolio.logoUrl}
-          initials={view.initials}
-          loginHref={view.loginHref}
-        />
-      </main>
-    </EnquiryAvailabilityProvider>
+    <FollowDesignerProvider designerProfileId={portfolio.profileId}>
+      <EnquiryAvailabilityProvider designerProfileId={portfolio.profileId}>
+        <main
+          id="profile-top"
+          className="designer-profile min-h-screen bg-background text-foreground"
+          style={portfolioAccentStyle(portfolio.accentColor)}
+        >
+          <ProfileMotion />
+          <ProfileNavigation {...props} />
+          {portfolio.sections.hero ? <HeroSection {...props} /> : <StudioBar {...props} />}
+          {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
+            <CredentialsSection {...props} />
+          ) : null}
+          <PortfolioSection {...props} />
+          {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
+          <ReviewsSection {...props} />
+          {tickifReviews}
+          <ExperienceCentersSection {...props} />
+          {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
+          <ConsultationSection {...props} />
+          <ProfileFooter {...props} />
+          <ProfileFloatingEnquiry
+            designerProfileId={portfolio.profileId}
+            designerName={portfolio.displayName}
+            logoUrl={portfolio.logoUrl}
+            initials={view.initials}
+            loginHref={view.loginHref}
+          />
+        </main>
+      </EnquiryAvailabilityProvider>
+    </FollowDesignerProvider>
   );
 }

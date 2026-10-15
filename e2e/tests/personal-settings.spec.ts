@@ -58,7 +58,7 @@ test.describe('personal settings with persisted accounts', () => {
     syntheticEmail = `settings-person-${suffix}@example.test`;
     syntheticPhone = `+9197${randomInt(10_000_000, 100_000_000)}`;
     const user = await makeUser({
-      name: 'Settings Person',
+      name: syntheticPhone,
       email: syntheticEmail,
       phoneNumber: syntheticPhone,
       phoneNumberVerified: true,
@@ -77,8 +77,13 @@ test.describe('personal settings with persisted accounts', () => {
     page,
     context,
   }, testInfo) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
     await signIn(context, syntheticPhone);
     await page.goto('/home');
+    await expect(
+      page.getByRole('button', { name: 'Open account menu for Account', exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: /Open account menu/ }).click();
     await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
     await expect(page).toHaveURL(/\/home\/settings$/);
@@ -87,13 +92,61 @@ test.describe('personal settings with persisted accounts', () => {
       page.getByRole('heading', { name: 'Personal settings', exact: true }),
     ).toBeVisible();
     await expect(page.getByText(`${syntheticEmail} (Verified)`)).toBeVisible();
+    await expect(page.getByLabel('Display name')).toHaveValue('');
+    await expect(page.getByLabel('Display name')).toHaveAttribute('placeholder', 'Enter your name');
+    await expect(page.getByText(`${syntheticPhone} (Verified)`)).toHaveRole('definition');
+    await expect(page.getByRole('textbox')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath('new-visitor-desktop.png'), fullPage: true });
+    const desktopViewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBeTruthy();
+    await page.screenshot({ path: testInfo.outputPath('new-visitor-mobile.png'), fullPage: true });
+    await page.setViewportSize(desktopViewport);
+    await page.getByLabel('Personal address (optional)').fill('Bandra West, Mumbai');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByLabel('Display name')).toBeFocused();
+    expect(
+      await page
+        .getByLabel('Display name')
+        .evaluate((input: HTMLInputElement) => input.validity.valueMissing),
+    ).toBeTruthy();
+    await expect(page.getByRole('status')).toHaveCount(0);
     await page.getByLabel('Display name').fill('Updated Person');
     await page.getByLabel('Personal address (optional)').fill('Bandra West, Mumbai');
     await page.getByLabel('WhatsApp number (optional)').fill('+919876543210');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByRole('status')).toHaveText('Personal settings saved.');
+    const updatedMenu = page.getByRole('button', {
+      name: 'Open account menu for Updated Person',
+      exact: true,
+    });
+    await expect(updatedMenu).toBeVisible();
+    const initials = await updatedMenu
+      .locator('img[src^="data:image/svg+xml"]')
+      .getAttribute('src');
+    expect(decodeURIComponent(initials!)).toContain('>UP</text>');
+    await updatedMenu.click();
+    await expect(page.getByRole('menu').getByText('Updated Person', { exact: true })).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('updated-name-account-menu.png'),
+      animations: 'disabled',
+    });
+    await page.keyboard.press('Escape');
+    await page.getByRole('link', { name: 'Back to My Tickif' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      /Good (morning|afternoon|evening), Updated/,
+    );
+    await page
+      .getByRole('button', { name: 'Open account menu for Updated Person', exact: true })
+      .click();
+    await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    await expect(page).toHaveURL(/\/home\/settings$/);
     await page.reload();
     await expect(page.getByLabel('Display name')).toHaveValue('Updated Person');
+    await expect(page.getByText(`${syntheticPhone} (Verified)`)).toHaveRole('definition');
     await expect(page.getByLabel('Personal address (optional)')).toHaveValue('Bandra West, Mumbai');
     await expect(page.getByLabel('WhatsApp number (optional)')).toHaveValue('+919876543210');
     const other = await context.newPage();
@@ -125,6 +178,7 @@ test.describe('personal settings with persisted accounts', () => {
       fullPage: true,
     });
     await other.close();
+    expect(pageErrors).toEqual([]);
   });
 
   test('redirects an anonymous visitor to login', async ({ page }) => {

@@ -18,6 +18,7 @@ import { CalendarDays, ImagePlus, X } from 'lucide-react';
 import { ConsultationScheduleActions } from '@/components/consultation-schedule-actions';
 import { leadStatusOptions } from '@/components/designer-lead-status';
 import { api } from '@/lib/api';
+import { EnquiryThread } from '@/components/enquiry-thread';
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en', {
@@ -252,6 +253,8 @@ export function DesignerLeadDetailDialog({
                   </div>
                 </div>
               </div>
+
+              <EnquiryThread key={lead.id} target={{ kind: 'lead', id: lead.id }} />
 
               <SelectField
                 className="mt-6"

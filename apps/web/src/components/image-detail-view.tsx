@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+import { FollowDesignerButton } from '@/components/follow-designer-button';
 import Link from 'next/link';
 import type {
   FeedProject,
@@ -306,8 +307,10 @@ export function ImageDetailView({
                     className="size-11 bg-primary/10 text-sm font-bold text-primary"
                     fallback={designer.displayName.charAt(0)}
                   />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold">{designer.displayName}</p>
+                  <div className="min-w-0 flex-1">
+                    <p title={designer.displayName} className="truncate text-sm font-semibold">
+                      {designer.displayName}
+                    </p>
                     {hasRating ? (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Star className="size-3 fill-primary text-primary" aria-hidden />
@@ -326,6 +329,11 @@ export function ImageDetailView({
                       </div>
                     ) : null}
                   </div>
+                  <FollowDesignerButton
+                    designerProfileId={designerProfileId}
+                    designerName={designer.displayName}
+                    loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`}
+                  />
                 </div>
 
                 <div className="mt-4 flex items-center gap-3">

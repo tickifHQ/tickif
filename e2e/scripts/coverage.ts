@@ -20,6 +20,14 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'visitor-following-enquiries.spec.ts',
+    'visitor follows a studio and sees real viewed and messaged enquiry milestones',
+  ],
+  [
+    'visitor-home.spec.ts',
+    'visitor home wires real activity, recommendations and retryable saves across viewports',
+  ],
+  [
     'upload-scroll.spec.ts',
     'first upload preserves the workspace scroll position while creating a draft',
   ],

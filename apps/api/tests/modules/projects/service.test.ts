@@ -69,6 +69,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       listUnresolvedReviewComments: vi.fn(),
       findReferencedImageObjectKeys: vi.fn(),
       listPublishedFeed: vi.fn(),
+      findPublicStudioLogoKeys: vi.fn(async () => new Map()),
       findTaxonomyLabels: vi.fn(),
       findLocalityLabels: vi.fn(),
       // keep the real-ish slugify so create() behavior is realistic
