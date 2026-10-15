@@ -4,11 +4,12 @@ import {
   enquiryMessageSchema,
   listEnquiriesResponseSchema,
 } from '@repo/contracts';
-import { describe, expect, it } from 'vitest';
-import { db, eq, schema } from '@repo/db';
+import { describe, expect, it, vi } from 'vitest';
+import { db, eq, schema, sql } from '@repo/db';
 import { makeDesigner } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+import { enquiryActivityRepository } from '../../../src/modules/enquiries/activity-repository.js';
 
 async function setup() {
   const owner = await createRoleSession('+919800007010', 'designer');
@@ -35,9 +36,49 @@ async function setup() {
   expect(response.status).toBe(201);
   const enquiry = enquiryResponseSchema.parse(await response.json());
   const [record] = await db.select().from(schema.enquiry).where(eq(schema.enquiry.id, enquiry.id));
-  return { visitor, ownerCookie, record: record! };
+  return { visitor, ownerCookie, ownerId: owner.userId, record: record! };
 }
 describe('enquiry milestone and messaging integration', () => {
+  it('keeps a reply unread when its transaction waited behind an already-read view', async () => {
+    const { visitor, ownerId, record } = await setup();
+    let pending: ReturnType<typeof enquiryActivityRepository.send> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.select().from(schema.lead).where(eq(schema.lead.id, record.leadId!)).for('update');
+      const blocker = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      pending = enquiryActivityRepository.send(record.leadId!, record.organizationId, ownerId, {
+        body: 'This reply was queued while the visitor read the earlier activity.',
+        requestId: randomUUID(),
+      });
+      // Observe the actual row-lock wait instead of relying on a timing delay.
+      await vi.waitFor(
+        async () => {
+          const waiting = await db.execute<{ waiting: boolean }>(sql`
+          select exists(select 1 from pg_stat_activity
+            where datname = current_database()
+              and ${blocker.rows[0]!.pid} = any(pg_blocking_pids(pid))) as waiting
+        `);
+          expect(waiting.rows[0]?.waiting).toBe(true);
+        },
+        { timeout: 10000 },
+      );
+      // A lead view and requester acknowledgement can finish while send waits.
+      await tx
+        .update(schema.enquiry)
+        .set({
+          viewedAt: sql`clock_timestamp()`,
+          activityReadAt: sql`clock_timestamp()`,
+        })
+        .where(eq(schema.enquiry.id, record.id));
+    });
+    expect((await pending)?.kind).toBe('sent');
+    expect(
+      await (
+        await app.request('/api/enquiries/counts', {
+          headers: { cookie: visitor.cookie },
+        })
+      ).json(),
+    ).toEqual({ total: 1, unread: 1 });
+  });
   it('records actual viewed and studio-reply events once, preserves retry idempotency, and acknowledges only the requester', async () => {
     const { visitor, ownerCookie, record } = await setup();
     const leadPath = `/api/leads/${record.leadId}`;

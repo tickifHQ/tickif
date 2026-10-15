@@ -76,7 +76,14 @@ export const enquiryActivityRepository = {
         return { kind: 'closed' } as const;
       const [message] = await tx
         .insert(schema.enquiryMessage)
-        .values({ enquiryId: enquiry.id, authorId, ...input })
+        .values({
+          enquiryId: enquiry.id,
+          authorId,
+          ...input,
+          // Transaction now() predates any lead-lock wait. Timestamp the actual
+          // insert so a reply cannot fall behind activity read while it waited.
+          createdAt: sql`clock_timestamp()`,
+        })
         .returning({
           id: schema.enquiryMessage.id,
           body: schema.enquiryMessage.body,
