@@ -11,6 +11,7 @@ import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { DashboardRightRailTransition } from '@/components/dashboard-right-rail-transition';
+import { DesignerDashboardLoadError } from '@/components/designer-dashboard-load-error';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
@@ -649,27 +650,21 @@ export function DesignerDashboardOverview({
             Welcome, <span className="text-muted-foreground">{studioName}</span>
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            {trackedChecklistComplete
-              ? 'Manage your projects, enquiries, and portfolio performance.'
-              : "Let's get your portfolio ready to go live."}
+            {dashboardError
+              ? 'Your dashboard summary is temporarily unavailable.'
+              : trackedChecklistComplete
+                ? 'Manage your projects, enquiries, and portfolio performance.'
+                : "Let's get your portfolio ready to go live."}
           </p>
         </div>
       </div>
 
       {dashboardError ? (
-        <Card radius="2xl" className="mt-5 border-destructive/30 bg-destructive/5">
-          <div className="px-5 py-4">
-            <div className="text-base font-medium text-foreground">
-              Could not load dashboard summary
-            </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Refresh the page in a moment to try again.
-            </p>
-          </div>
-        </Card>
-      ) : null}
-
-      {trackedChecklistComplete ? (
+        <DesignerDashboardLoadError
+          canWriteProjects={canWriteProjects}
+          canEditOrganization={canEditOrganization}
+        />
+      ) : trackedChecklistComplete ? (
         <section data-testid="post-setup-overview" className="mt-5">
           <div className="grid gap-5 xl:grid-cols-3">
             <div className="min-w-0 space-y-5 xl:col-span-2">

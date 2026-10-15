@@ -16,6 +16,15 @@ for (const width of [852, 516, 489, 390, 320]) {
     await page.getByRole('link', { name: 'Sign in', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Sign in to continue' });
     await expect(dialog).toBeVisible();
+    // Visibility starts during the opening scale animation, before geometry is final.
+    await dialog.evaluate(async (element) => {
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      );
+    });
     // The backdrop must cover the whole viewport, including the former scrollbar gutter.
     const backdrop = await page.locator('[data-slot="dialog-overlay"]').boundingBox();
     expect(
@@ -63,7 +72,7 @@ for (const width of [852, 516, 489, 390, 320]) {
       const closeButton = dialog.getByRole('button', { name: 'Close', exact: true });
       // Measure the touch target after the dialog's opening scale animation settles.
       await expect
-        .poll(async () => Math.round((await closeButton.boundingBox())!.height))
+        .poll(async () => (await closeButton.boundingBox())!.height)
         .toBeGreaterThanOrEqual(44);
       const closeBox = await closeButton.boundingBox();
       expect(closeBox!.y).toBeLessThanOrEqual(welcomeBox!.y);
