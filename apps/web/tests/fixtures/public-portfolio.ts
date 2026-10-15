@@ -95,12 +95,18 @@ export function makePublicPortfolio(
       websiteUrl: 'https://anikaspaces.in',
       instagramHandle: 'anika',
       linkedinHandle: 'anika',
-      youtubeHandle: null,
+      youtubeHandle: 'anika-spaces',
     },
     testimonial: {
       words: 'They understood our family before they understood our floor plan.',
       author: 'Priya & Rohan K.',
       projectTitle: 'Adyar Penthouse',
+    },
+    googleActions: {
+      readAllUrl:
+        'https://www.google.com/maps/search/?api=1&query=Anika%20Spaces%2C%20Chennai&query_place_id=demo-google-place-anika-spaces',
+      writeReviewUrl:
+        'https://search.google.com/local/writereview?placeid=demo-google-place-anika-spaces',
     },
     reviews: [makeReview()],
     projects: {

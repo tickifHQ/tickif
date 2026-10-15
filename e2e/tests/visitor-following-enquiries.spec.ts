@@ -268,8 +268,9 @@ test('visitor follows a studio and sees real viewed and messaged enquiry milesto
     const heroOrder = await heroActions
       .getByRole('button', profileUnfollowLabel)
       .evaluate((element) => {
-        const enquiry =
-          element.parentElement!.parentElement!.querySelector('[aria-label="Enquire"]')!;
+        const enquiry = element.parentElement!.parentElement!.querySelector(
+          '[aria-label="Send an enquiry"]',
+        )!;
         return Boolean(element.compareDocumentPosition(enquiry) & Node.DOCUMENT_POSITION_FOLLOWING);
       });
     expect(heroOrder).toBe(true);

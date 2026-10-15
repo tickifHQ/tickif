@@ -2,20 +2,17 @@ import Image from 'next/image';
 import './public-designer-profile.css';
 import { ProfileFloatingEnquiry } from '@/components/profile-floating-enquiry';
 import { ProfileMotion } from '@/components/profile-motion';
-import { profileSealLetterLayout } from '@/components/profile-seal-letter-layout';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
 import { portfolioAccentStyle } from '@/lib/portfolio-accent';
-import { portfolioShareFacts } from '@/lib/portfolio-share-card';
 import { portfolioRecognitionArtwork } from '@/lib/portfolio-recognition';
 import type { ReactNode } from 'react';
-import { ArrowRight, BadgeCheck, Check, MessageSquare, Star } from 'lucide-react';
+import { ArrowRight, BadgeCheck, ExternalLink, Globe2, Star } from 'lucide-react';
 import {
   PORTFOLIO_BADGE_PRESENTATION,
   type PublicPortfolioResponse,
   type PublicPortfolioStats,
 } from '@repo/contracts';
-import { Badge } from '@repo/ui/components/badge';
 import { Card } from '@repo/ui/components/card';
 import { RecognitionBadge } from '@repo/ui/components/recognition-badge';
 import { CopyLinkButton } from '@/components/copy-link-button';
@@ -24,10 +21,18 @@ import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-ct
 import { ConsultationCta } from '@/components/consultation-cta';
 import { PublicProjectGallery } from '@/components/public-project-gallery';
 import { ProfileClientRatings } from '@/components/profile-client-ratings';
+import { ProfileTestimonialQuote } from '@/components/profile-testimonial-quote';
 import { ProfileExperienceCentres } from '@/components/profile-experience-centres';
+import {
+  GoogleBrandIcon,
+  InstagramBrandIcon,
+  LinkedInBrandIcon,
+  YouTubeBrandIcon,
+} from '@/components/brand-icons';
 import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
 import {
   formatRating,
+  socialLabel,
   socialHref,
   strapline,
   studioInitials,
@@ -72,6 +77,66 @@ function safeExternalHref(value: string | null | undefined): string | null {
   }
 }
 
+type ProfileSocialLink = {
+  key: 'instagram' | 'linkedin' | 'youtube' | 'website';
+  label: string;
+  href: string;
+  meta?: string;
+  icon: ReactNode;
+};
+
+function portfolioSocialLinks(portfolio: PublicPortfolioResponse): ProfileSocialLink[] {
+  if (!portfolio.sections.socialLinks) return [];
+  const { social } = portfolio;
+  const links: ProfileSocialLink[] = [];
+  if (social.instagramHandle) {
+    const href = socialHref('instagram', social.instagramHandle);
+    if (href) {
+      links.push({
+        key: 'instagram',
+        label: 'Instagram',
+        href,
+        meta: socialLabel(social.instagramHandle),
+        icon: <InstagramBrandIcon />,
+      });
+    }
+  }
+  if (social.youtubeHandle) {
+    const href = socialHref('youtube', social.youtubeHandle);
+    if (href) {
+      links.push({
+        key: 'youtube',
+        label: 'YouTube',
+        href,
+        meta: socialLabel(social.youtubeHandle),
+        icon: <YouTubeBrandIcon />,
+      });
+    }
+  }
+  if (social.linkedinHandle) {
+    const href = socialHref('linkedin', social.linkedinHandle);
+    if (href) {
+      links.push({
+        key: 'linkedin',
+        label: 'LinkedIn',
+        href,
+        meta: socialLabel(social.linkedinHandle),
+        icon: <LinkedInBrandIcon />,
+      });
+    }
+  }
+  const websiteHref = safeExternalHref(social.websiteUrl);
+  if (websiteHref && social.websiteUrl) {
+    links.push({
+      key: 'website',
+      label: websiteLabel(social.websiteUrl),
+      href: websiteHref,
+      icon: <Globe2 />,
+    });
+  }
+  return links;
+}
+
 /** Logo when the designer uploaded one, else an initials monogram. */
 function StudioMark({
   portfolio,
@@ -109,7 +174,8 @@ function StudioBar({ portfolio, view }: SectionProps) {
               {portfolio.displayName}
               {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                 <BadgeCheck
-                  aria-label="Verified studio"
+                  aria-label={portfolio.isKycVerified ? 'Verified studio' : undefined}
+                  aria-hidden={portfolio.isKycVerified ? undefined : true}
                   className="size-4 shrink-0 fill-primary text-primary-foreground"
                 />
               ) : null}
@@ -151,143 +217,42 @@ function StudioBar({ portfolio, view }: SectionProps) {
 }
 
 /** One cell of the hero proof strip. */
-type HeroStatTile = { value: string; label: string; detail: string };
-
-function ProfileTicket({
-  portfolio,
-  share = false,
-}: {
-  portfolio: PublicPortfolioResponse;
-  share?: boolean;
-}) {
-  return (
-    <span className="profile-ticket">
-      <span>TICKIF</span>
-      <i aria-hidden="true" />
-      <span>
-        {portfolio.sections.tickifBadge && portfolio.isKycVerified
-          ? share
-            ? 'Verified'
-            : 'KYC verified'
-          : 'Portfolio'}
-      </span>
-    </span>
-  );
-}
-
-/** Intrinsic SVG dimensions are retained; each layer is a separate Figma export. */
-function ProfileArtwork({
-  name,
-  className,
-  accent = false,
-}: {
-  name: string;
-  className?: string;
-  accent?: boolean;
-}) {
-  const src = `/ui/profile/${name}`;
-  if (accent) {
-    return (
-      <span
-        className={`profile-accent-artwork ${className ?? ''}`}
-        style={{ maskImage: `url("${src}")` }}
-        aria-hidden="true"
-      >
-        <img src={src} alt="" className="invisible block max-w-none" />
-      </span>
-    );
-  }
-  // Exact decorative SVGs retain their fractional intrinsic root dimensions.
-  return (
-    <img
-      src={`/ui/profile/${name}`}
-      alt=""
-      aria-hidden="true"
-      className={`max-w-none ${className ?? ''}`}
-    />
-  );
-}
-
-const sealStyles = {
-  verified: { start: 0, color: 'var(--profile-seal-verified)', letters: 'verified', value: '✓' },
-  established: {
-    start: 3,
-    color: 'var(--profile-seal-established)',
-    letters: 'established',
-    value: '',
-  },
-  'top-performer': {
-    start: 6,
-    color: 'var(--profile-seal-performer)',
-    letters: 'performer',
-    value: '★',
-  },
-  'projects-published': {
-    start: 9,
-    color: 'var(--profile-seal-projects)',
-    letters: 'projects',
-    value: '',
-  },
-} as const;
+type HeroStatTile = {
+  value: string;
+  label: string;
+  detail: string;
+  variant?: 'rating';
+};
 
 function HeroIdentityCard({ portfolio, view }: SectionProps) {
   const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
-  const project = portfolio.projects.projects.find((item) => item.coverImageUrl);
-  const seals = portfolio.sections.trustCredentials
-    ? portfolio.badges.filter(
-        (badge): badge is keyof typeof sealStyles =>
-          badge in sealStyles && (badge !== 'verified' || portfolio.isKycVerified),
-      )
-    : [];
-  const orbitText = [
-    [
-      portfolio.sections.tickifBadge && portfolio.isKycVerified
-        ? 'VERIFIED ON TICKIF'
-        : 'ON TICKIF',
-      `${portfolio.stats.projectCount} PROJECTS`,
-    ],
-    [
-      portfolio.foundedYear != null ? `EST ${portfolio.foundedYear}` : null,
-      rating ? `★ ${formatRating(rating.rating)} FROM ${rating.reviewCount} REVIEWS` : null,
-      view.location?.toUpperCase(),
-    ],
-  ].map((facts) => facts.filter(Boolean).join(' · '));
+  const projectsWithImages = portfolio.projects.projects.filter((item) => item.coverImageUrl);
+  const primaryProject = projectsWithImages[0];
+  const secondaryProject = projectsWithImages.find(
+    (item) => item.coverImageUrl !== primaryProject?.coverImageUrl,
+  );
+  const heroImageUrl = portfolio.heroCoverUrl ?? primaryProject?.coverImageUrl;
+  const insetProject = portfolio.heroCoverUrl
+    ? primaryProject
+    : (secondaryProject ?? primaryProject);
+  const studioFactItems = [
+    `${portfolio.stats.projectCount}+ projects`,
+    portfolio.foundedYear != null ? `since ${portfolio.foundedYear}` : null,
+  ].filter((item): item is string => Boolean(item));
+  const bannerMeta = rating ? studioFactItems.join(' · ') : studioFactItems[0];
+  const spotlightLabel = [
+    rating ? 'Top rated' : 'Published studio',
+    view.location?.split(' · ')[0],
+    '2026',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <div className="profile-identity-wrap">
-      <svg
-        className="profile-identity-orbit"
-        width="530"
-        height="530"
-        viewBox="0 0 530 530"
-        aria-hidden="true"
-      >
-        <defs>
-          {/* Exact vector path from Figma text-path node 15888:6643. */}
-          <path
-            id="profile-identity-curve"
-            d="M 515 230 C 515 357.0254876708984 399.7133177185059 460 257.5 460 C 115.28668228149414 460 0 357.0254876708984 0 230 C 0 102.97451232910156 115.28668228149414 0 257.5 0 C 399.7133177185059 0 515 102.97451232910156 515 230 Z"
-          />
-        </defs>
-        <g className="profile-orbit-rotor">
-          <text transform="translate(15.319378852844238 32.999900817871094)">
-            {/* Arc-length equivalent of source segment 1, position 0.610914409160614. */}
-            <textPath href="#profile-identity-curve" startOffset="40.637057536046775%">
-              {orbitText[0]}
-            </textPath>
-          </text>
-          {orbitText[1] ? (
-            <text transform="translate(15.319378852844238 32.999900817871094) rotate(180 257.5 230)">
-              <textPath href="#profile-identity-curve" startOffset="40.637057536046775%">
-                {orbitText[1]}
-              </textPath>
-            </text>
-          ) : null}
-        </g>
-      </svg>
-      <Card className="profile-identity-card">
+      <div className="profile-identity-card">
         <div className="profile-cover">
           <Image
-            src={portfolio.heroCoverUrl!}
+            src={heroImageUrl!}
             alt={`${portfolio.displayName} portfolio cover`}
             fill
             priority
@@ -297,11 +262,11 @@ function HeroIdentityCard({ portfolio, view }: SectionProps) {
             className="object-cover"
           />
         </div>
-        {project?.coverImageUrl ? (
+        {insetProject?.coverImageUrl ? (
           <div className="profile-detail-photo">
             <Image
-              src={project.coverImageUrl}
-              alt={`${project.title} project detail`}
+              src={insetProject.coverImageUrl}
+              alt={`${insetProject.title} project detail`}
               fill
               unoptimized
               loading="eager"
@@ -310,107 +275,65 @@ function HeroIdentityCard({ portfolio, view }: SectionProps) {
             />
           </div>
         ) : null}
-        <p className="profile-card-name profile-highlight flex items-center gap-2">
-          <span className="min-w-0 break-words">Selected work</span>
-          {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
-            <BadgeCheck
-              aria-label="Verified studio"
-              className="size-4 shrink-0 fill-primary text-primary-foreground"
-            />
-          ) : null}
-        </p>
-        <p className="profile-card-type profile-highlight">{view.type}</p>
-        {seals.length > 0 ? (
-          <ul aria-label="Studio recognition" className="profile-seals">
-            {seals.map((badge) => {
-              const seal = sealStyles[badge];
-              const value =
-                badge === 'established'
-                  ? String(portfolio.stats.yearsExperience ?? '')
-                  : badge === 'projects-published'
-                    ? String(portfolio.stats.projectCount)
-                    : seal.value;
-              const [upper, lower] = profileSealLetterLayout[seal.letters];
-              const caption =
-                badge === 'established'
-                  ? portfolio.foundedYear != null
-                    ? `SINCE ${portfolio.foundedYear}`
-                    : 'ON TICKIF'
-                  : badge === 'top-performer'
-                    ? ' ONTICKIF '
-                    : lower.map((letter) => letter.letter).join('');
-              return (
-                <li
-                  key={badge}
-                  className={`profile-seal profile-seal-${badge}`}
-                  style={{ color: seal.color }}
-                >
-                  <span className="sr-only">{PORTFOLIO_BADGE_PRESENTATION[badge].label}</span>
-                  {[0, 1, 2].map((offset) => (
-                    <ProfileArtwork
-                      key={offset}
-                      name={`hero-vector${seal.start + offset || ''}.svg`}
-                      className="profile-seal-layer"
-                      accent={badge === 'projects-published'}
-                    />
-                  ))}
-                  <svg className="profile-seal-text" viewBox="0 0 65 65" aria-hidden="true">
-                    <defs>
-                      <path id={`seal-${badge}-top`} d="M 12 32.5 A 20.5 20.5 0 0 1 53 32.5" />
-                      <path id={`seal-${badge}-bottom`} d="M 8.5 32.5 A 24 24 0 0 0 56.5 32.5" />
-                    </defs>
-                    <text textAnchor="middle">
-                      <textPath href={`#seal-${badge}-top`} startOffset="50%">
-                        {upper.map((letter) => letter.letter).join('')}
-                      </textPath>
-                    </text>
-                    <text textAnchor="middle">
-                      <textPath href={`#seal-${badge}-bottom`} startOffset="50%">
-                        {caption.trim()}
-                      </textPath>
-                    </text>
-                  </svg>
-                  <span aria-hidden="true" className="profile-seal-value">
-                    {value}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-        <div className="profile-card-footer">
-          <ProfileTicket portfolio={portfolio} />
-          {rating ? (
-            <div className="text-right">
-              <span className="inline-flex items-center gap-1 text-sm">
-                <Star aria-hidden="true" className="size-3 fill-current" />
-                {formatRating(rating.rating)}
-              </span>
-              <p className="mt-1 font-mono text-2xs uppercase tracking-widest text-muted-foreground">
-                {rating.reviewCount} reviews
-              </p>
-            </div>
-          ) : null}
+        <div className="profile-card-spotlight">
+          <Star aria-hidden="true" className="size-3 fill-current" />
+          <span>{spotlightLabel}</span>
         </div>
-      </Card>
-      {portfolio.sections.shareBlock ? (
-        <div className="mt-8 flex justify-center">
-          <CopyLinkButton
-            value={view.publicProfileHref}
-            label="Share this card"
-            icon="share"
-            variant="outline"
-            className="bg-muted text-[13px]"
+        <div className="profile-card-banner">
+          <StudioMark
+            portfolio={portfolio}
+            view={view}
+            className="profile-card-banner-logo"
+            sizePx={40}
           />
+          <div className="profile-card-banner-copy">
+            <p className="profile-card-banner-name">
+              <span className="truncate">{portfolio.displayName}</span>
+              {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                <BadgeCheck
+                  aria-hidden={portfolio.isKycVerified ? undefined : true}
+                  aria-label={portfolio.isKycVerified ? 'Verified studio' : undefined}
+                  className="profile-card-banner-check"
+                />
+              ) : null}
+            </p>
+            {bannerMeta ? <p className="profile-card-banner-meta">{bannerMeta}</p> : null}
+          </div>
+          {rating || studioFactItems[1] ? (
+            <>
+              <span className="profile-card-banner-divider" aria-hidden="true" />
+              {rating ? (
+                <div className="profile-card-rating">
+                  <span>
+                    <Star aria-hidden="true" className="size-3.5 fill-current" />
+                    <b>{formatRating(rating.rating)}</b>
+                  </span>
+                  <p>{rating.reviewCount} reviews</p>
+                </div>
+              ) : (
+                <p className="profile-card-banner-proof">{studioFactItems[1]}</p>
+              )}
+            </>
+          ) : null}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
 
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
+  const projects = portfolio.projects.projects;
   const rating = portfolio.sections.overallRating ? headlineReviewAggregate(stats) : null;
+  const hasHeroVisual = Boolean(
+    portfolio.heroCoverUrl || projects.some((item) => item.coverImageUrl),
+  );
+  const heroDetails = [
+    view.type,
+    portfolio.foundedYear != null ? `Est. ${portfolio.foundedYear}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const tiles: HeroStatTile[] = [
     ...(rating
       ? [
@@ -418,6 +341,7 @@ function HeroSection({ portfolio, view }: SectionProps) {
             value: formatRating(rating.rating),
             label: 'Rating',
             detail: `${rating.reviewCount} ${rating.source === 'tickif' ? 'Tickif' : 'Google'} reviews`,
+            variant: 'rating' as const,
           },
         ]
       : []),
@@ -429,11 +353,14 @@ function HeroSection({ portfolio, view }: SectionProps) {
     ...(portfolio.foundedYear != null
       ? [
           {
-            value: String(portfolio.foundedYear),
-            label: 'Established',
+            value:
+              stats.yearsExperience != null
+                ? `${stats.yearsExperience} yrs`
+                : String(portfolio.foundedYear),
+            label: stats.yearsExperience != null ? 'Experience' : 'Established',
             detail:
               stats.yearsExperience != null
-                ? `${stats.yearsExperience} years experience`
+                ? `In practice since ${portfolio.foundedYear}`
                 : 'Studio founded',
           },
         ]
@@ -473,40 +400,38 @@ function HeroSection({ portfolio, view }: SectionProps) {
           },
         ]
       : []),
-  ];
+  ].slice(0, 4);
 
   return (
     <section aria-label="Portfolio hero" className="profile-hero">
-      <div className={`profile-shell ${portfolio.heroCoverUrl ? 'profile-hero-grid' : ''}`}>
+      <div className={`profile-shell ${hasHeroVisual ? 'profile-hero-grid' : ''}`}>
         <div className="profile-hero-copy">
-          {view.location ? (
-            <Badge variant="secondary" className="font-mono text-xs uppercase tracking-widest">
-              {view.location}
-            </Badge>
-          ) : null}
+          <div className="profile-hero-pills" aria-label="Studio availability and location">
+            <span className="profile-hero-pill">Accepting projects</span>
+            {view.location ? <span className="profile-hero-pill">{view.location}</span> : null}
+          </div>
           <div className="flex min-w-0 items-center gap-3.5">
             <StudioMark
               portfolio={portfolio}
               view={view}
-              className="size-16 rounded-xl text-3xl shadow-card"
-              sizePx={64}
+              className="profile-hero-avatar"
+              sizePx={48}
             />
             <div className="min-w-0">
-              {portfolio.isKycVerified ? (
-                <p className="mb-1 inline-flex items-center gap-1 font-mono text-metadata uppercase text-foreground">
-                  <Check aria-hidden="true" className="size-3 text-primary" />
-                  Verified studio
-                </p>
-              ) : null}
-              <p className="font-mono text-metadata uppercase text-muted-foreground">
-                {view.type}
-                {portfolio.foundedYear != null ? ` · Est. ${portfolio.foundedYear}` : ''}
+              <p className="profile-hero-studio-name">
+                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                  <>
+                    <BadgeCheck aria-hidden="true" className="profile-verified-icon" />
+                    <span>Verified studio</span>
+                  </>
+                ) : null}
               </p>
+              {heroDetails ? <p className="profile-hero-studio-meta">{heroDetails}</p> : null}
             </div>
           </div>
 
           <h1 className="profile-hero-title" aria-label={portfolio.displayName}>
-            <StudioName name={portfolio.displayName} />
+            {portfolio.displayName}
             <span aria-hidden="true" className="profile-punctuation">
               .
             </span>
@@ -516,7 +441,11 @@ function HeroSection({ portfolio, view }: SectionProps) {
               {view.pitch}
             </p>
           ) : null}
+        </div>
 
+        {hasHeroVisual ? <HeroIdentityCard portfolio={portfolio} view={view} /> : null}
+
+        <div className="profile-hero-lower">
           <dl className="profile-proof-grid">
             {tiles.map((tile) => (
               <div key={tile.label}>
@@ -526,22 +455,20 @@ function HeroSection({ portfolio, view }: SectionProps) {
                     {tile.value}
                   </span>
                 </dd>
-                <p>{tile.detail}</p>
+                {tile.variant === 'rating' ? (
+                  <p className="profile-proof-rating-detail">
+                    <span aria-hidden="true" className="profile-proof-stars">
+                      {Array.from({ length: 5 }, (_, index) => (
+                        <Star key={index} className="size-3 fill-current" />
+                      ))}
+                    </span>
+                    <span>{tile.detail}</span>
+                  </p>
+                ) : (
+                  <p>{tile.detail}</p>
+                )}
               </div>
             ))}
-            <ProfileArtwork
-              name="hero-vertical-divider1.png"
-              className="profile-proof-divider left-0"
-            />
-            <ProfileArtwork
-              name="hero-vertical-divider.png"
-              className="profile-proof-divider left-1/2"
-            />
-            <ProfileArtwork
-              name="hero-vertical-divider1.png"
-              className="profile-proof-divider right-0"
-            />
-            <span className="profile-proof-junction" aria-hidden="true" />
           </dl>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -560,29 +487,19 @@ function HeroSection({ portfolio, view }: SectionProps) {
               }}
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
-              variant="default"
-              size="lg"
-              ariaLabel="Enquire"
+              variant="emphasis"
+              ariaLabel="Send an enquiry"
+              className="profile-hero-enquiry"
             >
-              <MessageSquare className="size-4" />
-              Enquire
+              <span>Send an enquiry</span>
+              <span className="profile-hero-enquiry-icon" aria-hidden="true">
+                <ArrowRight className="size-4" />
+              </span>
             </EnquiryCta>
           </div>
         </div>
-        {portfolio.heroCoverUrl ? <HeroIdentityCard portfolio={portfolio} view={view} /> : null}
       </div>
     </section>
-  );
-}
-
-function StudioName({ name }: { name: string }) {
-  const space = name.indexOf(' ');
-  return space > 0 ? (
-    <>
-      {name.slice(0, space)} <span className="profile-highlight">{name.slice(space + 1)}</span>
-    </>
-  ) : (
-    <>{name}</>
   );
 }
 
@@ -592,7 +509,7 @@ function ProfileHeading({
   id,
   detail,
 }: {
-  number: string;
+  number?: string;
   children: ReactNode;
   id: string;
   detail?: ReactNode;
@@ -600,9 +517,11 @@ function ProfileHeading({
   return (
     <header className="profile-section-header">
       <h2 id={id} className="profile-heading">
-        <span className="profile-section-number" aria-hidden="true">
-          {number}
-        </span>
+        {number ? (
+          <span className="profile-section-number" aria-hidden="true">
+            {number}
+          </span>
+        ) : null}
         {children}
       </h2>
       {detail ? (
@@ -614,18 +533,29 @@ function ProfileHeading({
 
 function CredentialsSection({ portfolio }: SectionProps) {
   if (portfolio.badges.length === 0) return null;
+  const awardCount = portfolio.badges.length;
   return (
     <section
       id="recognition"
       aria-labelledby="recognition-heading"
       className="profile-shell profile-section"
     >
-      <ProfileHeading id="recognition-heading" number="01" detail="Earned through real work">
-        Recognition on Tickif
+      <ProfileHeading
+        id="recognition-heading"
+        detail={
+          <>
+            {awardCount} {awardCount === 1 ? 'award' : 'awards'}
+            {portfolio.sections.tickifBadge && portfolio.isKycVerified
+              ? ' · Verified on Tickif'
+              : null}
+          </>
+        }
+      >
+        Recognition
       </ProfileHeading>
       <ul className="profile-recognition-list">
         {portfolio.badges.map((badge) => {
-          const { label, criterion } = PORTFOLIO_BADGE_PRESENTATION[badge];
+          const { label } = PORTFOLIO_BADGE_PRESENTATION[badge];
           const detail =
             badge === 'established' && portfolio.foundedYear != null
               ? `Since ${portfolio.foundedYear}`
@@ -658,10 +588,9 @@ function CredentialsSection({ portfolio }: SectionProps) {
                     />
                   )
                 }
-                eyebrow="Tickif"
                 label={label}
                 detail={detail}
-                description={criterion}
+                description={undefined}
               />
             </li>
           );
@@ -680,61 +609,95 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
     return null;
   return (
     <section id="work" className="profile-shell profile-section" aria-labelledby="projects-heading">
-      <ProfileHeading
-        id="projects-heading"
-        number="02"
-        detail={`${portfolio.stats.projectCount} published`}
-      >
-        Selected projects
-      </ProfileHeading>
+      <ProfileHeading id="projects-heading">Selected projects</ProfileHeading>
       <PublicProjectGallery
         profileId={portfolio.profileId}
         initialPage={portfolio.projects}
         studioName={portfolio.displayName}
+        fallbackBudgetLabel={
+          portfolio.stats.startingBudget
+            ? formatCompactBudgetLabel(portfolio.stats.startingBudget)
+            : null
+        }
         emptyMessage={`${view.type} — no published projects yet.`}
       />
     </section>
   );
 }
 
+function clientNoteAvatarUrl(
+  portfolio: PublicPortfolioResponse,
+  author: string | null,
+): string | null {
+  if (!author) return null;
+  const authorTokens = new Set(
+    author
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((token) => token.length > 1),
+  );
+  return (
+    portfolio.reviews.find((review) => {
+      if (!review.avatarUrl) return false;
+      const reviewTokens = review.author
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((token) => token.length > 1);
+      return reviewTokens.some((token) => authorTokens.has(token));
+    })?.avatarUrl ?? null
+  );
+}
+
+function ClientNoteAvatar({ author, avatarUrl }: { author: string; avatarUrl: string | null }) {
+  if (avatarUrl) {
+    return (
+      <Image
+        src={avatarUrl}
+        alt=""
+        width={40}
+        height={40}
+        unoptimized
+        className="profile-note-avatar"
+      />
+    );
+  }
+  return <span className="profile-note-avatar">{studioInitials(author)}</span>;
+}
+
 function StorySection({ portfolio }: SectionProps) {
   const testimonial = portfolio.testimonial;
-  if (!testimonial) return null;
+  const quote = testimonial?.words ?? portfolio.tagline ?? portfolio.bio;
+  if (!quote) return null;
+  const isClientNote = Boolean(testimonial);
+  const noteMeta = [isClientNote ? 'Client note' : 'Studio note', testimonial?.projectTitle]
+    .filter(Boolean)
+    .join(' · ');
+  const author = testimonial?.author ?? portfolio.displayName;
+  const authorMeta = isClientNote
+    ? [testimonial?.projectTitle, 'Homeowner'].filter(Boolean).join(' · ')
+    : 'Published portfolio';
+  const avatarUrl = isClientNote ? clientNoteAvatarUrl(portfolio, author) : null;
   return (
     <section aria-label="Client note" className="profile-shell">
       <div className="profile-story">
-        <span aria-hidden="true" className="profile-story-corner left-0 top-0 border-l border-t" />
-        <span aria-hidden="true" className="profile-story-corner right-0 top-0 border-r border-t" />
-        <span
-          aria-hidden="true"
-          className="profile-story-corner bottom-0 left-0 border-b border-l"
-        />
-        <span
-          aria-hidden="true"
-          className="profile-story-corner bottom-0 right-0 border-b border-r"
-        />
-        <p className="font-mono text-metadata tracking-widest text-muted-foreground uppercase">
-          Client note{testimonial.projectTitle ? ` · ${testimonial.projectTitle}` : ''}
+        <p className="profile-story-pill">
+          <span aria-hidden="true" />
+          {noteMeta}
         </p>
-        <blockquote>
-          <span aria-hidden="true" className="profile-punctuation">
-            “
-          </span>
-          {testimonial.words}
-          <span aria-hidden="true" className="profile-punctuation">
-            ”
-          </span>
-        </blockquote>
-        {testimonial.author ? (
-          <footer className="flex items-center justify-center gap-3 pt-1 text-left">
-            <span className="profile-note-avatar grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold">
-              {studioInitials(testimonial.author)}
-            </span>
+        <ProfileTestimonialQuote quote={quote} />
+        {author ? (
+          <footer className="profile-story-author">
+            <ClientNoteAvatar author={author} avatarUrl={avatarUrl} />
             <div>
-              <p className="text-sm font-medium">{testimonial.author}</p>
-              <p className="text-xs text-muted-foreground">
-                {testimonial.projectTitle ?? 'Homeowner'}
-              </p>
+              <p>{author}</p>
+              {authorMeta ? (
+                <span>
+                  {isClientNote ? <BadgeCheck aria-hidden="true" className="size-3" /> : null}
+                  {authorMeta}
+                </span>
+              ) : null}
             </div>
           </footer>
         ) : null}
@@ -754,14 +717,23 @@ function hasGoogleClientRatings(portfolio: PublicPortfolioResponse) {
 }
 
 function ReviewsSection({ portfolio }: SectionProps) {
-  if (!hasGoogleClientRatings(portfolio)) return null;
+  const hasRatings = hasGoogleClientRatings(portfolio);
+  if (!hasRatings) return null;
   return (
     <section
       id="reviews"
       className="profile-shell profile-section"
       aria-labelledby="client-ratings-heading"
     >
-      <ProfileHeading id="client-ratings-heading" number="03">
+      <ProfileHeading
+        id="client-ratings-heading"
+        detail={
+          <span className="profile-google-sync">
+            <GoogleBrandIcon aria-hidden="true" />
+            From Google · synced daily
+          </span>
+        }
+      >
         Client ratings
       </ProfileHeading>
       <ProfileClientRatings portfolio={portfolio} />
@@ -781,7 +753,6 @@ function ExperienceCentersSection({ portfolio, view }: SectionProps) {
     >
       <ProfileHeading
         id="experience-centers-heading"
-        number="04"
         detail={`${centres.length} ${centres.length === 1 ? 'centre' : 'centres'} · ${cities.size} ${cities.size === 1 ? 'city' : 'cities'}`}
       >
         Experience centres
@@ -796,76 +767,150 @@ function ExperienceCentersSection({ portfolio, view }: SectionProps) {
 }
 
 function ShareSection({ portfolio, view }: SectionProps) {
-  const facts = portfolioShareFacts(portfolio);
+  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
+  const projectImages = portfolio.projects.projects
+    .map((project) => project.coverImageUrl)
+    .filter((url): url is string => Boolean(url))
+    .slice(0, 3);
+  const budgetLabel = portfolio.stats.startingBudget
+    ? formatCompactBudgetLabel(portfolio.stats.startingBudget)
+    : null;
+  const socialLinks = portfolioSocialLinks(portfolio);
+  const shareFacts: Array<{ value: string; label: string; icon?: ReactNode }> = [];
+  if (rating) {
+    shareFacts.push({
+      value: formatRating(rating.rating),
+      label: `${rating.reviewCount} ${rating.source === 'google' ? 'Google reviews' : 'reviews'}`,
+      icon: <Star aria-hidden="true" className="profile-share-rating-star" />,
+    });
+  }
+  shareFacts.push({ value: String(portfolio.stats.projectCount), label: 'Projects on tickif' });
+  if (portfolio.stats.yearsExperience != null) {
+    shareFacts.push({
+      value: `${portfolio.stats.yearsExperience} yrs`,
+      label: portfolio.foundedYear != null ? `Since ${portfolio.foundedYear}` : 'Studio experience',
+    });
+  }
+  const fitItems = [budgetLabel ? `Projects from ${budgetLabel}` : null, view.location].filter(
+    (item): item is string => Boolean(item),
+  );
   return (
     <section id="share" className="profile-shell profile-section">
       <div className="profile-share">
-        <Card className="profile-share-card">
-          <div className="flex items-center gap-3">
-            <StudioMark
-              portfolio={portfolio}
-              view={view}
-              className="size-11 rounded-lg text-sm"
-              sizePx={44}
-            />
-            <div className="min-w-0">
-              <p className="flex items-center gap-1.5 font-display text-lg font-bold">
-                {portfolio.displayName}
-                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
-                  <BadgeCheck
-                    aria-label="Verified studio"
-                    className="size-4 shrink-0 fill-primary text-primary-foreground"
+        <Card className="profile-share-card" aria-label={`${portfolio.displayName} preview card`}>
+          {projectImages.length > 0 ? (
+            <div className="profile-share-strip">
+              {projectImages.map((imageUrl, index) => (
+                <div key={`${imageUrl}-${index}`} className="profile-share-strip-image">
+                  <Image
+                    src={imageUrl}
+                    alt=""
+                    fill
+                    unoptimized
+                    sizes="(min-width: 768px) 180px, 30vw"
+                    className="object-cover"
                   />
-                ) : null}
-              </p>
-              <p className="mt-1 font-mono text-2xs uppercase tracking-widest text-muted-foreground">
-                {view.type}
-                {view.location ? ` · ${view.location}` : ''}
-              </p>
-            </div>
-          </div>
-          <div className="profile-share-grid">
-            <dl className="profile-share-stats">
-              {facts.map((fact) => (
-                <div key={fact.label}>
-                  <dt>{fact.label}</dt>
-                  <dd>{fact.value}</dd>
+                  {index === 2 && portfolio.stats.projectCount > projectImages.length ? (
+                    <span>+{portfolio.stats.projectCount - projectImages.length}</span>
+                  ) : null}
                 </div>
               ))}
-            </dl>
-            {portfolio.heroCoverUrl ? (
-              <div className="profile-share-photo">
+            </div>
+          ) : portfolio.heroCoverUrl ? (
+            <div className="profile-share-strip">
+              <div className="profile-share-strip-image">
                 <Image
                   src={portfolio.heroCoverUrl}
-                  alt={`${portfolio.displayName} portfolio preview`}
+                  alt=""
                   fill
                   unoptimized
-                  sizes="(min-width: 768px) 200px, 250px"
+                  sizes="(min-width: 768px) 440px, 80vw"
                   className="object-cover"
                 />
               </div>
+            </div>
+          ) : null}
+          <div className="profile-share-card-body">
+            <div className="profile-share-identity">
+              <StudioMark
+                portfolio={portfolio}
+                view={view}
+                className="profile-share-avatar"
+                sizePx={40}
+              />
+              <div className="min-w-0">
+                <p>
+                  {portfolio.displayName}
+                  {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                    <BadgeCheck aria-label="Verified studio" className="profile-share-check" />
+                  ) : null}
+                </p>
+                <span>
+                  {view.type}
+                  {view.location ? ` · ${view.location}` : ''}
+                </span>
+              </div>
+            </div>
+            {shareFacts.length > 0 ? (
+              <dl className="profile-share-stats">
+                {shareFacts.map((fact) => (
+                  <div key={fact.label}>
+                    <dt>{fact.label}</dt>
+                    <dd>
+                      {fact.icon}
+                      {fact.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            {fitItems.length > 0 ? (
+              <p className="profile-share-fit">
+                {fitItems.map((item, index) => (
+                  <span key={item}>
+                    {index > 0 ? <i aria-hidden="true">·</i> : null}
+                    {item}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+            {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+              <div className="profile-share-verified">
+                <BadgeCheck aria-hidden="true" />
+                <span>Verified on Tickif</span>
+              </div>
             ) : null}
           </div>
-          <div className="profile-card-footer">
-            <ProfileTicket portfolio={portfolio} share />
-            <span className="break-all font-mono text-2xs text-secondary-foreground">
-              {view.publicProfileLabel}
-            </span>
-          </div>
         </Card>
-        <div className="relative min-w-0">
-          <p className="profile-highlight font-mono text-xs uppercase tracking-widest">
+        <div className="profile-share-copy">
+          <p className="profile-share-pill">
+            <span aria-hidden="true" />
             One link. Everywhere.
           </p>
           <h2 className="profile-share-title">
-            A portfolio <span className="profile-highlight">worth sharing.</span>
+            A portfolio worth <span>sharing.</span>
           </h2>
-          <p className="mt-6 max-w-118 text-base leading-relaxed text-foreground-secondary">
-            This is {portfolio.displayName}&apos;s living portfolio — every project, rating and
-            detail in one link. Send it on WhatsApp, drop it in your Instagram bio, or print it on a
-            card.
+          <p className="profile-share-description">
+            Every project, review and recognition in one verified link. Send it to a homeowner, or
+            add it to your Instagram bio.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="profile-share-actions">
+            <div className="profile-share-link-box">
+              <span>{view.publicProfileLabel}</span>
+              <CopyLinkButton
+                value={view.publicProfileHref}
+                variant="default"
+                label="Copy link"
+                icon="copy"
+                className="profile-share-copy-button"
+              />
+            </div>
+            <FollowDesignerButton
+              designerProfileId={portfolio.profileId}
+              designerName={portfolio.displayName}
+              loginHref={view.loginHref}
+              size="lg"
+            />
             <EnquiryCta
               context={{
                 type: 'designer',
@@ -876,24 +921,35 @@ function ShareSection({ portfolio, view }: SectionProps) {
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"
-              size="lg"
-              ariaLabel="Send enquiry"
+              ariaLabel="Enquire"
+              className="profile-share-enquire"
             >
-              Send enquiry
+              <span>Enquire</span>
+              <span className="profile-share-enquire-icon" aria-hidden="true">
+                <ArrowRight className="size-4" />
+              </span>
             </EnquiryCta>
-            <FollowDesignerButton
-              designerProfileId={portfolio.profileId}
-              designerName={portfolio.displayName}
-              loginHref={view.loginHref}
-              size="lg"
-            />
-            <CopyLinkButton
-              value={view.publicProfileHref}
-              variant="outline"
-              size="lg"
-              className="bg-muted"
-            />
           </div>
+          {socialLinks.length > 0 ? (
+            <div className="profile-share-socials">
+              <p>Find {portfolio.displayName} on</p>
+              <div>
+                {socialLinks.map((link) => (
+                  <a
+                    key={link.key}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                  >
+                    <span className="profile-share-social-icon">{link.icon}</span>
+                    <span>{link.label}</span>
+                    {link.meta ? <small>{link.meta}</small> : null}
+                    <ExternalLink aria-hidden="true" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
@@ -904,32 +960,44 @@ function ConsultationSection({ portfolio, view }: SectionProps) {
   return (
     <section id="enquire" className="profile-consultation">
       <div className="profile-shell profile-consultation-inner">
-        <p className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-primary-soft">
-          <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-          Direct line to the designer
-        </p>
-        <h2
-          className="profile-consultation-title"
-          aria-label="Let's build something you can't imagine living without."
-        >
-          <span className="block">Let&apos;s build</span>
-          <span className="block">
-            something <span className="profile-highlight">you</span>
-          </span>
-          <span className="profile-highlight block">can&apos;t imagine</span>
-          <span className="block">
-            living without<span className="profile-punctuation">.</span>
-          </span>
-        </h2>
-        <div className="profile-consultation-bottom">
-          <p className="max-w-104 text-lg leading-relaxed text-surface-inverse-foreground/80">
-            Send an enquiry to {portfolio.displayName} on Tickif and start discussing your project.
+        <div className="profile-consultation-copy">
+          <p className="profile-consultation-pill">
+            <span aria-hidden="true" />
+            Enquire directly · No middlemen
+          </p>
+          <h2
+            className="profile-consultation-title"
+            aria-label="Let's build something you can't imagine living without."
+          >
+            <span>Let&apos;s build something</span>
+            <span>you can&apos;t imagine</span>
+            <span>
+              <mark>living without.</mark>
+            </span>
+          </h2>
+        </div>
+        <div className="profile-consultation-side">
+          <div className="profile-consultation-person">
+            <StudioMark
+              portfolio={portfolio}
+              view={view}
+              className="profile-consultation-avatar"
+              sizePx={56}
+            />
+            <div>
+              <p>{portfolio.displayName}</p>
+              <span>{view.type}</span>
+            </div>
+          </div>
+          <p>
+            Share your rooms, budget and timeline with {portfolio.displayName}. Enquiring is free,
+            with no obligation.
           </p>
           <ConsultationCta
             designerProfileId={portfolio.profileId}
             designerName={portfolio.displayName}
             loginHref={view.loginHref}
-            className="profile-floating-action h-16 border-0 px-8 text-base"
+            className="profile-consultation-enquire"
           />
         </div>
       </div>
@@ -942,30 +1010,59 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
     portfolio.stats.projectCount > 0 ||
     portfolio.projects.projects.length > 0 ||
     portfolio.projects.hasMore;
+  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
   const hasReviews = hasGoogleClientRatings(portfolio);
   const hasCentres = portfolio.experienceCenterGroups?.some((group) => group.centers.length > 0);
+  const navDetails = [view.type, rating ? `★ ${formatRating(rating.rating)}` : null, view.location]
+    .filter(Boolean)
+    .join(' · ');
+  const tickerItems = [
+    'Discover design studios',
+    'Free to browse',
+    'No middlemen',
+    [portfolio.displayName, view.location].filter(Boolean).join(' · '),
+    rating ? `★ ${formatRating(rating.rating)} from ${rating.reviewCount} reviews` : null,
+  ].filter((item): item is string => Boolean(item));
   return (
     <header className="profile-navigation">
+      <div className="profile-navigation-band" aria-label="Tickif portfolio highlights">
+        <div className="profile-navigation-ticker">
+          {[0, 1, 2].map((loop) => (
+            <span key={loop} className="profile-navigation-ticker-set" aria-hidden={loop > 0}>
+              {tickerItems.map((item) => (
+                <span key={`${loop}-${item}`}>{item}</span>
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
       <div className="profile-shell profile-navigation-inner">
         <a
           href="#profile-top"
-          className="flex min-w-0 items-center gap-3"
+          className="profile-nav-brand"
           aria-label={`${portfolio.displayName} portfolio`}
         >
           <StudioMark
             portfolio={portfolio}
             view={view}
-            className="size-10 rounded-lg text-sm"
-            sizePx={40}
+            className="profile-nav-avatar text-sm"
+            sizePx={36}
           />
-          <div className="min-w-0">
-            <p className="truncate text-xs text-muted-foreground">
-              {view.type}
-              {view.location ? ` · ${view.location}` : ''}
+          <div className="profile-nav-brand-copy">
+            <p className="profile-nav-name">
+              <span className="truncate">{portfolio.displayName}</span>
+              {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                <BadgeCheck
+                  aria-label={portfolio.isKycVerified ? 'Verified studio' : undefined}
+                  aria-hidden={portfolio.isKycVerified ? undefined : true}
+                  className="profile-nav-verified size-3.5 shrink-0 fill-primary text-primary-foreground"
+                />
+              ) : null}
             </p>
+            {navDetails ? <p className="profile-nav-meta">{navDetails}</p> : null}
           </div>
         </a>
-        <div className="flex shrink-0 items-center gap-6">
+        <div className="profile-nav-actions">
           <nav aria-label="Portfolio sections" className="profile-nav-links">
             {hasWork ? <a href="#work">Work</a> : null}
             {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
@@ -974,15 +1071,28 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
             {hasReviews ? <a href="#reviews">Reviews</a> : null}
             {hasCentres ? <a href="#centres">Centres</a> : null}
           </nav>
+          {portfolio.sections.shareBlock ? (
+            <CopyLinkButton
+              value={view.publicProfileHref}
+              label="Share"
+              icon="share"
+              variant="outline"
+              ariaLabel="Share profile"
+              className="profile-nav-share h-9 px-4 text-xs"
+            />
+          ) : null}
           <EnquiryCta
             context={{ type: 'designer', designerName: portfolio.displayName }}
             designerProfileId={portfolio.profileId}
             loginHref={view.loginHref}
             variant="emphasis"
             ariaLabel="Enquire about this studio"
-            className="h-9 px-4 text-xs"
+            className="profile-nav-enquiry h-10 text-xs"
           >
-            Enquire <ArrowRight className="size-3" />
+            <span>Send an enquiry</span>
+            <span className="profile-nav-enquiry-icon" aria-hidden="true">
+              <ArrowRight className="size-3.5" />
+            </span>
           </EnquiryCta>
         </div>
       </div>
@@ -991,117 +1101,153 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
 }
 
 function ProfileFooter({ portfolio, view }: SectionProps) {
-  const social = portfolio.social;
-  const links = portfolio.sections.socialLinks
-    ? [
-        social.instagramHandle
-          ? { label: 'Instagram', href: socialHref('instagram', social.instagramHandle) }
-          : null,
-        social.linkedinHandle
-          ? { label: 'LinkedIn', href: socialHref('linkedin', social.linkedinHandle) }
-          : null,
-        social.youtubeHandle
-          ? { label: 'YouTube', href: socialHref('youtube', social.youtubeHandle) }
-          : null,
-        safeExternalHref(social.websiteUrl)
-          ? { label: websiteLabel(social.websiteUrl!), href: safeExternalHref(social.websiteUrl)! }
-          : null,
-      ].filter(
-        (link): link is { label: string; href: string } => link !== null && Boolean(link.href),
-      )
-    : [];
+  const links = portfolioSocialLinks(portfolio);
+  const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
+  const centreCount =
+    portfolio.experienceCenterGroups?.reduce((sum, group) => sum + group.centers.length, 0) ?? 0;
+  const footerIntro =
+    portfolio.tagline?.trim() || `${portfolio.displayName}'s verified public portfolio.`;
   return (
-    <footer className="profile-shell profile-footer">
+    <footer className="profile-footer">
       <div className="profile-footer-grid">
-        <div>
-          <div className="flex items-center gap-3">
+        <div className="profile-footer-brand">
+          <div className="profile-footer-identity">
             <StudioMark
               portfolio={portfolio}
               view={view}
-              className="size-10 rounded-lg text-sm"
+              className="profile-footer-avatar"
               sizePx={40}
             />
             <div>
-              <p className="font-display font-bold">{portfolio.displayName}</p>
-              <p className="text-xs text-muted-foreground">
+              <p>
+                {portfolio.displayName}
+                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                  <BadgeCheck aria-hidden="true" className="profile-footer-check" />
+                ) : null}
+              </p>
+              <span>
                 {view.type}
                 {view.location ? ` · ${view.location}` : ''}
-              </p>
+              </span>
             </div>
           </div>
-          <p className="mt-4 max-w-95 text-sm leading-relaxed text-foreground-secondary">
-            {portfolio.tagline}
-          </p>
-          <ConsultationCta
+          <p className="profile-footer-intro">{footerIntro}</p>
+          <EnquiryCta
+            context={{
+              type: 'designer',
+              designerName: portfolio.displayName,
+              designerLocation: view.location,
+              designerLogoUrl: portfolio.logoUrl,
+            }}
             designerProfileId={portfolio.profileId}
-            designerName={portfolio.displayName}
             loginHref={view.loginHref}
-            className="mt-4 h-9 bg-button-inverted px-5 text-xs text-button-inverted-foreground hover:bg-button-inverted-hover"
-          />
+            variant="emphasis"
+            ariaLabel="Footer enquiry"
+            className="profile-footer-enquire"
+          >
+            <span>Enquire</span>
+            <span aria-hidden="true">
+              <ArrowRight className="size-3.5" />
+            </span>
+          </EnquiryCta>
         </div>
-        <div>
-          <p className="mb-4 font-mono text-metadata uppercase text-muted-foreground">Portfolio</p>
-          <ul className="space-y-3 text-sm">
+
+        <nav aria-label="Footer portfolio links" className="profile-footer-links">
+          <p>Portfolio</p>
+          <ul>
             {portfolio.stats.projectCount > 0 ? (
               <li>
-                <a href="#work">Projects</a>
+                <a href="#work">
+                  <span>Projects</span>
+                  <small>{portfolio.stats.projectCount}</small>
+                </a>
               </li>
             ) : null}
             {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
               <li>
-                <a href="#recognition">Recognition</a>
+                <a href="#recognition">
+                  <span>Recognition</span>
+                  <small>{portfolio.badges.length}</small>
+                </a>
               </li>
             ) : null}
-            {portfolio.experienceCenterGroups?.some((group) => group.centers.length > 0) ? (
+            {rating ? (
               <li>
-                <a href="#centres">Experience centres</a>
+                <a href="#reviews">
+                  <span>Ratings</span>
+                  <small>{formatRating(rating.rating)}</small>
+                </a>
               </li>
             ) : null}
           </ul>
-        </div>
+        </nav>
+
+        <nav aria-label="Footer studio actions" className="profile-footer-links">
+          <p>Studio</p>
+          <ul>
+            {centreCount > 0 ? (
+              <li>
+                <a href="#centres">
+                  <span>Experience centres</span>
+                  <small>{centreCount}</small>
+                </a>
+              </li>
+            ) : null}
+            <li>
+              <EnquiryCta
+                context={{ type: 'designer', designerName: portfolio.displayName }}
+                designerProfileId={portfolio.profileId}
+                loginHref={view.loginHref}
+                variant="link"
+                ariaLabel="Send enquiry"
+                className="profile-footer-action"
+              >
+                <span>Send an enquiry</span>
+              </EnquiryCta>
+            </li>
+            {portfolio.sections.shareBlock ? (
+              <li>
+                <CopyLinkButton
+                  value={view.publicProfileHref}
+                  variant="link"
+                  label="Share this portfolio"
+                  className="profile-footer-action"
+                />
+              </li>
+            ) : null}
+          </ul>
+        </nav>
+
         {links.length > 0 ? (
-          <div>
-            <p className="mb-4 font-mono text-metadata uppercase text-muted-foreground">
-              Elsewhere
-            </p>
-            <ul className="space-y-3 text-sm">
+          <nav aria-label="Footer social links" className="profile-footer-links">
+            <p>Elsewhere</p>
+            <ul>
               {links.map((link) => (
                 <li key={link.label}>
-                  <a
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="flex items-center justify-between gap-3"
-                  >
-                    {link.label}
-                    <span className="text-muted-foreground" aria-hidden="true">
-                      ↗
+                  <a href={link.href} target="_blank" rel="noopener noreferrer nofollow">
+                    <span>{link.label}</span>
+                    <span aria-hidden="true">
+                      <ArrowRight className="size-3" />
                     </span>
                   </a>
                 </li>
               ))}
             </ul>
-          </div>
+          </nav>
         ) : null}
       </div>
       <p className="profile-footer-outline" aria-hidden="true">
         {portfolio.displayName}
       </p>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-6 font-mono text-metadata uppercase text-muted-foreground">
-        <p className="flex items-center gap-2">
-          Portfolio by{' '}
-          <a
-            href="/"
-            aria-label="Tickif home"
-            className="rounded-sm bg-surface-inverse px-2 py-1 font-sans normal-case tracking-normal"
-          >
+      <div className="profile-footer-bottom">
+        <p>
+          <span>Portfolio by</span>
+          <a href="/" aria-label="Tickif home">
             <TickifBrandLogo tone="inverse" />
           </a>
-          <span>· Published studio portfolio</span>
+          <span>· Published on Tickif</span>
         </p>
-        <a href="#profile-top" className="text-foreground">
-          Back to top ↑
-        </a>
+        <a href="#profile-top">Back to top ↑</a>
       </div>
     </footer>
   );

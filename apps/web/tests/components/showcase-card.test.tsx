@@ -299,7 +299,7 @@ describe('PublicProjectCard', () => {
   it('keeps the real portfolio year inside the project link', () => {
     render(<PublicProjectCard project={designerProject} studioName="Studio A" />);
 
-    expect(screen.getByRole('link')).toContainElement(screen.getByText('2025'));
+    expect(screen.getByRole('link')).toHaveTextContent('3 BHK · Bandra · 1,200 sq ft · 2025');
   });
 
   it('does not display an unrated project as trusted', () => {

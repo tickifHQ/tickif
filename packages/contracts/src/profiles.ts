@@ -988,6 +988,15 @@ export const publicPortfolioTestimonialSchema = z
   .meta({ id: 'PublicPortfolioTestimonial' });
 export type PublicPortfolioTestimonial = z.infer<typeof publicPortfolioTestimonialSchema>;
 
+/** Public Google actions derived from the connected place id, not the private profile URL. */
+export const publicPortfolioGoogleActionsSchema = z
+  .object({
+    readAllUrl: z.string().url(),
+    writeReviewUrl: z.string().url(),
+  })
+  .meta({ id: 'PublicPortfolioGoogleActions' });
+export type PublicPortfolioGoogleActions = z.infer<typeof publicPortfolioGoogleActionsSchema>;
+
 /**
  * GET /api/portfolios/{slug} — everything the public designer page renders, in
  * one request.
@@ -1024,6 +1033,7 @@ export const publicPortfolioResponseSchema = z
     reviewVisibility: publicPortfolioReviewVisibilitySchema,
     social: publicPortfolioSocialSchema,
     testimonial: publicPortfolioTestimonialSchema.nullable(),
+    googleActions: publicPortfolioGoogleActionsSchema.nullable(),
     reviews: z.array(publicPortfolioReviewSchema),
     projects: designerProjectsResponseSchema,
     publishedAt: z.string().datetime().nullable(),

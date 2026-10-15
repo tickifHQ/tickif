@@ -244,8 +244,9 @@ export function EnquiryCta({
     <button
       type="button"
       aria-label={ariaLabel}
+      aria-busy={availabilityChecking || undefined}
       aria-disabled={ownStudio || undefined}
-      disabled={checking || availabilityChecking}
+      disabled={checking}
       className={cn(
         buttonVariants({ variant, size }),
         ownStudio && 'cursor-not-allowed opacity-50 active:translate-y-0',

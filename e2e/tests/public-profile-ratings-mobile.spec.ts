@@ -48,7 +48,7 @@ test('Google rating summary and review carousel fit narrow profile screens', asy
         authorUrl: null,
         profilePhotoUrl: null,
         rating: number === 5 ? 4 : 5,
-        text: `Demo Google review ${number} for responsive carousel testing.`,
+        text: `Demo Google review ${number} for responsive review-card testing.`,
         relativeTime: '1 week ago',
         time: Math.floor(timestamp.getTime() / 1000) - number,
       })),
@@ -62,26 +62,43 @@ test('Google rating summary and review carousel fit narrow profile screens', asy
       expect(response?.status()).toBe(200);
       const ratings = page.getByRole('region', { name: 'Client ratings' });
       await expect(ratings.getByRole('tablist')).toHaveCount(0);
-      await expect(ratings.getByText('5 Google reviews')).toBeVisible();
-      const carousel = ratings.getByRole('region', { name: 'Google client reviews' });
-      await expect(carousel.getByRole('article')).toHaveCount(2);
-      await ratings.getByRole('button', { name: 'Go to review page 3' }).click();
-      await expect(carousel.getByRole('article')).toHaveCount(1);
-      await expect(carousel.getByRole('article')).toContainText('Demo Google reviewer 5');
-      await ratings.getByRole('button', { name: 'Go to review page 1' }).click();
-      expect(
-        await ratings.locator('.profile-rating-wreath').evaluateAll((wreaths) =>
-          wreaths
-            .filter((wreath) => wreath.getBoundingClientRect().width > 0)
-            .every((wreath) => {
-              const artwork = wreath.querySelector('img');
-              return (
-                artwork !== null &&
-                artwork.getBoundingClientRect().width <= wreath.getBoundingClientRect().width + 1
-              );
-            }),
-        ),
-      ).toBe(true);
+      const summary = ratings.getByRole('complementary', { name: 'Google rating summary' });
+      await expect(summary.getByText('4.8', { exact: true })).toBeVisible();
+      await expect(summary.getByText('5 reviews on Google')).toBeVisible();
+      // The redesign shows the three most recent reviews together and retains
+      // access to all five reviews through the real Google destination.
+      const cards = ratings.getByTestId('profile-review-cards').getByRole('article');
+      await expect(cards).toHaveCount(3);
+      for (const number of [1, 2, 3]) {
+        const card = cards.filter({ hasText: `Demo Google reviewer ${number}` });
+        await expect(card).toBeVisible();
+        await expect(card).toContainText(
+          `Demo Google review ${number} for responsive review-card testing.`,
+        );
+        await expect(card.getByLabel('5.0 out of 5')).toBeVisible();
+        expect(
+          await card.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+          `Google review ${number} fits at ${width}px`,
+        ).toBe(true);
+      }
+      await expect(ratings.getByText('Demo Google reviewer 4', { exact: true })).toHaveCount(0);
+      await expect(ratings.getByText('Demo Google reviewer 5', { exact: true })).toHaveCount(0);
+      await expect(ratings.getByText('3 of 5', { exact: true })).toBeVisible();
+      const readAll = summary.getByRole('link', { name: 'Read all 5 on Google' });
+      const writeReview = summary.getByRole('link', { name: 'Worked with them? Write a review' });
+      await expect(readAll).toHaveAttribute(
+        'href',
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(organization.name)}&query_place_id=demo-ratings-${suffix}`,
+      );
+      await expect(writeReview).toHaveAttribute(
+        'href',
+        `https://search.google.com/local/writereview?placeid=demo-ratings-${suffix}`,
+      );
+      for (const link of [readAll, writeReview]) {
+        await expect(link).toBeVisible();
+        await expect(link).toHaveAttribute('target', '_blank');
+        await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      }
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       ).toBe(true);

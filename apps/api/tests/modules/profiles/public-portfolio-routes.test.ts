@@ -103,6 +103,7 @@ const fakePortfolio: PublicPortfolioResponse = {
     youtubeHandle: null,
   },
   testimonial: null,
+  googleActions: null,
   reviews: [],
   projects: { projects: [], page: 1, limit: 30, hasMore: false },
   publishedAt: null,
