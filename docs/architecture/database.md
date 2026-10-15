@@ -57,6 +57,13 @@ API persistence, public detail labels and discovery filters to retain the exact
 chosen range. Deployment must run the ordinary taxonomy seed before verifying
 the new choices; no project rewrite or schema migration is needed.
 
+The editor tracks its current selection separately from the budget confirmed by a
+project read or successful create/update response. Switching scope clears an
+incompatible unsaved selection, but retains shared choices and genuinely saved
+values, including retired ranges. Failed writes do not promote a new selection
+to a saved compatibility exception. A confirmed scalar write remains saved even
+if a later room/image save or completeness refresh fails.
+
 ## Connection
 
 The connection string is `DATABASE_URL` in `.env`. The local default

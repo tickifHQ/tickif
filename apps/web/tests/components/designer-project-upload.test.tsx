@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  designProjectBudgetBands,
   projectBudgetBands,
   projectDetailResponseSchema,
   type ListProjectImagesResponse,
   type ProjectDetailResponse,
+  type UpdateProjectInput,
 } from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
 import { uploadProjectImage } from '../../src/lib/upload-project-image';
@@ -449,6 +451,210 @@ describe('DesignerProjectUpload', () => {
     await screen.findByText('Draft saved.');
   });
 
+  describe('scope budget persistence', () => {
+    let project: ProjectDetailResponse;
+
+    beforeEach(async () => {
+      project = projectDetailResponseSchema.parse(await (await mock.projectGet()).json());
+      project.budgetBandSlug = null;
+      mock.projectGet.mockImplementation(async () => Response.json(project));
+      mock.projectPatch.mockImplementation(async ({ json }: { json: UpdateProjectInput }) => {
+        project = projectDetailResponseSchema.parse({ ...project, ...json });
+        return Response.json(project);
+      });
+      mock.roomPatch.mockImplementation(async () => Response.json({}));
+      const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+      mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+      mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+      mock.completenessGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({ complete: true, score: 100, missing: [], requirements: [] }),
+      });
+      const originalTaxonomy = mock.taxonomyGet.getMockImplementation()!;
+      mock.taxonomyGet.mockImplementation(async (input) =>
+        input.query.kind === 'budget_band'
+          ? Response.json({
+              terms: [...projectBudgetBands, ...designProjectBudgetBands].map((band, index) => ({
+                ...band,
+                id: `11111111-1111-4111-8111-${String(index + 120).padStart(12, '0')}`,
+                parentId: null,
+              })),
+            })
+          : originalTaxonomy(input),
+      );
+    });
+
+    it.each([
+      { from: 'Construction', label: 'Under ₹5L', to: 'Design' },
+      { from: 'Construction', label: '₹5L - ₹10L', to: 'Design' },
+      { from: 'Design', label: 'Under ₹1L', to: 'Construction' },
+      { from: 'Design', label: '₹2L–₹4L', to: 'Construction' },
+    ])(
+      'clears an incompatible unsaved $label when changing to $to',
+      async ({ from, label, to }) => {
+        const user = userEvent.setup();
+        render(<DesignerProjectUpload />);
+        await waitFor(() => expect(screen.getByRole('button', { name: from })).toBeEnabled());
+        await user.click(screen.getByRole('button', { name: from }));
+        await user.click(screen.getByRole('button', { name: 'Step 2 Timeline & Cost' }));
+        const budget = screen.getByRole('combobox', { name: 'Cost range' });
+        await user.click(budget);
+        await user.click(screen.getByRole('option', { name: label }));
+        await user.click(screen.getByRole('button', { name: to }));
+
+        expect(budget).toHaveTextContent('Select');
+        await user.click(budget);
+        expect(screen.getAllByRole('option')).toHaveLength(8);
+        expect(screen.queryByRole('option', { name: label })).not.toBeInTheDocument();
+        expect(mock.createProject).not.toHaveBeenCalled();
+        expect(mock.projectPatch).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      { slug: 'budget', label: 'Under ₹5L', scope: 'design', button: 'Design' },
+      { slug: 'under-1l', label: 'Under ₹1L', scope: 'construction', button: 'Construction' },
+      { slug: 'moderate', label: '₹5L - ₹15L', scope: 'design', button: 'Design' },
+    ])(
+      'preserves a genuinely saved $slug across scope changes and saves',
+      async ({ slug, label, scope, button }) => {
+        project.budgetBandSlug = slug;
+        if (slug === 'under-1l') project.scopeSlug = 'design';
+        const user = userEvent.setup();
+        render(<DesignerProjectUpload initialProjectId={project.id} />);
+        await screen.findByDisplayValue(project.title);
+        const budget = screen.getByRole('combobox', { name: 'Cost range' });
+        await user.click(screen.getByRole('button', { name: button }));
+
+        expect(budget).toHaveTextContent(label);
+        await user.click(budget);
+        expect(screen.getByRole('option', { name: label })).toBeVisible();
+        await user.keyboard('{Escape}');
+        await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+        await screen.findByText('Draft saved.');
+        expect(mock.projectPatch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            json: expect.objectContaining({ budgetBandSlug: slug, scopeSlug: scope }),
+          }),
+        );
+      },
+    );
+
+    it('preserves an unsaved range shared by both scopes', async () => {
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+      await screen.findByDisplayValue(project.title);
+      const budget = screen.getByRole('combobox', { name: 'Cost range' });
+      await user.click(budget);
+      await user.click(screen.getByRole('option', { name: '₹20L - ₹30L' }));
+      await user.click(screen.getByRole('button', { name: 'Design' }));
+      expect(budget).toHaveTextContent('₹20L - ₹30L');
+    });
+
+    it('promotes a newly selected budget only after a confirmed save', async () => {
+      project.budgetBandSlug = 'moderate';
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+      await screen.findByDisplayValue(project.title);
+      const budget = screen.getByRole('combobox', { name: 'Cost range' });
+      await user.click(budget);
+      await user.click(screen.getByRole('option', { name: 'Under ₹5L' }));
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+      await screen.findByText('Draft saved.');
+      await user.click(screen.getByRole('button', { name: 'Design' }));
+
+      expect(budget).toHaveTextContent('Under ₹5L');
+      await user.click(budget);
+      expect(screen.queryByRole('option', { name: '₹5L - ₹15L' })).not.toBeInTheDocument();
+    });
+
+    it.each(['non-OK', 'network failure', 'invalid payload'])(
+      'does not preserve an unsaved budget after a failed save (%s)',
+      async (failure) => {
+        project.budgetBandSlug = 'moderate';
+        if (failure === 'non-OK')
+          mock.projectPatch.mockImplementation(async () => Response.json({}, { status: 503 }));
+        if (failure === 'network failure')
+          mock.projectPatch.mockRejectedValue(new Error('Budget save failed.'));
+        if (failure === 'invalid payload')
+          mock.projectPatch.mockImplementation(async () => Response.json({}));
+        const user = userEvent.setup();
+        render(<DesignerProjectUpload initialProjectId={project.id} />);
+        await screen.findByDisplayValue(project.title);
+        const budget = screen.getByRole('combobox', { name: 'Cost range' });
+        await user.click(budget);
+        await user.click(screen.getByRole('option', { name: 'Under ₹5L' }));
+        await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+        await screen.findByText(
+          failure === 'network failure'
+            ? 'Budget save failed.'
+            : failure === 'invalid payload'
+              ? 'Could not read the saved project.'
+              : 'Could not save the draft project.',
+        );
+        await user.click(screen.getByRole('button', { name: 'Design' }));
+
+        expect(budget).toHaveTextContent('Select');
+        await user.click(budget);
+        expect(screen.queryByRole('option', { name: 'Under ₹5L' })).not.toBeInTheDocument();
+        expect(screen.getByRole('option', { name: '₹5L - ₹15L' })).toBeVisible();
+      },
+    );
+
+    it('preserves the budget confirmed by creation even when the subsequent patch fails', async () => {
+      mock.createProject.mockImplementationOnce(async () =>
+        Response.json({ ...project, budgetBandSlug: 'budget' }),
+      );
+      mock.projectPatch.mockImplementation(async () => Response.json({}, { status: 503 }));
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload />);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Construction' })).toBeEnabled(),
+      );
+      await user.click(screen.getByRole('button', { name: 'Step 2 Timeline & Cost' }));
+      const budget = screen.getByRole('combobox', { name: 'Cost range' });
+      await user.click(budget);
+      await user.click(screen.getByRole('option', { name: 'Under ₹5L' }));
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+      await screen.findByText('Could not save the draft project.');
+      expect(mock.createProject).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByRole('button', { name: 'Design' }));
+      expect(budget).toHaveTextContent('Under ₹5L');
+    });
+
+    it('does not promote the selection when draft creation fails', async () => {
+      mock.createProject.mockImplementationOnce(async () => Response.json({}, { status: 503 }));
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload />);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Construction' })).toBeEnabled(),
+      );
+      await user.click(screen.getByRole('button', { name: 'Step 2 Timeline & Cost' }));
+      const budget = screen.getByRole('combobox', { name: 'Cost range' });
+      await user.click(budget);
+      await user.click(screen.getByRole('option', { name: 'Under ₹5L' }));
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+      await screen.findByText('Could not create the draft project.');
+      await user.click(screen.getByRole('button', { name: 'Design' }));
+      expect(budget).toHaveTextContent('Select');
+      expect(mock.projectPatch).not.toHaveBeenCalled();
+    });
+
+    it('keeps a confirmed scalar budget if a later room write fails', async () => {
+      mock.roomPatch.mockRejectedValueOnce(new Error('Room save failed.'));
+      const user = userEvent.setup();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+      await screen.findByDisplayValue(project.title);
+      const budget = screen.getByRole('combobox', { name: 'Cost range' });
+      await user.click(budget);
+      await user.click(screen.getByRole('option', { name: 'Under ₹5L' }));
+      await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+      await screen.findByText('Room save failed.');
+      await user.click(screen.getByRole('button', { name: 'Design' }));
+      expect(budget).toHaveTextContent('Under ₹5L');
+    });
+  });
+
   function selectWithOption(container: HTMLElement, optionLabel: string) {
     const fieldLabels: Record<string, string | RegExp> = {
       '₹5L - ₹15L': 'Cost range',
@@ -663,9 +869,7 @@ describe('DesignerProjectUpload', () => {
     await waitFor(() => expect(mock.projectGet).toHaveBeenCalled());
     expect(commercial).toBeDisabled();
     await user.click(commercial);
-    expect(
-      screen.queryByRole('combobox', { name: 'Commercial type' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Commercial type' })).not.toBeInTheDocument();
 
     resolveProject?.(projectResponse);
     await screen.findByDisplayValue('2 BHK in Adyar');

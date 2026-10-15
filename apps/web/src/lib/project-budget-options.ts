@@ -38,3 +38,18 @@ export function projectBudgetOptions(
   }
   return options;
 }
+
+/** Only confirmed saved values may remain outside the next scope's choices. */
+export function projectBudgetSelectionForScope(
+  terms: Pick<TaxonomyTerm, 'slug' | 'label'>[],
+  scope: string,
+  selectedSlug: string,
+  savedSlug: string,
+) {
+  if (selectedSlug === savedSlug) return selectedSlug;
+  return projectBudgetOptions(terms, scope, savedSlug).some(
+    (option) => option.value === selectedSlug,
+  )
+    ? selectedSlug
+    : '';
+}
