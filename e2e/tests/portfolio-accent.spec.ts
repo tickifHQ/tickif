@@ -200,7 +200,12 @@ test('custom portfolio accent previews validates saves reloads and discards on d
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
       await page.goto(`/d/${slug}`);
       await expect(page.locator('main')).toHaveCSS('--primary', hex);
-      await expect(page.locator('main .bg-primary').first()).toHaveCSS('color', foreground);
+      const accentButton = page.locator('.profile-hero-enquiry');
+      await expect(accentButton).toHaveCSS('color', foreground);
+      await expect(accentButton).toHaveCSS(
+        'background-color',
+        hex === '#FFFFFF' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
+      );
       const headingEmphasis = page
         .getByRole('region', { name: 'Client note' })
         .locator('blockquote');
