@@ -121,21 +121,32 @@ test('custom portfolio accent previews validates saves reloads and discards on d
         [...document.fonts].some((font) => font.family === 'Inter' && font.status === 'loaded'),
       ),
     ).toBe(true);
-    // The sharing card can be narrower on tablets than on mobile. A year must
-    // remain on one line inside its cell at every breakpoint, without overflow.
+    // The sharing card can be narrower on tablets than on mobile. Its experience
+    // value and founding-year label must fit their cell at every breakpoint.
     for (const width of [1440, 1024, 830, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
-      const year = page.locator('.profile-share-stats dd').filter({ hasText: /^2018$/ });
-      await expect(year).toBeVisible();
+      const experience = page.locator('.profile-share-stats > div').filter({
+        has: page.getByText('Since 2018', { exact: true }),
+      });
+      const years = experience.locator('dd');
+      await expect(years).toHaveText(`${new Date().getUTCFullYear() - 2018} yrs`);
+      await expect(years).toBeVisible();
+      await expect(experience.locator('dt')).toHaveText('Since 2018');
       expect(
-        await year.evaluate((element) => {
+        await years.evaluate((element) => {
           const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
           return (
             element.clientHeight <= Math.ceil(lineHeight) &&
             element.scrollWidth <= element.clientWidth
           );
         }),
-        `Sharing-card year should fit at ${width}px`,
+        `Sharing-card experience should fit at ${width}px`,
+      ).toBe(true);
+      expect(
+        await experience
+          .locator('dt')
+          .evaluate((element) => element.scrollWidth <= element.clientWidth),
+        `Sharing-card founding label should fit at ${width}px`,
       ).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
@@ -189,7 +200,12 @@ test('custom portfolio accent previews validates saves reloads and discards on d
       await expect(page.getByText('Saved', { exact: true })).toBeVisible();
       await page.goto(`/d/${slug}`);
       await expect(page.locator('main')).toHaveCSS('--primary', hex);
-      await expect(page.locator('main .bg-primary').first()).toHaveCSS('color', foreground);
+      const accentButton = page.locator('.profile-hero-enquiry');
+      await expect(accentButton).toHaveCSS('color', foreground);
+      await expect(accentButton).toHaveCSS(
+        'background-color',
+        hex === '#FFFFFF' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
+      );
       const headingEmphasis = page
         .getByRole('region', { name: 'Client note' })
         .locator('blockquote');

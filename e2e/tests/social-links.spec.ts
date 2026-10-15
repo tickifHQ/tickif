@@ -116,7 +116,9 @@ test('social profile confirmations match saved public links on desktop and mobil
     await page.getByLabel('YouTube', { exact: true }).fill('@social-studio');
     await page.getByLabel('YouTube', { exact: true }).fill('');
     await expect(page.getByRole('link', { name: /Open YouTube profile/ })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'YouTube link error', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'YouTube link error', exact: true })).toHaveCount(
+      0,
+    );
     await page.getByLabel('YouTube', { exact: true }).fill('@social-studio');
     await page.screenshot({
       path: testInfo.outputPath('social-onboarding-mobile.png'),
@@ -231,11 +233,11 @@ test('social profile confirmations match saved public links on desktop and mobil
             const footer = await page.getByTestId('portfolio-action-bar').boundingBox();
             return Boolean(
               viewport &&
-                bounds &&
-                bounds.x >= 0 &&
-                bounds.x + bounds.width <= viewport.width &&
-                bounds.y >= 64 &&
-                bounds.y + bounds.height <= Math.min(viewport.height, footer?.y ?? viewport.height),
+              bounds &&
+              bounds.x >= 0 &&
+              bounds.x + bounds.width <= viewport.width &&
+              bounds.y >= 64 &&
+              bounds.y + bounds.height <= Math.min(viewport.height, footer?.y ?? viewport.height),
             );
           })
           .toBe(true);
@@ -268,9 +270,18 @@ test('social profile confirmations match saved public links on desktop and mobil
       },
     });
     await page.goto(`/d/${slug}`);
-    for (const href of Object.values(destinations))
-      await expect(page.locator(`a[href="${href}"]`)).toBeVisible();
-    await page.locator(`a[href="${destinations.Instagram}"]`).scrollIntoViewIfNeeded();
+    const footerSocials = page.getByRole('navigation', { name: 'Footer social links' });
+    const shareSocials = page.locator('#share .profile-share-socials');
+    for (const [platform, href] of Object.entries(destinations)) {
+      for (const links of [shareSocials, footerSocials]) {
+        const link = links.getByRole('link', { name: platform });
+        await expect(link).toBeVisible();
+        await expect(link).toHaveAttribute('href', href);
+        await expect(link).toHaveAttribute('target', '_blank');
+        await expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+      }
+    }
+    await shareSocials.getByRole('link', { name: /Instagram/ }).scrollIntoViewIfNeeded();
     await page.screenshot({
       path: testInfo.outputPath('social-public-desktop.png'),
       animations: 'disabled',

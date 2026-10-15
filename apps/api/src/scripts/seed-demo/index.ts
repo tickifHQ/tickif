@@ -36,6 +36,7 @@ import { connection, enqueueMedia, closeQueues, QUEUES } from '@repo/queue';
 import {
   SEED_DESIGNERS,
   type SeedDesignerSpec,
+  type SeedGoogleReviewSpec,
   type SeedImageSpec,
   type SeedProjectSpec,
 } from './data.js';
@@ -256,7 +257,10 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
         yearsExperience: spec.yearsExperience,
         projectCount: spec.projects.length,
         phone: spec.phone,
+        websiteUrl: spec.websiteUrl,
         instagramHandle: spec.instagramHandle,
+        linkedinHandle: spec.linkedinHandle,
+        youtubeHandle: spec.youtubeHandle,
         foundedYear: spec.foundedYear,
         staffCount: spec.staffCount,
       })
@@ -271,7 +275,10 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
           yearsExperience: spec.yearsExperience,
           projectCount: spec.projects.length,
           phone: spec.phone,
+          websiteUrl: spec.websiteUrl,
           instagramHandle: spec.instagramHandle,
+          linkedinHandle: spec.linkedinHandle,
+          youtubeHandle: spec.youtubeHandle,
           foundedYear: spec.foundedYear,
           staffCount: spec.staffCount,
           updatedAt: new Date(),
@@ -284,6 +291,101 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
 
     return profile.id;
   });
+}
+
+function googleRelativeTime(daysAgo: number): string {
+  if (daysAgo <= 0) return 'today';
+  if (daysAgo === 1) return 'a day ago';
+  return `${daysAgo} days ago`;
+}
+
+function googleReviewTime(daysAgo: number): number {
+  return Math.floor((Date.now() - daysAgo * 24 * 60 * 60 * 1000) / 1000);
+}
+
+function toGoogleReview(review: SeedGoogleReviewSpec): {
+  author: string;
+  authorUrl: string | null;
+  profilePhotoUrl: string | null;
+  rating: number;
+  relativeTime: string;
+  text: string;
+  time: number;
+} {
+  return {
+    author: review.author,
+    authorUrl: null,
+    profilePhotoUrl: review.profilePhotoUrl ?? null,
+    rating: review.rating,
+    relativeTime: googleRelativeTime(review.daysAgo),
+    text: review.text,
+    time: googleReviewTime(review.daysAgo),
+  };
+}
+
+async function upsertPortfolio(profileId: string, spec: SeedDesignerSpec): Promise<void> {
+  const now = new Date();
+  const portfolio = spec.portfolio;
+
+  await db
+    .insert(schema.designerPortfolio)
+    .values({
+      profileId,
+      publicLinkEnabled: true,
+      portfolioSlug: spec.orgSlug,
+      tagline: portfolio?.tagline ?? null,
+      testimonialWords: portfolio?.testimonial?.words ?? null,
+      testimonialAuthor: portfolio?.testimonial?.author ?? null,
+      testimonialProjectId: portfolio?.testimonial?.projectId ?? null,
+      testimonialUpdatedAt: portfolio?.testimonial ? now : null,
+      publishedAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: schema.designerPortfolio.profileId,
+      set: {
+        publicLinkEnabled: true,
+        portfolioSlug: spec.orgSlug,
+        tagline: portfolio?.tagline ?? null,
+        testimonialWords: portfolio?.testimonial?.words ?? null,
+        testimonialAuthor: portfolio?.testimonial?.author ?? null,
+        testimonialProjectId: portfolio?.testimonial?.projectId ?? null,
+        testimonialUpdatedAt: portfolio?.testimonial ? now : null,
+        publishedAt: now,
+        updatedAt: now,
+      },
+    });
+
+  if (!portfolio?.googlePlace) return;
+
+  await db
+    .insert(schema.googlePlaceCache)
+    .values({
+      profileId,
+      placeId: portfolio.googlePlace.placeId,
+      rating: portfolio.googlePlace.rating,
+      userRatingsTotal: portfolio.googlePlace.userRatingsTotal,
+      reviews: portfolio.googlePlace.reviews.map(toGoogleReview),
+      status: 'connected',
+      lastFetchedAt: now,
+      lastAttemptAt: now,
+      lastError: null,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: schema.googlePlaceCache.profileId,
+      set: {
+        placeId: portfolio.googlePlace.placeId,
+        rating: portfolio.googlePlace.rating,
+        userRatingsTotal: portfolio.googlePlace.userRatingsTotal,
+        reviews: portfolio.googlePlace.reviews.map(toGoogleReview),
+        status: 'connected',
+        lastFetchedAt: now,
+        lastAttemptAt: now,
+        lastError: null,
+        updatedAt: now,
+      },
+    });
 }
 
 /** Delete a demo project's R2 objects, stale queue jobs and rows so it can reseed cleanly. */
@@ -460,6 +562,7 @@ async function main(): Promise<void> {
     for (const project of designer.projects) {
       enqueued.push(...(await seedProject(profileId, project, tax, force)));
     }
+    await upsertPortfolio(profileId, designer);
   }
 
   if (enqueued.length > 0) {

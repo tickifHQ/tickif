@@ -110,13 +110,18 @@ test('portfolio details persist from editor to public studio on desktop and mobi
     await page.screenshot({ path: testInfo.outputPath('portfolio-preview-statistics.png') });
     await page.goto(`/d/${slug}`);
     const hero = page.getByRole('region', { name: 'Portfolio hero' });
-    await expect(page.locator('.profile-navigation')).not.toContainText('Meadow Studio');
-    await expect(hero.getByRole('heading', { name: 'Meadow Studio' })).toBeVisible();
-    await expect(hero.locator('.profile-card-name')).toHaveText('Selected work');
-    await expect(hero.getByText('Established', { exact: true })).toBeVisible();
-    await expect(hero.getByText('8 years experience', { exact: true })).toBeVisible();
     await expect(
-      hero.getByLabel(String(new Date().getUTCFullYear() - 8), { exact: true }),
+      page.locator('.profile-navigation').getByRole('link', { name: 'Meadow Studio portfolio' }),
+    ).toBeVisible();
+    await expect(hero.getByRole('heading', { name: 'Meadow Studio' })).toBeVisible();
+    await expect(hero.locator('.profile-card-banner-name')).toHaveText('Meadow Studio');
+    await expect(hero.locator('.profile-hero-studio-meta')).toContainText(
+      `Est. ${new Date().getUTCFullYear() - 8}`,
+    );
+    await expect(hero.getByText('Experience', { exact: true })).toBeVisible();
+    await expect(hero.getByLabel('8 yrs', { exact: true })).toBeVisible();
+    await expect(
+      hero.getByText(`In practice since ${new Date().getUTCFullYear() - 8}`, { exact: true }),
     ).toBeVisible();
     await expect(hero.getByText('Offices', { exact: true })).toBeVisible();
     await expect(hero.getByLabel('2', { exact: true })).toBeVisible();

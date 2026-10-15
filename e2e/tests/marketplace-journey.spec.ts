@@ -733,9 +733,9 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(portfolioHero.getByRole('heading', { level: 1 })).toHaveAccessibleName(
       `Journey Studio ${suffix}`,
     );
-    await expect(portfolioHero.getByRole('button', { name: 'Enquire', exact: true })).toHaveCount(
-      1,
-    );
+    await expect(
+      portfolioHero.getByRole('button', { name: 'Send an enquiry', exact: true }),
+    ).toHaveCount(1);
     await expect(portfolioHero.getByRole('button', { name: 'Share', exact: true })).toHaveCount(0);
     await expect(visitor.getByRole('button', { name: 'Copy link', exact: true })).toBeVisible();
     await expect(visitor.getByRole('button', { name: /Book consultation/i })).toHaveCount(0);
@@ -745,7 +745,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     });
     await visitor.setViewportSize({ width: 390, height: 844 });
     await portfolioHero
-      .getByRole('button', { name: 'Enquire', exact: true })
+      .getByRole('button', { name: 'Send an enquiry', exact: true })
       .scrollIntoViewIfNeeded();
     await expect
       .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
@@ -754,7 +754,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       path: testInfo.outputPath('portfolio-hero-mobile.png'),
       animations: 'disabled',
     });
-    await portfolioHero.getByRole('button', { name: 'Enquire', exact: true }).click();
+    await portfolioHero.getByRole('button', { name: 'Send an enquiry', exact: true }).click();
     const enquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
     await enquiry
       .getByLabel('Description', { exact: false })

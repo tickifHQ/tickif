@@ -50,6 +50,29 @@ export type SeedFootprintSpec = {
   slug: string;
 };
 
+export type SeedGoogleReviewSpec = {
+  author: string;
+  profilePhotoUrl?: string;
+  rating: number;
+  text: string;
+  daysAgo: number;
+};
+
+export type SeedPortfolioSpec = {
+  tagline?: string;
+  testimonial?: {
+    words: string;
+    author: string;
+    projectId: string;
+  };
+  googlePlace?: {
+    placeId: string;
+    rating: string;
+    userRatingsTotal: number;
+    reviews: SeedGoogleReviewSpec[];
+  };
+};
+
 export type SeedDesignerSpec = {
   /** Fixed better-auth user id (text). */
   userId: string;
@@ -69,8 +92,12 @@ export type SeedDesignerSpec = {
   yearsExperience: number;
   foundedYear?: number;
   staffCount?: number;
+  websiteUrl?: string;
   instagramHandle?: string;
+  linkedinHandle?: string;
+  youtubeHandle?: string;
   footprint: SeedFootprintSpec[];
+  portfolio?: SeedPortfolioSpec;
   projects: SeedProjectSpec[];
 };
 
@@ -90,7 +117,10 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
     yearsExperience: 8,
     foundedYear: 2017,
     staffCount: 12,
+    websiteUrl: 'https://studiomeraki.design',
     instagramHandle: 'studiomeraki.blr',
+    linkedinHandle: 'company/studio-meraki-blr',
+    youtubeHandle: '@studiomerakiblr',
     footprint: [
       { kind: 'city', slug: 'bengaluru' },
       { kind: 'scope', slug: 'full-home' },
@@ -98,6 +128,52 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
       { kind: 'theme', slug: 'modern' },
       { kind: 'theme', slug: 'scandinavian' },
     ],
+    portfolio: {
+      tagline: 'Warm, functional homes crafted in Bengaluru.',
+      testimonial: {
+        words:
+          'They turned our compact Whitefield apartment into a calm, practical home. The storage planning and kitchen finish were exactly what we hoped for.',
+        author: 'Priya & Rohan K.',
+        projectId: 'e5eed001-0000-4000-8000-000000000002',
+      },
+      googlePlace: {
+        placeId: 'demo-google-place-studio-meraki',
+        rating: '4.8',
+        userRatingsTotal: 48,
+        reviews: [
+          {
+            author: 'Priya K.',
+            profilePhotoUrl:
+              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=80&h=80&q=80',
+            rating: 5,
+            daysAgo: 6,
+            text:
+              'Studio Meraki understood our daily routines before suggesting layouts. The kitchen and pooja corner are our favourite parts of the home.',
+          },
+          {
+            author: 'Rohan Mehta',
+            rating: 5,
+            daysAgo: 11,
+            text:
+              'Clear timelines, thoughtful material choices, and very calm site coordination. The Whitefield project felt easy from design to handover.',
+          },
+          {
+            author: 'Ananya Rao',
+            rating: 5,
+            daysAgo: 18,
+            text:
+              'Loved how they balanced warm finishes with practical storage. The team was responsive even after installation.',
+          },
+          {
+            author: 'Vivek Nair',
+            rating: 4,
+            daysAgo: 24,
+            text:
+              'Good design sense and transparent communication. A few site delays, but the final home feels polished and personal.',
+          },
+        ],
+      },
+    },
     projects: [
       {
         id: 'e5eed001-0000-4000-8000-000000000001',
