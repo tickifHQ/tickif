@@ -334,6 +334,9 @@ describe('PublicDesignerProfile', () => {
     const sharing = container.querySelector<HTMLElement>('#share .profile-share-actions')!;
     const shareFollow = within(sharing).getByRole('button', { name: 'Follow Anika Spaces' });
     const send = within(sharing).getByRole('button', { name: 'Enquire' });
+    expect(shareFollow).toHaveClass('h-11.5');
+    expect(shareFollow).not.toHaveClass('h-12.5');
+    expect(follow).toHaveClass('h-12.5');
     expect(
       copy.compareDocumentPosition(shareFollow) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

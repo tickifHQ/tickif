@@ -46,6 +46,17 @@ describe('follow control', () => {
     mock.follow.mockImplementation(async () => response(true));
     mock.remove.mockImplementation(async () => response(false));
   });
+  it.each([false, true])('preserves contextual sizing when following is %s', async (following) => {
+    mock.state.mockResolvedValue(response(following));
+    render(<FollowDesignerButton {...props} size="lg" className="h-11.5" />);
+    const button = await screen.findByRole('button', {
+      name: `${following ? 'Unfollow' : 'Follow'} Studio`,
+    });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(button).toHaveClass('h-11.5');
+    expect(button).not.toHaveClass('h-12.5');
+    expect(button).toHaveAttribute('aria-pressed', String(following));
+  });
   it('loads state and toggles through real typed endpoints with Lucide icons', async () => {
     render(<FollowDesignerButton {...props} />);
     const button = screen.getByRole('button', { name: 'Follow Studio' });

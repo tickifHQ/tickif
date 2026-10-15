@@ -15,6 +15,7 @@ type FollowDesignerButtonProps = {
   designerName: string;
   loginHref: string;
   size?: ButtonVariantProps['size'];
+  className?: string;
 };
 
 function useFollowDesignerState(designerProfileId: string) {
@@ -141,6 +142,7 @@ function FollowDesignerControl({
   designerName,
   loginHref,
   size,
+  className,
   state,
 }: FollowDesignerButtonProps & { state: ReturnType<typeof useFollowDesignerState> }) {
   const [loginOpen, setLoginOpen] = useState(false);
@@ -153,6 +155,7 @@ function FollowDesignerControl({
         type="button"
         variant={following ? 'project-save' : 'outline'}
         size={size ?? (following ? 'project-save' : 'sm')}
+        className={className}
         aria-label={`${following ? 'Unfollow' : 'Follow'} ${designerName}`}
         aria-pressed={following}
         aria-busy={busy}

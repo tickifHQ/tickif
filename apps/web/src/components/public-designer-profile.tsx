@@ -910,6 +910,7 @@ function ShareSection({ portfolio, view }: SectionProps) {
               designerName={portfolio.displayName}
               loginHref={view.loginHref}
               size="lg"
+              className="h-11.5"
             />
             <EnquiryCta
               context={{
