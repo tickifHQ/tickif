@@ -58,12 +58,12 @@ catalog:
   '@opentelemetry/resources': 2.11.0
   '@opentelemetry/sdk-node': 0.222.0
   '@opentelemetry/sdk-trace-base': 2.11.0
-  '@opentelemetry/sdk-metrics': 2.11.0
+  '@opentelemetry/sdk-metrics': 2.12.0
   '@opentelemetry/exporter-trace-otlp-proto': 0.222.0
   '@opentelemetry/exporter-metrics-otlp-proto': 0.222.0
   '@opentelemetry/instrumentation': 0.222.0
   '@opentelemetry/instrumentation-http': 0.222.0
-  '@opentelemetry/instrumentation-undici': ^0.32.0
+  '@opentelemetry/instrumentation-undici': ^0.33.0
   '@opentelemetry/instrumentation-pg': ^0.74.0
   '@opentelemetry/instrumentation-ioredis': ^0.70.0
   # 2.x requires BullMQ 6; preserve this workspace's existing BullMQ 5 semantics.
@@ -92,7 +92,7 @@ catalog:
   react-email: ^6.9.3
 
   # Data layer
-  drizzle-orm: ^0.45.3
+  drizzle-orm: ^0.45.4
   drizzle-kit: ^0.31.11
   pg: ^8.22.0
   '@types/pg': ^8.11.10
@@ -102,8 +102,8 @@ catalog:
   ioredis: ^5.11.0
 
   # Storage (Cloudflare R2 via S3 API) + image processing
-  '@aws-sdk/client-s3': ^3.1145.0
-  '@aws-sdk/s3-request-presigner': ^3.1145.0
+  '@aws-sdk/client-s3': ^3.1148.0
+  '@aws-sdk/s3-request-presigner': ^3.1148.0
   sharp: ^0.35.5
 
   # Search

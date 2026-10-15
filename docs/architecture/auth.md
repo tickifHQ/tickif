@@ -337,10 +337,12 @@ personal-detail edits. A visitor must enter a valid name before saving changes.
 `ActionLoginDialog` owns explicit and intercepted sign-in overlays; direct visits
 to `/login` retain the standalone `LoginCard` fallback. On mobile, the card uses
 a compact dark green gradient welcome panel with a short, mode-specific
-introduction, a subdued discovery line below the title, and a touch-sized close control
-at the top corner. Tabs and inputs retain touch-sized targets. Inactive authentication
-panels stay mounted to preserve entered values but are hidden from layout and
-accessibility. The Terms and Privacy agreement follows the active form, and its
+introduction, a discovery badge, and a touch-sized close control.
+Tabs and inputs retain touch-sized targets. Inactive authentication
+panels are removed from layout and accessibility; entered values remain in the
+parent's state when switching tabs. Phone verification keeps the welcome panel
+visible with six responsive digit fields, automatic submission, an in-flight
+guard, and retryable errors. The Terms and Privacy agreement follows the active form, and its
 links open separately so reading a document does not discard authentication state.
 The original welcome gradient is retained in the `auth-welcome` theme token.
 Login phone and email fields use the 1px, 12% foreground border, 12px radius and

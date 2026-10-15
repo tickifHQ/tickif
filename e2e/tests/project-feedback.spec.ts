@@ -30,6 +30,11 @@ test('scope-specific project budget choices persist and room descriptions are ab
     await page.goto(`/designer/projects/upload?projectId=${target.id}`);
     const budget = page.getByLabel('Cost range', { exact: true });
     await expect(budget).toHaveText('₹15L - ₹35L');
+    await page.getByRole('button', { name: 'Design', exact: true }).click();
+    await expect(budget).toHaveText('₹15L - ₹35L');
+    await budget.click();
+    await expect(page.getByRole('option', { name: '₹15L - ₹35L', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByText('About this room', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Construction', exact: true }).click();
     await budget.click();
@@ -44,6 +49,7 @@ test('scope-specific project budget choices persist and room descriptions are ab
       '₹40L - ₹50L',
       '₹50L - ₹1Cr',
       '₹1Cr+',
+      '₹15L - ₹35L',
     ]);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
@@ -55,6 +61,10 @@ test('scope-specific project budget choices persist and room descriptions are ab
     await expect.poll(readBudget).toBe('30l-40l');
     await page.reload();
     await expect(budget).toHaveText('₹30L - ₹40L');
+    await budget.click();
+    await expect(page.getByRole('option')).toHaveCount(8);
+    await expect(page.getByRole('option', { name: '₹15L - ₹35L', exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await budget.scrollIntoViewIfNeeded();
     await testInfo.attach('project-budget-ranges', {
       body: await page.screenshot({ path: testInfo.outputPath('budget-ranges.png') }),
@@ -81,6 +91,10 @@ test('scope-specific project budget choices persist and room descriptions are ab
     await page.getByRole('option', { name: 'Under ₹1L', exact: true }).click();
     await page.getByRole('button', { name: 'Save as draft', exact: true }).click();
     await expect.poll(readBudget).toBe('under-1l');
+    await expect(page.getByRole('button', { name: 'Save as draft', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Construction', exact: true }).click();
+    await expect(budget).toHaveText('Under ₹1L');
+    await page.getByRole('button', { name: 'Design', exact: true }).click();
     await page.reload();
     await expect(budget).toHaveText('Under ₹1L');
     await budget.click();
@@ -94,12 +108,31 @@ test('scope-specific project budget choices persist and room descriptions are ab
       body: await page.screenshot({ path: testInfo.outputPath('room-without-description.png') }),
       contentType: 'image/png',
     });
-    await page.goto('/designer/projects/upload');
-    await page.getByRole('button', { name: 'Step 2 Timeline & Cost', exact: true }).click();
-    await budget.click();
-    await expect(page.getByRole('option')).toHaveCount(8);
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('About this room', { exact: true })).toHaveCount(0);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/designer/projects/upload');
+      await page.getByRole('button', { name: 'Step 2 Timeline & Cost', exact: true }).click();
+      await budget.click();
+      await expect(page.getByRole('option')).toHaveCount(8);
+      await page.getByRole('option', { name: 'Under ₹5L', exact: true }).click();
+      await page.getByRole('button', { name: 'Design', exact: true }).click();
+      await expect(budget).toHaveText('Select');
+      await budget.click();
+      await expect(page.getByRole('option')).toHaveCount(8);
+      await expect(page.getByRole('option', { name: 'Under ₹5L', exact: true })).toHaveCount(0);
+      await page.getByRole('option', { name: 'Under ₹1L', exact: true }).click();
+      await page.getByRole('button', { name: 'Construction', exact: true }).click();
+      await expect(budget).toHaveText('Select');
+      await budget.click();
+      await expect(page.getByRole('option')).toHaveCount(8);
+      await expect(page.getByRole('option', { name: 'Under ₹1L', exact: true })).toHaveCount(0);
+      await page.getByRole('option', { name: '₹20L - ₹30L', exact: true }).click();
+      await page.getByRole('button', { name: 'Design', exact: true }).click();
+      await expect(budget).toHaveText('₹20L - ₹30L');
+      await budget.click();
+      await page.keyboard.press('Escape');
+      await expect(page.getByText('About this room', { exact: true })).toHaveCount(0);
+    }
   } finally {
     await fixture.cleanup();
   }

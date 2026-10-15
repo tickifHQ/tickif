@@ -14,6 +14,13 @@ heading. Outstanding identity verification keeps its own status and permitted
 action under "Verification"; completing setup does not imply KYC approval.
 Actual project-review totals remain in the overview metrics.
 
+If the dashboard summary cannot be loaded, setup and metric data are unknown,
+not incomplete or zero. A neutral recovery card replaces both onboarding and the
+overview until a successful retry. It refreshes the authenticated route and keeps
+project navigation available, with project creation and portfolio editing gated
+by the current organization's capabilities. It does not infer publication or
+verification eligibility from completion data or a fallback summary.
+
 ## Sources and coverage
 
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)
@@ -154,6 +161,12 @@ recognition artwork into destructive/success intent colors.
 | Recognition hues                  | purple, gold, clay, deep green, green, rose | Observed artwork; separate from intent status                           |
 
 Destructive, warning, info, success and feature retain their intent semantics.
+Authentication uses the shared input boundary in both resting and hover states,
+so controls stay grey without darkening on hover. Focus rings and invalid states
+remain distinct. The login welcome panel persists through phone verification;
+only the active authentication tab contributes to the card height. Phone OTP
+keeps six digits and the server's five-minute expiry. Automatic submission is
+opt-in for this login presentation, with an in-flight guard and retryable errors.
 Success uses the brand green, and red/blue pairs were strengthened for readable
 status text in both themes. These intent colors are inferred. A clay heading accent is not
 an error indicator, and a gold recognition wreath is not a warning badge.

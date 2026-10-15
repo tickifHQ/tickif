@@ -16,6 +16,15 @@ for (const width of [852, 516, 489, 390, 320]) {
     await page.getByRole('link', { name: 'Sign in', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Sign in to continue' });
     await expect(dialog).toBeVisible();
+    // Visibility starts during the opening scale animation, before geometry is final.
+    await dialog.evaluate(async (element) => {
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      );
+    });
     // The backdrop must cover the whole viewport, including the former scrollbar gutter.
     const backdrop = await page.locator('[data-slot="dialog-overlay"]').boundingBox();
     expect(
@@ -61,17 +70,10 @@ for (const width of [852, 516, 489, 390, 320]) {
       const welcome = dialog.getByRole('heading', { name: 'Welcome to Tickif' });
       const welcomeBox = await welcome.boundingBox();
       const closeButton = dialog.getByRole('button', { name: 'Close', exact: true });
-      // Geometry assertions must use the settled dialog, not an intermediate
-      // frame of its opening scale animation. Keep the actual 44px requirement.
-      await dialog.evaluate(async (element) => {
-        await Promise.all(
-          element
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-            .map((animation) => animation.finished.catch(() => undefined)),
-        );
-      });
-      expect((await closeButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      // Measure the touch target after the dialog's opening scale animation settles.
+      await expect
+        .poll(async () => (await closeButton.boundingBox())!.height)
+        .toBeGreaterThanOrEqual(44);
       const closeBox = await closeButton.boundingBox();
       expect(closeBox!.y).toBeLessThanOrEqual(welcomeBox!.y);
       await expect(
@@ -223,20 +225,27 @@ test('phone OTP in the dialog rejects a wrong code then completes visitor sign-i
 }) => {
   const phoneNumber = `+9193${randomInt(10_000_000, 99_999_999)}`;
   try {
+    await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
     await page.getByRole('link', { name: 'Log in', exact: true }).click();
     await page.getByPlaceholder('9123456789').fill(phoneNumber.slice(3));
     await page.getByRole('button', { name: 'Get OTP', exact: true }).click();
     const firstDigit = page.getByRole('textbox', { name: 'OTP digit 1', exact: true });
     await expect(firstDigit).toBeVisible();
+    const digitBoxes = await page.getByRole('textbox', { name: /OTP digit/ }).all();
+    expect(digitBoxes).toHaveLength(6);
+    for (const digit of digitBoxes) {
+      const bounds = await digit.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    }
     const code = await phoneCode(phoneNumber);
     await firstDigit.fill(code === '000000' ? '111111' : '000000');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByText('Invalid OTP', { exact: true })).toBeVisible();
+    await expect(firstDigit).toBeFocused();
     await expect(page).toHaveURL(/\/login$/);
 
     await firstDigit.fill(code);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(page).toHaveURL(/\/home\?feed=custom$/);
@@ -245,3 +254,42 @@ test('phone OTP in the dialog rejects a wrong code then completes visitor sign-i
     await removeSyntheticUserByPhone(phoneNumber);
   }
 });
+
+for (const viewport of [
+  // Exercises content narrower than 320px after a native scrollbar reserves space.
+  { width: 300, height: 568 },
+  { width: 320, height: 568 },
+  { width: 375, height: 667 },
+  { width: 390, height: 844 },
+  { width: 1440, height: 1000 },
+]) {
+  test(`login tabs and actions fit at ${viewport.width} wide`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/login');
+    for (const mode of ["I'm browsing", "I'm a designer"]) {
+      await page.getByRole('tab', { name: mode, exact: true }).click();
+      await expect(page.getByRole('tabpanel')).toHaveCount(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      const tab = page.getByRole('tab', { name: mode, exact: true });
+      const bounds = await tab.boundingBox();
+      const icon = await tab.locator('svg').boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(icon).not.toBeNull();
+      expect(icon!.x).toBeGreaterThanOrEqual(bounds!.x);
+      expect(icon!.x + icon!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+      expect(await tab.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+      const action = page.getByRole('button', {
+        name: mode === "I'm browsing" ? 'Get OTP' : 'Login',
+        exact: true,
+      });
+      await expect(action).toBeVisible();
+      const box = await action.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+    }
+  });
+}

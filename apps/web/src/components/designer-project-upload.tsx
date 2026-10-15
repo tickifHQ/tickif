@@ -76,7 +76,7 @@ import { ApartmentNameCombobox } from '@/components/apartment-name-combobox';
 import { ProjectImageGrid } from '@/components/project-image-grid';
 import { uploadProjectImage } from '@/lib/upload-project-image';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
-import { projectBudgetOptions } from '@/lib/project-budget-options';
+import { projectBudgetOptions, projectBudgetSelectionForScope } from '@/lib/project-budget-options';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
@@ -1382,6 +1382,7 @@ export function DesignerProjectUpload({
   const [completedByMonth, setCompletedByMonth] = useState('');
   const [projectDuration, setProjectDuration] = useState('');
   const [budgetBandSlug, setBudgetBandSlug] = useState('');
+  const [savedBudgetBandSlug, setSavedBudgetBandSlug] = useState('');
   const [rooms, setRooms] = useState<RoomDraft[]>(() =>
     buildDefaultRooms('apartment', '').map((seed, index) =>
       makeRoomDraft({ roomSlug: seed.slug, title: seed.title }, index),
@@ -1450,8 +1451,8 @@ export function DesignerProjectUpload({
     [scopeTerms],
   );
   const budgetOptions = useMemo(
-    () => projectBudgetOptions(budgetBandTerms, selectedScopes[0] ?? '', budgetBandSlug),
-    [budgetBandTerms, budgetBandSlug, selectedScopes],
+    () => projectBudgetOptions(budgetBandTerms, selectedScopes[0] ?? '', savedBudgetBandSlug),
+    [budgetBandTerms, savedBudgetBandSlug, selectedScopes],
   );
   const propertySubtypeLabelBySlug = useMemo(
     () => new Map(propertySubtypes.map((term) => [term.slug, term.label])),
@@ -1905,6 +1906,7 @@ export function DesignerProjectUpload({
         setCompletedByMonth(project.completedMonth ?? '');
         setProjectDuration(project.durationMonths ? `${project.durationMonths} months` : '');
         setBudgetBandSlug(project.budgetBandSlug ?? '');
+        setSavedBudgetBandSlug(project.budgetBandSlug ?? '');
         setCoverImageId(project.coverImageId);
         setRooms(hydratedRooms);
         setSections({ classification: true, timeline: true, metadata: true, images: true });
@@ -2011,6 +2013,9 @@ export function DesignerProjectUpload({
 
   function toggleScope(scope: string) {
     setSelectedScopes([scope]);
+    setBudgetBandSlug((current) =>
+      projectBudgetSelectionForScope(budgetBandTerms, scope, current, savedBudgetBandSlug),
+    );
   }
 
   function handleProjectTypeSelect(nextProjectType: string) {
@@ -2419,6 +2424,7 @@ export function DesignerProjectUpload({
       // room state while attaching server IDs instead of replacing it with that snapshot.
       setRooms((current) => attachExistingProjectRoomsToDrafts(current, detail.rooms, roomTerms));
       setProjectId(detail.id);
+      setSavedBudgetBandSlug(detail.budgetBandSlug ?? '');
       setLoadedProjectId(detail.id);
       setProjectStatus(detail.status);
       setIsLive(detail.liveStatus === 'published' || detail.status === 'published');
@@ -2455,6 +2461,7 @@ export function DesignerProjectUpload({
       'Could not read the saved project.',
     );
     setProjectStatus(updated.status);
+    setSavedBudgetBandSlug(updated.budgetBandSlug ?? '');
     setIsLive(updated.liveStatus === 'published' || updated.status === 'published');
     setPendingChanges(updated.pendingChanges ?? false);
   }

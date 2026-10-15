@@ -14,4 +14,17 @@ describe('Input', () => {
 
     expect(screen.getByPlaceholderText('Project name')).toBeDisabled();
   });
+
+  it('keeps a grey input boundary on hover without removing focus or error states', () => {
+    render(<Input aria-invalid placeholder="Phone" />);
+    expect(screen.getByPlaceholderText('Phone')).toHaveClass(
+      'border-input',
+      'hover:border-input',
+      'focus-visible:ring-2',
+      'aria-invalid:border-destructive',
+    );
+    expect(screen.getByPlaceholderText('Phone')).not.toHaveClass(
+      'hover:border-foreground-secondary',
+    );
+  });
 });
