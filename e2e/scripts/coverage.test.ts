@@ -33,6 +33,15 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires every login viewport regression without omissions or skips', () => {
+    for (const width of [300, 320, 375, 390, 1440]) {
+      const title = `login tabs and actions fit at ${width} wide`;
+      expect(requiredTests).toContainEqual({ file: 'sign-in-modal.spec.ts', title });
+      expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/login tabs/);
+      expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/login tabs/);
+    }
+  });
+
   it('requires custom room persistence and discovery without omission or skip', () => {
     const title = 'custom room types persist and appear as search filters';
     expect(requiredTests).toContainEqual({ file: 'project-feedback.spec.ts', title });

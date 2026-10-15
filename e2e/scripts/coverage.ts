@@ -369,6 +369,10 @@ requiredEntries.push([
 ]);
 
 requiredEntries.push(
+  ...[300, 320, 375, 390, 1440].map((width): [string, string] => [
+    'sign-in-modal.spec.ts',
+    `login tabs and actions fit at ${width} wide`,
+  ]),
   ...[852, 516, 489, 390, 320].map((width): [string, string] => [
     'sign-in-modal.spec.ts',
     `sign-in fits ${width}px without shifting the page or reserving inactive form space`,

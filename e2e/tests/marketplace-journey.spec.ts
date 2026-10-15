@@ -448,7 +448,6 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await visitor
       .getByRole('textbox', { name: 'OTP digit 1', exact: true })
       .fill(await phoneCode(visitorPhone));
-    await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(visitor.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
     await visitor.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(visitor).toHaveURL(`${webUrl}/home?feed=custom`);
