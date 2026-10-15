@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import type { ExperienceCenter, PublicPortfolioResponse } from '@repo/contracts';
-import { CalendarDays, Clock3, MapPin, Star } from 'lucide-react';
+import { CalendarDays, MapPin, Navigation, Phone, Star } from 'lucide-react';
 import { GoogleMapEmbed, googleMapEmbedUrl } from '@repo/ui/components/google-map-embed';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@repo/ui/components/tabs';
 import { formatRating } from '@/lib/public-portfolio-view';
@@ -41,8 +41,13 @@ export function ProfileExperienceCentres({
     portfolio.heroCoverUrl ??
     portfolio.projects.projects.find((project) => project.coverImageUrl)?.coverImageUrl;
   const states = [...new Set(centres.map((item) => item.state))];
-  const googleRating = portfolio.stats.google;
-  const centreTitle = `${portfolio.displayName} Experience Centre`;
+  const googleRating =
+    portfolio.sections.overallRating && portfolio.reviewVisibility.google.overallRating
+      ? portfolio.stats.google
+      : null;
+  const phone = centre.phone?.trim();
+  const digits = phone?.replace(/\D/g, '');
+  const callHref = digits ? `tel:${phone?.startsWith('+') ? '+' : ''}${digits}` : null;
 
   return (
     <Tabs
@@ -110,7 +115,7 @@ export function ProfileExperienceCentres({
           </figure>
         ) : null}
         <header className="profile-centre-heading">
-          <h3>{centreTitle}</h3>
+          <h3>{centre.name}</h3>
           <p>{[centre.city, centre.state].filter(Boolean).join(', ')}</p>
           {googleRating && googleRating.reviewCount > 0 ? (
             <div className="profile-centre-rating">
@@ -129,9 +134,6 @@ export function ProfileExperienceCentres({
               <b>Interior design showroom</b>
             </div>
           ) : null}
-          <p className="profile-centre-hours">
-            Open <span>· Closes 7 pm</span>
-          </p>
         </header>
         <div className="profile-centre-content">
           <div className="profile-centre-detail-row">
@@ -148,16 +150,23 @@ export function ProfileExperienceCentres({
               </address>
             )}
           </div>
-          <div className="profile-centre-detail-row">
-            <Clock3 className="size-5 shrink-0" aria-hidden="true" />
-            <p>
-              <strong>Open</strong>
-              <span> · Closes 7 pm</span>
-            </p>
-          </div>
+          {callHref && phone ? (
+            <div className="profile-centre-detail-row">
+              <Phone className="size-5 shrink-0" aria-hidden="true" />
+              <a href={callHref}>{phone}</a>
+            </div>
+          ) : null}
+          {mapsHref ? (
+            <div className="profile-centre-detail-row">
+              <Navigation className="size-5 shrink-0" aria-hidden="true" />
+              <a href={mapsHref} target="_blank" rel="noopener noreferrer nofollow">
+                Open in Maps
+              </a>
+            </div>
+          ) : null}
           <div className="profile-centre-detail-row">
             <CalendarDays className="size-5 shrink-0" aria-hidden="true" />
-            <p>Visits by appointment</p>
+            <p>Contact the studio to arrange a visit</p>
           </div>
         </div>
       </aside>

@@ -171,7 +171,7 @@ function StudioBar({ portfolio, view }: SectionProps) {
           <div className="min-w-0">
             <h1 className="flex items-center gap-1 truncate text-sm font-medium">
               {portfolio.displayName}
-              {portfolio.sections.tickifBadge ? (
+              {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                 <BadgeCheck
                   aria-label={portfolio.isKycVerified ? 'Verified studio' : undefined}
                   aria-hidden={portfolio.isKycVerified ? undefined : true}
@@ -288,7 +288,7 @@ function HeroIdentityCard({ portfolio, view }: SectionProps) {
           <div className="profile-card-banner-copy">
             <p className="profile-card-banner-name">
               <span className="truncate">{portfolio.displayName}</span>
-              {portfolio.sections.tickifBadge ? (
+              {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                 <BadgeCheck
                   aria-hidden={portfolio.isKycVerified ? undefined : true}
                   aria-label={portfolio.isKycVerified ? 'Verified studio' : undefined}
@@ -324,8 +324,13 @@ function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
   const projects = portfolio.projects.projects;
   const rating = portfolio.sections.overallRating ? headlineReviewAggregate(stats) : null;
-  const hasHeroVisual = Boolean(portfolio.heroCoverUrl || projects.some((item) => item.coverImageUrl));
-  const heroDetails = [view.type, portfolio.foundedYear != null ? `Est. ${portfolio.foundedYear}` : null]
+  const hasHeroVisual = Boolean(
+    portfolio.heroCoverUrl || projects.some((item) => item.coverImageUrl),
+  );
+  const heroDetails = [
+    view.type,
+    portfolio.foundedYear != null ? `Est. ${portfolio.foundedYear}` : null,
+  ]
     .filter(Boolean)
     .join(' · ');
   const tiles: HeroStatTile[] = [
@@ -405,10 +410,15 @@ function HeroSection({ portfolio, view }: SectionProps) {
             {view.location ? <span className="profile-hero-pill">{view.location}</span> : null}
           </div>
           <div className="flex min-w-0 items-center gap-3.5">
-            <StudioMark portfolio={portfolio} view={view} className="profile-hero-avatar" sizePx={48} />
+            <StudioMark
+              portfolio={portfolio}
+              view={view}
+              className="profile-hero-avatar"
+              sizePx={48}
+            />
             <div className="min-w-0">
               <p className="profile-hero-studio-name">
-                {portfolio.sections.tickifBadge ? (
+                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                   <>
                     <BadgeCheck aria-hidden="true" className="profile-verified-icon" />
                     <span>Verified studio</span>
@@ -432,9 +442,7 @@ function HeroSection({ portfolio, view }: SectionProps) {
           ) : null}
         </div>
 
-        {hasHeroVisual ? (
-          <HeroIdentityCard portfolio={portfolio} view={view} />
-        ) : null}
+        {hasHeroVisual ? <HeroIdentityCard portfolio={portfolio} view={view} /> : null}
 
         <div className="profile-hero-lower">
           <dl className="profile-proof-grid">
@@ -529,7 +537,10 @@ function CredentialsSection({ portfolio }: SectionProps) {
         id="recognition-heading"
         detail={
           <>
-            {awardCount} {awardCount === 1 ? 'award' : 'awards'} · Verified on Tickif
+            {awardCount} {awardCount === 1 ? 'award' : 'awards'}
+            {portfolio.sections.tickifBadge && portfolio.isKycVerified
+              ? ' · Verified on Tickif'
+              : null}
           </>
         }
       >
@@ -591,9 +602,7 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
     return null;
   return (
     <section id="work" className="profile-shell profile-section" aria-labelledby="projects-heading">
-      <ProfileHeading id="projects-heading">
-        Selected projects
-      </ProfileHeading>
+      <ProfileHeading id="projects-heading">Selected projects</ProfileHeading>
       <PublicProjectGallery
         profileId={portfolio.profileId}
         initialPage={portfolio.projects}
@@ -609,7 +618,10 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
   );
 }
 
-function clientNoteAvatarUrl(portfolio: PublicPortfolioResponse, author: string | null): string | null {
+function clientNoteAvatarUrl(
+  portfolio: PublicPortfolioResponse,
+  author: string | null,
+): string | null {
   if (!author) return null;
   const authorTokens = new Set(
     author
@@ -657,7 +669,7 @@ function StorySection({ portfolio }: SectionProps) {
     .join(' · ');
   const author = testimonial?.author ?? portfolio.displayName;
   const authorMeta = isClientNote
-    ? [testimonial?.projectTitle, 'Verified homeowner'].filter(Boolean).join(' · ')
+    ? [testimonial?.projectTitle, 'Homeowner'].filter(Boolean).join(' · ')
     : 'Published portfolio';
   const avatarUrl = isClientNote ? clientNoteAvatarUrl(portfolio, author) : null;
   return (
@@ -699,11 +711,7 @@ function hasGoogleClientRatings(portfolio: PublicPortfolioResponse) {
 
 function ReviewsSection({ portfolio }: SectionProps) {
   const hasRatings = hasGoogleClientRatings(portfolio);
-  const canShowEmpty =
-    portfolio.sections.reviews &&
-    portfolio.reviewVisibility.google.reviews &&
-    !hasRatings;
-  if (!hasRatings && !canShowEmpty) return null;
+  if (!hasRatings) return null;
   return (
     <section
       id="reviews"
@@ -721,13 +729,7 @@ function ReviewsSection({ portfolio }: SectionProps) {
       >
         Client ratings
       </ProfileHeading>
-      {hasRatings ? (
-        <ProfileClientRatings portfolio={portfolio} />
-      ) : (
-        <p className="profile-reviews-empty">
-          Client reviews will appear here once this studio has published feedback.
-        </p>
-      )}
+      <ProfileClientRatings portfolio={portfolio} />
     </section>
   );
 }
@@ -779,8 +781,7 @@ function ShareSection({ portfolio, view }: SectionProps) {
   if (portfolio.stats.yearsExperience != null) {
     shareFacts.push({
       value: `${portfolio.stats.yearsExperience} yrs`,
-      label:
-        portfolio.foundedYear != null ? `Since ${portfolio.foundedYear}` : 'Studio experience',
+      label: portfolio.foundedYear != null ? `Since ${portfolio.foundedYear}` : 'Studio experience',
     });
   }
   const fitItems = [budgetLabel ? `Projects from ${budgetLabel}` : null, view.location].filter(
@@ -866,10 +867,12 @@ function ShareSection({ portfolio, view }: SectionProps) {
                 ))}
               </p>
             ) : null}
-            <div className="profile-share-verified">
-              <BadgeCheck aria-hidden="true" />
-              <span>Verified on Tickif</span>
-            </div>
+            {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+              <div className="profile-share-verified">
+                <BadgeCheck aria-hidden="true" />
+                <span>Verified on Tickif</span>
+              </div>
+            ) : null}
           </div>
         </Card>
         <div className="profile-share-copy">
@@ -997,16 +1000,11 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
   const rating = portfolio.sections.overallRating ? headlineReviewAggregate(portfolio.stats) : null;
   const hasReviews = hasGoogleClientRatings(portfolio);
   const hasCentres = portfolio.experienceCenterGroups?.some((group) => group.centers.length > 0);
-  const navDetails = [
-    view.type,
-    rating ? `★ ${formatRating(rating.rating)}` : null,
-    view.location,
-  ]
+  const navDetails = [view.type, rating ? `★ ${formatRating(rating.rating)}` : null, view.location]
     .filter(Boolean)
     .join(' · ');
   const tickerItems = [
-    '12,400+ verified projects',
-    'Every studio ID-verified',
+    'Discover design studios',
     'Free to browse',
     'No middlemen',
     [portfolio.displayName, view.location].filter(Boolean).join(' · '),
@@ -1040,7 +1038,7 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
           <div className="profile-nav-brand-copy">
             <p className="profile-nav-name">
               <span className="truncate">{portfolio.displayName}</span>
-              {portfolio.sections.tickifBadge ? (
+              {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                 <BadgeCheck
                   aria-label={portfolio.isKycVerified ? 'Verified studio' : undefined}
                   aria-hidden={portfolio.isKycVerified ? undefined : true}
@@ -1213,11 +1211,7 @@ function ProfileFooter({ portfolio, view }: SectionProps) {
             <ul>
               {links.map((link) => (
                 <li key={link.label}>
-                  <a
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                  >
+                  <a href={link.href} target="_blank" rel="noopener noreferrer nofollow">
                     <span>{link.label}</span>
                     <span aria-hidden="true">
                       <ArrowRight className="size-3" />
@@ -1238,11 +1232,9 @@ function ProfileFooter({ portfolio, view }: SectionProps) {
           <a href="/" aria-label="Tickif home">
             <TickifBrandLogo tone="inverse" />
           </a>
-          <span>· Generated from verified data</span>
+          <span>· Published on Tickif</span>
         </p>
-        <a href="#profile-top">
-          Back to top ↑
-        </a>
+        <a href="#profile-top">Back to top ↑</a>
       </div>
     </footer>
   );

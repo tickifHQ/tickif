@@ -55,7 +55,9 @@ function GoogleReviewCard({ review }: { review: PublicPortfolioReview }) {
         </div>
         <ReviewStars rating={review.rating} />
       </header>
-      <p className="profile-google-review-copy">{review.text ? `“${review.text}”` : 'Rating only'}</p>
+      <p className="profile-google-review-copy">
+        {review.text ? `“${review.text}”` : 'Rating only'}
+      </p>
     </article>
   );
 }
@@ -72,7 +74,9 @@ export function ProfileClientRatings({ portfolio }: { portfolio: PublicPortfolio
   const visibleReviews = reviews.slice(0, REVIEW_LIMIT);
   const rating = aggregate?.rating ?? visibleReviews[0]?.rating ?? 0;
   const reviewCount = aggregate?.reviewCount ?? reviews.length;
-  const location = portfolio.cities[0] ? `${portfolio.displayName} · ${portfolio.cities[0]}` : portfolio.displayName;
+  const location = portfolio.cities[0]
+    ? `${portfolio.displayName} · ${portfolio.cities[0]}`
+    : portfolio.displayName;
 
   return (
     <div className="profile-client-ratings">
@@ -93,12 +97,15 @@ export function ProfileClientRatings({ portfolio }: { portfolio: PublicPortfolio
             </div>
           </div>
           <p className="profile-google-disclaimer">
-            Reviews are pulled directly from Google and shown unedited. tickif can&apos;t remove or
-            reorder them.
+            Reviews are sourced from this studio&apos;s connected Google Business Profile.
           </p>
           <div className="profile-google-actions">
             {portfolio.googleActions ? (
-              <a href={portfolio.googleActions.readAllUrl} target="_blank" rel="noopener noreferrer">
+              <a
+                href={portfolio.googleActions.readAllUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Read all {reviewCount} on Google
                 <ArrowUpRight aria-hidden="true" />
               </a>
