@@ -111,8 +111,8 @@
   --feature-lighter: #efebff;
   --border: rgba(23, 22, 18, 0.14);
   --border-strong: rgba(23, 22, 18, 0.2);
-  --input: rgba(23, 22, 18, 0.48);
-  --auth-field-border: rgba(23, 22, 18, 0.12);
+  --input: rgba(23, 22, 18, 0.18);
+  --auth-field-border: rgba(23, 22, 18, 0.1);
   --auth-field-divider: rgba(23, 22, 18, 0.1);
   --auth-field-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   --auth-welcome-background:
@@ -260,8 +260,8 @@
   --feature-lighter: color-mix(in oklab, var(--feature) 20%, var(--card));
   --border: rgba(244, 240, 232, 0.16);
   --border-strong: rgba(244, 240, 232, 0.28);
-  --input: rgba(244, 240, 232, 0.4);
-  --auth-field-border: rgba(244, 240, 232, 0.2);
+  --input: rgba(244, 240, 232, 0.24);
+  --auth-field-border: rgba(244, 240, 232, 0.16);
   --auth-field-divider: rgba(244, 240, 232, 0.14);
   --auth-field-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   --ring: #8fd8b4;

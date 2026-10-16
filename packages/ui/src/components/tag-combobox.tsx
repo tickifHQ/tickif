@@ -201,7 +201,7 @@ export function TagCombobox({
         {label} {labelHint ? <span className="text-muted-foreground">({labelHint})</span> : null}
       </Label>
       <div ref={containerRef}>
-        <div className="rounded-lg border border-input bg-background px-3.5 py-2.5 shadow-xs transition-[border-color,box-shadow] hover:border-foreground-secondary focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25 focus-within:ring-offset-2 focus-within:ring-offset-background motion-reduce:transition-none">
+        <div className="rounded-lg border border-input bg-background px-3.5 py-2.5 shadow-xs transition-[border-color,box-shadow] hover:border-input focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25 focus-within:ring-offset-2 focus-within:ring-offset-background motion-reduce:transition-none">
           {tags.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">
               {tags.map((tag) => (

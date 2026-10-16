@@ -1647,7 +1647,7 @@
 }
 .designer-profile .profile-centre-detail-row > svg {
   margin-top: 1px;
-  color: #1e7a55;
+  color: var(--primary);
   flex-shrink: 0;
 }
 .designer-profile .profile-centre-detail-row a {
@@ -2130,9 +2130,10 @@
 .designer-profile .profile-consultation-title mark {
   color: inherit;
   background: linear-gradient(
-    color-mix(in srgb, var(--primary-soft) 60%, transparent),
-    color-mix(in srgb, var(--primary-soft) 60%, transparent)
-  ) 0 83% / 100% 28% no-repeat;
+      color-mix(in srgb, var(--primary-soft) 60%, transparent),
+      color-mix(in srgb, var(--primary-soft) 60%, transparent)
+    )
+    0 83% / 100% 28% no-repeat;
 }
 .designer-profile .profile-consultation-side {
   display: flex;
