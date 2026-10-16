@@ -136,16 +136,11 @@ function CurrentPlanCard({
             <p className="text-xs font-medium text-muted-foreground">Current Plan</p>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-sans text-base text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))] font-medium tracking-normal">
+                <h2 className="font-sans text-base text-primary font-medium tracking-normal">
                   {tierLabel}
                 </h2>
                 {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
-                  <Badge
-                    variant="outline"
-                    className="border-primary/20 bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]"
-                  >
-                    Free
-                  </Badge>
+                  <Badge variant="soft">Free</Badge>
                 )}
                 {billing.lifecycle === 'locked' && <Badge variant="destructive">Locked</Badge>}
                 {billing.lifecycle === 'downgraded' && <Badge variant="warning">Downgraded</Badge>}
@@ -273,13 +268,13 @@ function UsageMetricCard({
     <div className="min-w-0">
       <div className="p-5 sm:px-6">
         <div className="flex items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground">
             <Icon className="size-4" />
           </span>
           <div>
             <span className="text-sm font-medium text-foreground">{label}</span>
             {frozen && (
-              <Badge variant="warning" className="ml-2 text-[10px]">
+              <Badge variant="warning" size="compact" className="ml-2">
                 <Snowflake className="size-3" /> Frozen
               </Badge>
             )}
@@ -464,7 +459,7 @@ function FrozenResourcesCard({
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-foreground">{resource.quantity}</span>
                 {resource.recoverable && (
-                  <Badge variant="success" className="text-[10px]">
+                  <Badge variant="success" size="compact">
                     Recoverable
                   </Badge>
                 )}
@@ -638,7 +633,7 @@ function PlanIncludesCard({
                   className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
                     suspended
                       ? 'bg-muted text-muted-foreground'
-                      : 'bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]'
+                      : 'bg-primary-soft text-primary-soft-foreground'
                   }`}
                 >
                   <Icon className="size-4" />
@@ -647,7 +642,7 @@ function PlanIncludesCard({
                   <p className="font-sans text-sm font-medium tracking-normal text-foreground">
                     {feature.title}
                     {suspended && (
-                      <Badge variant="outline" className="ml-1.5 text-[9px]">
+                      <Badge variant="outline" size="compact" className="ml-1.5">
                         Suspended
                       </Badge>
                     )}

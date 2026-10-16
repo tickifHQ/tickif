@@ -133,6 +133,44 @@ describe('SubscribePage support recovery', () => {
 });
 
 describe('SubscribePage visible comparison and retained selection', () => {
+  it('shows the pricing loading state until the initial subscription is available', async () => {
+    let complete: ((response: Response) => void) | undefined;
+    mocks.selection.mockImplementation(async () =>
+      Response.json({
+        organizationId: 'org-loading',
+        currentTier: 'hobby',
+        sourceSubscriptionId: null,
+        providerState: 'known',
+        unfinishedCheckout: null,
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: ['professional_plus', 'corporate'].map((targetTier) => ({
+          targetTier,
+          action: 'subscribe',
+          reason: null,
+          effectiveAt: null,
+        })),
+      }),
+    );
+    mocks.getSubscription.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    render(<SubscribePage />);
+    expect(screen.getByRole('status', { name: 'Loading plans' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: /Upgrade to/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(complete).toBeDefined());
+    await act(async () => complete?.(Response.json({ ...subscription('active'), tier: 'hobby' })));
+    expect(await screen.findByRole('table', { name: 'Compare plan features' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading plans' })).not.toBeInTheDocument();
+  });
+
   it('updates pending checkout to the active plan automatically while preserving the mounted dialog', async () => {
     sessionStorage.clear();
     let active = false;

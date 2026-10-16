@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { Button } from '@repo/ui/components/button';
 import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
 import { PlanSelection } from './plan-selection';
+import { SubscribePageLoading } from './subscribe-page-loading';
 import { usePlanSelection, type BillingSelectionScope } from './use-plan-selection';
 import { useSelectionContext } from './use-selection-context';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
-import { Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import type { PlanTier, SubscriptionState, SubscriptionResponse } from '@repo/contracts';
 import { subscriptionResponseSchema } from '@repo/contracts';
 import { CheckoutFlow } from './checkout-flow';
@@ -118,11 +119,7 @@ function ScopedSubscribePage({
 
   // Keep the mounted checkout and its provider callbacks alive during background refreshes.
   if (loading && !subscription) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <SubscribePageLoading />;
   }
 
   if (!subscription) {

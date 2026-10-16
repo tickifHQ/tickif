@@ -318,46 +318,80 @@ export function DesignerBranchesLoading() {
 
 export function DesignerPlanBillingLoading() {
   return (
-    <LoadingRegion label="Loading plan and billing" className="p-6 md:p-8 xl:p-10">
-      <PageHeadingLoading titleWidth="w-64" />
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="space-y-6">
-          <Card radius="2xl" className="p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-3">
-                <Skeleton className="h-5 w-28" />
-                <Skeleton className="h-9 w-44" />
-                <Skeleton className="h-4 w-64 max-w-full" />
-              </div>
-              <Skeleton className="h-9 w-28" />
+    <LoadingRegion
+      label="Loading plan and billing"
+      className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12"
+    >
+      <div>
+        <Skeleton className="h-8 w-48 max-w-full" />
+        <Skeleton className="mt-2 h-6 w-80 max-w-full" />
+      </div>
+      <Card
+        radius="lg"
+        variant="accent"
+        className="mt-8 border-l-2 border-l-primary/60 shadow-none"
+      >
+        <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <div className="flex flex-wrap items-center gap-4">
+              <Skeleton className="h-6 w-28" />
+              <Skeleton className="h-5 w-48 max-w-full" />
             </div>
-          </Card>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {THREE_ITEMS.map((item) => (
-              <Card key={item} radius="2xl" className="space-y-3 p-5">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-7 w-20" />
-                <Skeleton className="h-2 w-full rounded-full" />
-              </Card>
+            <Skeleton className="h-4 w-64 max-w-full" />
+          </div>
+          <Skeleton className="h-11 w-full shrink-0 rounded-full sm:w-44" />
+        </div>
+      </Card>
+      <div className="mt-5 space-y-5">
+        <Card radius="lg" className="overflow-hidden shadow-none">
+          <div className="border-b border-border bg-muted/30 px-5 py-4">
+            <Skeleton className="h-5 w-32" />
+          </div>
+          <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+            {TWO_ITEMS.map((item) => (
+              <div key={item} className="p-5 sm:px-6">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-8 shrink-0" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-7 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="mt-3 h-4 w-28" />
+                <Skeleton className="mt-2 h-1.5 w-full rounded-full" />
+              </div>
             ))}
           </div>
-          {THREE_ITEMS.map((item) => (
-            <Card key={item} radius="2xl" className="p-6">
+          <div className="border-t border-border bg-muted/30 px-5 py-3">
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        </Card>
+        {THREE_ITEMS.map((item) => (
+          <Card key={item} radius="lg" className="overflow-hidden shadow-none">
+            <div className="border-b border-border bg-muted/30 px-5 py-4">
               <Skeleton className="h-5 w-40" />
-              <Skeleton className="mt-4 h-20 w-full" />
-            </Card>
-          ))}
-        </div>
-        <aside className="space-y-4">
-          {TWO_ITEMS.map((item) => (
-            <Card key={item} radius="2xl" className="p-5">
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="mt-3 h-4 w-full" />
-              <Skeleton className="mt-2 h-4 w-4/5" />
-              <Skeleton className="mt-4 h-9 w-full" />
-            </Card>
-          ))}
-        </aside>
+            </div>
+            <div className="grid gap-5 p-5 sm:grid-cols-2">
+              {TWO_ITEMS.map((column) => (
+                <div key={column} className="space-y-3">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+        <Card radius="lg" variant="muted" className="shadow-none">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-2">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-5 w-80 max-w-full" />
+            </div>
+            <Skeleton className="h-9 w-36 shrink-0 rounded-full" />
+          </div>
+        </Card>
       </div>
     </LoadingRegion>
   );
