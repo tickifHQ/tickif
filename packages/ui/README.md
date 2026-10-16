@@ -101,7 +101,9 @@ Generated components land in `src/components/` and already consume the semantic 
 ## Shared component additions
 
 - `Button`: `shape="pill"` is the default; `shape="rounded"` opts into control
-  corners. `variant="soft"` supports inverse sections. `size="lg"` is 50px,
+  corners. `variant="soft"` supports inverse sections.
+  `variant="outline-accent"` fills outlined actions with the scoped primary
+  color on hover, including the contrasting primary foreground. `size="lg"` is 50px,
   `size="xl"` is 64px; `icon-sm` is 32px. Existing compact/fancy sizes remain.
   Native button type and `asChild` behavior are preserved; callers still specify
   `type="button"` for non-submit actions.

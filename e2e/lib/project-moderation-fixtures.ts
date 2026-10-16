@@ -112,17 +112,25 @@ export async function createProjectModerationFixture({ projectCount = 21 } = {})
     projects,
     async cleanup() {
       await assertTestDb();
-      const projectIds = projects.map((project) => project.id);
-      // Remove only this guarded synthetic fixture's retained moderation records.
-      await db
-        .delete(schema.projectReviewComment)
-        .where(inArray(schema.projectReviewComment.projectId, projectIds));
-      await db
-        .delete(schema.projectModerationEvent)
-        .where(inArray(schema.projectModerationEvent.projectId, projectIds));
-      await db.delete(schema.organization).where(eq(schema.organization.id, organization.id));
-      await db.delete(schema.user).where(inArray(schema.user.id, [owner.id, admin.id]));
-      await db.delete(schema.taxonomy).where(eq(schema.taxonomy.id, roomType.id));
+      await db.transaction(async (tx) => {
+        // Fence late moderation writes before removing this fixture's retained history.
+        const ownedProjects = await tx
+          .select({ id: schema.project.id })
+          .from(schema.project)
+          .where(eq(schema.project.designerId, designer.id))
+          .for('update');
+        const projectIds = ownedProjects.map((project) => project.id);
+        await tx
+          .delete(schema.projectReviewComment)
+          .where(inArray(schema.projectReviewComment.projectId, projectIds));
+        await tx
+          .delete(schema.projectModerationEvent)
+          .where(inArray(schema.projectModerationEvent.projectId, projectIds));
+        await tx.delete(schema.project).where(inArray(schema.project.id, projectIds));
+        await tx.delete(schema.organization).where(eq(schema.organization.id, organization.id));
+        await tx.delete(schema.user).where(inArray(schema.user.id, [owner.id, admin.id]));
+        await tx.delete(schema.taxonomy).where(eq(schema.taxonomy.id, roomType.id));
+      });
       await deleteObject(originalKey);
     },
   };

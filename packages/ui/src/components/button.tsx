@@ -21,6 +21,8 @@ const buttonVariants = cva(
         fancy:
           'border border-button-fancy-border bg-button-fancy text-button-fancy-foreground shadow-button-fancy [background-image:var(--button-fancy-background)] hover:bg-button-fancy-hover',
         outline: 'border border-border-strong bg-transparent text-foreground hover:bg-muted',
+        'outline-accent':
+          'border border-border-strong bg-transparent text-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
         'discovery-tab':

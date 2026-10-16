@@ -54,6 +54,21 @@ fallbacks. Check the 1512px desktop composition, 800px tablet stack and 375px mo
 layout including Read more/Read less. Disable the section or clear its story and
 confirm it and the About navigation link disappear after saving.
 
+Social fields in designer onboarding, the profile editor and portfolio settings
+show the generated clickable profile URL beneath each valid Instagram, LinkedIn
+or YouTube entry. The preview updates with the input and uses the same resolver
+as public portfolio links. Blank or invalid entries have no preview; existing
+validation errors remain available. The link opens in a new tab so designers can
+check the destination before continuing; it does not verify account ownership.
+
+To check E-361 manually, open designer onboarding and enter the company social
+links step, or edit social links in portfolio settings. Enter `@yourhandle` for
+Instagram or YouTube and `company/yourstudio` for LinkedIn. Confirm the full URL
+appears beneath each input and opens the expected destination in a new tab.
+Change the handle and confirm the URL updates, then clear it or enter a URL for
+the wrong platform and confirm the preview disappears. Check the same behavior
+at mobile width; long URLs should wrap within the form.
+
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)
 uses a 1512px canvas. A 390px mobile frame, `15885:4109`, exists on the same
 Portfolio page; use it rather than inventing the profile's mobile composition.
@@ -174,26 +189,26 @@ Keep existing token names where possible. Add narrowly named roles for new
 visual treatments instead of hardcoding colors in components or merging
 recognition artwork into destructive/success intent colors.
 
-| Role                              | Proposed value                              | Basis                                                                   |
-| --------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------- |
-| Background and standard card      | `#ffffff`                                   | Observed                                                                |
-| Foreground                        | `#171612`                                   | Observed                                                                |
-| Secondary body text               | `#4a473f`                                   | Observed                                                                |
-| Muted foreground                  | `#6b675c`                                   | Observed                                                                |
-| Decorative metadata text          | `#8a867a`                                   | Observed; contrast review required for small functional labels          |
-| Primary and foreground            | `#1e7a55` / white                           | Observed CTA                                                            |
-| Secondary, accent, subtle surface | `#e2ece4` / `#0f3326`                       | Observed badge and sharing surfaces                                     |
-| Muted/neutral button surface      | `#f6f6f4`                                   | Observed reviews and share action                                       |
-| Inverse surface and foreground    | `#0f3326` / `#f4f0e8`                       | Observed consultation section                                           |
-| Soft primary CTA                  | `#8fd8b4` / `#0f3326`                       | Observed inverse-section button                                         |
-| Normal/strong border              | foreground at 14% / 20% opacity             | Observed divider / outline action                                       |
-| Input boundary                    | foreground at 48% light / cream at 40% dark | Inferred for distinguishable controls; stronger than decorative borders |
-| Rating decoration                 | `#e8a317`                                   | Observed stars; rating text stays readable foreground                   |
-| Recognition hues                  | purple, gold, clay, deep green, green, rose | Observed artwork; separate from intent status                           |
+| Role                              | Proposed value                              | Basis                                                              |
+| --------------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| Background and standard card      | `#ffffff`                                   | Observed                                                           |
+| Foreground                        | `#171612`                                   | Observed                                                           |
+| Secondary body text               | `#4a473f`                                   | Observed                                                           |
+| Muted foreground                  | `#6b675c`                                   | Observed                                                           |
+| Decorative metadata text          | `#8a867a`                                   | Observed; contrast review required for small functional labels     |
+| Primary and foreground            | `#1e7a55` / white                           | Observed CTA                                                       |
+| Secondary, accent, subtle surface | `#e2ece4` / `#0f3326`                       | Observed badge and sharing surfaces                                |
+| Muted/neutral button surface      | `#f6f6f4`                                   | Observed reviews and share action                                  |
+| Inverse surface and foreground    | `#0f3326` / `#f4f0e8`                       | Observed consultation section                                      |
+| Soft primary CTA                  | `#8fd8b4` / `#0f3326`                       | Observed inverse-section button                                    |
+| Normal/strong border              | foreground at 14% / 20% opacity             | Observed divider / outline action                                  |
+| Input boundary                    | foreground at 18% light / cream at 24% dark | Review-requested lighter borders; focus and error tokens preserved |
+| Rating decoration                 | `#e8a317`                                   | Observed stars; rating text stays readable foreground              |
+| Recognition hues                  | purple, gold, clay, deep green, green, rose | Observed artwork; separate from intent status                      |
 
 Destructive, warning, info, success and feature retain their intent semantics.
-Authentication uses the shared input boundary in both resting and hover states,
-so controls stay grey without darkening on hover. Focus rings and invalid states
+Authentication uses softer boundaries at 10% light / 16% dark in resting and hover
+states, so controls stay grey without darkening on hover. Focus rings and invalid states
 remain distinct. The login welcome panel persists through phone verification;
 only the active authentication tab contributes to the card height. Phone OTP
 keeps six digits and the server's five-minute expiry. Automatic submission is

@@ -2024,7 +2024,7 @@
 }
 .designer-profile .profile-centre-detail-row > svg {
   margin-top: 1px;
-  color: #1e7a55;
+  color: var(--primary);
   flex-shrink: 0;
 }
 .designer-profile .profile-centre-detail-row a {

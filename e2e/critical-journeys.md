@@ -35,6 +35,8 @@ and the other test connection options are defined in `packages/config/src/e2e.ts
 The launcher overrides provider credentials with synthetic values. It never
 truncates a database or flushes Redis. Fixtures remove their own records, including
 retained moderation history only inside the guarded local test database.
+Moderation fixture cleanup locks its projects and removes history and parent
+records in one transaction so late writes cannot race the foreign-key cleanup.
 
 Playwright owns the processes and stops them after the run. Do not start another
 web/API instance on the same ports. A five-minute allowance applies only to cold
