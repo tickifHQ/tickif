@@ -33,7 +33,9 @@ replace the selected location with another city.
 
 A Redis-backed, shared budget allows at most 30 upstream lookups per fixed
 60-second window (the first request starts the window), across API instances.
-Redis outages fail closed for paid lookups. The budget stores no visitor or
+Redis outages fail closed for paid lookups. The API retries a failed Redis
+connection on the next request after a 30-second cooldown, so recovery does not
+require an API restart. The budget stores no visitor or
 location identifiers. This is a cost ceiling, not per-visitor abuse protection;
 one caller can exhaust it. Manual city selection remains available.
 

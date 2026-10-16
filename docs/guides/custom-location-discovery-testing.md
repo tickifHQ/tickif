@@ -60,5 +60,7 @@ by Geocoding; enabling the API is an operator action. See Google's
 The API accepts bounded numeric latitude/longitude in a POST body, rounds to two
 decimal places and returns only an active taxonomy city. Responses use private,
 no-store caching. The shared Redis budget permits 30 provider calls per minute;
-busy/unavailable Redis produces a retry/manual-selection message. Automated tests
+busy/unavailable Redis produces a retry/manual-selection message. After a Redis
+outage, restore Redis and retry after 30 seconds; lookup should recover without
+restarting the API. Automated tests
 mock device location and Google and do not transmit a real user's location.

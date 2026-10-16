@@ -14,7 +14,8 @@ import { log } from './logger.js';
  */
 
 let client: Redis | null = null;
-let connectionFailed = false;
+let retryAfter = 0;
+const RECONNECT_COOLDOWN_MS = 30_000;
 
 /** Shared hard budget for paid reverse geocoding; outages fail closed. No location data in keys. */
 export async function consumeNearbyLookupBudget(): Promise<boolean> {
@@ -33,33 +34,37 @@ export async function consumeNearbyLookupBudget(): Promise<boolean> {
 }
 
 function getClient(): Redis | null {
-  if (connectionFailed) return null;
+  if (Date.now() < retryAfter) return null;
   if (client) return client;
 
   try {
-    client = new Redis(config.REDIS_URL, {
+    const nextClient = new Redis(config.REDIS_URL, {
       maxRetriesPerRequest: 1,
       lazyConnect: true,
       connectTimeout: 3000,
       // Dedicated namespace to avoid collision with BullMQ keys
       keyPrefix: 'cache:',
     });
+    client = nextClient;
 
-    client.on('error', (err) => {
+    const connectionFailed = () => {
+      // A late event from a disconnected client must not evict its replacement.
+      if (client !== nextClient) return;
+      retryAfter = Date.now() + RECONNECT_COOLDOWN_MS;
+      client = null;
+      nextClient.disconnect();
+    };
+
+    nextClient.on('error', (err) => {
       log.error({ event: 'cache.redis.connection.failed', err });
-      connectionFailed = true;
-      client?.disconnect();
-      client = null;
+      connectionFailed();
     });
 
-    void client.connect().catch(() => {
-      connectionFailed = true;
-      client = null;
-    });
+    void nextClient.connect().catch(connectionFailed);
 
-    return client;
+    return nextClient;
   } catch {
-    connectionFailed = false;
+    retryAfter = Date.now() + RECONNECT_COOLDOWN_MS;
     return null;
   }
 }
