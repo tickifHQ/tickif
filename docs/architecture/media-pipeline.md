@@ -62,6 +62,11 @@ processing. Ready previews remain viewable while sibling files are uploading.
 The browser uses XMLHttpRequest only for the direct storage PUT so it can measure
 bytes; application API requests continue through the typed Hono client.
 
+Processing status and completeness are polled every four seconds while images
+are processing. Timer ticks skip an outstanding poll so slow responses can land
+without being invalidated by successive requests. Success and failure both
+release the poll guard, allowing later status updates to continue.
+
 ## Public image quality and embedded identifiers
 
 Public cards use the medium derivative (1024px) when available, with larger and

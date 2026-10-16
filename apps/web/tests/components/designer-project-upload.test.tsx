@@ -2353,6 +2353,77 @@ describe('DesignerProjectUpload batch recovery', () => {
     expect(screen.getByText('1 photo added · 1 failed')).toBeInTheDocument();
   });
 
+  it.each([false, true])(
+    'accepts a slow processing response without overlapping polls (completeness fails: %s)',
+    async (completenessFails) => {
+      mockSuccessfulLookups();
+      const pendingItem = {
+        ...readyItem,
+        id: 'c1111111-1111-4111-8111-111111111111',
+        status: 'processing',
+      };
+      mockImageList([readyItem, pendingItem]);
+      const interval = vi.spyOn(window, 'setInterval');
+      try {
+        render(<DesignerProjectUpload initialProjectId={projectId} />);
+        await screen.findByText('Processing');
+        const poll = interval.mock.calls.find((call) => call[1] === 4000)?.[0];
+        if (typeof poll !== 'function') throw new Error('Processing poll was not scheduled');
+        let resolveImages!: (response: Response) => void;
+        mock.listImagesGet.mockImplementationOnce(
+          () =>
+            new Promise<Response>((resolve) => {
+              resolveImages = resolve;
+            }),
+        );
+        const initialCalls = mock.listImagesGet.mock.calls.length;
+        if (completenessFails) mock.completenessGet.mockRejectedValueOnce(new Error('Offline'));
+        await act(async () => {
+          poll();
+        });
+        await waitFor(() => expect(resolveImages).toBeDefined());
+        await act(async () => {
+          poll();
+          poll();
+        });
+        expect(mock.listImagesGet).toHaveBeenCalledTimes(initialCalls + 1);
+        await act(async () => {
+          resolveImages(imageListResponse([readyItem, { ...pendingItem, status: 'ready' }]));
+        });
+        await waitFor(() => expect(screen.queryByText('Processing')).not.toBeInTheDocument());
+        expect(screen.getAllByText('Ready')).toHaveLength(2);
+      } finally {
+        interval.mockRestore();
+      }
+    },
+  );
+
+  it('resumes processing polls after a request fails', async () => {
+    mockSuccessfulLookups();
+    const pendingItem = { ...readyItem, status: 'processing' };
+    mockImageList([pendingItem]);
+    const interval = vi.spyOn(window, 'setInterval');
+    try {
+      render(<DesignerProjectUpload initialProjectId={projectId} />);
+      await screen.findByText('Processing');
+      const poll = interval.mock.calls.find((call) => call[1] === 4000)?.[0];
+      if (typeof poll !== 'function') throw new Error('Processing poll was not scheduled');
+      mock.listImagesGet.mockRejectedValueOnce(new Error('Offline'));
+      await act(async () => {
+        poll();
+      });
+      await screen.findByText(/could not refresh image processing status/i);
+      mockImageList([readyItem]);
+      await act(async () => {
+        poll();
+      });
+      await waitFor(() => expect(screen.queryByText('Processing')).not.toBeInTheDocument());
+      expect(screen.getByText('Ready')).toBeInTheDocument();
+    } finally {
+      interval.mockRestore();
+    }
+  });
+
   it('refreshes completeness automatically while images are processing', async () => {
     mockSuccessfulLookups();
     mockImageList([

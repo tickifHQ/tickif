@@ -1984,21 +1984,34 @@ export function DesignerProjectUpload({
     if (!projectId || !hasProcessingImages) return;
 
     let cancelled = false;
+    let refreshing = false;
     const timer = window.setInterval(() => {
+      // A slow response must be allowed to land before a newer poll can
+      // invalidate it, otherwise Ready previews can remain stuck Processing.
+      if (cancelled || refreshing) return;
+      refreshing = true;
       const uploadStateRefreshVersion = beginUploadStateRefresh();
       const imageListRefreshVersion = beginImageListRefresh();
       // Refresh images and completeness together so Ready/Failed transitions
       // land without requiring Save or reload (E-285).
-      void Promise.all([
+      void Promise.allSettled([
         refreshProjectImages(projectId, imageListRefreshVersion),
         fetchCompleteness(projectId, uploadStateRefreshVersion),
-      ]).catch(() => {
-        if (!cancelled && isCurrentImageListRefresh(imageListRefreshVersion)) {
-          setError(
-            'Could not refresh image processing status. Save the draft or refresh the page in a moment.',
-          );
-        }
-      });
+      ])
+        .then((results) => {
+          if (
+            results.some((result) => result.status === 'rejected') &&
+            !cancelled &&
+            isCurrentImageListRefresh(imageListRefreshVersion)
+          ) {
+            setError(
+              'Could not refresh image processing status. Save the draft or refresh the page in a moment.',
+            );
+          }
+        })
+        .finally(() => {
+          refreshing = false;
+        });
     }, 4000);
 
     return () => {
