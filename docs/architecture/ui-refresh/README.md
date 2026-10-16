@@ -23,6 +23,21 @@ verification eligibility from completion data or a fallback summary.
 
 ## Sources and coverage
 
+Social fields in designer onboarding, the profile editor and portfolio settings
+show the generated clickable profile URL beneath each valid Instagram, LinkedIn
+or YouTube entry. The preview updates with the input and uses the same resolver
+as public portfolio links. Blank or invalid entries have no preview; existing
+validation errors remain available. The link opens in a new tab so designers can
+check the destination before continuing; it does not verify account ownership.
+
+To check E-361 manually, open designer onboarding and enter the company social
+links step, or edit social links in portfolio settings. Enter `@yourhandle` for
+Instagram or YouTube and `company/yourstudio` for LinkedIn. Confirm the full URL
+appears beneath each input and opens the expected destination in a new tab.
+Change the handle and confirm the URL updates, then clear it or enter a URL for
+the wrong platform and confirm the preview disappears. Check the same behavior
+at mobile width; long URLs should wrap within the form.
+
 Public portfolio client/studio notes display at most 60 whitespace-separated
 words, with an ellipsis for longer copy; saved testimonial content is preserved.
 The quote has a 192px desktop / 224px mobile height and fits its font from the
