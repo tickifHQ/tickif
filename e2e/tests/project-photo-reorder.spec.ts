@@ -211,6 +211,8 @@ for (const phone of [false, true]) {
         await expect(first).toHaveAttribute('aria-pressed', 'true');
         // Active state precedes dnd-kit's measurement of the initial drop target.
         await expect(page.getByText('Move to position 1 of 3.', { exact: true })).toBeAttached();
+        // Keyboard listeners and fresh target measurements are deferred after activation.
+        await settlePhotoGrid(grid);
         await page.keyboard.press('ArrowRight');
         await expect(page.getByText('Move to position 2 of 3.', { exact: true })).toBeAttached();
         await page.keyboard.press('Escape');
@@ -221,6 +223,7 @@ for (const phone of [false, true]) {
         await page.keyboard.press('Space');
         await expect(first).toHaveAttribute('aria-pressed', 'true');
         await expect(page.getByText('Move to position 1 of 3.', { exact: true })).toBeAttached();
+        await settlePhotoGrid(grid);
         await page.keyboard.press('ArrowRight');
         await expect(page.getByText('Move to position 2 of 3.', { exact: true })).toBeAttached();
         await page.keyboard.press('Space');

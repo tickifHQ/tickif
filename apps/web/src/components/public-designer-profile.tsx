@@ -1206,16 +1206,6 @@ function ProfileFooter({ portfolio, view }: SectionProps) {
                 <span>Send an enquiry</span>
               </EnquiryCta>
             </li>
-            {portfolio.sections.shareBlock ? (
-              <li>
-                <CopyLinkButton
-                  value={view.publicProfileHref}
-                  variant="link"
-                  label="Share this portfolio"
-                  className="profile-footer-action"
-                />
-              </li>
-            ) : null}
           </ul>
         </nav>
 

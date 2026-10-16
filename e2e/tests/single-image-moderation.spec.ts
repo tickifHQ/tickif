@@ -63,6 +63,12 @@ test('E-371 reviewer removes one image after confirmation and keeps the other or
     await page.reload();
     await page.getByRole('tab', { name: /in review by me/i }).click();
     await page.getByRole('button', { name: `Open review for ${target.title}` }).click();
+    // A missing link also matches the loading screen; wait for the persisted detail first.
+    for (const image of after.images) {
+      await expect(
+        page.getByRole('link', { name: `Open original image ${image.id}` }),
+      ).toBeVisible();
+    }
     await expect(
       page.getByRole('link', { name: `Open original image ${selected.id}` }),
     ).toHaveCount(0);

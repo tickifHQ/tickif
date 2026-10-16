@@ -12,6 +12,7 @@ These documents explain how to work on Tickif. Before implementation, follow
 | [Database and migrations](./database-and-migrations.md) | Schema-change workflow, migration warnings and repository queries        |
 | [Testing](./testing.md)                                 | Vitest, isolated integration targets and Playwright                      |
 | [Custom locations and Near me](./custom-location-discovery-testing.md) | Save, search and filter custom places; test device location and fallback behavior |
+| [Project image uploads](./project-image-upload-testing.md) | Manual checks for scroll stability, progress, previews and slow polling |
 | [Troubleshooting](./troubleshooting.md)                 | Configuration, dependencies, framework typing and builds                 |
 | [Shared UI review](./shared-ui-review.md)               | Component gallery, states, behavior and approval checklist               |
 | [Company content](./company-content.md)                 | Maintain researched policy drafts, sample About content and public links |
