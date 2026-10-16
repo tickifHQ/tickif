@@ -207,8 +207,8 @@ test('custom portfolio accent previews validates saves reloads and discards on d
         hex === '#FFFFFF' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
       );
       const headingEmphasis = page
-        .getByRole('region', { name: 'Client note' })
-        .locator('blockquote');
+        .getByRole('region', { name: 'About the company' })
+        .getByRole('heading', { name: 'Space for colour' });
       await expect(headingEmphasis).toBeVisible();
       expect(
         await headingEmphasis.evaluate((element) => {
