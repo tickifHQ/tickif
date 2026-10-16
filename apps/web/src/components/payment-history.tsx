@@ -2,14 +2,10 @@
 
 import { useCallback, useState } from 'react';
 import { billingPaymentsResponseSchema, type BillingPaymentsResponse } from '@repo/contracts';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@repo/ui/components/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@repo/ui/components/card';
 import { Button } from '@repo/ui/components/button';
+import { Badge } from '@repo/ui/components/badge';
+import { EmptyState } from '@repo/ui/components/empty-state';
 import { Receipt } from 'lucide-react';
 import {
   Table,
@@ -57,16 +53,16 @@ function PaymentHistoryPage({
   }, [offset]);
   useBillingAutoRefresh(load, { urgent: error });
   return (
-    <Card radius="lg" className="overflow-hidden shadow-none">
-      <CardHeader className="gap-1 border-b border-border bg-muted/30 px-5 py-4">
-        <CardTitle className="font-sans text-sm leading-5 font-medium tracking-normal">
+    <Card className="min-w-0 overflow-hidden">
+      <CardHeader className="gap-2 p-6 pb-0">
+        <h2 className="font-sans text-lg font-medium tracking-normal text-foreground">
           Payment history
-        </CardTitle>
+        </h2>
         <CardDescription>
           Payments recorded from Razorpay. Recent payments can take a moment to appear.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4 p-5">
+      <CardContent className="flex flex-col gap-5 p-6">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>
@@ -79,41 +75,46 @@ function PaymentHistoryPage({
             Loading payments…
           </p>
         ) : data?.items.length ? (
-          <Table>
+          <Table aria-label="Payment history">
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="font-sans text-sm tracking-normal">Date</TableHead>
+                <TableHead className="font-sans text-sm tracking-normal">Payment</TableHead>
+                <TableHead className="text-right font-sans text-sm tracking-normal">
+                  Amount
+                </TableHead>
+                <TableHead className="font-sans text-sm tracking-normal">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.items.map((payment) => (
                 <TableRow key={payment.id}>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {new Intl.DateTimeFormat('en-IN', {
                       dateStyle: 'medium',
                       timeZone: 'Asia/Kolkata',
                     }).format(new Date(payment.occurredAt))}
                   </TableCell>
-                  <TableCell className="font-mono">{payment.id}</TableCell>
-                  <TableCell>
+                  <TableCell className="break-all">{payment.id}</TableCell>
+                  <TableCell className="text-right tabular-nums whitespace-nowrap">
                     {new Intl.NumberFormat('en-IN', {
                       style: 'currency',
                       currency: payment.currency,
                     }).format(payment.amount / 100)}
                   </TableCell>
-                  <TableCell>{payment.status}</TableCell>
+                  <TableCell>
+                    <Badge variant="info">{payment.status}</Badge>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         ) : data ? (
-          <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-5">
-            <Receipt className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
-          </div>
+          <EmptyState
+            icon={<Receipt className="size-6" />}
+            title="No payments recorded yet."
+            className="max-w-none py-8 [&_h2]:font-sans [&_h2]:tracking-normal"
+          />
         ) : null}
         <div data-testid="payment-history-controls" className="flex flex-wrap justify-end gap-2">
           <Button

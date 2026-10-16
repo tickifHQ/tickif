@@ -16,7 +16,7 @@ import {
   Eye,
   Globe,
   Lock,
-  Receipt,
+  Headphones,
   Search,
   ShieldCheck,
   Snowflake,
@@ -126,28 +126,26 @@ function CurrentPlanCard({
       : null);
 
   return (
-    <Card radius="lg" variant="accent" className="border-l-2 border-l-primary/60 shadow-none">
+    <Card radius="lg" variant="inverse" className="shadow-none">
       <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div
           data-testid="current-plan-identity"
           className="flex min-w-0 flex-1 flex-col items-start sm:flex-row"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-muted-foreground">Current Plan</p>
+            <p className="text-xs font-medium text-surface-inverse-foreground/80">Current Plan</p>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-sans text-base text-primary font-medium tracking-normal">
+                <h2 className="font-sans text-base font-medium tracking-normal text-surface-inverse-foreground">
                   {tierLabel}
                 </h2>
                 {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
-                  <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-                    Free
-                  </Badge>
+                  <Badge variant="default">Free</Badge>
                 )}
                 {billing.lifecycle === 'locked' && <Badge variant="destructive">Locked</Badge>}
                 {billing.lifecycle === 'downgraded' && <Badge variant="warning">Downgraded</Badge>}
                 {billing.lifecycle === 'downgraded' && billing.preLapseTier && (
-                  <span className="text-sm font-normal text-muted-foreground">
+                  <span className="text-sm font-normal text-surface-inverse-foreground/80">
                     from {PLAN_TIER_LABELS[billing.preLapseTier]}
                   </span>
                 )}
@@ -156,7 +154,7 @@ function CurrentPlanCard({
                   <Badge variant="destructive">Payment Failed</Badge>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-surface-inverse-foreground/80">
                 <span className="font-medium">₹{price.toLocaleString('en-IN')} / month</span>
                 {billing.usage.seats.limit != null && (
                   <>
@@ -176,7 +174,7 @@ function CurrentPlanCard({
               </p>
             </div>
             {billing.tier === 'hobby' && (
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
+              <p className="mt-1.5 text-xs leading-5 text-surface-inverse-foreground/80">
                 No paid subscription required. Upgrade anytime for more features.
               </p>
             )}
@@ -184,7 +182,7 @@ function CurrentPlanCard({
               billing.lifecycle === 'active' &&
               billing.tier !== 'hobby' &&
               !(suppressPlanActions && billing.cancellationScheduled) && (
-                <p className="mt-3 text-sm text-muted-foreground">
+                <p className="mt-3 text-sm text-surface-inverse-foreground/80">
                   {billing.cancellationScheduled
                     ? `Your plan ends on ${formatDate(billing.renewalDate)}`
                     : `Your plan renews on ${formatDate(billing.renewalDate)}`}
@@ -194,23 +192,23 @@ function CurrentPlanCard({
               billing.lifecycle === 'active' &&
               billing.tier !== 'hobby' &&
               !billing.earlyBirdTrial && (
-                <p className="mt-3 text-sm text-muted-foreground">
+                <p className="mt-3 text-sm text-surface-inverse-foreground/80">
                   Renewal date is awaiting confirmation.
                 </p>
               )}
             {checkoutTarget && (
               <p
                 role="status"
-                className="mt-3 flex items-start gap-2 text-xs leading-5 text-muted-foreground"
+                className="mt-3 flex items-start gap-2 text-xs leading-5 text-surface-inverse-foreground/80"
               >
-                <Clock3 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                <Clock3 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 {`We’re confirming your ${PLAN_TIER_LABELS[checkoutTarget]} checkout. Your current access remains until confirmation.`}
               </p>
             )}
           </div>
         </div>
         {checkoutTarget && (
-          <Button asChild variant="default" className="w-full shrink-0 sm:w-auto">
+          <Button asChild variant="soft" className="w-full shrink-0 sm:w-auto">
             <Link href={`/designer/plan-billing/subscribe/complete?plan=${checkoutTarget}`}>
               View checkout status
             </Link>
@@ -223,7 +221,7 @@ function CurrentPlanCard({
             (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')) && (
             <Button
               asChild={billing.lifecycle === 'active' && cta.kind === 'subscribe'}
-              variant="default"
+              variant="soft"
               className="w-full shrink-0 sm:w-auto"
               disabled={paymentBusy}
               onClick={
@@ -265,85 +263,81 @@ function UsageMetricCard({
   icon: typeof Users;
 }) {
   const percentage = limit ? Math.min((current / limit) * 100, 100) : null;
-
   return (
-    <div className="min-w-0">
-      <div className="p-5 sm:px-6">
-        <div className="flex items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="size-4" />
-          </span>
-          <div>
-            <span className="text-sm font-medium text-foreground">{label}</span>
-            {frozen && (
-              <Badge variant="warning" size="compact" className="ml-2">
-                <Snowflake className="size-3" /> Frozen
-              </Badge>
-            )}
-            <div className="mt-1">
-              <span className="text-xl font-semibold text-foreground">{current}</span>
-              {limit != null && <span className="text-sm text-muted-foreground"> / {limit}</span>}
-              {limit === null && (
-                <span className="text-sm text-muted-foreground"> (unlimited)</span>
-              )}
-            </div>
-          </div>
+    <Card className="min-w-0 p-6 sm:p-7">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">{label}</span>
+          {frozen && (
+            <Badge variant="warning" size="compact">
+              <Snowflake className="size-3" /> Frozen
+            </Badge>
+          )}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          {current} active {unit}
-        </p>
-        {percentage != null && (
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-        )}
+        <Icon className="size-5 shrink-0 text-primary" aria-hidden="true" />
       </div>
-    </div>
+      <div className="mt-5 flex flex-wrap items-baseline gap-2 tabular-nums">
+        <span className="text-4xl font-medium leading-none tracking-normal text-foreground">
+          {current}
+        </span>
+        {limit != null && <span className="text-base text-muted-foreground"> / {limit}</span>}
+        {limit === null && <span className="text-sm text-muted-foreground"> (unlimited)</span>}
+      </div>
+      <p className="mt-4 text-sm text-muted-foreground">
+        {current} active {unit}
+      </p>
+      {percentage != null && (
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      )}
+    </Card>
   );
 }
 
 function UsageSummary({ billing }: { billing: BillingState }) {
   return (
-    <Card radius="lg" className="overflow-hidden shadow-none">
-      <div>
-        <h2 className="font-sans border-b border-border bg-muted/30 px-5 py-4 text-sm text-foreground font-medium tracking-normal">
-          Usage Summary
-        </h2>
-        <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <UsageMetricCard
-            label={billing.usage.seats.label}
-            current={billing.usage.seats.current}
-            limit={billing.usage.seats.limit}
-            unit={billing.usage.seats.unit}
-            icon={Users}
-            frozen={billing.lifecycle === 'downgraded'}
-          />
-          <UsageMetricCard
-            label={billing.usage.branches.label}
-            current={billing.usage.branches.current}
-            limit={billing.usage.branches.limit}
-            unit={billing.usage.branches.unit}
-            icon={Building2}
-            frozen={billing.lifecycle === 'downgraded'}
-          />
-        </div>
-        {billing.tier === 'professional_plus' && (
-          <p className="border-t border-border bg-muted/30 px-5 py-3 text-xs leading-5 text-muted-foreground">
-            Professional+ includes 1 seat. For additional team members and branches, upgrade to
-            Corporate.
-          </p>
-        )}
-        {billing.tier === 'hobby' && (
-          <p className="border-t border-border bg-muted/30 px-5 py-3 text-xs leading-5 text-muted-foreground">
-            Hobby includes 1 seat and 1 studio. Upgrade to Professional+ for verified badge and
-            discovery priority.
-          </p>
-        )}
+    <section aria-labelledby="billing-usage-heading" className="space-y-4">
+      <h2
+        id="billing-usage-heading"
+        className="font-sans text-lg font-medium tracking-normal text-foreground"
+      >
+        Usage Summary
+      </h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <UsageMetricCard
+          label={billing.usage.seats.label}
+          current={billing.usage.seats.current}
+          limit={billing.usage.seats.limit}
+          unit={billing.usage.seats.unit}
+          icon={Users}
+          frozen={billing.lifecycle === 'downgraded'}
+        />
+        <UsageMetricCard
+          label={billing.usage.branches.label}
+          current={billing.usage.branches.current}
+          limit={billing.usage.branches.limit}
+          unit={billing.usage.branches.unit}
+          icon={Building2}
+          frozen={billing.lifecycle === 'downgraded'}
+        />
       </div>
-    </Card>
+      {billing.tier === 'professional_plus' && (
+        <p className="text-sm leading-6 text-muted-foreground">
+          Professional+ includes 1 seat. For additional team members and branches, upgrade to
+          Corporate.
+        </p>
+      )}
+      {billing.tier === 'hobby' && (
+        <p className="text-sm leading-6 text-muted-foreground">
+          Hobby includes 1 seat and 1 studio. Upgrade to Professional+ for verified badge and
+          discovery priority.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -364,12 +358,12 @@ function BillingSummary({
   const info = billing.billing;
 
   return (
-    <Card radius="lg" className="overflow-hidden shadow-none">
-      <h2 className="font-sans border-b border-border bg-muted/30 px-5 py-4 text-sm text-foreground font-medium tracking-normal">
+    <Card>
+      <h2 className="px-6 pt-6 font-sans text-lg font-medium tracking-normal text-foreground">
         Billing Summary
       </h2>
-      <div className="p-5">
-        <div className="grid gap-5 sm:grid-cols-2">
+      <div className="p-6">
+        <div className="grid gap-8 sm:grid-cols-2">
           <div className="space-y-4">
             <div>
               <p className="text-xs text-muted-foreground">
@@ -396,7 +390,7 @@ function BillingSummary({
                 </div>
               </div>
             )}
-            <Button variant="outline" size="sm" disabled={paymentBusy} onClick={onPayment}>
+            <Button variant="outline" disabled={paymentBusy} onClick={onPayment}>
               Update Payment Method
             </Button>
           </div>
@@ -617,61 +611,56 @@ function PlanIncludesCard({
     tier === 'hobby' ? 'professional_plus' : tier === 'professional_plus' ? 'corporate' : null;
 
   return (
-    <Card radius="lg" className="overflow-hidden shadow-none">
-      <h2 className="font-sans border-b border-border bg-muted/30 px-5 py-4 text-sm text-foreground font-medium tracking-normal">
+    <Card className="p-6 sm:p-8">
+      <h2 className="font-sans text-lg font-medium tracking-normal text-foreground">
         Your Plan Includes
       </h2>
-      <div>
-        <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => {
-            const Icon = feature.icon;
-            const suspended = impaired && feature.suspendedWhenImpaired;
-            return (
-              <div
-                key={feature.title}
-                className={`flex items-start gap-3 ${suspended ? 'opacity-50' : ''}`}
-              >
-                <span
-                  className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                    suspended
-                      ? 'bg-muted text-muted-foreground'
-                      : 'bg-primary/10 text-primary'
-                  }`}
-                >
-                  <Icon className="size-4" />
-                </span>
-                <div>
-                  <p className="font-sans text-sm font-medium tracking-normal text-foreground">
-                    {feature.title}
-                    {suspended && (
-                      <Badge variant="outline" size="compact" className="ml-1.5">
-                        Suspended
-                      </Badge>
-                    )}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{feature.description}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {nextTier && lifecycle === 'active' && !suppressPlanActions && (
-          <div className="flex flex-col items-start justify-between gap-3 border-t border-border bg-muted/30 px-5 py-4 sm:flex-row sm:items-center">
-            <p className="text-sm text-muted-foreground">
-              {tier === 'hobby'
-                ? 'Want verified status and priority ranking?'
-                : 'Need more team members or branches?'}
-            </p>
-            <Button
-              variant="default"
-              className="w-full sm:w-auto"
-              onClick={() => onSubscribe(nextTier)}
+      <div className="mt-7 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+        {features.map((feature) => {
+          const Icon = feature.icon;
+          const suspended = impaired && feature.suspendedWhenImpaired;
+          return (
+            <div
+              key={feature.title}
+              className={`flex items-start gap-3 ${suspended ? 'opacity-50' : ''}`}
             >
-              Upgrade to {PLAN_TIER_LABELS[nextTier]}
-            </Button>
-          </div>
-        )}
+              <Icon
+                className={`mt-0.5 size-5 shrink-0 ${suspended ? 'text-muted-foreground' : 'text-primary'}`}
+                aria-hidden="true"
+              />
+              <div className="min-w-0">
+                <p className="font-sans text-sm font-medium tracking-normal text-foreground">
+                  {feature.title}
+                  {suspended && (
+                    <Badge variant="outline" size="compact" className="ml-1.5">
+                      Suspended
+                    </Badge>
+                  )}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {feature.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </div>
+      {nextTier && lifecycle === 'active' && !suppressPlanActions && (
+        <div className="mt-8 flex flex-col items-start justify-between gap-4 border-t border-border pt-6 sm:flex-row sm:items-center">
+          <p className="text-sm leading-6 text-muted-foreground">
+            {tier === 'hobby'
+              ? 'Want verified status and priority ranking?'
+              : 'Need more team members or branches?'}
+          </p>
+          <Button
+            variant="default"
+            className="w-full shrink-0 sm:w-auto"
+            onClick={() => onSubscribe(nextTier)}
+          >
+            Upgrade to {PLAN_TIER_LABELS[nextTier]}
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -680,23 +669,21 @@ function PlanIncludesCard({
 
 function HelpCard() {
   return (
-    <Card radius="lg" variant="muted" className="shadow-none">
-      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-sans text-sm text-foreground font-medium tracking-normal">
-            Need Help?
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Our support team is here to help you with any billing queries.
-          </p>
-        </div>
-        <Button asChild variant="neutral" size="sm" className="shrink-0">
-          <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-            <Receipt className="size-4" />
-            Contact Support
-          </a>
-        </Button>
+    <Card variant="subtle" className="space-y-5 p-6">
+      <Headphones className="size-6 text-primary" aria-hidden="true" />
+      <div>
+        <h2 className="font-sans text-lg font-medium tracking-normal text-secondary-foreground">
+          Need Help?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-secondary-foreground/80">
+          Our support team is here to help you with any billing queries.
+        </p>
       </div>
+      <Button asChild variant="inverted" className="w-full">
+        <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+          Contact Support
+        </a>
+      </Button>
     </Card>
   );
 }
@@ -891,8 +878,8 @@ function ScopedDesignerPlanBilling({
       )}
 
       {/* Main content */}
-      <div className="mt-5 space-y-5">
-        <div className="min-w-0 space-y-5">
+      <div className="mt-8 space-y-8">
+        <div className="min-w-0 space-y-8">
           <UsageSummary billing={billing} />
 
           {billing.lifecycle === 'locked' && billing.lockedAccess && (
@@ -915,48 +902,52 @@ function ScopedDesignerPlanBilling({
             lifecycle={billing.lifecycle}
             onSubscribe={openSubscribe}
           />
-          <PaymentHistory />
         </div>
 
-        {/* Payment notice and support */}
-        <aside className="space-y-5">
-          {showPaymentDueCard && billing.billing && (
-            <Card radius="lg" className="border-warning bg-warning/10 shadow-none">
-              <div className="p-5">
-                <div className="flex items-center gap-2">
-                  <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">
-                    <CreditCard className="size-4 text-warning-foreground" />
-                  </span>
-                  <h2 className="font-sans text-base text-warning-foreground font-medium tracking-normal">
-                    {billing.lifecycle === 'payment_failed' ? 'Payment Failed' : 'Payment Due Soon'}
-                  </h2>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <PaymentHistory />
+          {/* Payment notice and support */}
+          <aside className="space-y-5">
+            {showPaymentDueCard && billing.billing && (
+              <Card radius="lg" className="border-warning bg-warning/10 shadow-none">
+                <div className="p-5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">
+                      <CreditCard className="size-4 text-warning-foreground" />
+                    </span>
+                    <h2 className="font-sans text-base text-warning-foreground font-medium tracking-normal">
+                      {billing.lifecycle === 'payment_failed'
+                        ? 'Payment Failed'
+                        : 'Payment Due Soon'}
+                    </h2>
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Your payment of{' '}
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(billing.billing.total)}
+                    </span>{' '}
+                    {billing.lastPaymentFailedDate
+                      ? `failed on ${formatDate(billing.lastPaymentFailedDate)}.`
+                      : `is due on ${formatDate(billing.billing.nextBillingDate)}.`}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
+                    disabled={payment.busy}
+                    onClick={payment.open}
+                  >
+                    {billing.lifecycle === 'payment_failed'
+                      ? 'Update Payment Method'
+                      : 'Make Payment'}
+                  </Button>
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Your payment of{' '}
-                  <span className="font-semibold text-foreground">
-                    {formatCurrency(billing.billing.total)}
-                  </span>{' '}
-                  {billing.lastPaymentFailedDate
-                    ? `failed on ${formatDate(billing.lastPaymentFailedDate)}.`
-                    : `is due on ${formatDate(billing.billing.nextBillingDate)}.`}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
-                  disabled={payment.busy}
-                  onClick={payment.open}
-                >
-                  {billing.lifecycle === 'payment_failed'
-                    ? 'Update Payment Method'
-                    : 'Make Payment'}
-                </Button>
-              </div>
-            </Card>
-          )}
+              </Card>
+            )}
 
-          <HelpCard />
-        </aside>
+            <HelpCard />
+          </aside>
+        </div>
       </div>
     </div>
   );

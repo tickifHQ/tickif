@@ -326,11 +326,7 @@ export function DesignerPlanBillingLoading() {
         <Skeleton className="h-8 w-48 max-w-full" />
         <Skeleton className="mt-2 h-6 w-80 max-w-full" />
       </div>
-      <Card
-        radius="lg"
-        variant="accent"
-        className="mt-8 border-l-2 border-l-primary/60 shadow-none"
-      >
+      <Card radius="lg" variant="inverse" className="mt-8 shadow-none">
         <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-2">
             <Skeleton className="h-4 w-24" />
@@ -343,55 +339,83 @@ export function DesignerPlanBillingLoading() {
           <Skeleton className="h-11 w-full shrink-0 rounded-full sm:w-44" />
         </div>
       </Card>
-      <div className="mt-5 space-y-5">
-        <Card radius="lg" className="overflow-hidden shadow-none">
-          <div className="border-b border-border bg-muted/30 px-5 py-4">
-            <Skeleton className="h-5 w-32" />
-          </div>
-          <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+      <div className="mt-8 space-y-8">
+        <section className="space-y-4">
+          <Skeleton className="h-7 w-40" />
+          <div className="grid gap-4 sm:grid-cols-2">
             {TWO_ITEMS.map((item) => (
-              <div key={item} className="p-5 sm:px-6">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="size-8 shrink-0" />
-                  <div className="space-y-1">
-                    <Skeleton className="h-5 w-28" />
-                    <Skeleton className="h-7 w-20" />
-                  </div>
+              <Card key={item} className="p-6 sm:p-7">
+                <div className="flex items-center justify-between gap-4">
+                  <Skeleton className="h-5 w-28" />
+                  <Skeleton className="size-5" />
                 </div>
-                <Skeleton className="mt-3 h-4 w-28" />
-                <Skeleton className="mt-2 h-1.5 w-full rounded-full" />
+                <Skeleton className="mt-5 h-10 w-24" />
+                <Skeleton className="mt-4 h-5 w-28" />
+                <Skeleton className="mt-4 h-1.5 w-full rounded-full" />
+              </Card>
+            ))}
+          </div>
+          <Skeleton className="h-5 w-3/4" />
+        </section>
+        <Card className="p-6">
+          <Skeleton className="h-7 w-40" />
+          <div className="mt-6 grid gap-8 sm:grid-cols-2">
+            {TWO_ITEMS.map((item) => (
+              <div key={item} className="space-y-4">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-6 w-36" />
+                <Skeleton className="h-4 w-24" />
               </div>
             ))}
           </div>
-          <div className="border-t border-border bg-muted/30 px-5 py-3">
-            <Skeleton className="h-4 w-3/4" />
+        </Card>
+        <Card className="p-6 sm:p-8">
+          <Skeleton className="h-7 w-44" />
+          <div className="mt-7 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, item) => (
+              <div key={item} className="flex items-start gap-3">
+                <Skeleton className="mt-0.5 size-5 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-5 w-32 max-w-full" />
+                  <Skeleton className="h-5 w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <Skeleton className="h-5 w-64 max-w-full" />
+            <Skeleton className="h-11 w-full shrink-0 rounded-full sm:w-52" />
           </div>
         </Card>
-        {THREE_ITEMS.map((item) => (
-          <Card key={item} radius="lg" className="overflow-hidden shadow-none">
-            <div className="border-b border-border bg-muted/30 px-5 py-4">
-              <Skeleton className="h-5 w-40" />
-            </div>
-            <div className="grid gap-5 p-5 sm:grid-cols-2">
-              {TWO_ITEMS.map((column) => (
-                <div key={column} className="space-y-3">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="h-4 w-4/5" />
-                </div>
-              ))}
-            </div>
-          </Card>
-        ))}
-        <Card radius="lg" variant="muted" className="shadow-none">
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-2">
-              <Skeleton className="h-5 w-24" />
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <Card className="min-w-0 space-y-5 p-6">
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-40" />
               <Skeleton className="h-5 w-80 max-w-full" />
             </div>
-            <Skeleton className="h-9 w-36 shrink-0 rounded-full" />
-          </div>
-        </Card>
+            <Skeleton className="h-11 w-full" />
+            {TWO_ITEMS.map((item) => (
+              <div key={item} className="grid grid-cols-4 gap-3 border-b border-border py-3">
+                {Array.from({ length: 4 }, (_, column) => (
+                  <Skeleton key={column} className="h-5 w-full" />
+                ))}
+              </div>
+            ))}
+            <div className="flex justify-end gap-2">
+              <Skeleton className="h-9 w-32 rounded-full" />
+              <Skeleton className="h-9 w-28 rounded-full" />
+            </div>
+          </Card>
+          <Card variant="subtle" className="space-y-5 p-6">
+            <Skeleton className="size-6" />
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-5 w-full" />
+              <Skeleton className="h-5 w-4/5" />
+            </div>
+            <Skeleton className="h-11 w-full rounded-full" />
+          </Card>
+        </div>
       </div>
     </LoadingRegion>
   );
