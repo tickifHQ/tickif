@@ -61,6 +61,13 @@ describe('getBillingState', () => {
     await expect(getBillingState()).resolves.toBeNull();
   });
 
+  it('rejects an invalid server subscription instead of seeding workspace synchronization', async () => {
+    mocks.getSubscription.mockResolvedValue(
+      new Response(JSON.stringify({ ...subscription, tier: 'unknown-plan' }), { status: 200 }),
+    );
+    await expect(getBillingState()).resolves.toBeNull();
+  });
+
   it('forwards the incoming cookie to protected billing endpoints', async () => {
     await expect(getBillingState()).resolves.toMatchObject({ tier: 'corporate' });
 

@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   refresh: vi.fn(),
   paymentMethod: vi.fn(),
+  sync: vi.fn(),
+}));
+
+vi.mock('@/components/workspace-entitlement-sync', () => ({
+  useWorkspaceEntitlementSync: () => mocks.sync,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -54,6 +59,7 @@ vi.mock('@/components/subscribe/checkout-flow', () => ({
 import { SubscribePage } from '../../src/components/subscribe/subscribe-page';
 
 beforeEach(() => {
+  mocks.sync.mockClear();
   mocks.refresh.mockImplementation(async () => new Response(null, { status: 200 }));
 });
 
@@ -133,6 +139,24 @@ describe('SubscribePage support recovery', () => {
 });
 
 describe('SubscribePage visible comparison and retained selection', () => {
+  it.each(['failed request', 'invalid response'] as const)(
+    'does not sync workspace entitlements from a %s',
+    async (failure) => {
+      mocks.getSubscription.mockImplementation(async () =>
+        failure === 'failed request'
+          ? new Response(null, { status: 503 })
+          : Response.json({ tier: 'corporate', lifecycleState: 'active' }),
+      );
+      render(<SubscribePage userId="user-sync" organizationId="org-sync" />);
+      await screen.findByText(
+        failure === 'failed request'
+          ? 'We could not load your subscription'
+          : 'We could not verify your subscription',
+      );
+      expect(mocks.sync).not.toHaveBeenCalled();
+    },
+  );
+
   it('shows the pricing loading state until the initial subscription is available', async () => {
     let complete: ((response: Response) => void) | undefined;
     mocks.selection.mockImplementation(async () =>
@@ -396,6 +420,10 @@ describe('SubscribePage visible comparison and retained selection', () => {
     );
     expect(await screen.findByRole('dialog', { name: 'Plan subscription' })).toHaveTextContent(
       'corporate',
+    );
+    expect(mocks.sync).toHaveBeenCalledWith(
+      'org-url',
+      expect.objectContaining({ tier: 'hobby', lifecycleState: 'active' }),
     );
     expect(window.location.search).toBe('');
     await userEvent.click(screen.getByRole('button', { name: 'Close billing' }));

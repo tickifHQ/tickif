@@ -176,6 +176,10 @@ const requiredEntries: [file: string, title: string][] = [
     'billing-management.spec.ts',
     'fresh Hobby organization shows actual seat and branch usage without a subscription',
   ],
+  [
+    'billing-management.spec.ts',
+    'Corporate checkout refreshes the retained workspace and unlocks team and branch management without a reload',
+  ],
   ...(['Hobby', 'Professional+', 'Corporate'] as const).map((label): [string, string] => [
     'billing-management.spec.ts',
     `${label} owner opens comparison from billing or directly at desktop and mobile widths`,

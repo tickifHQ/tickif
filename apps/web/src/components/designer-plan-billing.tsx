@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@repo/ui/components/badge';
@@ -38,6 +38,7 @@ import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { subscriptionResponseSchema, type BillingSelectionContext } from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { EarlyBirdActive } from '@/components/early-bird-trial';
+import { useWorkspaceEntitlementSync } from '@/components/workspace-entitlement-sync';
 
 interface DesignerPlanBillingProps extends BillingSelectionScope {
   billing: BillingState;
@@ -705,8 +706,18 @@ function ScopedDesignerPlanBilling({
 }: DesignerPlanBillingProps) {
   const [billing, setBilling] = useState(initialBilling);
   const router = useRouter();
+  const synchronizeWorkspace = useWorkspaceEntitlementSync();
   const selection = useSelectionContext(organizationId);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // A new billing page can have fresher server data than its retained workspace layout,
+    // even when the subsequent provider reconciliation is temporarily unavailable.
+    synchronizeWorkspace(organizationId, {
+      tier: initialBilling.tier,
+      lifecycleState: initialBilling.lifecycle,
+    });
+  }, [initialBilling.tier, initialBilling.lifecycle, organizationId, synchronizeWorkspace]);
 
   // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
   // Called on mount (SSR hydration catch-up) and after checkout flow completes.
@@ -719,6 +730,7 @@ function ScopedDesignerPlanBilling({
         const parsed = subscriptionResponseSchema.safeParse(await response.json());
         if (!parsed.success) throw new Error('Billing response invalid');
         setBilling(mapSubscriptionToBillingState(parsed.data));
+        synchronizeWorkspace(organizationId, parsed.data);
         setRefreshError(null);
       } else {
         throw new Error('Billing read unavailable');
@@ -729,7 +741,7 @@ function ScopedDesignerPlanBilling({
       );
       throw new Error('Billing refresh unavailable');
     }
-  }, []);
+  }, [organizationId, synchronizeWorkspace]);
 
   const refreshAll = useCallback(async () => {
     try {

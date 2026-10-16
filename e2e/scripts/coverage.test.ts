@@ -104,7 +104,12 @@ describe('critical E2E coverage gate', () => {
 
   it('requires every billing matrix and failure journey without omissions or skips', () => {
     const billing = requiredTests.filter(({ file }) => file.startsWith('billing-'));
-    expect(billing).toHaveLength(50);
+    expect(billing).toHaveLength(51);
+    expect(billing).toContainEqual({
+      file: 'billing-management.spec.ts',
+      title:
+        'Corporate checkout refreshes the retained workspace and unlocks team and branch management without a reload',
+    });
     expect(billing.filter(({ file }) => file === 'billing-plan-matrix.spec.ts')).toHaveLength(18);
     expect(billing.filter(({ file }) => file === 'billing-same-cycle.spec.ts')).toHaveLength(4);
     for (const source of ['professional_plus', 'corporate']) {

@@ -37,6 +37,7 @@ const FULL_CAPABILITIES: OrganizationCapabilities = {
 const mock = vi.hoisted(() => ({
   pathname: '/designer/dashboard',
   router: { refresh: vi.fn() },
+  branchMounts: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -86,13 +87,21 @@ vi.mock('@/components/designer-organization-switcher', () => ({
   ),
 }));
 
-vi.mock('@/components/designer-branch-selector', () => ({
-  DesignerBranchSelector: ({ organizationId }: { organizationId: string | null }) => (
-    <div data-testid="branch-selector" data-organization-id={organizationId}>
-      Branch switcher
-    </div>
-  ),
-}));
+vi.mock('@/components/designer-branch-selector', async () => {
+  const { useEffect } = await import('react');
+  return {
+    DesignerBranchSelector: ({ organizationId }: { organizationId: string | null }) => {
+      useEffect(() => {
+        mock.branchMounts(organizationId);
+      }, [organizationId]);
+      return (
+        <div data-testid="branch-selector" data-organization-id={organizationId}>
+          Branch switcher
+        </div>
+      );
+    },
+  };
+});
 
 describe('DesignerWorkspaceShell', () => {
   it('shows consultation navigation only when its feature flag is enabled', () => {
@@ -145,12 +154,59 @@ describe('DesignerWorkspaceShell', () => {
     expect(screen.queryByRole('link', { name: 'Leads' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Portfolio' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Verification' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Team & Roles' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Team & Roles' })).toHaveAttribute(
+      'href',
+      '/designer/terms-roles',
+    );
     expect(screen.queryByRole('link', { name: 'Branches' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Add new project' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Analytics' })).toBeInTheDocument();
-    expect(screen.queryByText(/^Grow$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^Grow$/i)).toBeInTheDocument();
     expect(screen.getByTestId('account-menu')).toHaveAttribute('data-profile-settings', 'false');
+  });
+
+  it.each(['Hobby plan', 'Professional+ plan', 'Corporate plan'])(
+    'keeps Team & Roles discoverable with restricted capabilities on %s',
+    (planLabel) => {
+      render(
+        <DesignerWorkspaceShell
+          capabilities={RESTRICTED_CAPABILITIES}
+          activeOrganizationId="org-team"
+          studioName="Studio One"
+          planLabel={planLabel}
+        >
+          <div>Workspace</div>
+        </DesignerWorkspaceShell>,
+      );
+      expect(screen.getByRole('link', { name: 'Team & Roles' })).toHaveAttribute(
+        'href',
+        '/designer/terms-roles',
+      );
+      expect(screen.queryByRole('link', { name: 'Branches' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Plan & billing' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('reloads branch access after same-organization server plan or capability changes only', () => {
+    mock.branchMounts.mockClear();
+    const workspace = (planLabel: string, capabilities: OrganizationCapabilities) => (
+      <DesignerWorkspaceShell
+        capabilities={capabilities}
+        activeOrganizationId="org-same"
+        studioName="Studio One"
+        planLabel={planLabel}
+      >
+        <div>Workspace</div>
+      </DesignerWorkspaceShell>
+    );
+    const view = render(workspace('Hobby plan', RESTRICTED_CAPABILITIES));
+    expect(mock.branchMounts).toHaveBeenCalledTimes(1);
+    view.rerender(workspace('Hobby plan', { ...RESTRICTED_CAPABILITIES }));
+    expect(mock.branchMounts).toHaveBeenCalledTimes(1);
+    view.rerender(workspace('Corporate plan', FULL_CAPABILITIES));
+    expect(mock.branchMounts).toHaveBeenCalledTimes(2);
+    view.rerender(workspace('Corporate plan', { ...FULL_CAPABILITIES, manageMembers: false }));
+    expect(mock.branchMounts).toHaveBeenCalledTimes(3);
   });
   it('shows a workspace skeleton until the refreshed organization is rendered', async () => {
     mock.pathname = '/designer/dashboard';

@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { usePaymentMethod } from './use-payment-method';
 import { EarlyBirdActive } from '@/components/early-bird-trial';
+import { useWorkspaceEntitlementSync } from '@/components/workspace-entitlement-sync';
 
 /**
  * E-120 Subscribe page client component.
@@ -50,6 +51,7 @@ function ScopedSubscribePage({
   initialTargetTier = null,
 }: SubscribePageProps) {
   const [subscription, setSubscription] = useState<SubscriptionResponse | null>(null);
+  const synchronizeWorkspace = useWorkspaceEntitlementSync();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -87,6 +89,7 @@ function ScopedSubscribePage({
       const parsed = subscriptionResponseSchema.safeParse(await response.json());
       if (!parsed.success) throw new Error('We could not verify your subscription');
       setSubscription(parsed.data);
+      synchronizeWorkspace(organizationId, parsed.data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load subscription');
@@ -94,7 +97,7 @@ function ScopedSubscribePage({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [organizationId, synchronizeWorkspace]);
 
   const refreshAll = useCallback(async () => {
     try {

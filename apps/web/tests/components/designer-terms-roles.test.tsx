@@ -260,8 +260,107 @@ describe('DesignerTermsRoles', () => {
     expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
       'href',
-      '/designer/plan-billing',
+      '/designer/plan-billing/subscribe?tier=corporate',
     );
+  });
+
+  it.each(['owner', 'billing_admin'] as const)(
+    'gives an unsupported-plan %s the explicit Corporate upgrade target',
+    (currentUserRole) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole,
+            planTier: 'professional_plus',
+            rbacEnabled: false,
+            canManage: false,
+            capabilities: {
+              ...ownerWorkspace.capabilities,
+              billing: true,
+              manageMembers: false,
+              changeMemberRoles: false,
+              transferOwnership: false,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+        'href',
+        '/designer/plan-billing/subscribe?tier=corporate',
+      );
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['admin', 'member', 'viewer'] as const)(
+    'gives an unsupported-plan %s owner-contact guidance without billing actions',
+    (currentUserRole) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole,
+            planTier: 'hobby',
+            rbacEnabled: false,
+            canManage: false,
+            capabilities: {
+              ...ownerWorkspace.capabilities,
+              billing: false,
+              manageMembers: false,
+              changeMemberRoles: false,
+              transferOwnership: false,
+            },
+          }}
+        />,
+      );
+      expect(
+        screen.getByText('Contact your organization Owner to change plans.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('link', { name: /Corporate plans|Restore access/i }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['owner', 'billing_admin'] as const)(
+    'keeps locked Corporate %s on restore billing even if an older capability snapshot allows RBAC',
+    (currentUserRole) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole,
+            subscriptionState: 'locked',
+            rbacEnabled: true,
+          }}
+        />,
+      );
+      expect(screen.getByText('Team access is suspended')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Restore access' })).toHaveAttribute(
+        'href',
+        '/designer/plan-billing',
+      );
+      expect(screen.queryByRole('link', { name: /Corporate plans/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it('does not expose member mutations from stale RBAC on an unsupported plan', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{ ...ownerWorkspace, planTier: 'hobby', rbacEnabled: true }}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing/subscribe?tier=corporate',
+    );
+    expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
   });
 
   it('prompts locked Corporate orgs to restore billing instead of upgrading', () => {

@@ -17,6 +17,7 @@ import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { getResumableCheckoutTier } from './use-selection-context';
 import type { BillingSelectionScope } from './use-plan-selection';
+import { useWorkspaceEntitlementSync } from '@/components/workspace-entitlement-sync';
 
 interface CheckoutResultProps extends BillingSelectionScope {
   outcome: 'complete' | 'closed';
@@ -34,6 +35,7 @@ export function CheckoutResult(props: CheckoutResultProps) {
 }
 
 function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutResultProps) {
+  const synchronizeWorkspace = useWorkspaceEntitlementSync();
   const [details, setDetails] = useState<{
     subscription: SubscriptionResponse;
     context: BillingSelectionContext;
@@ -69,12 +71,13 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
         throw new Error('Billing could not be verified');
       if (!mounted.current) return;
       setDetails({ subscription: subscription.data, context: context.data });
+      synchronizeWorkspace(organizationId, subscription.data);
       setError(false);
     } catch (failure) {
       if (mounted.current) setError(true);
       throw failure;
     }
-  }, [organizationId]);
+  }, [organizationId, synchronizeWorkspace]);
 
   const context = details?.context;
   const subscription = details?.subscription;

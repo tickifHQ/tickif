@@ -36,6 +36,16 @@ still require reconciliation.
 - Preserve safeguards for authorized mandates, captured payments and unknown
   outcomes. Entitlements remain provider-authoritative; closing a browser UI is
   never evidence that money cannot arrive.
+- After a validated subscription read changes the effective tier or lifecycle,
+  refresh the retained designer layout so its plan label, capabilities and branch
+  access follow the same server state as billing. Deduplicate unchanged polling
+  and bound retries if a layout refresh fails. Keep checkout mounted; selected
+  plans, callback URLs and scheduled targets do not grant access. Organization
+  changes discard the previous synchronization scope.
+- Keep Team & Roles visible in the sidebar on every plan. Unsupported plans show
+  a Corporate upgrade prompt to billing users and owner-contact guidance to
+  others. Locked plans show billing restoration. Page and API permissions remain
+  enforced independently of navigation visibility.
 
 ## Consequences
 

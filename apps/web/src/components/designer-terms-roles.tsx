@@ -17,7 +17,7 @@ import type {
   OrganizationMemberRole,
   OrganizationWorkspaceResponse,
 } from '@repo/contracts';
-import { seatLimit } from '@repo/contracts';
+import { rbacEnabled, seatLimit } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
@@ -113,14 +113,16 @@ function UpgradePrompt({
     const restorableSeats = formatSeatLimit(seatLimit(planTier, 'active'));
     return (
       <Card className="space-y-3 p-5 shadow-none">
-        <p className="text-sm font-medium text-foreground">Team access is suspended</p>
+        <h2 className="font-sans text-lg font-medium tracking-normal text-foreground">
+          Team access is suspended
+        </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {organizationName} billing is past due, so team management is paused while the{' '}
           {planTierLabels[planTier]} plan is retained. Restore billing to reactivate {seatUsage} of{' '}
           {restorableSeats} seats with no data lost.
         </p>
         {canManageBilling ? (
-          <Button type="button" size="compact" asChild>
+          <Button type="button" asChild>
             <Link href="/designer/plan-billing">Restore access</Link>
           </Button>
         ) : (
@@ -133,15 +135,17 @@ function UpgradePrompt({
   }
   return (
     <Card className="space-y-3 p-5 shadow-none">
-      <p className="text-sm font-medium text-foreground">Team management is a Corporate feature</p>
+      <h2 className="font-sans text-lg font-medium tracking-normal text-foreground">
+        Team management is a Corporate feature
+      </h2>
       <p className="text-sm leading-relaxed text-muted-foreground">
         {organizationName} is on a single-user plan. The org is Owner solo with {seatUsage} of{' '}
         {formatSeatLimit(suspendedSeatLimit)} seats used. Upgrade to Corporate to invite teammates,
         assign roles, and manage seats.
       </p>
       {canManageBilling ? (
-        <Button type="button" size="compact" asChild>
-          <Link href="/designer/plan-billing">View Corporate plans</Link>
+        <Button type="button" asChild>
+          <Link href="/designer/plan-billing/subscribe?tier=corporate">View Corporate plans</Link>
         </Button>
       ) : (
         <p className="text-sm text-muted-foreground">
@@ -513,11 +517,13 @@ export function DesignerTermsRoles({
   }
 
   const activeWorkspace = workspace;
+  const hasTeamManagement =
+    workspace.rbacEnabled && rbacEnabled(workspace.planTier, workspace.subscriptionState);
   const canInvite =
-    workspace.canManage && workspace.capabilities.manageMembers && workspace.rbacEnabled;
+    workspace.canManage && workspace.capabilities.manageMembers && hasTeamManagement;
   const canChangeRoles =
-    workspace.canManage && workspace.capabilities.changeMemberRoles && workspace.rbacEnabled;
-  const canTransfer = workspace.capabilities.transferOwnership && workspace.rbacEnabled;
+    workspace.canManage && workspace.capabilities.changeMemberRoles && hasTeamManagement;
+  const canTransfer = workspace.capabilities.transferOwnership && hasTeamManagement;
   const ownerCount = workspace.members.filter((member) => member.role === 'owner').length;
   const isSoleOwner = workspace.currentUserRole === 'owner' && ownerCount <= 1;
   const transferTargets = workspace.members.filter(
@@ -768,7 +774,7 @@ export function DesignerTermsRoles({
 
         <SummaryCards workspace={workspace} />
 
-        {!workspace.rbacEnabled ? (
+        {!hasTeamManagement ? (
           <UpgradePrompt
             organizationName={workspace.organization.name}
             seatUsage={workspace.seatUsage}

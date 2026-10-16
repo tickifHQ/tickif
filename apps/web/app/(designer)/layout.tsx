@@ -7,41 +7,51 @@ import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
-import { getCurrentOrgCapabilities, getCurrentOrgPlanTier, getCurrentOrgRole } from '@/lib/current-org-role';
+import { getCurrentOrgWorkspace } from '@/lib/current-org-role';
+import { WorkspaceEntitlementSync } from '@/components/workspace-entitlement-sync';
 import { PLAN_TIER_LABELS } from '@/lib/billing-types';
 
 /** Designer workspace chrome. Requires the exact designer platform role. */
 export default async function DesignerLayout({ children }: { children: ReactNode }) {
   const session = await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
-  const [profile, orgCapabilities, planTier, role] = await Promise.all([
+  const [profile, workspace] = await Promise.all([
     requireCurrentDesignerProfile(),
-    getCurrentOrgCapabilities(),
-    getCurrentOrgPlanTier(),
-    getCurrentOrgRole(),
+    getCurrentOrgWorkspace(),
   ]);
   const studioName = profile.displayName.trim() || session.user.name?.trim() || 'Your studio';
-  if (!orgCapabilities) redirect('/unauthorized');
+  if (!workspace || workspace.organization.id !== profile.organization.id)
+    redirect('/unauthorized');
+  const { capabilities: orgCapabilities, planTier, currentUserRole: role } = workspace;
   const planLabel = planTier ? `${PLAN_TIER_LABELS[planTier]} plan` : 'Plan unavailable';
 
   return (
-    <DesignerWorkspaceShell
-      activeOrganizationId={profile.organization.id}
-      studioName={studioName}
-      logoUrl={profile.logoUrl}
-      planLabel={planLabel}
-      capabilities={orgCapabilities}
-      consultationsEnabled={config.CONSULTATIONS_ENABLED}
+    <WorkspaceEntitlementSync
+      organizationId={workspace.organization.id}
+      planTier={planTier}
+      subscriptionState={workspace.subscriptionState}
     >
-      <ProtectedBfcacheGuard />
-      {role === 'owner' && !orgCapabilities.editOrganization ? (
-        <p className="m-6 rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
-          Studio editing is unavailable.{' '}
-          <Link href="/designer/portfolio" className="font-medium text-foreground underline underline-offset-4">
-            View studio closure and recovery
-          </Link>
-        </p>
-      ) : null}
-      {children}
-    </DesignerWorkspaceShell>
+      <DesignerWorkspaceShell
+        activeOrganizationId={profile.organization.id}
+        studioName={studioName}
+        logoUrl={profile.logoUrl}
+        planLabel={planLabel}
+        capabilities={orgCapabilities}
+        consultationsEnabled={config.CONSULTATIONS_ENABLED}
+      >
+        <ProtectedBfcacheGuard />
+        {role === 'owner' && !orgCapabilities.editOrganization ? (
+          <p className="m-6 rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
+            Studio editing is unavailable.{' '}
+            <Link
+              href="/designer/portfolio"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              View studio closure and recovery
+            </Link>
+          </p>
+        ) : null}
+        {children}
+      </DesignerWorkspaceShell>
+    </WorkspaceEntitlementSync>
   );
 }

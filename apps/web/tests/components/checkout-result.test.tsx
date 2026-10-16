@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   refresh: vi.fn(),
   poll: vi.fn(),
+  sync: vi.fn(),
+}));
+vi.mock('@/components/workspace-entitlement-sync', () => ({
+  useWorkspaceEntitlementSync: () => mocks.sync,
 }));
 vi.mock('@/lib/api', () => ({
   api: {
@@ -189,6 +193,10 @@ describe('checkout return pages', () => {
       await screen.findByRole('heading', { name: 'Confirming your payment' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Payment confirmed' })).not.toBeInTheDocument();
+    expect(mocks.sync).toHaveBeenLastCalledWith(
+      'org',
+      expect.objectContaining({ tier: 'hobby', lifecycleState: 'active' }),
+    );
     mocks.subscription.mockResolvedValue(
       Response.json({
         ...subscription,
@@ -205,6 +213,10 @@ describe('checkout return pages', () => {
     });
     expect(await screen.findByRole('heading', { name: 'Payment confirmed' })).toBeInTheDocument();
     expect(screen.getByText('Your Professional+ plan is now active.')).toBeInTheDocument();
+    expect(mocks.sync).toHaveBeenLastCalledWith(
+      'org',
+      expect.objectContaining({ tier: 'professional_plus', lifecycleState: 'active' }),
+    );
   });
   it('offers fresh plan choices when closed, without restoring the abandoned target', async () => {
     render(<CheckoutResult {...props} outcome="closed" />);
@@ -236,6 +248,13 @@ describe('checkout return pages', () => {
       await screen.findByRole('heading', { name: 'Unable to confirm payment' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue checkout' })).not.toBeInTheDocument();
+    expect(mocks.sync).not.toHaveBeenCalled();
+  });
+  it('does not sync workspace entitlements after a failed subscription refresh', async () => {
+    mocks.refresh.mockResolvedValue(new Response(null, { status: 503 }));
+    render(<CheckoutResult {...props} />);
+    await screen.findByRole('heading', { name: 'Unable to confirm payment' });
+    expect(mocks.sync).not.toHaveBeenCalled();
   });
   it('shows a scheduled transition without claiming the new plan is active', async () => {
     mocks.context.mockResolvedValue(

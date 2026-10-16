@@ -11,6 +11,11 @@ const apiMocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   paymentMethod: vi.fn(),
   payments: vi.fn(),
+  sync: vi.fn(),
+}));
+
+vi.mock('@/components/workspace-entitlement-sync', () => ({
+  useWorkspaceEntitlementSync: () => apiMocks.sync,
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: apiMocks.push }) }));
@@ -101,6 +106,7 @@ describe('BillingAccessDenied', () => {
 
 describe('DesignerPlanBilling', () => {
   beforeEach(() => {
+    apiMocks.sync.mockClear();
     apiMocks.selection.mockImplementation(async () =>
       Response.json({
         organizationId: 'org-a',
@@ -132,6 +138,46 @@ describe('DesignerPlanBilling', () => {
       .mockReset()
       .mockImplementation(async () => Response.json({ items: [], nextOffset: null }));
   });
+
+  it.each(['active', 'locked'] as const)(
+    'syncs the server-rendered Corporate %s snapshot even when the subsequent refresh fails',
+    async (lifecycle) => {
+      render(
+        <DesignerPlanBilling
+          organizationId="org-a"
+          billing={makeBilling({ tier: 'corporate', lifecycle })}
+        />,
+      );
+      await screen.findByText(
+        'We could not update billing. Your last loaded details are shown while we try again.',
+      );
+      expect(apiMocks.sync).toHaveBeenCalledWith(
+        'org-a',
+        expect.objectContaining({ tier: 'corporate', lifecycleState: lifecycle }),
+      );
+      expect(apiMocks.sync).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['failed request', 'invalid response'] as const)(
+    'keeps only the initial server snapshot when a refresh has a %s',
+    async (failure) => {
+      apiMocks.getSubscription.mockImplementation(async () =>
+        failure === 'failed request'
+          ? new Response(null, { status: 503 })
+          : Response.json({ tier: 'corporate', lifecycleState: 'active' }),
+      );
+      render(<DesignerPlanBilling organizationId="org-a" billing={makeBilling()} />);
+      await screen.findByText(
+        'We could not update billing. Your last loaded details are shown while we try again.',
+      );
+      expect(apiMocks.sync).toHaveBeenCalledWith(
+        'org-a',
+        expect.objectContaining({ tier: 'professional_plus', lifecycleState: 'active' }),
+      );
+      expect(apiMocks.sync).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('shows no payment action during a trial and refreshes to Hobby when the server expires it', async () => {
     const earlyBirdTrial = {
@@ -517,10 +563,14 @@ describe('DesignerPlanBilling', () => {
         ),
     );
 
-    render(<DesignerPlanBilling billing={makeBilling()} />);
+    render(<DesignerPlanBilling organizationId="org-a" billing={makeBilling()} />);
 
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Corporate', level: 2 })).toBeInTheDocument(),
+    );
+    expect(apiMocks.sync).toHaveBeenCalledWith(
+      'org-a',
+      expect.objectContaining({ tier: 'corporate', lifecycleState: 'active' }),
     );
     expect(screen.getByText('7 active seats')).toBeInTheDocument();
     expect(screen.getByText('5 active branches')).toBeInTheDocument();

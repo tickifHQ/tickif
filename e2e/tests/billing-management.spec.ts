@@ -5,7 +5,7 @@ import {
   deliverSubscriptionEvent,
   providerMutationCount,
 } from '../lib/billing';
-import { randomInt, randomUUID } from 'node:crypto';
+import { createHmac, randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
 import { billingChangePreviewSchema } from '@repo/contracts';
@@ -584,6 +584,133 @@ test('paid recovery preserves the accepted downgrade across session loss and can
         return intent?.status;
       })
       .toBe('completed');
+  } finally {
+    await owner.dispose();
+  }
+});
+
+test('Corporate checkout refreshes the retained workspace and unlocks team and branch management without a reload', async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1412, height: 900 });
+  const owner = await createBillingOwner(context);
+  const documentNavigations: string[] = [];
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.exposeBinding(
+    'authorizeCorporateCheckout',
+    async (_source, subscriptionId: string) => {
+      expect(subscriptionId).toBe((await owner.subscription())?.razorpaySubscriptionId);
+      const now = Math.floor(Date.now() / 1000);
+      const authorized = await context.request.post(
+        `${providerUrl}/billing-fixture/subscriptions`,
+        {
+          data: {
+            id: subscriptionId,
+            plan_id: 'plan_e2e_corporate',
+            status: 'authenticated',
+            current_start: now,
+            current_end: now + 30 * 86400,
+            notes: { organizationId: owner.org.id, tier: 'corporate' },
+          },
+        },
+      );
+      expect(authorized.ok()).toBeTruthy();
+      const paymentId = `pay_workspace_${owner.org.id}`;
+      return {
+        razorpay_subscription_id: subscriptionId,
+        razorpay_payment_id: paymentId,
+        razorpay_signature: createHmac('sha256', 'tickif-e2e-secret')
+          .update(`${paymentId}|${subscriptionId}`)
+          .digest('hex'),
+      };
+    },
+  );
+  await page.addInitScript(() => {
+    class CorporateCheckoutFixture {
+      constructor(
+        private options: {
+          subscription_id: string;
+          handler: (payment: Record<string, string>) => void;
+        },
+      ) {}
+      on() {}
+      async open() {
+        const bridge = window as typeof window & {
+          authorizeCorporateCheckout: (id: string) => Promise<Record<string, string>>;
+        };
+        this.options.handler(await bridge.authorizeCorporateCheckout(this.options.subscription_id));
+      }
+    }
+    Object.assign(window, { Razorpay: CorporateCheckoutFixture });
+  });
+  try {
+    await page.goto('/designer/plan-billing');
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+        documentNavigations.push(request.url());
+    });
+    const workspaceSwitcher = page.getByRole('button', { name: 'Switch context', exact: true });
+    await expect(workspaceSwitcher).toContainText('Hobby');
+    await page.getByRole('link', { name: 'Team & Roles', exact: true }).click();
+    await expect(page).toHaveURL(`${stackWebUrl}/designer/terms-roles`);
+    await expect(
+      page.getByRole('heading', { name: 'Team management is a Corporate feature', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send invite', exact: true })).toHaveCount(0);
+    const upgrade = page.getByRole('link', { name: 'View Corporate plans', exact: true });
+    await expect(upgrade).toHaveAttribute(
+      'href',
+      '/designer/plan-billing/subscribe?tier=corporate',
+    );
+    await upgrade.click();
+    await expect(page).toHaveURL(/\/designer\/plan-billing\/subscribe(?:\?.*)?$/);
+    await expect(
+      page.getByRole('dialog', { name: 'Plan subscription', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    await expect(page).toHaveURL(/\/subscribe\/complete\?plan=corporate$/);
+    await expect(
+      page.getByRole('heading', { name: 'Confirming your payment', exact: true }),
+    ).toBeVisible();
+    expect((await owner.subscription())?.planTier).toBe('hobby');
+    const pending = await owner.subscription();
+    const now = Math.floor(Date.now() / 1000);
+    await deliverSubscriptionEvent(context, 'subscription.activated', {
+      id: pending!.razorpaySubscriptionId,
+      entity: 'subscription',
+      status: 'active',
+      plan_id: 'plan_e2e_corporate',
+      current_start: now,
+      current_end: now + 30 * 86400,
+      created_at: now,
+      notes: { organizationId: owner.org.id, tier: 'corporate' },
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
+    ).toBeVisible();
+    await expect(workspaceSwitcher).toContainText('Corporate');
+    await page.getByRole('link', { name: 'Team & Roles', exact: true }).click();
+    await expect(page).toHaveURL(`${stackWebUrl}/designer/terms-roles`);
+    await expect(
+      page.getByRole('heading', { name: 'Team management is a Corporate feature', exact: true }),
+    ).toHaveCount(0);
+    const inviteEmail = `workspace-${owner.org.id}@example.test`;
+    await page.getByLabel('Work email', { exact: true }).fill(inviteEmail);
+    await page.getByRole('button', { name: 'Send invite', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText(`Invitation created for ${inviteEmail}.`);
+    await expect(page.getByText(inviteEmail, { exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Branches', exact: true }).click();
+    await expect(page).toHaveURL(`${stackWebUrl}/designer/branches`);
+    const branchName = `Upgraded branch ${owner.org.id.slice(0, 8)}`;
+    await page.getByLabel('Branch name', { exact: true }).fill(branchName);
+    await page.getByRole('button', { name: 'Create branch', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText(`Branch ${branchName} created.`);
+    await expect(page.getByRole('paragraph').filter({ hasText: branchName })).toBeVisible();
+    expect(documentNavigations).toEqual([]);
+    expect(errors).toEqual([]);
   } finally {
     await owner.dispose();
   }
