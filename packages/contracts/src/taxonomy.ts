@@ -111,6 +111,37 @@ export const createLocationSchema = z
   })
   .meta({ id: 'CreateLocation' });
 export type CreateLocationInput = z.infer<typeof createLocationSchema>;
+export const nearbyLocationSchema = z
+  .object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  })
+  .meta({ id: 'NearbyLocation' });
+export type NearbyLocationInput = z.infer<typeof nearbyLocationSchema>;
+export const nearbyLocationResponseSchema = z
+  .object({
+    city: taxonomyTermSchema,
+  })
+  .meta({ id: 'NearbyLocationResponse' });
+
+/** Only address components used for city resolution are accepted from the provider. */
+export const geocodingResponseSchema = z
+  .object({
+    results: z
+      .array(
+        z.object({
+          addressComponents: z.array(
+            z.object({
+              longText: z.string(),
+              shortText: z.string().optional(),
+              types: z.array(z.string()),
+            }),
+          ),
+        }),
+      )
+      .default([]),
+  })
+  .meta({ id: 'GeocodingResponse' });
 export const createLocationResponseSchema = z
   .object({
     city: taxonomyTermSchema,

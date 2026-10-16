@@ -9,6 +9,13 @@ const selection = {
 };
 
 export const locationsRepository = {
+  async findCityByLabels(labels: string[]): Promise<TaxonomyTerm | null> {
+    for (const label of labels) {
+      const city = await this.findCity(locationSlug(label));
+      if (city) return city;
+    }
+    return null;
+  },
   async findCity(slug: string): Promise<TaxonomyTerm | null> {
     const [city] = await db
       .select(selection)

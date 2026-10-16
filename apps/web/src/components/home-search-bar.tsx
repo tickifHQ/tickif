@@ -5,6 +5,7 @@ import { cn } from '@repo/ui/lib/utils';
 
 import Link from 'next/link';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+import { NearMeSearch } from '@/components/near-me-search';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, History, MapPin, Search, X } from 'lucide-react';
@@ -43,7 +44,7 @@ export function LandingHeaderSearch() {
   useEffect(() => {
     const controller = new AbortController();
     void api.api.taxonomy.terms
-      .$get({ query: { kind: 'city' } }, { init: { signal: controller.signal } })
+      .$get({ query: { kind: 'city' } }, { init: { signal: controller.signal, cache: 'no-store' } })
       .then(async (response) => {
         if (!response.ok) return;
         const parsed = listTaxonomyResponseSchema.safeParse(await response.json());
@@ -165,7 +166,7 @@ export function HomeSearchBar({
       try {
         const response = await api.api.search.suggest.$get(
           { query: { q: trimmedQuery } },
-          { init: { signal: controller.signal } },
+          { init: { signal: controller.signal, cache: 'no-store' } },
         );
         if (!response.ok) throw new Error('Suggestion request failed.');
 
@@ -225,6 +226,11 @@ export function HomeSearchBar({
     params.delete('q');
     params.delete('page');
     if (basePath === '/home') params.set('feed', 'custom');
+    if (filter.filterKey === 'city' || filter.filterKey === 'locality') {
+      params.delete('city');
+      params.delete('locality');
+      if (filter.citySlug) params.set('city', filter.citySlug);
+    }
     const selected = new Set(parseFeedParams(params)[filter.filterKey]);
     selected.add(filter.slug);
     params.set(filter.filterKey, [...selected].join(','));
@@ -450,6 +456,7 @@ export function HomeSearchBar({
             {citySelector}
           </>
         )}
+        <NearMeSearch basePath={basePath} query={query} />
         {variant === 'hero' ? (
           <Button
             type="submit"
@@ -554,7 +561,7 @@ export function HomeSearchBar({
               <div className="grid gap-1 sm:grid-cols-2">
                 {suggestions.filters.map((filter) => (
                   <button
-                    key={`${filter.filterKey}-${filter.slug}`}
+                    key={`${filter.filterKey}-${filter.citySlug ?? ''}-${filter.slug}`}
                     type="button"
                     data-suggestion-item
                     aria-label={`${filter.label}, ${filter.kind.charAt(0).toUpperCase()}${filter.kind.slice(1)}`}

@@ -111,7 +111,8 @@ export const searchRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const query = c.req.valid('query');
     const result = await searchService.suggest(query);
 
-    c.header('Cache-Control', CACHE_HEADER);
+    // Newly saved places must be discoverable without waiting on a warmed cache.
+    c.header('Cache-Control', 'no-store');
 
     return c.json(result, 200);
   });

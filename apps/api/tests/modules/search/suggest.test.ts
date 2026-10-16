@@ -23,7 +23,9 @@ vi.mock('../../../src/modules/search/repository.js', () => ({
 
 // Mock storage presign to return predictable URLs
 vi.mock('@repo/storage', () => ({
-  presignDownload: vi.fn(async ({ key }: { key: string }) => `https://cdn.example.com/${key}?signed=1`),
+  presignDownload: vi.fn(
+    async ({ key }: { key: string }) => `https://cdn.example.com/${key}?signed=1`,
+  ),
 }));
 
 import * as repository from '../../../src/modules/search/repository.js';
@@ -40,14 +42,16 @@ async function get(path: string): Promise<Response> {
   return app.request(path, { method: 'GET' });
 }
 
-function createMockProjectDocument(overrides: Partial<{
-  id: string;
-  slug: string;
-  title: string;
-  designerName: string;
-  citySlug: string | null;
-  coverImageKey: string | null;
-}> = {}) {
+function createMockProjectDocument(
+  overrides: Partial<{
+    id: string;
+    slug: string;
+    title: string;
+    designerName: string;
+    citySlug: string | null;
+    coverImageKey: string | null;
+  }> = {},
+) {
   return {
     id: overrides.id !== undefined ? overrides.id : 'project-1',
     slug: overrides.slug !== undefined ? overrides.slug : 'modern-apartment',
@@ -58,18 +62,21 @@ function createMockProjectDocument(overrides: Partial<{
   };
 }
 
-function createMockDesignerDocument(overrides: Partial<{
-  id: string;
-  slug: string | null;
-  displayName: string;
-  citySlugs: string[];
-  logoImageKey: string | null;
-  projectCount: number;
-}> = {}) {
+function createMockDesignerDocument(
+  overrides: Partial<{
+    id: string;
+    slug: string | null;
+    displayName: string;
+    citySlugs: string[];
+    logoImageKey: string | null;
+    projectCount: number;
+  }> = {},
+) {
   return {
     id: overrides.id !== undefined ? overrides.id : 'designer-1',
     slug: 'slug' in overrides ? overrides.slug : 'test-designer',
-    displayName: overrides.displayName !== undefined ? overrides.displayName : 'Test Designer Studio',
+    displayName:
+      overrides.displayName !== undefined ? overrides.displayName : 'Test Designer Studio',
     citySlugs: overrides.citySlugs !== undefined ? overrides.citySlugs : ['mumbai', 'pune'],
     logoImageKey: 'logoImageKey' in overrides ? overrides.logoImageKey : 'designers/logo-1.png',
     projectCount: overrides.projectCount !== undefined ? overrides.projectCount : 15,
@@ -84,6 +91,20 @@ describe('GET /api/search/suggest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(repository.findFilterSuggestions).mockResolvedValue([]);
+  });
+
+  it('keeps saved-location suggestions available when the search index is unavailable', async () => {
+    vi.mocked(repository.multiSearch).mockRejectedValueOnce(new Error('Index unavailable'));
+    vi.mocked(repository.findFilterSuggestions).mockResolvedValue([
+      { kind: 'city', filterKey: 'city', slug: 'vapi', label: 'Vapi' },
+    ]);
+    const response = await get('/api/search/suggest?q=Vapi');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      projects: [],
+      designers: [],
+      filters: [{ kind: 'city', slug: 'vapi' }],
+    });
   });
 
   it('returns matching filter entities that can be selected by the discovery UI', async () => {
@@ -153,7 +174,7 @@ describe('GET /api/search/suggest', () => {
   it('returns maximum 5 projects in suggest response', async () => {
     // Simulate repository returning exactly 5 projects (the limit)
     const mockProjects = Array.from({ length: 5 }, (_, i) =>
-      createMockProjectDocument({ id: `p${i + 1}`, title: `Project ${i + 1}` })
+      createMockProjectDocument({ id: `p${i + 1}`, title: `Project ${i + 1}` }),
     );
 
     vi.mocked(repository.multiSearch).mockResolvedValue({
@@ -172,7 +193,7 @@ describe('GET /api/search/suggest', () => {
   it('returns maximum 3 designers in suggest response', async () => {
     // Simulate repository returning exactly 3 designers (the limit)
     const mockDesigners = Array.from({ length: 3 }, (_, i) =>
-      createMockDesignerDocument({ id: `d${i + 1}`, displayName: `Designer ${i + 1}` })
+      createMockDesignerDocument({ id: `d${i + 1}`, displayName: `Designer ${i + 1}` }),
     );
 
     vi.mocked(repository.multiSearch).mockResolvedValue({
@@ -319,7 +340,7 @@ describe('GET /api/search/suggest', () => {
   // Cache-Control header (Requirement 3.8)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  it('returns Cache-Control header with correct value', async () => {
+  it('does not cache suggestions so newly saved locations appear immediately', async () => {
     vi.mocked(repository.multiSearch).mockResolvedValue({
       projects: [],
       designers: [],
@@ -329,9 +350,7 @@ describe('GET /api/search/suggest', () => {
     const res = await get('/api/search/suggest?q=test');
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).toBe(
-      'public, max-age=30, stale-while-revalidate=120'
-    );
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -399,7 +418,7 @@ describe('GET /api/search/suggest', () => {
     }>(res);
 
     expect(body.projects[0]!.coverImageUrl).toBe(
-      'https://cdn.example.com/projects/cover-image.jpg?signed=1'
+      'https://cdn.example.com/projects/cover-image.jpg?signed=1',
     );
   });
 
@@ -422,7 +441,7 @@ describe('GET /api/search/suggest', () => {
     }>(res);
 
     expect(body.designers[0]!.logoUrl).toBe(
-      'https://cdn.example.com/designers/logo-image.png?signed=1'
+      'https://cdn.example.com/designers/logo-image.png?signed=1',
     );
   });
 
@@ -495,7 +514,9 @@ describe('GET /api/search/suggest', () => {
 
   it('handles single character q parameter', async () => {
     vi.mocked(repository.multiSearch).mockResolvedValue({
-      projects: [createMockProjectDocument()] as unknown as repository.MultiSearchResult['projects'],
+      projects: [
+        createMockProjectDocument(),
+      ] as unknown as repository.MultiSearchResult['projects'],
       designers: [],
       processingTimeMs: 5,
     });
