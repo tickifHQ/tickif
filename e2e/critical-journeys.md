@@ -47,6 +47,11 @@ coverage gate.
 
 ## Coverage and evidence
 
+- `admin-visibility.spec.ts`: admin company selection, dated lead pipeline,
+  full private lead/enquiry details and studio messages, unchanged read milestones,
+  company → designer → lead drill-down, enquiry response/progression reporting,
+  mobile table containment, and visitor denial. Can run with consultations disabled.
+
 - `account-menu.spec.ts`: real account data and fallback labels, responsive menu
   and logout confirmation, single-device and all-device session boundaries,
   authentication-protected saved projects, recoverable failures, and list/count/

@@ -30,6 +30,7 @@ export * from './entitlements';
 export * from './personal-account';
 export * from './health';
 export * from './admin-activity';
+export * from './admin-visibility';
 export * from './blog';
 export * from './billing-selection';
 export * from './telemetry';

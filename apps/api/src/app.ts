@@ -38,6 +38,7 @@ import {
 } from './modules/organization-retention/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { adminActivityRoutes } from './modules/admin-activity/routes.js';
+import { adminVisibilityRoutes } from './modules/admin-visibility/routes.js';
 import { requestTelemetry, type RequestTelemetryVariables } from './lib/request-telemetry.js';
 import { telemetryRoutes } from './modules/telemetry/routes.js';
 
@@ -99,6 +100,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 export const app = base
   .route('/api/telemetry', telemetryRoutes)
   .route('/api/admin/activity', adminActivityRoutes)
+  .route('/api/admin/insights', adminVisibilityRoutes)
   .route('/api/admin/organizations', adminOrganizationRetentionRoutes)
   .route('/', healthRoutes)
   .route('/api/admin/verifications', adminVerificationsRoutes)

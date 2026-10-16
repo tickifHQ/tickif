@@ -9,6 +9,8 @@ import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import {
   Inbox,
+  ChartNoAxesCombined,
+  ContactRound,
   LayoutDashboard,
   MessageSquareMore,
   ShieldUser,
@@ -25,6 +27,8 @@ type AdminNavItem = {
 const adminItems: AdminNavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Users', href: '/users', icon: UsersRound },
+  { label: 'Leads and pipeline', href: '/admin/leads', icon: ContactRound },
+  { label: 'Company analytics', href: '/admin/analytics', icon: ChartNoAxesCombined },
   { label: 'Project moderation', href: '/moderation', icon: SquareChartGantt },
   { label: 'Review moderation', href: '/review-moderation', icon: MessageSquareMore },
   { label: 'Profile verification', href: '/verifications', icon: ShieldUser },

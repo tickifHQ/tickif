@@ -20,6 +20,8 @@ read the documents and [ADRs](../adr/README.md) relevant to the domain.
 | [UI refresh](./ui-refresh/README.md)           | Figma provenance, tokens, artwork and shared component decisions |
 
 See [Public landing page](./landing-page.md) for homepage design, API sources and content boundaries.
+See [Admin visibility](./admin-visibility.md) for private lead drill-down, company/designer
+comparisons and enquiry response/conversion cohort reporting.
 
 Use [coding guidelines](../coding-guidelines/README.md) for enforced conventions,
 [guides](../guides/README.md) for development procedures and
