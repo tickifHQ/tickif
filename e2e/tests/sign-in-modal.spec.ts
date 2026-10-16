@@ -40,7 +40,7 @@ for (const width of [852, 516, 489, 390, 320]) {
     const agreement = dialog.getByText(/By continuing you agree/);
     await expect(agreement).toBeInViewport({ ratio: 1 });
     const phoneField = dialog.locator('[data-slot="phone-number-input"]');
-    await expect(phoneField).toHaveCSS('border-color', 'rgba(23, 22, 18, 0.12)');
+    await expect(phoneField).toHaveCSS('border-color', 'rgba(23, 22, 18, 0.1)');
     await expect(phoneField).toHaveCSS('border-radius', '12px');
     await expect(phoneField).toHaveCSS('box-shadow', /rgba\(0, 0, 0, 0\.04\) 0px 1px 2px/);
     await expect(dialog.getByRole('button', { name: 'Country code, India +91' })).toHaveCSS(
@@ -100,7 +100,7 @@ for (const width of [852, 516, 489, 390, 320]) {
     await expect(dialog.getByRole('textbox', { name: 'Email', exact: true })).toBeVisible();
     const emailField = dialog.getByRole('textbox', { name: 'Email', exact: true });
     await emailField.blur();
-    await expect(emailField).toHaveCSS('border-color', 'rgba(23, 22, 18, 0.12)');
+    await expect(emailField).toHaveCSS('border-color', 'rgba(23, 22, 18, 0.1)');
     await emailField.focus();
     await expect(emailField).toHaveCSS('border-color', 'rgb(30, 122, 85)');
     await expect(agreement).toBeInViewport({ ratio: 1 });

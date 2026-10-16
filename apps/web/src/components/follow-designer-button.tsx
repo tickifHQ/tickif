@@ -153,7 +153,7 @@ function FollowDesignerControl({
     <div className="flex shrink-0 flex-col items-end gap-1">
       <Button
         type="button"
-        variant={following ? 'project-save' : 'outline'}
+        variant={following ? 'project-save' : 'outline-accent'}
         size={size ?? (following ? 'project-save' : 'sm')}
         className={className}
         aria-label={`${following ? 'Unfollow' : 'Follow'} ${designerName}`}

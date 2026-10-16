@@ -346,6 +346,17 @@ describe('PublicDesignerProfile', () => {
     expect(container.querySelectorAll('button[aria-label="Follow Anika Spaces"]')).toHaveLength(2);
   });
 
+  it('keeps sharing in the header and share block without a footer share action', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+    expect(screen.getByRole('button', { name: 'Share profile' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    const footerActions = screen.getByRole('navigation', { name: 'Footer studio actions' });
+    expect(within(footerActions).getByRole('button', { name: 'Send enquiry' })).toBeInTheDocument();
+    expect(
+      within(footerActions).queryByRole('button', { name: 'Share this portfolio' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('provides working portfolio navigation and a back-to-top link', () => {
     const { container } = render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
     const navigation = within(screen.getByRole('navigation', { name: 'Portfolio sections' }));
