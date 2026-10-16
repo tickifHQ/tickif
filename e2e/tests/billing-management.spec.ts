@@ -659,6 +659,10 @@ test('Corporate checkout refreshes the retained workspace and unlocks team and b
     await expect(
       page.getByRole('heading', { name: 'Team management is a Corporate feature', exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Members', exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'Leave organisation', exact: true }),
+    ).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send invite', exact: true })).toHaveCount(0);
     const upgrade = page.getByRole('link', { name: 'View Corporate plans', exact: true });
     await expect(upgrade).toHaveAttribute(

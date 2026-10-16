@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
+  Lock,
   MoreVertical,
   Send,
   Undo,
@@ -97,14 +98,12 @@ const planTierLabels: Record<OrganizationWorkspaceResponse['planTier'], string> 
 function UpgradePrompt({
   organizationName,
   seatUsage,
-  seatLimit: suspendedSeatLimit,
   planTier,
   subscriptionState,
   canManageBilling,
 }: {
   organizationName: string;
   seatUsage: number;
-  seatLimit: number;
   planTier: OrganizationWorkspaceResponse['planTier'];
   subscriptionState: OrganizationWorkspaceResponse['subscriptionState'];
   canManageBilling: boolean;
@@ -112,11 +111,12 @@ function UpgradePrompt({
   if (subscriptionState === 'locked') {
     const restorableSeats = formatSeatLimit(seatLimit(planTier, 'active'));
     return (
-      <Card className="space-y-3 p-5 shadow-none">
+      <Card className="flex flex-col items-center gap-4 px-6 py-10 text-center shadow-none">
+        <Lock className="size-8 text-muted-foreground" aria-hidden="true" />
         <h2 className="font-sans text-lg font-medium tracking-normal text-foreground">
           Team access is suspended
         </h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
           {organizationName} billing is past due, so team management is paused while the{' '}
           {planTierLabels[planTier]} plan is retained. Restore billing to reactivate {seatUsage} of{' '}
           {restorableSeats} seats with no data lost.
@@ -134,14 +134,13 @@ function UpgradePrompt({
     );
   }
   return (
-    <Card className="space-y-3 p-5 shadow-none">
+    <Card className="flex flex-col items-center gap-4 px-6 py-10 text-center shadow-none">
+      <Lock className="size-8 text-muted-foreground" aria-hidden="true" />
       <h2 className="font-sans text-lg font-medium tracking-normal text-foreground">
         Team management is a Corporate feature
       </h2>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        {organizationName} is on a single-user plan. The org is Owner solo with {seatUsage} of{' '}
-        {formatSeatLimit(suspendedSeatLimit)} seats used. Upgrade to Corporate to invite teammates,
-        assign roles, and manage seats.
+      <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+        Upgrade to Corporate to invite teammates, assign roles, and manage seats.
       </p>
       {canManageBilling ? (
         <Button type="button" asChild>
@@ -778,236 +777,240 @@ export function DesignerTermsRoles({
           <UpgradePrompt
             organizationName={workspace.organization.name}
             seatUsage={workspace.seatUsage}
-            seatLimit={workspace.seatLimit}
             planTier={workspace.planTier}
             subscriptionState={workspace.subscriptionState}
             canManageBilling={workspace.capabilities.billing}
           />
         ) : null}
 
-        {canInvite ? (
-          <SectionCard title="Invite a teammate">
-            <form
-              className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_minmax(12rem,1fr)_auto] sm:items-end"
-              onSubmit={submitInvitation}
-            >
-              <div className="space-y-1">
-                <Label htmlFor={emailId} className="text-sm font-medium text-muted-foreground">
-                  Work email
-                </Label>
-                <Input
-                  id={emailId}
-                  type="email"
-                  autoComplete="email"
-                  placeholder="teammate@studio.com"
-                  required
-                  className="h-8 px-2 text-sm"
-                  value={email}
-                  disabled={isPending}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </div>
-              <SelectField
-                label="Role"
-                value={role}
-                placeholder="Select a role"
-                options={assignableRoles}
-                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
-                disabled={isPending}
-                onValueChange={(value) => setRole(value as AssignableRole)}
-              />
-              <Button type="submit" size="compact" disabled={isPending}>
-                {isPending ? <Loader2 className="animate-spin" /> : <Send />}
-                Send invite
-              </Button>
-            </form>
-            <p className="px-2 pt-2 text-xs leading-relaxed text-muted-foreground">
-              Invites are email only. Inviting an email with a pending invite replaces it with a new
-              7-day invite instead of creating a duplicate.
-            </p>
-          </SectionCard>
-        ) : null}
+        {hasTeamManagement ? (
+          <>
+            {canInvite ? (
+              <SectionCard title="Invite a teammate">
+                <form
+                  className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_minmax(12rem,1fr)_auto] sm:items-end"
+                  onSubmit={submitInvitation}
+                >
+                  <div className="space-y-1">
+                    <Label htmlFor={emailId} className="text-sm font-medium text-muted-foreground">
+                      Work email
+                    </Label>
+                    <Input
+                      id={emailId}
+                      type="email"
+                      autoComplete="email"
+                      placeholder="teammate@studio.com"
+                      required
+                      className="h-8 px-2 text-sm"
+                      value={email}
+                      disabled={isPending}
+                      onChange={(event) => setEmail(event.target.value)}
+                    />
+                  </div>
+                  <SelectField
+                    label="Role"
+                    value={role}
+                    placeholder="Select a role"
+                    options={assignableRoles}
+                    className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
+                    disabled={isPending}
+                    onValueChange={(value) => setRole(value as AssignableRole)}
+                  />
+                  <Button type="submit" size="compact" disabled={isPending}>
+                    {isPending ? <Loader2 className="animate-spin" /> : <Send />}
+                    Send invite
+                  </Button>
+                </form>
+                <p className="px-2 pt-2 text-xs leading-relaxed text-muted-foreground">
+                  Invites are email only. Inviting an email with a pending invite replaces it with a
+                  new 7-day invite instead of creating a duplicate.
+                </p>
+              </SectionCard>
+            ) : null}
 
-        {feedback ? (
-          <Alert
-            variant={feedback.tone === 'error' ? 'destructive' : 'success'}
-            role={feedback.tone === 'error' ? 'alert' : 'status'}
-            aria-live="polite"
-          >
-            {feedback.tone === 'error' ? (
-              <AlertCircle aria-hidden="true" />
-            ) : (
-              <CheckCircle2 aria-hidden="true" />
-            )}
-            <AlertDescription>{feedback.message}</AlertDescription>
-          </Alert>
-        ) : null}
+            {feedback ? (
+              <Alert
+                variant={feedback.tone === 'error' ? 'destructive' : 'success'}
+                role={feedback.tone === 'error' ? 'alert' : 'status'}
+                aria-live="polite"
+              >
+                {feedback.tone === 'error' ? (
+                  <AlertCircle aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 aria-hidden="true" />
+                )}
+                <AlertDescription>{feedback.message}</AlertDescription>
+              </Alert>
+            ) : null}
 
-        <SectionCard title="Members">
-          <MembersList
-            members={workspace.members}
-            canManage={canChangeRoles}
-            isPending={isPending}
-            onChangeRole={updateRole}
-          />
-        </SectionCard>
-
-        {canInvite ? (
-          <SectionCard title="Invitations">
-            {workspace.invitations.length ? (
-              <PendingInvites
-                invitations={workspace.invitations}
+            <SectionCard title="Members">
+              <MembersList
+                members={workspace.members}
+                canManage={canChangeRoles}
                 isPending={isPending}
-                onResend={resendInvitation}
-                onRevoke={revokeInvitation}
+                onChangeRole={updateRole}
               />
-            ) : (
-              <Card className="px-5 py-8 text-center text-sm text-muted-foreground shadow-xs">
-                No invitations yet.
-              </Card>
-            )}
-          </SectionCard>
-        ) : null}
+            </SectionCard>
 
-        {canTransfer || pendingTransfer ? (
-          <SectionCard title="Ownership transfer">
-            {pendingTransfer ? (
-              <Card className="space-y-3 p-5 shadow-none">
-                <p className="text-sm font-medium text-foreground">
-                  Transfer to {pendingTransfer.target.name} is pending
+            {canInvite ? (
+              <SectionCard title="Invitations">
+                {workspace.invitations.length ? (
+                  <PendingInvites
+                    invitations={workspace.invitations}
+                    isPending={isPending}
+                    onResend={resendInvitation}
+                    onRevoke={revokeInvitation}
+                  />
+                ) : (
+                  <Card className="px-5 py-8 text-center text-sm text-muted-foreground shadow-xs">
+                    No invitations yet.
+                  </Card>
+                )}
+              </SectionCard>
+            ) : null}
+
+            {canTransfer || pendingTransfer ? (
+              <SectionCard title="Ownership transfer">
+                {pendingTransfer ? (
+                  <Card className="space-y-3 p-5 shadow-none">
+                    <p className="text-sm font-medium text-foreground">
+                      Transfer to {pendingTransfer.target.name} is pending
+                    </p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {pendingTransfer.initiator.name} nominated {pendingTransfer.target.name} (
+                      {pendingTransfer.target.email}) as Owner. The nominee must explicitly accept
+                      or decline. On acceptance the previous Owner becomes an Admin and keeps
+                      operational access.
+                    </p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Expires {formatDate(pendingTransfer.expiresAt)}.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {isTransferTarget ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="compact"
+                            disabled={isPending}
+                            onClick={() => resolveOwnershipTransfer(pendingTransfer.id, 'accept')}
+                          >
+                            {isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+                            Accept transfer
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="neutral"
+                            size="compact"
+                            disabled={isPending}
+                            onClick={() => resolveOwnershipTransfer(pendingTransfer.id, 'decline')}
+                          >
+                            Decline
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          size="compact"
+                          disabled={isPending}
+                          onClick={() => resolveOwnershipTransfer(pendingTransfer.id, 'cancel')}
+                        >
+                          {isPending ? <Loader2 className="animate-spin" /> : <Undo />}
+                          Cancel request
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                ) : transferTargets.length ? (
+                  <form
+                    className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_auto] sm:items-end"
+                    onSubmit={startOwnershipTransfer}
+                  >
+                    <SelectField
+                      label="Nominate an Admin or Member as Owner"
+                      value={transferTargetId}
+                      placeholder="Select a teammate"
+                      options={transferTargets.map((member) => ({
+                        value: member.id,
+                        label: `${member.name} (${organizationRoleLabels[member.role]})`,
+                      }))}
+                      disabled={isPending}
+                      onValueChange={setTransferTargetId}
+                    />
+                    <Button type="submit" size="compact" disabled={isPending || !transferTargetId}>
+                      {isPending ? <Loader2 className="animate-spin" /> : <Send />}
+                      Request transfer
+                    </Button>
+                  </form>
+                ) : (
+                  <Card className="px-5 py-8 text-center text-sm text-muted-foreground shadow-xs">
+                    No eligible Admin or Member to nominate.
+                  </Card>
+                )}
+                <p className="px-2 pt-2 text-xs leading-relaxed text-muted-foreground">
+                  Ownership transfer is a two-party handshake. Your role becomes Admin on
+                  completion.
                 </p>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {pendingTransfer.initiator.name} nominated {pendingTransfer.target.name} (
-                  {pendingTransfer.target.email}) as Owner. The nominee must explicitly accept or
-                  decline. On acceptance the previous Owner becomes an Admin and keeps operational
-                  access.
-                </p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Expires {formatDate(pendingTransfer.expiresAt)}.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {isTransferTarget ? (
-                    <>
-                      <Button
-                        type="button"
-                        size="compact"
-                        disabled={isPending}
-                        onClick={() => resolveOwnershipTransfer(pendingTransfer.id, 'accept')}
-                      >
-                        {isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-                        Accept transfer
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="neutral"
-                        size="compact"
-                        disabled={isPending}
-                        onClick={() => resolveOwnershipTransfer(pendingTransfer.id, 'decline')}
-                      >
-                        Decline
-                      </Button>
-                    </>
-                  ) : (
+              </SectionCard>
+            ) : null}
+
+            <SectionCard title="Leave organisation">
+              {isSoleOwner ? (
+                <Card className="space-y-2 p-5 shadow-none">
+                  <p className="text-sm font-medium text-foreground">
+                    Transfer ownership or delete the organisation first
+                  </p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    You are the sole Owner, so leaving now would orphan this studio. Nominate
+                    another Owner above before leaving.
+                  </p>
+                </Card>
+              ) : confirmLeave ? (
+                <Card className="space-y-3 p-5 shadow-none">
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Leaving removes your studio access immediately. Published projects stay live.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      variant="neutral"
                       size="compact"
+                      variant="destructive"
                       disabled={isPending}
-                      onClick={() => resolveOwnershipTransfer(pendingTransfer.id, 'cancel')}
+                      onClick={leaveOrganization}
                     >
-                      {isPending ? <Loader2 className="animate-spin" /> : <Undo />}
-                      Cancel request
+                      {isPending ? <Loader2 className="animate-spin" /> : null}
+                      Confirm leave
                     </Button>
-                  )}
-                </div>
-              </Card>
-            ) : transferTargets.length ? (
-              <form
-                className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_auto] sm:items-end"
-                onSubmit={startOwnershipTransfer}
-              >
-                <SelectField
-                  label="Nominate an Admin or Member as Owner"
-                  value={transferTargetId}
-                  placeholder="Select a teammate"
-                  options={transferTargets.map((member) => ({
-                    value: member.id,
-                    label: `${member.name} (${organizationRoleLabels[member.role]})`,
-                  }))}
-                  disabled={isPending}
-                  onValueChange={setTransferTargetId}
-                />
-                <Button type="submit" size="compact" disabled={isPending || !transferTargetId}>
-                  {isPending ? <Loader2 className="animate-spin" /> : <Send />}
-                  Request transfer
-                </Button>
-              </form>
-            ) : (
-              <Card className="px-5 py-8 text-center text-sm text-muted-foreground shadow-xs">
-                No eligible Admin or Member to nominate.
-              </Card>
-            )}
-            <p className="px-2 pt-2 text-xs leading-relaxed text-muted-foreground">
-              Ownership transfer is a two-party handshake. Your role becomes Admin on completion.
-            </p>
-          </SectionCard>
+                    <Button
+                      type="button"
+                      size="compact"
+                      variant="neutral"
+                      disabled={isPending}
+                      onClick={() => setConfirmLeave(false)}
+                    >
+                      Keep my access
+                    </Button>
+                  </div>
+                </Card>
+              ) : (
+                <Card className="space-y-3 p-5 shadow-none">
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Leaving removes your studio access immediately. Published projects stay live.
+                  </p>
+                  <Button
+                    type="button"
+                    size="compact"
+                    variant="neutral"
+                    disabled={isPending}
+                    onClick={() => setConfirmLeave(true)}
+                  >
+                    Leave organisation
+                  </Button>
+                </Card>
+              )}
+            </SectionCard>
+          </>
         ) : null}
-
-        <SectionCard title="Leave organisation">
-          {isSoleOwner ? (
-            <Card className="space-y-2 p-5 shadow-none">
-              <p className="text-sm font-medium text-foreground">
-                Transfer ownership or delete the organisation first
-              </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                You are the sole Owner, so leaving now would orphan this studio. Nominate another
-                Owner above before leaving.
-              </p>
-            </Card>
-          ) : confirmLeave ? (
-            <Card className="space-y-3 p-5 shadow-none">
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Leaving removes your studio access immediately. Published projects stay live.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="compact"
-                  variant="destructive"
-                  disabled={isPending}
-                  onClick={leaveOrganization}
-                >
-                  {isPending ? <Loader2 className="animate-spin" /> : null}
-                  Confirm leave
-                </Button>
-                <Button
-                  type="button"
-                  size="compact"
-                  variant="neutral"
-                  disabled={isPending}
-                  onClick={() => setConfirmLeave(false)}
-                >
-                  Keep my access
-                </Button>
-              </div>
-            </Card>
-          ) : (
-            <Card className="space-y-3 p-5 shadow-none">
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Leaving removes your studio access immediately. Published projects stay live.
-              </p>
-              <Button
-                type="button"
-                size="compact"
-                variant="neutral"
-                disabled={isPending}
-                onClick={() => setConfirmLeave(true)}
-              >
-                Leave organisation
-              </Button>
-            </Card>
-          )}
-        </SectionCard>
       </div>
     </div>
   );

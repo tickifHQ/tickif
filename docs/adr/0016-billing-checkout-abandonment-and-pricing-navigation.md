@@ -46,6 +46,8 @@ still require reconciliation.
   a Corporate upgrade prompt to billing users and owner-contact guidance to
   others. Locked plans show billing restoration. Page and API permissions remain
   enforced independently of navigation visibility.
+  Unsupported or suspended team access retains the summary cards and locked
+  prompt while hiding member, invitation, ownership-transfer and leave panels.
 
 ## Consequences
 
