@@ -4,6 +4,8 @@ import {
   reconcileReplacement,
   refundAbandonedReplacement,
   auditSupersededAgreement,
+  abandonedCheckoutRepository,
+  reconcileAbandonedCheckout,
 } from '@repo/billing';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
@@ -103,6 +105,11 @@ export async function processWebhookEvent(
   const razorpaySubscriptionId = await resolveSubscriptionId(event, payload);
   if (!razorpaySubscriptionId) {
     return { outcome: 'ignored', reason: 'No subscription ID in payload' };
+  }
+
+  if (await abandonedCheckoutRepository.byProvider(razorpaySubscriptionId)) {
+    await reconcileAbandonedCheckout(razorpaySubscriptionId);
+    return { outcome: 'ignored', reason: 'Superseded checkout agreement' };
   }
 
   const replacement = await replacementRepository.byProvider(razorpaySubscriptionId);

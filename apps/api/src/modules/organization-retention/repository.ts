@@ -257,6 +257,12 @@ async function beginDeletion(
       [
         subscription?.razorpaySubscriptionId,
         ...replacements.flatMap((row) => [row.sourceSubscriptionId, row.replacementSubscriptionId]),
+        ...(
+          await tx
+            .select({ id: schema.billingAbandonedCheckout.razorpaySubscriptionId })
+            .from(schema.billingAbandonedCheckout)
+            .where(eq(schema.billingAbandonedCheckout.organizationId, input.organizationId))
+        ).map(({ id }) => id),
       ].filter((id): id is string => !!id),
     ),
   ];

@@ -91,8 +91,8 @@ export function PlanCard({
           <p className="min-h-10 text-sm text-muted-foreground">{actionReason}</p>
         ) : (
           <Button
-            variant={currentActionDisabled ? 'outline' : 'fancy'}
-            className="h-auto min-h-9 w-full whitespace-normal text-xs leading-snug md:h-10 md:py-0"
+            variant={currentActionDisabled ? 'outline' : 'default'}
+            className="w-full leading-snug whitespace-normal"
             disabled={currentActionDisabled || isLocked}
             onClick={() => onSelect(plan.tier)}
             aria-label={currentActionDisabled ? `${plan.label} is your current plan` : label}

@@ -14,7 +14,6 @@ import {
 import { api } from '@/lib/api';
 import { PLAN_MAP } from '@/lib/plan-config';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
-import { CheckoutFlow } from './checkout-flow';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { getResumableCheckoutTier } from './use-selection-context';
 import type { BillingSelectionScope } from './use-plan-selection';
@@ -40,8 +39,6 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
     context: BillingSelectionContext;
   } | null>(null);
   const [error, setError] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [returnedOutcome, setReturnedOutcome] = useState(outcome);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -101,14 +98,14 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
   const scheduled = known && context.scheduledChange?.targetTier === targetTier;
   const resumable = known && getResumableCheckoutTier(context) === targetTier;
   const closed =
-    returnedOutcome === 'closed' &&
+    outcome === 'closed' &&
     known &&
     !active &&
     !scheduled &&
     (resumable || (!context.pendingOperation && !context.unfinishedCheckout));
   const refreshNow = useBillingAutoRefresh(refresh, {
     enabled: !active && !scheduled,
-    urgent: !reviewOpen,
+    urgent: true,
   });
   const label = PLAN_MAP[targetTier].label;
   const title = error
@@ -164,18 +161,11 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
               : scheduled
                 ? `Your ${label} plan starts on ${date}. Your current access continues until then.`
                 : closed
-                  ? resumable
-                    ? `You closed Razorpay before checkout was confirmed. ${label} is still selected, and you can continue the same checkout whenever you’re ready.`
-                    : 'This checkout is no longer pending. You can review the available plans to start a new checkout.'
+                  ? 'You can review the available plans and choose again. Your access changes only after payment is confirmed.'
                   : `We’re checking your ${label} payment. Your plan will update once it’s confirmed. No further payment is needed while we check.`}
         </p>
         <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:min-w-52">
-          {closed && resumable && (
-            <Button variant="fancy" onClick={() => setReviewOpen(true)}>
-              Continue checkout
-            </Button>
-          )}
-          {closed && !resumable && (
+          {closed && (
             <Button variant="fancy" asChild>
               <Link href="/designer/plan-billing/subscribe">Choose your plan</Link>
             </Button>
@@ -213,23 +203,6 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
           </a>
         )}
       </div>
-      {subscription && (
-        <CheckoutFlow
-          open={reviewOpen}
-          onOpenChange={setReviewOpen}
-          currentTier={subscription.tier}
-          lifecycleState={subscription.lifecycleState}
-          cancellationScheduled={subscription.cancellationScheduled}
-          currentPeriodEnd={subscription.currentPeriodEnd}
-          initialTargetTier={targetTier}
-          onSubscriptionChange={refreshNow}
-          onCheckoutResult={(next) => {
-            setReturnedOutcome(next);
-            setReviewOpen(false);
-            void refreshNow().catch(() => undefined);
-          }}
-        />
-      )}
     </div>
   );
 }

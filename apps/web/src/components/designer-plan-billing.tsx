@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -25,16 +26,9 @@ import {
 import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types';
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
-import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
 import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
-import {
-  usePlanSelection,
-  type BillingSelectionScope,
-} from '@/components/subscribe/use-plan-selection';
-import {
-  getResumableCheckoutTier,
-  useSelectionContext,
-} from '@/components/subscribe/use-selection-context';
+import type { BillingSelectionScope } from '@/components/subscribe/use-plan-selection';
+import { useSelectionContext } from '@/components/subscribe/use-selection-context';
 import { useBillingAutoRefresh } from '@/components/subscribe/use-billing-auto-refresh';
 import { api } from '@/lib/api';
 import { mapSubscriptionToBillingState } from '@/lib/billing-state';
@@ -120,13 +114,16 @@ function CurrentPlanCard({
   const tierLabel = PLAN_TIER_LABELS[billing.tier];
   const cta = lifecycleCta(billing);
   const price = billing.billing?.planAmount ?? PLAN_TIER_PRICES[billing.tier];
-  const resumableTarget = getResumableCheckoutTier(checkoutContext);
   const checkoutTarget =
-    checkoutContext?.pendingOperation?.targetTier ??
-    checkoutContext?.unfinishedCheckout?.targetTier ??
-    checkoutContext?.recovery?.targetTier ??
-    resumableTarget;
-  const resumable = !!checkoutTarget && resumableTarget === checkoutTarget;
+    (checkoutContext?.pendingOperation?.status !== 'checkout'
+      ? checkoutContext?.pendingOperation?.targetTier
+      : null) ??
+    (checkoutContext?.unfinishedCheckout?.status !== 'created'
+      ? checkoutContext?.unfinishedCheckout?.targetTier
+      : null) ??
+    (checkoutContext?.recovery?.status === 'checkout_pending'
+      ? checkoutContext.recovery.targetTier
+      : null);
 
   return (
     <Card radius="lg" variant="accent" className="border-l-2 border-l-primary/60 shadow-none">
@@ -210,30 +207,18 @@ function CurrentPlanCard({
                 className="mt-3 flex items-start gap-2 text-xs leading-5 text-muted-foreground"
               >
                 <Clock3 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                {resumable
-                  ? `${PLAN_TIER_LABELS[checkoutTarget]} checkout is awaiting completion.`
-                  : `We’re confirming your ${PLAN_TIER_LABELS[checkoutTarget]} checkout. Your current access remains until confirmation.`}
+                {`We’re confirming your ${PLAN_TIER_LABELS[checkoutTarget]} checkout. Your current access remains until confirmation.`}
               </p>
             )}
           </div>
         </div>
-        {checkoutTarget &&
-          (resumable ? (
-            <Button
-              variant="fancy"
-              size="sm"
-              className="w-full shrink-0 sm:w-auto"
-              onClick={() => onSubscribe(checkoutTarget)}
-            >
-              Continue checkout
-            </Button>
-          ) : (
-            <Button asChild variant="fancy" size="sm" className="w-full shrink-0 sm:w-auto">
-              <Link href={`/designer/plan-billing/subscribe/complete?plan=${checkoutTarget}`}>
-                View checkout status
-              </Link>
-            </Button>
-          ))}
+        {checkoutTarget && (
+          <Button asChild variant="fancy" size="sm" className="w-full shrink-0 sm:w-auto">
+            <Link href={`/designer/plan-billing/subscribe/complete?plan=${checkoutTarget}`}>
+              View checkout status
+            </Link>
+          </Button>
+        )}
         {!checkoutTarget &&
           cta &&
           (!suppressPlanActions ||
@@ -728,16 +713,10 @@ export function DesignerPlanBilling(props: DesignerPlanBillingProps) {
 
 function ScopedDesignerPlanBilling({
   billing: initialBilling,
-  userId,
   organizationId,
 }: DesignerPlanBillingProps) {
   const [billing, setBilling] = useState(initialBilling);
-  const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const { selectedTier, setSelectedTier } = usePlanSelection({
-    userId,
-    organizationId,
-    currentTier: billing.tier,
-  });
+  const router = useRouter();
   const selection = useSelectionContext(organizationId);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
@@ -772,16 +751,14 @@ function ScopedDesignerPlanBilling({
     }
   }, [refreshBilling, selection.refreshContext]);
   const refreshNow = useBillingAutoRefresh(refreshAll, {
-    urgent:
-      !subscribeOpen &&
-      !!(
-        refreshError ||
-        selection.error ||
-        selection.context?.pendingOperation ||
-        selection.context?.unfinishedCheckout ||
-        selection.context?.recovery?.status === 'requested' ||
-        selection.context?.recovery?.status === 'checkout_pending'
-      ),
+    urgent: !!(
+      refreshError ||
+      selection.error ||
+      selection.context?.pendingOperation ||
+      selection.context?.unfinishedCheckout ||
+      selection.context?.recovery?.status === 'requested' ||
+      selection.context?.recovery?.status === 'checkout_pending'
+    ),
   });
   const payment = usePaymentMethod(billing.tier, refreshNow);
 
@@ -797,8 +774,8 @@ function ScopedDesignerPlanBilling({
           : billing.lifecycle === 'locked'
             ? billing.tier
             : null;
-      setSelectedTier(tier ?? selectedTier ?? recoveryTier);
-      setSubscribeOpen(true);
+      const target = tier ?? recoveryTier;
+      router.push(`/designer/plan-billing/subscribe${target ? `?tier=${target}` : ''}`);
     },
     [
       billing.lifecycle,
@@ -806,14 +783,9 @@ function ScopedDesignerPlanBilling({
       billing.tier,
       billing.razorpayStatus,
       payment,
-      selectedTier,
-      setSelectedTier,
+      router,
     ],
   );
-
-  const handleSubscribeOpenChange = useCallback((next: boolean) => {
-    setSubscribeOpen(next);
-  }, []);
 
   if (billing.earlyBirdTrial)
     return (
@@ -834,9 +806,10 @@ function ScopedDesignerPlanBilling({
     !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
   const checkoutContext =
     selection.context &&
-    (getResumableCheckoutTier(selection.context) ||
-      selection.context.unfinishedCheckout?.targetTier ||
-      selection.context.pendingOperation?.reason === 'replacement_checkout_pending' ||
+    ((selection.context.unfinishedCheckout &&
+      selection.context.unfinishedCheckout.status !== 'created') ||
+      (selection.context.pendingOperation &&
+        selection.context.pendingOperation.status !== 'checkout') ||
       selection.context.recovery?.status === 'checkout_pending')
       ? selection.context
       : null;
@@ -982,20 +955,6 @@ function ScopedDesignerPlanBilling({
           <HelpCard />
         </aside>
       </div>
-
-      <CheckoutFlow
-        scopeKey={JSON.stringify([userId, organizationId])}
-        open={subscribeOpen}
-        onOpenChange={handleSubscribeOpenChange}
-        currentTier={billing.tier}
-        lifecycleState={billing.lifecycle}
-        cancellationScheduled={billing.cancellationScheduled}
-        currentPeriodEnd={billing.renewalDate}
-        restoreTier={billing.preLapseTier}
-        initialTargetTier={selectedTier}
-        onTargetChange={setSelectedTier}
-        onSubscriptionChange={refreshNow}
-      />
     </div>
   );
 }

@@ -208,36 +208,31 @@ export const subscribeService = {
               'The existing checkout plan cannot be verified. Contact support.',
               409,
             );
-          if (checkoutTier && checkoutTier !== params.targetTier) {
-            throw new AppError(
-              'unfinished_checkout_conflict',
-              'A checkout for another plan is already open. Complete or expire it before changing plans.',
-              409,
-              { targetTier: checkoutTier },
-            );
+          if (checkoutTier === params.targetTier) {
+            if (existing.razorpayStatus !== remoteSubscription.status)
+              await repository.update(existing.id, { razorpayStatus: remoteSubscription.status });
+            return {
+              razorpaySubscriptionId: remoteSubscription.id,
+              shortUrl: remoteSubscription.short_url,
+            };
           }
-
-          if (existing.razorpayStatus !== remoteSubscription.status) {
-            await repository.update(existing.id, { razorpayStatus: remoteSubscription.status });
-          }
-
-          return {
+          // Razorpay cannot cancel a created mandate. Retain its identity before
+          // replacing the pointer, so a late authorization is cancelled/refunded.
+          await repository.trackAbandonedCheckout({
+            organizationId: caller.activeOrgId!,
             razorpaySubscriptionId: remoteSubscription.id,
-            shortUrl: remoteSubscription.short_url,
-          };
-        }
-
-        const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
-        const isExplicitRecovery =
-          existing.subscriptionState === 'locked' || existing.subscriptionState === 'downgraded';
-        const recoverableStatuses = terminalStatuses;
-        const canReplace =
-          (existing.planTier === 'hobby' && terminalStatuses.has(remoteSubscription.status)) ||
-          (isExplicitRecovery && recoverableStatuses.has(remoteSubscription.status));
-        if (!canReplace) {
-          throw AppError.conflict(
-            'Organization already has a live Razorpay subscription. Complete checkout or use change-plan instead.',
-          );
+          });
+        } else {
+          const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
+          const isExplicitRecovery =
+            existing.subscriptionState === 'locked' || existing.subscriptionState === 'downgraded';
+          const canReplace =
+            (existing.planTier === 'hobby' && terminalStatuses.has(remoteSubscription.status)) ||
+            (isExplicitRecovery && terminalStatuses.has(remoteSubscription.status));
+          if (!canReplace)
+            throw AppError.conflict(
+              'Organization already has a live Razorpay subscription. Complete checkout or use change-plan instead.',
+            );
         }
       }
 

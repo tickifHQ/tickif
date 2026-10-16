@@ -7,13 +7,15 @@ describe('billing selection persistence', () => {
     sessionStorage.clear();
     vi.restoreAllMocks();
   });
-  it('keeps explicit Corporate intent across a remount and clears it after activation', () => {
+  it('forgets browsing intent after leaving checkout and removes legacy stored intent', () => {
     const props = { userId: 'user-a', organizationId: 'org-a', currentTier: 'hobby' as const };
     const first = renderHook(() => usePlanSelection(props));
     act(() => first.result.current.setSelectedTier('corporate'));
+    expect(first.result.current.selectedTier).toBe('corporate');
     first.unmount();
+    sessionStorage.setItem('tickif:billing-selection:v1:user-a:org-a', 'corporate');
     const next = renderHook(() => usePlanSelection(props));
-    expect(next.result.current.selectedTier).toBe('corporate');
+    expect(next.result.current.selectedTier).toBeNull();
     next.unmount();
     const activated = renderHook(() => usePlanSelection({ ...props, currentTier: 'corporate' }));
     expect(activated.result.current.selectedTier).toBeNull();

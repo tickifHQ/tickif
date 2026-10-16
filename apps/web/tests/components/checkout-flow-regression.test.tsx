@@ -160,6 +160,63 @@ function context(tier: PlanTier, recovery: BillingRecovery | null = null) {
   };
 }
 describe('billing preview checkout regressions', () => {
+  it.each([
+    { nextRenewalAt: null, renewalLabel: 'Monthly after activation' },
+    { nextRenewalAt: '2099-02-01T00:00:00.000Z', renewalLabel: '1 Feb 2099' },
+  ])(
+    'explains first-purchase timing without an inapplicable adjustment row ($renewalLabel)',
+    async ({ nextRenewalAt, renewalLabel }) => {
+      mocks.preview.mockResolvedValue(
+        Response.json({
+          ...preview,
+          targetTier: 'professional_plus',
+          recurringAmount: 299900,
+          currency: 'INR',
+          nextRenewalAt,
+        }),
+      );
+      render(<CheckoutFlow {...base} initialTargetTier="professional_plus" />);
+      await screen.findByRole('button', { name: 'Continue to payment' });
+      expect(screen.getByText('Starts')).toBeInTheDocument();
+      expect(screen.getByText('After successful payment')).toBeInTheDocument();
+      expect(screen.getByText(renewalLabel)).toBeInTheDocument();
+      expect(screen.getByText('₹2,999.00')).toBeInTheDocument();
+      expect(screen.queryByText('Additional charge')).not.toBeInTheDocument();
+      expect(screen.queryByText('Refund', { exact: true })).not.toBeInTheDocument();
+      expect(screen.queryByText('Not yet confirmed')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Review today’s charge and authorize monthly payments in Razorpay Checkout.',
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('preserves the provider renewal date and quoted adjustment for a paid plan change', async () => {
+    mocks.preview.mockResolvedValue(
+      Response.json({
+        ...preview,
+        currentTier: 'professional_plus',
+        action: 'change_plan',
+        recurringAmount: 799900,
+        adjustmentAmount: 50000,
+        currency: 'INR',
+        nextRenewalAt: '2099-02-01T00:00:00.000Z',
+        amountCertainty: 'confirmed',
+        adjustmentDirection: 'charge',
+      }),
+    );
+    render(<CheckoutFlow {...base} currentTier="professional_plus" />);
+    await screen.findByRole('button', { name: 'Confirm plan change' });
+    expect(screen.getByText('Effective date')).toBeInTheDocument();
+    expect(screen.getByText('Once confirmed')).toBeInTheDocument();
+    expect(screen.getByText('1 Feb 2099')).toBeInTheDocument();
+    expect(screen.getByText('Additional charge')).toBeInTheDocument();
+    expect(screen.getByText('₹500.00')).toBeInTheDocument();
+    expect(screen.getByText('₹7,999.00')).toBeInTheDocument();
+    expect(screen.queryByText('Monthly after activation')).not.toBeInTheDocument();
+  });
+
   it('automatically resolves pending activation with GETs and never repeats checkout or preview', async () => {
     mocks.subscribe.mockRejectedValue(new Error('Connection interrupted'));
     render(<CheckoutFlow {...base} />);
@@ -380,7 +437,7 @@ describe('billing preview checkout regressions', () => {
     await screen.findByRole('heading', { name: 'Upgrade to Corporate' });
     expect(screen.queryByRole('button', { name: 'Cancel & save plan' })).not.toBeInTheDocument();
   });
-  it('retains the selected target when Razorpay is dismissed', async () => {
+  it('clears the selected target when Razorpay is dismissed and returns to the closed page', async () => {
     mocks.subscribe.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -397,7 +454,8 @@ describe('billing preview checkout regressions', () => {
     mocks.checkout.mockImplementation(async ({ onDismiss }: { onDismiss: () => void }) =>
       onDismiss(),
     );
-    render(<CheckoutFlow {...base} />);
+    const onTargetChange = vi.fn();
+    render(<CheckoutFlow {...base} onTargetChange={onTargetChange} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
     await waitFor(() =>
       expect(mocks.replace).toHaveBeenCalledWith(
@@ -408,6 +466,9 @@ describe('billing preview checkout regressions', () => {
       json: expect.objectContaining({ targetTier: 'corporate', previewToken: 'signed-preview' }),
     });
     expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(onTargetChange).toHaveBeenCalledWith(null);
+    expect(base.onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.preview).toHaveBeenCalledTimes(1);
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
   });

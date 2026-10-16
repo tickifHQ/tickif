@@ -68,17 +68,18 @@ export function BillingStatusNotice({
   let body: string;
   let action: { label: string; tier: PlanTier } | null = null;
   let canRemove = false;
-  if (pending) {
+  if (
+    pending &&
+    !(pending.status === 'checkout' && pending.reason === 'replacement_checkout_pending')
+  ) {
     title =
       checkout?.status === 'authenticated' ? 'Confirming payment…' : 'Confirming plan change…';
     body = `We are checking your ${PLAN_MAP[pending.targetTier].label} ${checkout?.status === 'authenticated' ? 'payment' : 'plan change'}.`;
-  } else if (checkout) {
+  } else if (checkout && checkout.status !== 'created') {
     title = checkout.status === 'authenticated' ? 'Confirming payment…' : 'Checkout in progress';
     body = checkout.targetTier
       ? `${PLAN_MAP[checkout.targetTier].label} is selected.`
       : 'Your checkout details are being confirmed.';
-    if (checkout.status === 'created' && checkout.targetTier)
-      action = { label: 'Continue checkout', tier: checkout.targetTier };
   } else if (activeRecovery) {
     const targetLabel = PLAN_MAP[activeRecovery.targetTier].label;
     const end = activeRecovery.eligibleAt ?? currentPeriodEnd;

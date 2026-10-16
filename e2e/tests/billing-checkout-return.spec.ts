@@ -9,7 +9,7 @@ import {
 } from '../lib/billing';
 
 for (const width of [1412, 390]) {
-  test(`checkout loader, close, resume and verified success at ${width}px`, async ({
+  test(`checkout close restores plan choices and another plan completes safely at ${width}px`, async ({
     page,
     context,
   }, testInfo) => {
@@ -29,11 +29,11 @@ for (const width of [1412, 390]) {
           await context.request.post(`${providerUrl}/billing-fixture/subscriptions`, {
             data: {
               id: subscriptionId,
-              plan_id: 'plan_e2e_professional',
+              plan_id: 'plan_e2e_corporate',
               status: 'authenticated',
               current_start: now,
               current_end: now + 30 * 86400,
-              notes: { organizationId: owner.org.id, tier: 'professional_plus' },
+              notes: { organizationId: owner.org.id, tier: 'corporate' },
             },
           })
         ).ok(),
@@ -87,21 +87,38 @@ for (const width of [1412, 390]) {
     });
     try {
       await page.goto('/designer/plan-billing');
-      if (width === 390) {
-        await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
-        await expect(page).toHaveURL(`${webUrl}/designer/plan-billing/subscribe`);
-        await expect(
-          page.getByRole('heading', { name: 'Choose your plan', exact: true }),
-        ).toBeVisible();
-      }
       await page.getByRole('button', { name: 'Upgrade to Professional+', exact: true }).click();
+      await expect(page).toHaveURL(/\/designer\/plan-billing\/subscribe(?:\?.*)?$/);
+      const confirmation = page.getByRole('dialog', { name: 'Plan subscription', exact: true });
+      await expect(confirmation).toBeVisible();
+      await expect(
+        confirmation.getByRole('region', { name: 'Choose your plan', exact: true }),
+      ).toHaveCount(0);
       await expect(
         page.getByRole('button', { name: 'Continue to payment', exact: true }),
       ).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('01-review.png') });
+      await confirmation.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(confirmation).toHaveCount(0);
+      await page.getByRole('link', { name: 'Back to billing', exact: true }).click();
+      await expect(page).toHaveURL(`${webUrl}/designer/plan-billing`);
+      await page.goBack();
+      await expect(page).toHaveURL(`${webUrl}/designer/plan-billing/subscribe`);
+      // Browser history can restore cached server props, but must not restore abandoned intent.
+      await expect(confirmation).toHaveCount(0);
+      await expect(page.getByText('Selected plan', { exact: true })).toHaveCount(0);
+      for (const label of ['Upgrade to Professional+', 'Upgrade to Corporate'])
+        await expect(page.getByRole('button', { name: label, exact: true })).toBeEnabled();
+      await page.screenshot({
+        path: testInfo.outputPath('00-pricing-page.png'),
+        animations: 'disabled',
+      });
+      expect(await providerMutationCount(context, '/subscriptions')).toBe(before);
+      await page.getByRole('button', { name: 'Upgrade to Professional+', exact: true }).click();
+      await expect(confirmation).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('01-review.png'), animations: 'disabled' });
       await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
       await expect(page.getByRole('status', { name: 'Secure checkout' })).toBeVisible();
-      if (width === 1412) await expect(page).toHaveURL(`${webUrl}/designer/plan-billing`);
+      await expect(page).toHaveURL(/\/designer\/plan-billing\/subscribe(?:\?.*)?$/);
       await page.screenshot({ path: testInfo.outputPath('02-loader.png') });
       await expect(page.getByRole('dialog', { name: 'Razorpay test checkout' })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath('03-popup.png') });
@@ -117,32 +134,48 @@ for (const width of [1412, 390]) {
       await expect(page).toHaveURL(`${webUrl}/designer/plan-billing`);
       await expect(page.getByRole('status', { name: 'Billing status' })).toHaveCount(0);
       await expect(
-        page.getByText('Professional+ checkout is awaiting completion.', { exact: true }),
-      ).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('00-billing-resume.png') });
-      await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
-      await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-      await expect(page.getByRole('status', { name: 'Secure checkout' })).toBeVisible();
-      await expect(page).toHaveURL(`${webUrl}/designer/plan-billing`);
-      await page.getByRole('button', { name: 'Close test checkout', exact: true }).click();
-      await expect(page).toHaveURL(/\/subscribe\/closed\?plan=professional_plus$/);
-      await page.reload();
-      await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
-      await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-      await page.getByRole('button', { name: 'Close test checkout', exact: true }).click();
-      // Dismissing a resumed checkout on the same return URL must remove the loader.
-      await expect(page.getByRole('status', { name: 'Secure checkout' })).toHaveCount(0);
+        page.getByRole('button', { name: 'Continue checkout', exact: true }),
+      ).toHaveCount(0);
       await expect(
-        page.getByRole('heading', { name: 'Checkout closed', exact: true }),
-      ).toBeVisible();
-      await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
-      await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-      expect((await owner.subscription())?.razorpaySubscriptionId).toBe(
-        created?.razorpaySubscriptionId,
-      );
+        page.getByRole('button', { name: 'Upgrade to Professional+', exact: true }),
+      ).toBeEnabled();
+      await page.screenshot({ path: testInfo.outputPath('00-billing-choices-restored.png') });
+      await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
+      await expect(page).toHaveURL(`${webUrl}/designer/plan-billing/subscribe`);
+      await page.reload();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.getByText('Selected plan', { exact: true })).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Upgrade to Corporate', exact: true }),
+      ).toBeEnabled();
+      await page.getByRole('button', { name: 'Upgrade to Corporate', exact: true }).click();
+      await expect(confirmation).toBeVisible();
+      // Reviewing a different plan never creates a provider checkout until confirmed.
       expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 1);
+      await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Razorpay test checkout' })).toBeVisible();
+      const replacement = await owner.subscription();
+      expect(replacement?.razorpaySubscriptionId).not.toBe(created?.razorpaySubscriptionId);
+      expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 2);
+      await deliverSubscriptionEvent(context, 'subscription.activated', {
+        ...owner.provider,
+        id: created!.razorpaySubscriptionId,
+        status: 'active',
+        plan_id: 'plan_e2e_professional',
+        notes: { organizationId: owner.org.id, tier: 'professional_plus' },
+      });
+      expect(await owner.subscription()).toMatchObject({
+        planTier: 'hobby',
+        razorpaySubscriptionId: replacement!.razorpaySubscriptionId,
+      });
+      expect(
+        await providerMutationCount(
+          context,
+          `/subscriptions/${created!.razorpaySubscriptionId}/cancel`,
+        ),
+      ).toBe(1);
       await page.getByRole('button', { name: 'Simulate successful payment', exact: true }).click();
-      await expect(page).toHaveURL(/\/subscribe\/complete\?plan=professional_plus$/);
+      await expect(page).toHaveURL(/\/subscribe\/complete\?plan=corporate$/);
       await expect(
         page.getByRole('heading', { name: 'Confirming your payment', exact: true }),
       ).toBeVisible();
@@ -150,14 +183,14 @@ for (const width of [1412, 390]) {
       await page.screenshot({ path: testInfo.outputPath('05-confirming.png') });
       const now = Math.floor(Date.now() / 1000);
       await deliverSubscriptionEvent(context, 'subscription.activated', {
-        id: created!.razorpaySubscriptionId,
+        id: replacement!.razorpaySubscriptionId,
         entity: 'subscription',
         status: 'active',
-        plan_id: 'plan_e2e_professional',
+        plan_id: 'plan_e2e_corporate',
         current_start: now,
         current_end: now + 30 * 86400,
         created_at: now,
-        notes: { organizationId: owner.org.id, tier: 'professional_plus' },
+        notes: { organizationId: owner.org.id, tier: 'corporate' },
       });
       await expect(
         page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
@@ -169,9 +202,9 @@ for (const width of [1412, 390]) {
       ).toBeVisible();
       await page.getByRole('link', { name: 'Go to billing', exact: true }).click();
       await expect(page).toHaveURL(`${webUrl}/designer/plan-billing`);
-      await expect(page.getByText('Professional+', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('Corporate', { exact: true }).first()).toBeVisible();
       expect((await context.request.get(`${apiUrl}/api/billing/subscription`)).ok()).toBeTruthy();
-      expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 1);
+      expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 2);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       ).toBeTruthy();
@@ -289,6 +322,9 @@ for (const width of [1412, 390]) {
     try {
       await page.goto('/designer/plan-billing/subscribe');
       await page.getByRole('button', { name: 'Upgrade to Corporate', exact: true }).click();
+      await expect(
+        page.getByRole('dialog', { name: 'Plan subscription', exact: true }),
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Confirm plan change', exact: true }).click();
       await page.getByRole('button', { name: 'Continue plan change', exact: true }).click();
       await page.getByRole('button', { name: 'Authorize renewal mandate', exact: true }).click();
@@ -298,19 +334,19 @@ for (const width of [1412, 390]) {
       expect((await owner.subscription())?.planTier).toBe('professional_plus');
       await page.getByRole('button', { name: 'Close adjustment checkout', exact: true }).click();
       await expect(page).toHaveURL(/\/subscribe\/closed\?plan=corporate$/);
-      await expect(
-        page.getByRole('button', { name: 'Continue checkout', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Choose your plan', exact: true })).toBeVisible();
       await page.reload();
-      await expect(
-        page.getByRole('button', { name: 'Continue checkout', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Choose your plan', exact: true })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath('upgrade-closed.png') });
       await page.getByRole('link', { name: 'Back to billing', exact: true }).first().click();
+      await page.getByRole('link', { name: 'Manage Subscription', exact: true }).click();
+      await expect(page).toHaveURL(/\/designer\/plan-billing\/subscribe$/);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      // A provider-authorized mandate is protected; only its unpaid adjustment can resume.
       await expect(
-        page.getByText('Corporate checkout is awaiting completion.', { exact: true }),
-      ).toBeVisible();
-      await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
+        page.getByRole('button', { name: 'Switch to Hobby', exact: true }),
+      ).toBeDisabled();
+      await page.getByRole('button', { name: 'Upgrade to Corporate', exact: true }).click();
       await page.getByRole('button', { name: 'Confirm plan change', exact: true }).click();
       await page.getByRole('button', { name: 'Continue plan change', exact: true }).click();
       await expect(

@@ -137,11 +137,15 @@ export function PlanSelection({
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col" className="w-1/4 px-0">
+              <TableHead scope="col" className="w-1/4 px-0 font-sans text-sm tracking-normal">
                 Features
               </TableHead>
               {PLANS.map((plan) => (
-                <TableHead key={plan.tier} scope="col" className="w-1/4 px-5">
+                <TableHead
+                  key={plan.tier}
+                  scope="col"
+                  className="w-1/4 px-5 font-sans text-sm tracking-normal"
+                >
                   {plan.label}
                 </TableHead>
               ))}
@@ -153,7 +157,7 @@ export function PlanSelection({
                 <TableHead
                   scope="rowgroup"
                   colSpan={4}
-                  className="px-0 pt-7 pb-3 font-semibold text-foreground"
+                  className="px-0 pt-7 pb-3 font-sans text-sm font-semibold tracking-normal text-foreground"
                 >
                   {group.label}
                 </TableHead>
@@ -162,7 +166,7 @@ export function PlanSelection({
                 <TableRow key={feature.label}>
                   <TableHead
                     scope="row"
-                    className="px-0 py-3 pr-5 font-normal leading-5 whitespace-normal"
+                    className="px-0 py-3 pr-5 font-sans text-sm font-normal leading-5 tracking-normal whitespace-normal"
                   >
                     {feature.label}
                   </TableHead>

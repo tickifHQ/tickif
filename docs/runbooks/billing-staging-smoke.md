@@ -5,8 +5,8 @@ Use a synthetic designer organization and Razorpay **Test Mode**. Staging's webh
 The deterministic suite verifies local PostgreSQL concurrency, authorization, callback signatures, repeated callbacks, cancellation, unchanged-status reconciliation, payment history and UI recovery behavior. `e2e/tests/billing-management.spec.ts` runs real local auth and billing reads with a stubbed Checkout boundary; it does not prove Razorpay connectivity.
 
 1. Configure the staging secret store with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` and both paid `RAZORPAY_PLAN_ID_*` values. Use plans from the same Test Mode account. Configure the public API webhook URL `/api/billing/webhook` and the supported subscription/payment events in the Razorpay dashboard.
-2. Sign in as the synthetic studio owner. Open Plan & Billing, upgrade Hobby to Professional+, complete the official Test Mode Checkout, and wait for the signed webhook or reconciliation. Confirm the plan stays Hobby if Checkout is dismissed or payment fails. Confirm that retrying the same uncompleted checkout uses the same subscription ID.
-3. On a paid plan, choose a different paid plan and confirm the cycle-end change. The current plan must remain unchanged until Razorpay advances to the new plan. Schedule Hobby cancellation and confirm the paid plan stays available to the end date; repeated cancellation must remain idempotent.
+2. Sign in as the synthetic studio owner. Open Plan & Billing, upgrade Hobby to Professional+, complete the official Test Mode Checkout, and wait for the signed webhook or reconciliation. Confirm the plan stays Hobby if Checkout is dismissed or payment fails. After dismissal, Buy/Upgrade options must be available again. Explicitly choosing the same unused checkout may reuse its subscription ID; choosing another tier must obtain a fresh review and safely supersede the unused attempt.
+3. On Professional+, review the immediate Corporate upgrade and its adjustment payment. On Corporate, review the cycle-end Professional+ downgrade. Mandate authorization alone must not grant an unpaid upgrade; deferred downgrades retain current access until the verified end date. Schedule Hobby cancellation and confirm the paid plan stays available to the end date; repeated cancellation must remain idempotent.
 4. For an active or pending subscription, choose Update Payment Method. Confirm Razorpay opens against the existing subscription ID with `subscription_card_change`. Complete the Test Mode authorization and check the updated status after refresh. Repeated callbacks must not downgrade a webhook-confirmed active status to authenticated.
 5. For a halted subscription, use the same recovery control. Confirm it updates the existing mandate. Historical unpaid invoices can still require support intervention: do not represent updating the mandate as paying every old invoice. Test card/UPI/eMandate behavior supported by this account; the hosted payment-failure email link offers the provider's supported method-switching choices.
 6. Verify recorded payments, paise-to-rupee conversion and pagination. The history contains signed-webhook transactions, including failures, and may lag until webhook delivery. It does not fabricate invoices, tax amounts, card details or a payment receipt.
@@ -16,6 +16,41 @@ The deterministic suite verifies local PostgreSQL concurrency, authorization, ca
 Sources: [Razorpay payment retries and card changes](https://razorpay.com/docs/payments/subscriptions/payment-retries/), [subscription updates](https://razorpay.com/docs/api/payments/subscriptions/update-subscription/), [Test Mode subscriptions](https://razorpay.com/docs/payments/subscriptions/test/).
 
 The development-only `subscribe-demo` route remains inaccessible in production; all production billing actions use `CheckoutFlow` or the existing-subscription payment recovery flow.
+
+## Checkout abandonment and pricing navigation
+
+Follow [ADR 0016](../adr/0016-billing-checkout-abandonment-and-pricing-navigation.md).
+Deploy additive migration `0087_tearful_logan.sql` before the API and worker.
+It retains superseded provider checkout identities for compensation; unresolved
+records also prevent organization retention from deleting reconciliation state.
+
+Verify on desktop and mobile:
+
+- Manage Subscription, Upgrade, reactivation, restore and saved-plan review open
+  `/designer/plan-billing/subscribe`. Plan comparison renders on that subpage;
+  selecting a plan opens a subscription confirmation dialog. Choosing another
+  plan closes the dialog and returns to pricing. The table never appears inside
+  the dialog.
+- Close an unused checkout, return to billing, and reopen plans. Buy/Upgrade
+  options are available and no previous browsing selection is restored. Repeat
+  using browser Back, reload and an old session-storage selection.
+- Choose a different paid tier after closing checkout. Confirm the old provider
+  ID is retained in `billing_abandoned_checkout`, the new checkout has a distinct
+  identity, and replaying the old operation cannot resume the retired attempt.
+- Leave an unused paid-plan replacement, then choose Hobby cancellation. The
+  existing paid access lasts through its verified period end; the unused upgrade
+  reservation must not prevent cancellation.
+- Deliver late authorization/charge evidence for a superseded attempt in the
+  isolated provider test setup. It must not change entitlements. Confirm worker
+  cancellation/refund reconciliation and that a failed provider request retries
+  without losing the retired identity or processing later candidates incorrectly.
+- An already authorized mandate, adjustment payment or uncertain create outcome
+  remains under confirmation/recovery. Navigation alone must not create a second
+  financial agreement or claim that an in-flight payment failed.
+
+The local billing browser suite uses a deterministic provider simulator and
+does not establish real merchant sandbox settlement. Repeat the applicable
+provider checks against the configured Razorpay Test Mode account before rollout.
 
 ## Active subscriptions with an unverified period
 
@@ -59,12 +94,12 @@ The older webhook `TVy7gzuF3VVmcN` targeted
 unchanged. The staging endpoint rejected an unsigned probe with 401. A correctly
 signed unsupported event returned 200/ignored without changing billing data.
 
-| Check                        | Evidence                                                                               | Result                                                                                                                       |
-| ---------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Fresh provider delivery      | Real staging Checkout, subscription `sub_TZ7RQwMQ9mBQFK`, payment `pay_TZcdtXbJ0YNMuo` | Razorpay captured INR 299,900 paise; API and rendered history showed one captured ₹2,999 row before operator redelivery.     |
-| Duplicate handling           | Two signed operator redeliveries using verified provider entities for that payment     | Both returned 200/duplicate; exactly one payment remained.                                                                   |
-| Original missing transaction | Payment `pay_TZ6QSnkDmBsBik`, subscription `sub_TZ6McgaGBZEwGW`                        | Recovery returned 200/processed; repeat returned 200/duplicate. API and UI showed one captured ₹2,999 row dated 7 September. |
-| Subscription preservation    | Full subscription response before and after each recovery/duplicate check              | Unchanged, including entitlements, period end and scheduled cancellation.                                                    |
+| Check                        | Evidence                                                                               | Result                                                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Fresh provider delivery      | Real staging Checkout, subscription `sub_TZ7RQwMQ9mBQFK`, payment `pay_TZcdtXbJ0YNMuo` | Razorpay captured INR 299,900 paise; API and rendered history showed one captured â‚¹2,999 row before operator redelivery.     |
+| Duplicate handling           | Two signed operator redeliveries using verified provider entities for that payment     | Both returned 200/duplicate; exactly one payment remained.                                                                     |
+| Original missing transaction | Payment `pay_TZ6QSnkDmBsBik`, subscription `sub_TZ6McgaGBZEwGW`                        | Recovery returned 200/processed; repeat returned 200/duplicate. API and UI showed one captured â‚¹2,999 row dated 7 September. |
+| Subscription preservation    | Full subscription response before and after each recovery/duplicate check              | Unchanged, including entitlements, period end and scheduled cancellation.                                                      |
 
 ![Fresh provider payment in staging history](./assets/billing/fresh-payment.png)
 

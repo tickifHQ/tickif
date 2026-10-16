@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@repo/ui/components/button';
 import { BillingStatusNotice } from '@/components/subscribe/saved-recovery-notice';
@@ -9,9 +9,8 @@ import { usePlanSelection, type BillingSelectionScope } from './use-plan-selecti
 import { useSelectionContext } from './use-selection-context';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
-import type { SubscriptionState, SubscriptionResponse } from '@repo/contracts';
+import type { PlanTier, SubscriptionState, SubscriptionResponse } from '@repo/contracts';
 import { subscriptionResponseSchema } from '@repo/contracts';
-import { PLAN_MAP } from '@/lib/plan-config';
 import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
@@ -34,23 +33,47 @@ import { EarlyBirdActive } from '@/components/early-bird-trial';
  * Does NOT duplicate the Plan & Billing lifecycle detail UI (E-179).
  * Links to /designer/plan-billing for lifecycle management.
  */
-export function SubscribePage(props: BillingSelectionScope) {
+interface SubscribePageProps extends BillingSelectionScope {
+  initialTargetTier?: PlanTier | null;
+}
+
+export function SubscribePage(props: SubscribePageProps) {
   return (
     <ScopedSubscribePage key={JSON.stringify([props.userId, props.organizationId])} {...props} />
   );
 }
 
-function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) {
+function ScopedSubscribePage({
+  userId,
+  organizationId,
+  initialTargetTier = null,
+}: SubscribePageProps) {
   const [subscription, setSubscription] = useState<SubscriptionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewTrigger = useRef<HTMLElement | null>(null);
   const { selectedTier, setSelectedTier } = usePlanSelection({
     userId,
     organizationId,
     currentTier: subscription?.tier ?? null,
   });
   const selection = useSelectionContext(organizationId);
+  const appliedTarget = useRef<PlanTier | null>(null);
+  useEffect(() => {
+    if (!initialTargetTier || appliedTarget.current === initialTargetTier) return;
+    // Next can remount cached server props after browser Back. Only a still-present
+    // URL request is fresh browsing intent; consumed query props must not reopen review.
+    const url = new URL(window.location.href);
+    const requestedTiers = url.searchParams.getAll('tier');
+    if (requestedTiers.length !== 1 || requestedTiers[0] !== initialTargetTier) return;
+    appliedTarget.current = initialTargetTier;
+    setSelectedTier(initialTargetTier);
+    setReviewOpen(true);
+    // A link expresses one explicit review; reload/back must not restore abandoned intent.
+    url.searchParams.delete('tier');
+    window.history.replaceState(window.history.state, '', url);
+  }, [initialTargetTier, setSelectedTier]);
 
   const fetchSubscription = useCallback(async () => {
     try {
@@ -81,7 +104,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
   }, [fetchSubscription, selection.refreshContext]);
   const refreshNow = useBillingAutoRefresh(refreshAll, {
     urgent:
-      !dialogOpen &&
+      !reviewOpen &&
       !!(
         error ||
         selection.error ||
@@ -121,8 +144,6 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         <EarlyBirdActive trial={subscription.earlyBirdTrial} />
       </div>
     );
-  const suppressPlanActions =
-    !selection.context || Object.values(selection.actions).some((action) => action?.hidden);
   const needsPaymentRecovery =
     subscription.razorpayStatus === 'halted' ||
     lifecycleState === 'payment_failed' ||
@@ -155,35 +176,34 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         </div>
       )}
 
-      <BillingStatusNotice
-        context={selection.context}
-        currentTier={tier}
-        cancellationScheduled={subscription.cancellationScheduled}
-        currentPeriodEnd={subscription.currentPeriodEnd}
-        onDismissed={refreshNow}
-        onReview={(target) => {
-          setSelectedTier(target);
-          setDialogOpen(true);
-        }}
-      />
+      {!reviewOpen && (
+        <BillingStatusNotice
+          context={selection.context}
+          currentTier={tier}
+          cancellationScheduled={subscription.cancellationScheduled}
+          currentPeriodEnd={subscription.currentPeriodEnd}
+          onDismissed={refreshNow}
+          onReview={(target) => {
+            setSelectedTier(target);
+            setReviewOpen(true);
+          }}
+        />
+      )}
 
       <PlanSelection
         headingLevel={1}
         description="Compare plans and manage your subscription"
         currentTier={tier}
         lifecycleState={lifecycleState}
-        selectedTier={selection.savedTargetTier ?? selectedTier}
+        selectedTier={selectedTier}
         actions={selection.actions}
         onSelectPlan={(target) => {
+          reviewTrigger.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
           setSelectedTier(target);
-          setDialogOpen(true);
+          setReviewOpen(true);
         }}
       />
-      {selectedTier && !suppressPlanActions && !selection.actions[selectedTier]?.disabled && (
-        <Button variant="outline" className="mt-4" onClick={() => setDialogOpen(true)}>
-          Continue {PLAN_MAP[selectedTier].label}
-        </Button>
-      )}
       {selection.error && (
         <p role="status" className="mt-4 text-sm text-muted-foreground">
           {selection.error}
@@ -216,11 +236,14 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         </p>
       )}
 
-      {/* Checkout dialog */}
+      {/* The pricing table stays on the page; only the explicit plan review uses a dialog. */}
       <CheckoutFlow
         scopeKey={JSON.stringify([userId, organizationId])}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={reviewOpen}
+        onOpenChange={(next) => {
+          setReviewOpen(next);
+          if (!next) setSelectedTier(null);
+        }}
         currentTier={tier}
         lifecycleState={lifecycleState}
         cancellationScheduled={subscription.cancellationScheduled ?? false}
@@ -229,6 +252,7 @@ function ScopedSubscribePage({ userId, organizationId }: BillingSelectionScope) 
         initialTargetTier={selectedTier}
         onTargetChange={setSelectedTier}
         onSubscriptionChange={refreshNow}
+        onRestoreFocus={() => reviewTrigger.current?.focus()}
       />
     </div>
   );

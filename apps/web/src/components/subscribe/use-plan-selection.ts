@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { planTierSchema, type PlanTier } from '@repo/contracts';
+import type { PlanTier } from '@repo/contracts';
 
 export interface BillingSelectionScope {
   userId?: string;
@@ -12,44 +12,30 @@ export interface BillingSelectionScope {
 export function usePlanSelection({
   userId,
   organizationId,
-  currentTier,
-}: BillingSelectionScope & { currentTier: PlanTier | null }) {
+  initialTier = null,
+}: BillingSelectionScope & { currentTier: PlanTier | null; initialTier?: PlanTier | null }) {
   const storageKey =
     userId && organizationId ? `tickif:billing-selection:v1:${userId}:${organizationId}` : null;
   const [selection, setTarget] = useState<{ key: string | null; tier: PlanTier | null }>({
     key: storageKey,
-    tier: null,
+    tier: initialTier,
   });
   const selectedTier = selection.key === storageKey ? selection.tier : null;
 
   useEffect(() => {
-    if (!storageKey) {
-      setTarget({ key: storageKey, tier: null });
-      return;
-    }
+    setTarget((value) => (value.key === storageKey ? value : { key: storageKey, tier: null }));
+    if (!storageKey) return;
     try {
-      const parsed = planTierSchema.safeParse(sessionStorage.getItem(storageKey));
-      setTarget({
-        key: storageKey,
-        tier: parsed.success && parsed.data !== currentTier ? parsed.data : null,
-      });
-      if (!parsed.success || parsed.data === currentTier) sessionStorage.removeItem(storageKey);
+      // Discard browsing intent saved by older versions; no plan is reserved locally.
+      sessionStorage.removeItem(storageKey);
     } catch {
-      setTarget({ key: storageKey, tier: null });
-      // Storage may be unavailable in private browsing; selection still works in memory.
+      // Browsing intent only lives in memory when storage is unavailable, too.
     }
-  }, [storageKey, currentTier]);
+  }, [storageKey]);
 
   const setSelectedTier = useCallback(
     (tier: PlanTier | null) => {
       setTarget({ key: storageKey, tier });
-      if (!storageKey) return;
-      try {
-        if (tier) sessionStorage.setItem(storageKey, tier);
-        else sessionStorage.removeItem(storageKey);
-      } catch {
-        // Browser persistence is best effort and never authorizes a billing action.
-      }
     },
     [storageKey],
   );

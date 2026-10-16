@@ -279,7 +279,7 @@ for (const [tier, label] of [
   });
 }
 
-test('direct Corporate checkout survives provider dismissal and reload, then activates only from provider evidence', async ({
+test('direct Corporate checkout restores choices after dismissal and activates only from provider evidence', async ({
   page,
   context,
 }) => {
@@ -307,12 +307,17 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await expect(upgrade).toBeEnabled();
     await upgrade.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('dialog')).toBeVisible();
+    const confirmation = page.getByRole('dialog', { name: 'Plan subscription', exact: true });
+    await expect(confirmation).toBeVisible();
+    await expect(
+      confirmation.getByRole('region', { name: 'Choose your plan', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'Upgrade to Corporate', exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
     await expect(page).toHaveURL(/\/subscribe\/closed\?plan=corporate$/);
-    await expect(
-      page.getByRole('button', { name: 'Continue checkout', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Choose your plan', exact: true })).toBeVisible();
     expect(targets).toEqual(['corporate']);
     const created = await owner.subscription();
     expect(created?.planTier).toBe('hobby');
@@ -321,15 +326,17 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await expect(page.getByRole('dialog')).not.toBeVisible();
     expect(targets).toEqual(['corporate']);
     await expect(page.getByRole('heading', { name: 'Checkout closed', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Continue checkout', exact: true }).click();
+    await page.getByRole('link', { name: 'Choose your plan', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Upgrade to Professional+', exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByText('Selected plan', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Upgrade to Corporate', exact: true }).click();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-    // Wait for the asynchronous provider dismissal to close its review dialog
-    // before delivering activation evidence for the resumed checkout.
+    // Wait for dismissal before delivering provider evidence for the explicitly chosen tier.
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await expect(page.getByRole('status', { name: 'Secure checkout' })).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: 'Continue checkout', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Choose your plan', exact: true })).toBeVisible();
     expect(targets).toEqual(['corporate', 'corporate']);
     expect((await owner.subscription())?.razorpaySubscriptionId).toBe(
       created?.razorpaySubscriptionId,
@@ -360,6 +367,77 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await owner.dispose();
   }
 });
+
+for (const scenario of [
+  { source: 'professional_plus', abandoned: 'Upgrade to Corporate' },
+  { source: 'corporate', abandoned: 'Downgrade to Professional+' },
+] as const) {
+  test(`abandoning ${scenario.source} plan change restores choices including Hobby`, async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(120_000);
+    const owner = await createBillingOwner(context, scenario.source);
+    await page.addInitScript(() => {
+      class DismissedCheckout {
+        constructor(private options: { modal: { ondismiss: () => void } }) {}
+        on() {}
+        open() {
+          this.options.modal.ondismiss();
+        }
+      }
+      Object.assign(window, { Razorpay: DismissedCheckout });
+    });
+    const cancelPath = `/subscriptions/${owner.provider.id}/cancel`;
+    try {
+      await page.setViewportSize({
+        width: scenario.source === 'corporate' ? 390 : 1412,
+        height: 900,
+      });
+      await page.goto('/designer/plan-billing/subscribe');
+      await page.getByRole('button', { name: scenario.abandoned, exact: true }).click();
+      await expect(
+        page.getByRole('dialog', { name: 'Plan subscription', exact: true }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Confirm plan change', exact: true }).click();
+      await page.getByRole('button', { name: 'Continue plan change', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Checkout closed', exact: true }),
+      ).toBeVisible();
+      expect((await owner.subscription())?.planTier).toBe(scenario.source);
+      expect(await providerMutationCount(context, cancelPath)).toBe(0);
+      await page.getByRole('link', { name: 'Choose your plan', exact: true }).click();
+      await expect(page).toHaveURL(`${stackWebUrl}/designer/plan-billing/subscribe`);
+      await page.reload();
+      await expect(
+        page.getByRole('button', { name: scenario.abandoned, exact: true }),
+      ).toBeEnabled();
+      await expect(
+        page.getByRole('button', { name: 'Switch to Hobby', exact: true }),
+      ).toBeEnabled();
+      await page.getByRole('button', { name: 'Switch to Hobby', exact: true }).click();
+      // Reviewing Hobby must not cancel paid access; explicit confirmation is required.
+      expect(await providerMutationCount(context, cancelPath)).toBe(0);
+      await page.getByRole('button', { name: 'Schedule cancellation', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Plan change scheduled', exact: true }),
+      ).toBeVisible();
+      expect(await providerMutationCount(context, cancelPath)).toBe(1);
+      expect(await owner.subscription()).toMatchObject({
+        planTier: scenario.source,
+        cancelAtPeriodEnd: true,
+      });
+      const replacements = await db
+        .select()
+        .from(schema.billingReplacement)
+        .where(eq(schema.billingReplacement.organizationId, owner.org.id));
+      expect(replacements).toHaveLength(1);
+      expect(replacements[0]?.status).toBe('failed');
+    } finally {
+      await owner.dispose();
+    }
+  });
+}
 
 test('paid recovery preserves the accepted downgrade across session loss and cancellation requires a fresh preview', async ({
   page,
@@ -399,7 +477,9 @@ test('paid recovery preserves the accepted downgrade across session loss and can
       ).ok(),
     ).toBeTruthy();
     await page.getByRole('button', { name: 'Schedule cancellation', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Billing details changed');
+    await expect(
+      page.getByRole('dialog', { name: 'Plan subscription', exact: true }).getByRole('alert'),
+    ).toContainText('Billing details changed');
     expect((await owner.subscription())?.cancelAtPeriodEnd).toBe(false);
     expect(await providerMutationCount(context, `/subscriptions/${owner.provider.id}/cancel`)).toBe(
       0,
@@ -471,9 +551,7 @@ test('paid recovery preserves the accepted downgrade across session loss and can
     await page.getByRole('button', { name: 'Review Professional+', exact: true }).click();
     expect(replacementRequests).toBe(0);
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-    await expect(
-      page.getByRole('button', { name: 'Continue checkout', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Choose your plan', exact: true })).toBeVisible();
     const replacement = await owner.subscription();
     expect(replacementRequests).toBe(1);
     expect(replacement?.planTier).toBe('hobby');

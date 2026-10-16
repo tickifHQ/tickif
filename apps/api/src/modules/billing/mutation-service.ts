@@ -13,6 +13,7 @@ import {
 import { AppError } from '../../lib/errors.js';
 import { startReplacement } from './replacement-service.js';
 import { replacementRepository, cancelReplacementRenewal } from '@repo/billing';
+import { canSupersedeReplacement } from './abandoned-checkout-policy.js';
 
 export const billingMutationService = {
   async execute(
@@ -23,19 +24,8 @@ export const billingMutationService = {
     await assertBillingAccess(caller);
     const org = caller.activeOrgId!;
     const replacement = await replacementRepository.current(org);
-    if (replacement) {
-      if (kind === 'change_plan' && replacement.targetTier === params.targetTier)
-        return {
-          operationId: replacement.id,
-          outcome: 'processing',
-          targetTier: replacement.targetTier,
-          effectiveAt: replacement.periodEnd.toISOString(),
-          razorpaySubscriptionId: replacement.replacementSubscriptionId ?? '',
-        };
-      if (!(kind === 'cancel' && replacement.status === 'confirmed'))
-        throw AppError.conflict('Complete the pending plan change before choosing another plan.');
-    }
     const reserved = await subscribeRepository.withOrganizationLock(org, async (repository) => {
+      const currentReplacement = await repository.findReplacement(org);
       const existing = await repository.findOperation(org, params.operationId);
       if (existing) {
         if (existing.targetTier !== params.targetTier || existing.kind !== kind)
@@ -50,14 +40,47 @@ export const billingMutationService = {
             'This operation failed. Refresh and explicitly review a new request.',
             409,
           );
-        if (existing.result) return { replay: existing.result };
+        if (existing.result) {
+          const providerId = existing.result.razorpaySubscriptionId;
+          if (
+            typeof providerId === 'string' &&
+            (await repository.checkoutWasSuperseded(providerId))
+          )
+            throw new AppError(
+              'operation_superseded',
+              'This checkout was replaced. Review a new selection.',
+              409,
+            );
+          return { replay: existing.result };
+        }
         throw new AppError(
           'reconciliation_pending',
           'This request is still being reconciled. Refresh billing before continuing.',
           409,
         );
       }
-      if (await repository.findOpenOperation(org))
+      if (
+        currentReplacement?.status === 'checkout' &&
+        kind === 'change_plan' &&
+        currentReplacement.targetTier === params.targetTier &&
+        currentReplacement.expiresAt.getTime() > Date.now()
+      ) {
+        await validateBillingPreview(caller, params, repository);
+        return {
+          replay: {
+            operationId: currentReplacement.id,
+            outcome: 'processing' as const,
+            targetTier: currentReplacement.targetTier,
+            effectiveAt: currentReplacement.periodEnd.toISOString(),
+            razorpaySubscriptionId: currentReplacement.replacementSubscriptionId ?? '',
+          },
+        };
+      }
+      const openOperation = await repository.findOpenOperation(org);
+      if (
+        openOperation &&
+        (!currentReplacement || openOperation.operationId !== currentReplacement.id)
+      )
         throw new AppError(
           'reconciliation_pending',
           'An earlier billing request must be reconciled before continuing.',
@@ -70,6 +93,13 @@ export const billingMutationService = {
           'Review the available recovery action before continuing.',
           409,
         );
+      if (currentReplacement && !(kind === 'cancel' && currentReplacement.status === 'confirmed')) {
+        if (!(await canSupersedeReplacement(currentReplacement)))
+          throw AppError.conflict(
+            'Payment is already in progress. Refresh billing before continuing.',
+          );
+        await repository.supersedeReplacement(currentReplacement);
+      }
       await repository.insertOperation({
         organizationId: org,
         operationId: params.operationId,
@@ -90,7 +120,7 @@ export const billingMutationService = {
         kind === 'subscribe'
           ? await subscribeService.createSubscription(caller, params)
           : kind === 'cancel'
-            ? replacement
+            ? replacement?.status === 'confirmed'
               ? await cancelReplacementRenewal(org)
               : await subscribeService.cancelSubscription(caller, params)
             : await startReplacement(caller, params.operationId, reserved.preview!);

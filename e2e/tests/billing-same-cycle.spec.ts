@@ -43,7 +43,7 @@ for (const scenario of [
           `${webUrl}/designer/plan-billing/subscribe/closed?plan=${scenario.source}`,
         );
         await expect(
-          page.getByRole('button', { name: 'Continue checkout', exact: true }),
+          page.getByRole('link', { name: 'Choose your plan', exact: true }),
         ).toBeVisible();
         const purchase = await owner.subscription();
         expect(purchase?.planTier).toBe('hobby');

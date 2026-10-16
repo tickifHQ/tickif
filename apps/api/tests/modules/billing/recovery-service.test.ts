@@ -60,6 +60,45 @@ const row = {
   updatedAt: new Date('2026-01-01'),
 };
 describe('durable recovery', () => {
+  it('releases an abandoned unauthenticated recovery checkout for a new plan review', async () => {
+    mocks.findRecovery.mockResolvedValue({ ...row, status: 'checkout_pending' });
+    mocks.find.mockResolvedValue({
+      razorpaySubscriptionId: 'sub_new',
+      planTier: 'hobby',
+      subscriptionState: 'active',
+    });
+    mocks.fetch
+      .mockResolvedValueOnce({ id: 'sub_new', status: 'created', plan_id: 'plan_corporate' })
+      .mockResolvedValueOnce({ id: 'sub_old', status: 'cancelled' });
+    mocks.resolveTier.mockReturnValue('corporate');
+    mocks.updateRecovery.mockResolvedValue({ ...row, status: 'eligible', revision: 2 });
+    expect((await recoveryService.get(caller)).recovery?.status).toBe('eligible');
+    expect(mocks.updateRecovery).toHaveBeenCalledWith('org', row.id, 1, {
+      status: 'eligible',
+      eligibleAt: null,
+      reason: 'source_subscription_terminated',
+    });
+    expect(mocks.cancel).not.toHaveBeenCalled();
+  });
+
+  it.each(['authenticated', 'active'])(
+    'does not release a recovery checkout with provider status %s',
+    async (status) => {
+      mocks.findRecovery.mockResolvedValue({ ...row, status: 'checkout_pending' });
+      mocks.find.mockResolvedValue({
+        razorpaySubscriptionId: 'sub_new',
+        planTier: 'hobby',
+        subscriptionState: 'active',
+      });
+      mocks.fetch
+        .mockResolvedValueOnce({ id: 'sub_new', status, plan_id: 'plan_corporate' })
+        .mockResolvedValueOnce({ id: 'sub_old', status: 'cancelled' });
+      mocks.resolveTier.mockReturnValue('corporate');
+      expect((await recoveryService.get(caller)).recovery?.status).toBe('checkout_pending');
+      expect(mocks.updateRecovery).not.toHaveBeenCalled();
+    },
+  );
+
   it('acknowledges cancellation without an echoed request flag and retains it on reads', async () => {
     mocks.findRecovery.mockResolvedValueOnce(undefined).mockResolvedValue(row);
     mocks.find.mockResolvedValue({
@@ -320,6 +359,58 @@ describe('durable recovery', () => {
       expect.objectContaining({ status: 'scheduled', sourceSubscriptionId: 'sub_old' }),
     );
   });
+  it('changes a saved target after an abandoned created recovery checkout', async () => {
+    mocks.findRecovery.mockResolvedValue({ ...row, status: 'eligible' });
+    mocks.validate.mockResolvedValue({
+      preview: { action: 'subscribe', sourceSubscriptionId: 'sub_unpaid' },
+      revision: 'state',
+    });
+    mocks.fetch.mockImplementation(async (id: string) => ({
+      id,
+      status: id === 'sub_unpaid' ? 'created' : 'cancelled',
+    }));
+    mocks.updateRecovery.mockResolvedValue({
+      ...row,
+      status: 'eligible',
+      targetTier: 'professional_plus',
+      revision: 2,
+    });
+    const result = await recoveryService.save(caller, {
+      ...input,
+      targetTier: 'professional_plus',
+      expectedRecoveryId: row.id,
+      expectedRevision: 1,
+    });
+    expect(result.recovery).toMatchObject({ status: 'eligible', targetTier: 'professional_plus' });
+    expect(mocks.fetch).toHaveBeenCalledWith('sub_unpaid');
+    expect(mocks.fetch).toHaveBeenCalledWith('sub_old');
+    expect(mocks.cancel).not.toHaveBeenCalled();
+  });
+
+  it.each(['authenticated', 'active'])(
+    'protects a saved target when a newer checkout is %s',
+    async (status) => {
+      mocks.findRecovery.mockResolvedValue({ ...row, status: 'eligible' });
+      mocks.validate.mockResolvedValue({
+        preview: { action: 'subscribe', sourceSubscriptionId: 'sub_new' },
+        revision: 'state',
+      });
+      mocks.fetch.mockImplementation(async (id: string) => ({
+        id,
+        status: id === 'sub_new' ? status : 'cancelled',
+      }));
+      await expect(
+        recoveryService.save(caller, {
+          ...input,
+          targetTier: 'professional_plus',
+          expectedRecoveryId: row.id,
+          expectedRevision: 1,
+        }),
+      ).rejects.toMatchObject({ code: 'recovery_revision_conflict' });
+      expect(mocks.updateRecovery).not.toHaveBeenCalled();
+      expect(mocks.cancel).not.toHaveBeenCalled();
+    },
+  );
   it('rejects saved eligibility when original provider mandate is still live', async () => {
     mocks.findRecovery.mockResolvedValue({ ...row, status: 'eligible' });
     mocks.validate.mockResolvedValue({

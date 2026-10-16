@@ -5,12 +5,15 @@ import { resolveEntitlements } from '@repo/contracts';
 import type { BillingState } from '../../src/lib/billing-types';
 
 const apiMocks = vi.hoisted(() => ({
+  push: vi.fn(),
   selection: vi.fn(),
   refresh: vi.fn(),
   getSubscription: vi.fn(),
   paymentMethod: vi.fn(),
   payments: vi.fn(),
 }));
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: apiMocks.push }) }));
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -172,39 +175,24 @@ describe('DesignerPlanBilling', () => {
     expect(screen.getByText('Plan & Billing')).toBeInTheDocument();
   });
 
-  it('automatically reconciles pending activation without losing the open checkout or selected target', async () => {
-    sessionStorage.clear();
-    let active = false;
-    const snapshot = () => ({
-      tier: active ? 'corporate' : 'hobby',
-      lifecycleState: 'active',
-      preLapseTier: null,
-      razorpayStatus: active ? 'active' : 'authenticated',
-      currentPeriodEnd: null,
-      cancellationScheduled: false,
-      seatUsage: 1,
-      branchUsage: 1,
-      graceDaysRemaining: null,
-      lockedDaysRemaining: null,
-      frozenResources: [],
-      entitlements: resolveEntitlements(active ? 'corporate' : 'hobby', 'active'),
-    });
-    apiMocks.getSubscription.mockImplementation(async () => Response.json(snapshot()));
-    apiMocks.selection.mockImplementation(async () =>
+  it('restores upgrade entry points for an unpaid checkout and opens their subpage', async () => {
+    apiMocks.selection.mockResolvedValue(
       Response.json({
         organizationId: 'org-auto',
-        currentTier: active ? 'corporate' : 'hobby',
+        currentTier: 'hobby',
         sourceSubscriptionId: 'sub_pending',
         providerState: 'known',
-        unfinishedCheckout: active
-          ? null
-          : { targetTier: 'corporate', status: 'created', razorpaySubscriptionId: 'sub_pending' },
+        unfinishedCheckout: {
+          targetTier: 'corporate',
+          status: 'created',
+          razorpaySubscriptionId: 'sub_pending',
+        },
         recovery: null,
         pendingOperation: null,
         scheduledChange: null,
-        actions: ['hobby', 'professional_plus', 'corporate'].map((targetTier) => ({
+        actions: ['professional_plus', 'corporate'].map((targetTier) => ({
           targetTier,
-          action: targetTier === (active ? 'corporate' : 'hobby') ? 'current' : 'subscribe',
+          action: 'subscribe',
           reason: null,
           effectiveAt: null,
         })),
@@ -217,38 +205,12 @@ describe('DesignerPlanBilling', () => {
         billing={makeBilling({ tier: 'hobby', billing: null })}
       />,
     );
-    await screen.findByText('Corporate checkout is awaiting completion.');
-    expect(screen.queryByText('Checkout in progress')).not.toBeInTheDocument();
-    expect(screen.queryByRole('status', { name: 'Billing status' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /refresh|check status/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Continue checkout' }));
-    const dialog = screen.getByRole('dialog');
-    let finish: ((value: Response) => void) | undefined;
-    apiMocks.getSubscription.mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          finish = resolve;
-        }),
+    await userEvent.click(await screen.findByRole('button', { name: 'Upgrade to Professional+' }));
+    expect(apiMocks.push).toHaveBeenCalledWith(
+      '/designer/plan-billing/subscribe?tier=professional_plus',
     );
-    fireEvent(window, new Event('focus'));
-    await waitFor(() => expect(finish).toBeDefined());
-    expect(screen.getByRole('dialog')).toBe(dialog);
-    expect(dialog).toHaveTextContent('corporate');
-    expect(sessionStorage.getItem('tickif:billing-selection:v1:user-auto:org-auto')).toBe(
-      'corporate',
-    );
-    active = true;
-    await act(async () => {
-      finish?.(Response.json(snapshot()));
-    });
-    await waitFor(() =>
-      expect(
-        screen.queryByText('Corporate checkout is awaiting completion.'),
-      ).not.toBeInTheDocument(),
-    );
-    expect(screen.getByRole('heading', { name: 'Corporate', level: 2 })).toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: 'Compare plan features' })).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(screen.queryByRole('button', { name: 'Continue checkout' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('links an authenticated checkout to its confirmation page within the current-plan card', async () => {
@@ -278,7 +240,7 @@ describe('DesignerPlanBilling', () => {
     expect(screen.queryByRole('status', { name: 'Billing status' })).not.toBeInTheDocument();
   });
 
-  it('resumes the unpaid replacement order from the current-plan card', async () => {
+  it('opens upgrade options for an unpaid replacement order', async () => {
     apiMocks.selection.mockResolvedValue(
       Response.json({
         organizationId: 'org',
@@ -300,9 +262,9 @@ describe('DesignerPlanBilling', () => {
       }),
     );
     render(<DesignerPlanBilling billing={makeBilling()} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Continue checkout' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
-    expect(screen.getByText('Corporate checkout is awaiting completion.')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Upgrade to Corporate' }));
+    expect(apiMocks.push).toHaveBeenCalledWith('/designer/plan-billing/subscribe?tier=corporate');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   describe('active state', () => {
@@ -459,7 +421,10 @@ describe('DesignerPlanBilling', () => {
       const cta = await screen.findByRole('button', { name: 'Reactivate Subscription' });
       expect(cta).toBeEnabled();
       await user.click(cta);
-      expect(screen.getByRole('dialog')).toHaveTextContent('professional_plus');
+      expect(apiMocks.push).toHaveBeenCalledWith(
+        '/designer/plan-billing/subscribe?tier=professional_plus',
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 
@@ -508,7 +473,8 @@ describe('DesignerPlanBilling', () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={downgradedBilling} />);
       await user.click((await screen.findAllByRole('button', { name: 'Upgrade to Restore' }))[0]!);
-      expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
+      expect(apiMocks.push).toHaveBeenCalledWith('/designer/plan-billing/subscribe?tier=corporate');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 

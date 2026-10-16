@@ -2,7 +2,9 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type * as Billing from '@repo/billing';
 vi.mock('@repo/billing', async (original) => ({
   ...(await original<typeof Billing>()),
-  replacementRepository: { current: vi.fn().mockResolvedValue(undefined) },
+  replacementRepository: { current: mocks.replacement },
+  replacementProvider: { subscription: mocks.mandate, payments: mocks.payments },
+  reconcileReplacement: vi.fn(),
 }));
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -12,7 +14,11 @@ const mocks = vi.hoisted(() => ({
   recovery: vi.fn(),
   pending: vi.fn(),
   updateOperation: vi.fn(),
+  replacement: vi.fn(),
+  mandate: vi.fn(),
+  payments: vi.fn(),
 }));
+vi.mock('../../../src/lib/redis.js', () => ({ invalidateEntitlementCache: vi.fn() }));
 vi.mock('@repo/config', () => ({
   config: {
     BETTER_AUTH_SECRET: 'test-secret-long-enough',
@@ -194,6 +200,102 @@ describe('billing selection and signed consent', () => {
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(mocks.plan).not.toHaveBeenCalled();
+  });
+  const checkout = {
+    id: operationId,
+    status: 'checkout',
+    targetTier: 'corporate',
+    sourceTier: 'professional_plus',
+    sourceSubscriptionId: 'rzp1',
+    targetPlanId: 'plan_corp',
+    replacementSubscriptionId: 'rzp_next',
+    orderId: 'order_next',
+    periodEnd: new Date('2026-10-01T00:00:00Z'),
+    createdAt: new Date('2026-09-22T00:00:00Z'),
+    expiresAt: new Date('2026-09-24T00:00:00Z'),
+    amount: 150000,
+    recurringAmount: 799900,
+    currency: 'INR',
+  };
+  it('allows other source-plan actions after an unpaid replacement checkout closes', async () => {
+    mocks.find.mockResolvedValue(active);
+    mocks.fetch.mockResolvedValue(remote);
+    mocks.replacement.mockResolvedValue(checkout);
+    mocks.mandate.mockResolvedValue({ status: 'created', plan_id: 'plan_corp' });
+    mocks.payments.mockResolvedValue([]);
+    mocks.pending.mockResolvedValue({ operationId, kind: 'change_plan', status: 'processing' });
+    const context = await billingSelectionService.context(caller);
+    expect(context.pendingOperation).toBeNull();
+    expect(context.actions.find((x) => x.targetTier === 'hobby')?.action).toBe('cancel');
+    expect(await billingSelectionService.preview(caller, { targetTier: 'hobby' })).toMatchObject({
+      action: 'cancel',
+      confirmationAllowed: true,
+    });
+  });
+  it('reviews the original order amount when resuming the same upgrade later', async () => {
+    mocks.find.mockResolvedValue(active);
+    mocks.replacement.mockResolvedValue(checkout);
+    expect(
+      await billingSelectionService.preview(caller, { targetTier: 'corporate' }),
+    ).toMatchObject({ adjustmentAmount: 150000, confirmationAllowed: true });
+    expect(mocks.plan).not.toHaveBeenCalled();
+  });
+  it('quotes a fresh checkout after an unpaid replacement expires', async () => {
+    mocks.find.mockResolvedValue(active);
+    mocks.fetch.mockResolvedValue(remote);
+    mocks.replacement.mockResolvedValue({
+      ...checkout,
+      expiresAt: new Date('2026-09-22T00:00:00Z'),
+    });
+    mocks.mandate.mockResolvedValue({ status: 'created', plan_id: 'plan_corp' });
+    mocks.payments.mockResolvedValue([]);
+    expect(
+      await billingSelectionService.preview(caller, { targetTier: 'corporate' }),
+    ).toMatchObject({ action: 'change_plan', adjustmentAmount: 133333, confirmationAllowed: true });
+  });
+  it.each(['authenticated', 'active'])(
+    'protects a replacement with an %s mandate',
+    async (status) => {
+      mocks.find.mockResolvedValue(active);
+      mocks.replacement.mockResolvedValue(checkout);
+      mocks.mandate.mockResolvedValue({ status, plan_id: 'plan_corp' });
+      expect(await billingSelectionService.preview(caller, { targetTier: 'hobby' })).toMatchObject({
+        action: 'blocked',
+        confirmationAllowed: false,
+      });
+    },
+  );
+  it('protects a replacement with an authorized adjustment payment', async () => {
+    mocks.find.mockResolvedValue(active);
+    mocks.replacement.mockResolvedValue(checkout);
+    mocks.mandate.mockResolvedValue({ status: 'created', plan_id: 'plan_corp' });
+    mocks.payments.mockResolvedValue([{ status: 'authorized' }]);
+    expect(await billingSelectionService.preview(caller, { targetTier: 'hobby' })).toMatchObject({
+      action: 'blocked',
+      confirmationAllowed: false,
+    });
+  });
+  it('offers every paid plan again after an unauthenticated checkout is abandoned', async () => {
+    mocks.find.mockResolvedValue({ ...active, planTier: 'hobby' });
+    mocks.fetch.mockResolvedValue({ ...remote, status: 'created', plan_id: 'plan_corp' });
+    const context = await billingSelectionService.context(caller);
+    expect(context.actions.map(({ targetTier, action }) => [targetTier, action])).toEqual([
+      ['hobby', 'current'],
+      ['professional_plus', 'subscribe'],
+      ['corporate', 'subscribe'],
+    ]);
+    expect(
+      await billingSelectionService.preview(caller, { targetTier: 'professional_plus' }),
+    ).toMatchObject({ action: 'subscribe', confirmationAllowed: true });
+  });
+  it('keeps authorization pending protected even when local checkout still says created', async () => {
+    mocks.find.mockResolvedValue({ ...active, planTier: 'hobby', razorpayStatus: 'created' });
+    mocks.fetch.mockResolvedValue({ ...remote, status: 'authenticated' });
+    expect(
+      (await billingSelectionService.context(caller)).actions.every(
+        (action) => action.action === 'blocked' && action.reason === 'activation_pending',
+      ),
+    ).toBe(true);
   });
   it('reconciles a lost cancellation after a terminal webhook cleared the local ID', async () => {
     mocks.find.mockResolvedValue({ ...active, planTier: 'hobby', razorpaySubscriptionId: null });

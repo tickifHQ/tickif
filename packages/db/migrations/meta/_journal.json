@@ -596,6 +596,13 @@
       "when": 1792150304715,
       "tag": "0086_married_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1792182328037,
+      "tag": "0087_tearful_logan",
+      "breakpoints": true
     }
   ]
 }
