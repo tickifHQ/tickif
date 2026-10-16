@@ -140,7 +140,9 @@ function CurrentPlanCard({
                   {tierLabel}
                 </h2>
                 {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
-                  <Badge variant="soft">Free</Badge>
+                  <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                    Free
+                  </Badge>
                 )}
                 {billing.lifecycle === 'locked' && <Badge variant="destructive">Locked</Badge>}
                 {billing.lifecycle === 'downgraded' && <Badge variant="warning">Downgraded</Badge>}
@@ -268,7 +270,7 @@ function UsageMetricCard({
     <div className="min-w-0">
       <div className="p-5 sm:px-6">
         <div className="flex items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Icon className="size-4" />
           </span>
           <div>
@@ -633,7 +635,7 @@ function PlanIncludesCard({
                   className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
                     suspended
                       ? 'bg-muted text-muted-foreground'
-                      : 'bg-primary-soft text-primary-soft-foreground'
+                      : 'bg-primary/10 text-primary'
                   }`}
                 >
                   <Icon className="size-4" />

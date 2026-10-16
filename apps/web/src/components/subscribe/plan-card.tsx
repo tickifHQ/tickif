@@ -56,8 +56,16 @@ export function PlanCard({
           <CardTitle className="font-sans text-base leading-6 font-medium tracking-normal">
             <h3 className="font-sans font-medium tracking-normal">{plan.label}</h3>
           </CardTitle>
-          {isCurrent ? <Badge variant="soft">Current plan</Badge> : null}
-          {isSelected && !isCurrent ? <Badge variant="outline">Selected plan</Badge> : null}
+          {isCurrent ? (
+            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+              Current plan
+            </Badge>
+          ) : null}
+          {isSelected && !isCurrent ? (
+            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+              Selected plan
+            </Badge>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-baseline gap-1">
           <span className="text-2xl font-semibold tracking-tight">
