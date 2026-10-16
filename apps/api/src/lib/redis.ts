@@ -16,6 +16,22 @@ import { log } from './logger.js';
 let client: Redis | null = null;
 let connectionFailed = false;
 
+/** Shared hard budget for paid reverse geocoding; outages fail closed. No location data in keys. */
+export async function consumeNearbyLookupBudget(): Promise<boolean> {
+  const redis = getClient();
+  if (!redis) return false;
+  try {
+    const count = await redis.eval(
+      "local n = redis.call('INCR', KEYS[1]); if n == 1 then redis.call('EXPIRE', KEYS[1], 60) end; return n",
+      1,
+      'nearby:lookup-budget',
+    );
+    return typeof count === 'number' && count <= 30;
+  } catch {
+    return false;
+  }
+}
+
 function getClient(): Redis | null {
   if (connectionFailed) return null;
   if (client) return client;
@@ -67,10 +83,7 @@ export async function getCachedEntitlement(organizationId: string): Promise<stri
 /**
  * Set a cached entitlement value with the standard TTL.
  */
-export async function setCachedEntitlement(
-  organizationId: string,
-  value: string,
-): Promise<void> {
+export async function setCachedEntitlement(organizationId: string, value: string): Promise<void> {
   const redis = getClient();
   if (!redis) return;
   try {

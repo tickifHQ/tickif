@@ -21,8 +21,9 @@ import {
 } from '@repo/search';
 import { db, schema, eq, and, asc, desc, gt, isNotNull, isNull, inArray, or, sql } from '@repo/db';
 import { exists, ilike } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { log } from '../../lib/logger.js';
-import type { Derivative } from '@repo/contracts';
+import type { Derivative, SuggestFilter } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
   PROJECT_MAX_FACET_VALUES,
@@ -86,12 +87,7 @@ export interface MultiSearchResult {
   processingTimeMs: number;
 }
 
-export interface FilterSuggestion {
-  kind: 'style' | 'space' | 'material' | 'tag';
-  filterKey: 'theme' | 'room' | 'material' | 'tag';
-  slug: string;
-  label: string;
-}
+export type FilterSuggestion = SuggestFilter;
 
 export interface RecentProject {
   id: string;
@@ -426,9 +422,14 @@ export async function findFilterSuggestions(q: string): Promise<FilterSuggestion
         sql`${schema.projectImage.materialSlugs} ? ${schema.taxonomy.slug}`,
       ),
     );
-  const [terms, tagResult] = await Promise.all([
+  const parentCity = alias(schema.taxonomy, 'suggestion_parent_city');
+  const [terms, tagResult, locations] = await Promise.all([
     db
-      .select({ kind: schema.taxonomy.kind, slug: schema.taxonomy.slug, label: schema.taxonomy.label })
+      .select({
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+      })
       .from(schema.taxonomy)
       .where(
         and(
@@ -460,6 +461,35 @@ export async function findFilterSuggestions(q: string): Promise<FilterSuggestion
       order by tag.slug
       limit 6
     `),
+    db
+      .select({
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        citySlug: parentCity.slug,
+        cityLabel: parentCity.label,
+      })
+      .from(schema.taxonomy)
+      .leftJoin(
+        parentCity,
+        and(
+          eq(schema.taxonomy.parentId, parentCity.id),
+          eq(parentCity.kind, 'city'),
+          eq(parentCity.isActive, true),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.taxonomy.isActive, true),
+          or(
+            eq(schema.taxonomy.kind, 'city'),
+            and(eq(schema.taxonomy.kind, 'locality'), isNotNull(parentCity.id)),
+          ),
+          or(ilike(schema.taxonomy.label, pattern), ilike(schema.taxonomy.slug, pattern)),
+        ),
+      )
+      .orderBy(asc(schema.taxonomy.label), asc(parentCity.label))
+      .limit(6),
   ]);
 
   const kindMap = {
@@ -481,7 +511,18 @@ export async function findFilterSuggestions(q: string): Promise<FilterSuggestion
       .join(' '),
   }));
 
-  return [...taxonomySuggestions, ...tagSuggestions].slice(0, 12);
+  const locationSuggestions: FilterSuggestion[] = locations.map((term) =>
+    term.kind === 'city'
+      ? { kind: 'city', filterKey: 'city', slug: term.slug, label: term.label }
+      : {
+          kind: 'area',
+          filterKey: 'locality',
+          slug: term.slug,
+          label: `${term.label}, ${term.cityLabel}`,
+          citySlug: term.citySlug!,
+        },
+  );
+  return [...locationSuggestions, ...taxonomySuggestions, ...tagSuggestions].slice(0, 12);
 }
 
 /**

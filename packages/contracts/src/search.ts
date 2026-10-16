@@ -225,10 +225,15 @@ export type SuggestDesigner = z.infer<typeof suggestDesignerSchema>;
 
 export const suggestFilterSchema = z
   .object({
-    kind: z.enum(['style', 'space', 'material', 'tag']),
-    filterKey: z.enum(['theme', 'room', 'material', 'tag']),
+    kind: z.enum(['style', 'space', 'material', 'tag', 'city', 'area']),
+    filterKey: z.enum(['theme', 'room', 'material', 'tag', 'city', 'locality']),
     slug: facetValue,
-    label: z.string().trim().min(1).max(120),
+    label: z.string().trim().min(1).max(220),
+    citySlug: facetValue.optional(),
+  })
+  .refine((value) => value.filterKey !== 'locality' || Boolean(value.citySlug), {
+    message: 'Area suggestions must include their city.',
+    path: ['citySlug'],
   })
   .meta({ id: 'SuggestFilter' });
 export type SuggestFilter = z.infer<typeof suggestFilterSchema>;

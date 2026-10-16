@@ -56,6 +56,38 @@ const suggestions = {
 };
 
 describe('HomeSearchBar', () => {
+  it.each([
+    { kind: 'city', filterKey: 'city', slug: 'vapi', label: 'Vapi' },
+    {
+      kind: 'area',
+      filterKey: 'locality',
+      slug: 'gunjan',
+      label: 'Gunjan, Vapi',
+      citySlug: 'vapi',
+    },
+  ])('applies a saved $kind suggestion with the correct city context', async (filter) => {
+    mock.params = new URLSearchParams('city=mumbai&locality=bandra&room=kitchen&page=3');
+    mock.suggestGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({ projects: [], designers: [], filters: [filter], processingTimeMs: 1 }),
+    });
+    render(<HomeSearchBar />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: filter.label } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${filter.label}, ${filter.kind === 'city' ? 'City' : 'Area'}`,
+      }),
+    );
+    const url = new URL(mock.push.mock.calls[0]![0], 'http://localhost');
+    expect(url.searchParams.get('city')).toBe('vapi');
+    expect(url.searchParams.get('locality')).toBe(filter.kind === 'area' ? 'gunjan' : null);
+    expect(url.searchParams.get('room')).toBe('kitchen');
+    expect(url.searchParams.has('q')).toBe(false);
+    expect(url.searchParams.has('page')).toBe(false);
+  });
   it.each(['header', 'hero'] as const)(
     'uses Lucide controls in the %s search presentation',
     (variant) => {
@@ -148,7 +180,7 @@ describe('HomeSearchBar', () => {
     );
     expect(mock.taxonomyGet).toHaveBeenCalledWith(
       { query: { kind: 'city' } },
-      { init: { signal: expect.any(AbortSignal) } },
+      { init: { signal: expect.any(AbortSignal), cache: 'no-store' } },
     );
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     const input = screen.getByRole('searchbox');
@@ -175,7 +207,7 @@ describe('HomeSearchBar', () => {
     expect(screen.getByRole('button', { name: 'Kitchen, Space' })).toBeInTheDocument();
     expect(mock.suggestGet).toHaveBeenCalledWith(
       { query: { q: 'kitchen' } },
-      { init: { signal: expect.any(AbortSignal) } },
+      { init: { signal: expect.any(AbortSignal), cache: 'no-store' } },
     );
     expect(screen.getByRole('group', { name: 'Search suggestions' })).toBeInTheDocument();
     expect(input).not.toHaveAttribute('aria-autocomplete');
