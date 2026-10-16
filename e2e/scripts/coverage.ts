@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'admin-visibility.spec.ts',
+    'admin lead visibility and company reporting retain filters through drill-down without changing enquiry milestones',
+  ],
+  [
     'visitor-following-enquiries.spec.ts',
     'visitor follows a studio and sees real viewed and messaged enquiry milestones',
   ],

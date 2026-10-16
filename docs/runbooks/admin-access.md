@@ -9,6 +9,16 @@ identify the operator, and take a current database backup before changing produc
 
 ## Bootstrap the first superadmin
 
+For ordinary admin visibility, open `/admin/leads` for the pipeline and full
+lead records, or `/admin/analytics` for company/designer drill-down and cohort
+reporting. Choose paired India calendar dates and a company; company selection
+supports name search and pagination. Access is read-only and includes private
+contact details, notes and messages. Do not copy these into logs or public
+support tickets. Admin inspection never marks a lead viewed or contacted.
+See [admin visibility architecture](../architecture/admin-visibility.md) for
+rate definitions and retained-event limitations. Consultation scheduling remains
+disabled/deferred.
+
 ### Automatic provisioning
 
 Set `SYSTEM_ADMIN_EMAIL` to provision an active `superadmin` before the API starts

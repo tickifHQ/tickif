@@ -177,6 +177,14 @@ pnpm test:e2e
 Screenshots, videos and traces belong in ignored `test-results/` directories and
 CI artifacts. Keep only deliberately referenced documentation images in Git.
 
+## Admin visibility coverage
+
+Focused coverage lives in `apps/api/tests/modules/admin-visibility/` and
+`apps/web/tests/components/admin-visibility.test.tsx`. The browser journey is
+`e2e/tests/admin-visibility.spec.ts`; run it with `CONSULTATIONS_ENABLED=false`
+to verify lead inspection and company/designer reporting while scheduling stays
+disabled. Use separate worktree test DBs, Redis targets and Typesense prefixes.
+
 ## Conventions
 
 - AAA (arrange-act-assert); test **behavior, not implementation**.

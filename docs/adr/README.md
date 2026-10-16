@@ -36,6 +36,13 @@ For later media settings and regeneration, also read
 [media architecture](../architecture/media-pipeline.md) and its
 [runbook](../runbooks/media-pipeline.md).
 
+## Admin visibility
+
+[0016: Admin lead visibility and cohort reporting](./0016-admin-lead-visibility-and-cohort-reporting.md)
+is accepted (2026-10-17). It defines read-only platform-admin access to full lead
+data and company/designer analytics, with India-date submission cohorts and
+explicit response/progression definitions. Consultation scheduling stays deferred.
+
 ## Recording decisions
 
 Create an ADR whenever implementation takes a major deviation from an agreed

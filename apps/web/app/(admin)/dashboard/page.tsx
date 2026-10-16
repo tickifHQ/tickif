@@ -146,6 +146,21 @@ export default async function AdminDashboardPage() {
         </p>
       </header>
 
+      <section aria-label="Lead and company visibility" className="grid gap-4 sm:grid-cols-2">
+        <Link href="/admin/leads" className="rounded-xl border bg-card p-5 hover:bg-accent">
+          <h2 className="font-display text-xl font-semibold">Leads and pipeline →</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Inspect all lead details, assignment, notes and studio responses.
+          </p>
+        </Link>
+        <Link href="/admin/analytics" className="rounded-xl border bg-card p-5 hover:bg-accent">
+          <h2 className="font-display text-xl font-semibold">Company and designer analytics →</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Filter enquiry response and conversion reporting by date and company.
+          </p>
+        </Link>
+      </section>
+
       {summary ? (
         <AdminPlatformSummary summary={summary} />
       ) : (

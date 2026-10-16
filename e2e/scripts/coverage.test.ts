@@ -33,6 +33,13 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires private admin lead and reporting visibility without omissions or skips', () => {
+    const title =
+      'admin lead visibility and company reporting retain filters through drill-down without changing enquiry milestones';
+    expect(requiredTests).toContainEqual({ file: 'admin-visibility.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+    expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+  });
   it('requires every login viewport regression without omissions or skips', () => {
     for (const width of [300, 320, 375, 390, 1440]) {
       const title = `login tabs and actions fit at ${width} wide`;

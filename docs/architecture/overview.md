@@ -152,3 +152,7 @@ and the [billing staging checks](../runbooks/billing-staging-smoke.md).
 Consultation scheduling remains disabled by default even though booking code and
 tests exist. [ADR 0003](../adr/0003-consultation-enquiries.md) establishes enquiries
 as the current public action. Read applicable ADRs before extending a domain.
+
+Platform admins have read-only [lead visibility and company analytics](./admin-visibility.md)
+with full lead details, paginated studio messages, designer drill-down and
+date/company-filtered enquiry response and pipeline progression reporting.
