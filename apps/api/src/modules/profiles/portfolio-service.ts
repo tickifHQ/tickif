@@ -133,6 +133,14 @@ export async function presignPortfolioHeroCover(
   return presignDownload({ key: portfolio.heroImageId });
 }
 
+export async function presignPortfolioCompanyPhoto(
+  profileId: string,
+  key: string | null | undefined,
+): Promise<string | null> {
+  if (!key?.startsWith(`originals/portfolio-covers/${profileId}/`)) return null;
+  return presignDownload({ key });
+}
+
 /** Presign the private untouched source used only by the owner-side crop editor. */
 export async function presignProfileLogoSource(
   profile: DesignerProfileRecord,
@@ -295,6 +303,10 @@ async function buildPortfolioResponse(
     showHero: portfolio.showHero,
     showTrustCredentials: portfolio.showTrustCredentials,
     showFeaturedTestimonial: portfolio.showFeaturedTestimonial,
+    showAboutCompany: portfolio.showAboutCompany ?? true,
+    aboutCompany: portfolio.aboutCompany ?? null,
+    founderPhotoUrl: await presignPortfolioCompanyPhoto(profile.id, portfolio.founderImageId),
+    studioPhotoUrl: await presignPortfolioCompanyPhoto(profile.id, portfolio.studioImageId),
     showReviews: portfolio.showTickifReviews || portfolio.showGoogleReviews,
     showSocialLinks: portfolio.showSocialLinks,
     showShareBlock: portfolio.showShareBlock,
@@ -449,6 +461,10 @@ export const portfolioService = {
 
       // Build portfolio update payload
       const portfolioPatch: Record<string, unknown> = {};
+      if (portfolioFields.showAboutCompany !== undefined)
+        portfolioPatch.showAboutCompany = portfolioFields.showAboutCompany;
+      if (portfolioFields.aboutCompany !== undefined)
+        portfolioPatch.aboutCompany = portfolioFields.aboutCompany;
       if (portfolioFields.publicLinkEnabled !== undefined)
         portfolioPatch.publicLinkEnabled = portfolioFields.publicLinkEnabled;
       if (portfolioFields.portfolioSlug !== undefined)
@@ -610,7 +626,7 @@ export const portfolioService = {
 
   /** Mint a presigned upload URL for the dedicated portfolio Hero cover. */
   async createHeroCoverUploadUrl(
-    input: { contentType: string; contentLength: number },
+    input: { contentType: string; contentLength: number; target?: 'hero' | 'founder' | 'studio' },
     caller: Caller,
   ): Promise<{ uploadUrl: string; key: string }> {
     const profile = await resolveProfile(caller);
@@ -645,7 +661,7 @@ export const portfolioService = {
 
   /** Confirm and atomically associate a dedicated portfolio Hero cover. */
   async commitHeroCoverUpload(
-    input: { objectKey: string },
+    input: { objectKey: string; target?: 'hero' | 'founder' | 'studio' },
     caller: Caller,
   ): Promise<{ heroCoverUrl: string }> {
     const profile = await resolveProfile(caller);
@@ -658,6 +674,29 @@ export const portfolioService = {
     }
 
     let portfolio = await portfolioRepository.findOrCreate(profile.id);
+    if (input.target === 'founder' || input.target === 'studio') {
+      const field = input.target === 'founder' ? 'founderImageId' : 'studioImageId';
+      const previous = portfolio[field];
+      if (
+        !(await portfolioRepository.setCompanyImageIfMatch(
+          profile.id,
+          field,
+          previous,
+          input.objectKey,
+        ))
+      ) {
+        throw AppError.conflict('Company photo was modified concurrently, please retry');
+      }
+      emitAuditEvent({
+        userId: caller.userId,
+        activeOrgId: caller.activeOrgId!,
+        action: 'portfolio.updated',
+        timestamp: new Date().toISOString(),
+        resourceId: profile.id,
+        changedFields: [field],
+      });
+      return { heroCoverUrl: await presignDownload({ key: input.objectKey }) };
+    }
     const previousKey = portfolio.heroImageId;
     let updated = await portfolioRepository.setHeroImageIfMatch(
       profile.id,

@@ -16,6 +16,7 @@ import {
   computeBadges,
   getPortfolioPublicationState,
   presignPortfolioHeroCover,
+  presignPortfolioCompanyPhoto,
   presignProfileLogo,
   publicPortfolioSlug,
   publicPortfolioUrl,
@@ -140,6 +141,15 @@ export const publicPortfolioService = {
     }
 
     const sections = sectionsOf(portfolio);
+    const showAboutCompany =
+      (portfolio.showAboutCompany ?? true) &&
+      Boolean(portfolio.aboutCompany ? portfolio.aboutCompany.story.trim() : profile.bio?.trim());
+    const [founderPhotoUrl, studioPhotoUrl] = showAboutCompany
+      ? await Promise.all([
+          presignPortfolioCompanyPhoto(profile.id, portfolio.founderImageId),
+          presignPortfolioCompanyPhoto(profile.id, portfolio.studioImageId),
+        ])
+      : [null, null];
 
     const [
       logoUrl,
@@ -209,6 +219,9 @@ export const publicPortfolioService = {
 
     return {
       profileId: profile.id,
+      aboutCompany: showAboutCompany ? (portfolio.aboutCompany ?? null) : null,
+      founderPhotoUrl,
+      studioPhotoUrl,
       slug,
       canonicalUrl: publicPortfolioUrl(portfolio.portfolioSlug, orgSlug),
       displayName: profile.displayName,
@@ -224,7 +237,7 @@ export const publicPortfolioService = {
       accentColor: portfolio.accentColor,
       badges: sections.trustCredentials ? computeBadges(profile, isKycVerified) : [],
       isKycVerified,
-      sections,
+      sections: { ...sections, aboutCompany: showAboutCompany },
       stats: {
         tickif: tickifSettings.showOverallRating
           ? {

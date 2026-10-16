@@ -23,12 +23,36 @@ verification eligibility from completion data or a fallback summary.
 
 ## Sources and coverage
 
-Public portfolio client/studio notes display at most 60 whitespace-separated
-words, with an ellipsis for longer copy; saved testimonial content is preserved.
-The quote has a 192px desktop / 224px mobile height and fits its font from the
-responsive 44px / 28px maximum down to 16px when its container changes size or
-fonts load. Exceptional overflow remains scrollable at the readable minimum;
-the author stays outside the quote area.
+The public portfolio replaces its featured testimonial with **About the company**,
+following [the updated design](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=16335-132681).
+Company copy has separate storage and visibility; saved testimonials are preserved
+and never relabelled as company stories. The editor accepts an 80-character headline,
+450-character story, founder name/role, and optional services, styles, team and
+languages. Cities use the existing public service footprint. Empty facts are omitted.
+Legacy portfolios use their company bio until company copy is saved; an explicitly
+empty story hides the section. The editor prompts the owner when the story is empty.
+
+Desktop uses a two-column story/photo composition and a facts row. Tablet stacks
+the images and wraps facts. Mobile places imagery below the headline, uses a
+label/value facts list and offers Read more/Read less for overflowing four-line
+stories. Missing founder photos use initials; missing studio photos use the top
+published project cover. Founding-year stamps use the actual profile year.
+The existing reduced-motion behavior applies to the new content.
+
+Founder/studio photos use the existing authenticated portfolio cover upload/commit
+endpoints with a `target` of `founder` or `studio`; absent targets retain hero behavior.
+Company photo commits save immediately using compare-and-swap, while text/visibility
+use normal Save. Browser decoding/re-encoding strips photo metadata and bounds
+dimensions. Keys stay under the profile-owned `originals/portfolio-covers/` prefix,
+participating in upload leases and organization purge. Public signing validates
+ownership and section visibility. Migration: `0086_married_karnak.sql`.
+
+Manual checks: edit About the company at `/designer/portfolio`, Save, and open the
+public portfolio. Verify company content replaces the testimonial, empty facts are
+hidden, each photo upload preserves the Hero cover, and missing photos use the stated
+fallbacks. Check the 1512px desktop composition, 800px tablet stack and 375px mobile
+layout including Read more/Read less. Disable the section or clear its story and
+confirm it and the About navigation link disappear after saving.
 
 The [Figma desktop profile](https://www.figma.com/design/WJhOguDptAwt2735BS2WMG/tickif--DS-?node-id=15885-2549&m=dev)
 uses a 1512px canvas. A 390px mobile frame, `15885:4109`, exists on the same

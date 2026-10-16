@@ -589,6 +589,13 @@
       "when": 1791829481134,
       "tag": "0085_wild_the_order",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1792150304715,
+      "tag": "0086_married_karnak",
+      "breakpoints": true
     }
   ]
 }

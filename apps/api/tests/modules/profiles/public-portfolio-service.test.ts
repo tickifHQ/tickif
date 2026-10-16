@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DesignerProjectsResponse, GoogleReview } from '@repo/contracts';
 import type { PortfolioRecord } from '../../../src/modules/profiles/portfolio-repository.js';
+import { portfolioCompanyAboutSchema } from '@repo/contracts';
 import type { DesignerProfileRecord } from '../../../src/modules/profiles/repository.js';
 import type { GooglePlaceCacheRecord } from '../../../src/modules/profiles/google-repository.js';
 
@@ -98,6 +99,10 @@ const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfile
 });
 
 const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => ({
+  showAboutCompany: true,
+  aboutCompany: null,
+  founderImageId: null,
+  studioImageId: null,
   id: 'portfolio-1',
   profileId: 'profile-1',
   publicLinkEnabled: true,
@@ -200,6 +205,54 @@ beforeEach(() => {
 });
 
 describe('publicPortfolioService.getBySlug — visibility gate', () => {
+  it('withholds an explicitly empty company section instead of reviving the legacy bio', async () => {
+    resolveTo(
+      makeProfile({ bio: 'Legacy company bio' }),
+      makePortfolio({
+        aboutCompany: portfolioCompanyAboutSchema.parse({
+          story: '',
+          founderName: 'Private founder',
+        }),
+        founderImageId: 'originals/portfolio-covers/profile-1/founder',
+      }),
+    );
+    const result = await publicPortfolioService.getBySlug('test-studio');
+    expect(result.sections.aboutCompany).toBe(false);
+    expect(result.aboutCompany).toBeNull();
+    expect(result.founderPhotoUrl).toBeNull();
+  });
+  it('projects company information separately and signs only profile-owned company photos', async () => {
+    const aboutCompany = portfolioCompanyAboutSchema.parse({
+      headline: 'Our studio',
+      story: 'Our own story',
+    });
+    resolveTo(
+      makeProfile(),
+      makePortfolio({
+        aboutCompany,
+        founderImageId: 'originals/portfolio-covers/profile-1/founder',
+        studioImageId: 'originals/portfolio-covers/other/studio',
+      }),
+    );
+    const result = await publicPortfolioService.getBySlug('test-studio');
+    expect(result.aboutCompany).toEqual(aboutCompany);
+    expect(result.founderPhotoUrl).toContain('/profile-1/founder');
+    expect(result.studioPhotoUrl).toBeNull();
+  });
+  it('withholds company information and photos when its section is disabled', async () => {
+    resolveTo(
+      makeProfile(),
+      makePortfolio({
+        showAboutCompany: false,
+        aboutCompany: portfolioCompanyAboutSchema.parse({ story: 'Private story' }),
+        founderImageId: 'originals/portfolio-covers/profile-1/founder',
+      }),
+    );
+    const result = await publicPortfolioService.getBySlug('test-studio');
+    expect(result.sections.aboutCompany).toBe(false);
+    expect(result.aboutCompany).toBeNull();
+    expect(result.founderPhotoUrl).toBeNull();
+  });
   it('404s for an unknown slug', async () => {
     vi.mocked(portfolioRepository.findPublicBySlug).mockResolvedValue(null);
 

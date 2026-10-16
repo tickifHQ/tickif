@@ -619,6 +619,21 @@ export const portfolioReviewSettingsSchema = z
   .meta({ id: 'PortfolioReviewSettings' });
 export type PortfolioReviewSettings = z.infer<typeof portfolioReviewSettingsSchema>;
 
+/** Editable studio information; testimonials remain separate legacy data. */
+export const portfolioCompanyAboutSchema = z
+  .object({
+    headline: z.string().trim().max(80).default(''),
+    story: z.string().trim().max(450).default(''),
+    founderName: z.string().trim().max(100).default(''),
+    founderRole: z.string().trim().max(100).default(''),
+    services: z.string().trim().max(200).default(''),
+    styles: z.string().trim().max(200).default(''),
+    team: z.string().trim().max(200).default(''),
+    languages: z.string().trim().max(200).default(''),
+  })
+  .meta({ id: 'PortfolioCompanyAbout' });
+export type PortfolioCompanyAbout = z.infer<typeof portfolioCompanyAboutSchema>;
+
 export const portfolioResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -628,6 +643,10 @@ export const portfolioResponseSchema = z
     showHero: z.boolean(),
     showTrustCredentials: z.boolean(),
     showFeaturedTestimonial: z.boolean(),
+    showAboutCompany: z.boolean().optional(),
+    aboutCompany: portfolioCompanyAboutSchema.nullable().optional(),
+    founderPhotoUrl: z.string().url().nullable().optional(),
+    studioPhotoUrl: z.string().url().nullable().optional(),
     showReviews: z.boolean(),
     showSocialLinks: z.boolean(),
     showShareBlock: z.boolean(),
@@ -683,6 +702,8 @@ export const updatePortfolioSchema = z
     showHero: z.boolean().optional(),
     showTrustCredentials: z.boolean().optional(),
     showFeaturedTestimonial: z.boolean().optional(),
+    showAboutCompany: z.boolean().optional(),
+    aboutCompany: portfolioCompanyAboutSchema.nullable().optional(),
     showReviews: z.boolean().optional(),
     showSocialLinks: z.boolean().optional(),
     showShareBlock: z.boolean().optional(),
@@ -786,6 +807,7 @@ export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;
 /** POST /api/profiles/me/portfolio/cover/upload — request body. */
 export const portfolioCoverUploadRequestSchema = z
   .object({
+    target: z.enum(['hero', 'founder', 'studio']).optional(),
     contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif']),
     contentLength: z.number().int().min(1).max(10_000_000),
   })
@@ -804,6 +826,7 @@ export type PortfolioCoverUploadUrlResponse = z.infer<typeof portfolioCoverUploa
 /** POST /api/profiles/me/portfolio/cover/commit — request body. */
 export const portfolioCoverCommitRequestSchema = z
   .object({
+    target: z.enum(['hero', 'founder', 'studio']).optional(),
     objectKey: z
       .string()
       .max(512)
@@ -910,6 +933,7 @@ export type PublicPortfolioReview = z.infer<typeof publicPortfolioReviewSchema>;
  */
 export const publicPortfolioSectionsSchema = z
   .object({
+    aboutCompany: z.boolean().optional(),
     hero: z.boolean(),
     trustCredentials: z.boolean(),
     featuredTestimonial: z.boolean(),
@@ -1008,6 +1032,9 @@ export type PublicPortfolioGoogleActions = z.infer<typeof publicPortfolioGoogleA
  */
 export const publicPortfolioResponseSchema = z
   .object({
+    aboutCompany: portfolioCompanyAboutSchema.nullable().optional(),
+    founderPhotoUrl: z.string().url().nullable().optional(),
+    studioPhotoUrl: z.string().url().nullable().optional(),
     profileId: z.string().uuid(),
     /** The slug that resolved this portfolio (may be the org slug). */
     slug: z.string(),
