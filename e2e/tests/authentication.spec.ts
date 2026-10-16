@@ -70,7 +70,7 @@ test('phone OTP creates a visitor session, completes onboarding, and opens perso
     await expect(firstDigit).toBeVisible();
     const code = await phoneCode(phoneNumber);
     await firstDigit.fill(code === '000000' ? '111111' : '000000');
-    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'Invalid OTP' })).toBeVisible();
     await firstDigit.fill(code);
     await expect(page.getByRole('heading', { name: 'You’re in — welcome!' })).toBeVisible();
     const session = await context.request.get(`${apiUrl}/api/auth/get-session`);
