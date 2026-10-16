@@ -679,7 +679,7 @@ function HelpCard() {
           Our support team is here to help you with any billing queries.
         </p>
       </div>
-      <Button asChild variant="inverted" className="w-full">
+      <Button asChild variant="outline" className="w-full">
         <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
           Contact Support
         </a>
