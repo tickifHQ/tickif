@@ -136,9 +136,13 @@ export async function uploadLogo(
 }
 
 /** Upload and commit the dedicated public portfolio Hero cover. */
-export async function uploadPortfolioCover(file: File): Promise<UploadPortfolioCoverResponse> {
+export async function uploadPortfolioCover(
+  file: File,
+  target?: 'hero' | 'founder' | 'studio',
+): Promise<UploadPortfolioCoverResponse> {
   const presignResponse = await api.api.profiles.me.portfolio.cover.upload.$post({
     json: {
+      ...(target ? { target } : {}),
       contentType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif',
       contentLength: file.size,
     },
@@ -159,7 +163,7 @@ export async function uploadPortfolioCover(file: File): Promise<UploadPortfolioC
   }
 
   const commitResponse = await api.api.profiles.me.portfolio.cover.commit.$post({
-    json: { objectKey: key },
+    json: { objectKey: key, ...(target ? { target } : {}) },
   });
   return handleApiResponse(
     commitResponse,

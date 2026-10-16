@@ -67,6 +67,10 @@ const { recordSearchProjectionEvents } =
 const { db } = await import('@repo/db');
 
 const mockPortfolioRow = (overrides: Partial<PortfolioRecord> = {}): PortfolioRecord => ({
+  showAboutCompany: true,
+  aboutCompany: null,
+  founderImageId: null,
+  studioImageId: null,
   id: 'portfolio-1',
   profileId: 'profile-1',
   publicLinkEnabled: true,

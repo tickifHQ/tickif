@@ -569,7 +569,7 @@ describe('PublicDesignerProfile', () => {
     expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recognition' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Selected projects/i })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Client note' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'About the company' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Client ratings' })).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: 'Anika Spaces', level: 2 }),
@@ -678,7 +678,7 @@ describe('PublicDesignerProfile', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('uses a matching review photo for the client note avatar', () => {
+  it('does not reuse a client review photo as a company portrait', () => {
     const { container } = render(
       <PublicDesignerProfile
         portfolio={makePublicPortfolio({
@@ -694,7 +694,7 @@ describe('PublicDesignerProfile', () => {
 
     expect(
       container.querySelector('.profile-story-author img.profile-note-avatar'),
-    ).toHaveAttribute('src', 'https://cdn.example.test/avatars/priya.png');
+    ).toBeNull();
   });
 
   it('hides Reviews when neither ratings nor reviews exist', () => {
@@ -823,6 +823,7 @@ describe('PublicDesignerProfile', () => {
             ...portfolio.sections,
             trustCredentials: false,
             featuredTestimonial: false,
+            aboutCompany: false,
             reviews: false,
             overallRating: false,
             shareBlock: false,
@@ -832,7 +833,7 @@ describe('PublicDesignerProfile', () => {
     );
 
     expect(screen.queryByRole('heading', { name: 'Recognition' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Client note' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'About the company' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Client ratings' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: /A portfolio worth sharing/i }),
@@ -989,10 +990,10 @@ describe('PublicDesignerProfile', () => {
     },
   );
 
-  it('does not label a studio-curated testimonial as a verified homeowner', () => {
+  it('replaces client testimonials with company information', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
-    const note = within(screen.getByRole('region', { name: 'Client note' }));
-    expect(note.getByText('Adyar Penthouse · Homeowner')).toBeInTheDocument();
+    const note = within(screen.getByRole('region', { name: 'About the company' }));
+    expect(note.queryByText('Adyar Penthouse · Homeowner')).not.toBeInTheDocument();
     expect(note.queryByText(/Verified homeowner/)).not.toBeInTheDocument();
   });
 
@@ -1312,7 +1313,7 @@ describe('PublicDesignerProfile — bio is not duplicated across sections (E-212
     // bio appears exactly once — in Studio details.
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ bio })} />);
 
-    expect(screen.queryAllByText(bio)).toHaveLength(0);
+    expect(screen.queryAllByText(bio)).toHaveLength(1);
   });
 
   it('shows the bio at most twice when it is also the hero fallback (no tagline)', () => {
@@ -1336,7 +1337,7 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
 
     expect(screen.getByRole('heading', { name: 'Recognition' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Selected projects/i })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Client note' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'About the company' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Client ratings' })).toBeInTheDocument();
   });
 
@@ -1356,7 +1357,7 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
     expect(screen.queryByText('Earned through real work')).not.toBeInTheDocument();
   });
 
-  it('uses a studio-note fallback when there is no testimonial but profile copy exists', () => {
+  it('uses the company bio when no separate company story has been saved', () => {
     const portfolio = makePublicPortfolio();
     render(
       <PublicDesignerProfile
@@ -1368,9 +1369,9 @@ describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
       />,
     );
 
-    const note = within(screen.getByRole('region', { name: 'Client note' }));
-    expect(note.getByText('Studio note')).toBeInTheDocument();
-    expect(note.getByText(portfolio.tagline!)).toBeInTheDocument();
+    const note = within(screen.getByRole('region', { name: 'About the company' }));
+    expect(note.getByText('About the studio')).toBeInTheDocument();
+    expect(note.getByText(portfolio.bio!)).toBeInTheDocument();
   });
 
   it('hides empty Reviews even when reviews are enabled', () => {

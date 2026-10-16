@@ -24,8 +24,9 @@ import {
   PORTFOLIO_BADGE_PRESENTATION,
   type ExperienceCenter,
   type GoogleReviewsResponse,
-  type PortfolioProjectItem,
   type PortfolioResponse,
+  portfolioCompanyAboutSchema,
+  type PortfolioCompanyAbout,
   type PublicPortfolioStats,
   type RequiredPortfolioField,
   type UpdatePortfolioInput,
@@ -37,12 +38,6 @@ import { RecognitionBadge } from '@repo/ui/components/recognition-badge';
 import { portfolioRecognitionArtwork } from '@/lib/portfolio-recognition';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Switch } from '@repo/ui/components/switch';
@@ -53,6 +48,7 @@ import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { SocialProfileInput, socialProfileError } from '@/components/social-profile-confirmation';
 import { DesignerLogoAvatar } from '@/components/designer-logo-avatar';
+import { CompanyAboutEditor } from '@/components/company-about-editor';
 import { DesignerLogoInput } from '@/components/designer-logo-input';
 import { PortfolioCoverCropDialog } from '@/components/portfolio-cover-crop-dialog';
 import { cropPortfolioCoverToFile } from '@/lib/crop-image';
@@ -71,7 +67,6 @@ import {
   checkSlugAvailability,
   connectGoogleReviews,
   disconnectGoogleReviews,
-  fetchPortfolioProjects,
   fetchGoogleReviews,
   fetchPortfolio,
   refreshGoogleReviews,
@@ -93,6 +88,8 @@ type FormState = {
   // longer patch a value the designer can never change.
   showTrustCredentials: boolean;
   showFeaturedTestimonial: boolean;
+  showAboutCompany: boolean;
+  aboutCompany: PortfolioCompanyAbout;
   showGoogleReviews: boolean;
   showSocialLinks: boolean;
   showShareBlock: boolean;
@@ -134,16 +131,6 @@ const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
   bio: 'a bio',
 };
 
-type TestimonialProjectOption = {
-  label: string;
-  value: string;
-};
-
-function formatProjectOption(project: PortfolioProjectItem) {
-  const location = [project.locality, project.city].filter(Boolean).join(', ');
-  return location ? `${project.title} - ${location}` : project.title;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -155,6 +142,13 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     accentColor: data.accentColor,
     showTrustCredentials: data.showTrustCredentials,
     showFeaturedTestimonial: data.showFeaturedTestimonial,
+    showAboutCompany: data.showAboutCompany ?? true,
+    aboutCompany:
+      data.aboutCompany ??
+      portfolioCompanyAboutSchema.parse({
+        headline: (data.tagline ?? '').slice(0, 80),
+        story: (data.bio ?? '').slice(0, 450),
+      }),
     showGoogleReviews: data.reviewSettings.google.showReviews,
     showSocialLinks: data.showSocialLinks,
     showShareBlock: data.showShareBlock,
@@ -199,6 +193,11 @@ function computeChangedFields(current: FormState, saved: FormState): UpdatePortf
   }
 
   for (const key of Object.keys(current) as Array<keyof FormState>) {
+    if (key === 'aboutCompany') {
+      if (JSON.stringify(current.aboutCompany) !== JSON.stringify(saved.aboutCompany))
+        patch.aboutCompany = current.aboutCompany;
+      continue;
+    }
     if (
       key === 'showGoogleReviews' ||
       key === 'showGoogleOverallRating' ||
@@ -315,12 +314,6 @@ export function DesignerPortfolioSettings({
   const [isRefreshingGoogle, setIsRefreshingGoogle] = useState(false);
   const googlePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Published projects available for the featured testimonial picker.
-  const [testimonialProjects, setTestimonialProjects] = useState<PortfolioProjectItem[]>([]);
-  const [testimonialProjectsLoading, setTestimonialProjectsLoading] = useState(true);
-  const [testimonialProjectsError, setTestimonialProjectsError] = useState<string | null>(null);
-
-  // Collapsible/expanded UI state (local only — presentation, not persisted)
   const [sectionExpanded, setSectionExpanded] = useState<Record<SectionKey, boolean>>({
     linkUrl: true,
     customizations: true,
@@ -373,25 +366,6 @@ export function DesignerPortfolioSettings({
   useEffect(() => {
     void loadPortfolio();
   }, [loadPortfolio]);
-
-  const loadTestimonialProjects = useCallback(async () => {
-    setTestimonialProjectsLoading(true);
-    setTestimonialProjectsError(null);
-    try {
-      const data = await fetchPortfolioProjects();
-      setTestimonialProjects(data.items);
-    } catch (err) {
-      setTestimonialProjectsError(
-        err instanceof Error ? err.message : 'Could not load portfolio projects.',
-      );
-    } finally {
-      setTestimonialProjectsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadTestimonialProjects();
-  }, [loadTestimonialProjects]);
 
   // -------------------------------------------------------------------------
   // Google reviews
@@ -789,27 +763,6 @@ export function DesignerPortfolioSettings({
   const googleConnection = googleReviews?.connection ?? null;
   const googleAvailable = googleReviews?.available ?? true;
   const googleStatus = googleConnection?.status ?? null;
-  const testimonialProjectOptions = testimonialProjects.map((project) => ({
-    value: project.id,
-    label: formatProjectOption(project),
-  }));
-  // A saved testimonial project that is no longer published won't be in the
-  // options, so surface a placeholder entry rather than showing nothing selected.
-  const selectedTestimonialProjectId = form.testimonialProjectId;
-  const selectedTestimonialProjectMissing =
-    !!selectedTestimonialProjectId &&
-    !testimonialProjectOptions.some((option) => option.value === selectedTestimonialProjectId);
-  const testimonialProjectSelectOptions =
-    selectedTestimonialProjectMissing && selectedTestimonialProjectId
-      ? [
-          {
-            value: selectedTestimonialProjectId,
-            label: 'Selected project',
-          },
-          ...testimonialProjectOptions,
-        ]
-      : testimonialProjectOptions;
-
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -1237,14 +1190,15 @@ export function DesignerPortfolioSettings({
                 </div>
               </ToggleableSection>
 
-              {/* Featured testimonial */}
               <ToggleableSection
-                title="Featured testimonial"
-                subtitle="Their words – one client quote"
-                enabled={form.showFeaturedTestimonial}
-                onToggle={() =>
-                  updateField('showFeaturedTestimonial', !form.showFeaturedTestimonial)
+                title="About the company"
+                subtitle={
+                  form.aboutCompany.story.trim()
+                    ? 'Your studio, your story'
+                    : 'Add your company story to show this section on your portfolio'
                 }
+                enabled={form.showAboutCompany}
+                onToggle={() => updateField('showAboutCompany', !form.showAboutCompany)}
                 expanded={sectionExpanded.testimonial}
                 onToggleExpanded={() => toggleExpanded('testimonial')}
               >
@@ -1252,56 +1206,22 @@ export function DesignerPortfolioSettings({
                   data-slot="portfolio-section-content"
                   className="mt-0.5 rounded-xl border border-border bg-background p-6 shadow-sm"
                 >
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-muted-foreground">
-                        Their words
-                      </Label>
-                      <Textarea
-                        value={form.testimonialWords}
-                        onChange={(e) => updateField('testimonialWords', e.target.value)}
-                        placeholder="A line from a happy client..."
-                        maxLength={500}
-                        rows={3}
-                        className="resize-y shadow-sm"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-sm font-medium text-muted-foreground">Author</Label>
-                        <Input
-                          value={form.testimonialAuthor}
-                          onChange={(e) => updateField('testimonialAuthor', e.target.value)}
-                          placeholder="Client"
-                          maxLength={100}
-                          className="shadow-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <ProjectDropdown
-                          value={form.testimonialProjectId}
-                          onChange={(value) => updateField('testimonialProjectId', value)}
-                          options={testimonialProjectSelectOptions}
-                          placeholder={
-                            testimonialProjectsLoading ? 'Loading projects...' : 'Select a project'
-                          }
-                          disabled={
-                            testimonialProjectsLoading ||
-                            (testimonialProjectSelectOptions.length === 0 &&
-                              !form.testimonialProjectId)
-                          }
-                        />
-                        {testimonialProjectsError ? (
-                          <p className="text-xs text-destructive">{testimonialProjectsError}</p>
-                        ) : testimonialProjectSelectOptions.length === 0 &&
-                          !testimonialProjectsLoading ? (
-                          <p className="text-xs text-muted-foreground">
-                            Publish a project to feature it.
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
+                  <CompanyAboutEditor
+                    value={form.aboutCompany}
+                    onChange={(value) => updateField('aboutCompany', value)}
+                    founderPhotoUrl={portfolio.founderPhotoUrl}
+                    studioPhotoUrl={portfolio.studioPhotoUrl}
+                    onPhotoUploaded={(target, url) =>
+                      setPortfolio((previous) =>
+                        previous
+                          ? {
+                              ...previous,
+                              [target === 'founder' ? 'founderPhotoUrl' : 'studioPhotoUrl']: url,
+                            }
+                          : previous,
+                      )
+                    }
+                  />
                 </div>
               </ToggleableSection>
 
@@ -1870,104 +1790,6 @@ export function DesignerPortfolioSettings({
 }
 
 /* ─── Sub-components ─────────────────────────────────────────────────────────── */
-
-function ProjectDropdown({
-  disabled,
-  onChange,
-  options,
-  placeholder,
-  value,
-}: {
-  disabled?: boolean;
-  onChange: (value: string | null) => void;
-  options: TestimonialProjectOption[];
-  placeholder: string;
-  value: string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const selected = options.find((option) => option.value === value);
-  const displayValue = selected?.label ?? placeholder;
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = normalizedQuery
-    ? options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
-    : options;
-
-  function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
-    if (!nextOpen) setQuery('');
-  }
-
-  function handleSelect(nextValue: string | null) {
-    onChange(nextValue);
-    setOpen(false);
-    setQuery('');
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium text-muted-foreground">Project</Label>
-      <DropdownMenu open={open} onOpenChange={handleOpenChange}>
-        <DropdownMenuTrigger
-          aria-label="Project"
-          disabled={disabled}
-          className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 text-left shadow-md transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <span
-            className={cn(
-              'min-w-0 truncate text-sm font-medium',
-              selected ? 'text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {displayValue}
-          </span>
-          <ChevronsUpDown className="ml-3 size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          sideOffset={4}
-          className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-md border border-border bg-background p-1 shadow-md"
-        >
-          <div className="p-1">
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
-              placeholder="Search projects"
-              className="h-8 shadow-sm"
-            />
-          </div>
-          <DropdownMenuItem
-            onSelect={() => handleSelect(null)}
-            className={cn('justify-between px-3 py-2', !value && 'bg-accent/30')}
-          >
-            <span className="text-sm text-muted-foreground">{placeholder}</span>
-            {!value ? <Check className="size-4 text-primary" aria-hidden /> : null}
-          </DropdownMenuItem>
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onSelect={() => handleSelect(option.value)}
-                className={cn(
-                  'justify-between px-3 py-2',
-                  option.value === value && 'bg-accent/30',
-                )}
-              >
-                <span className="min-w-0 truncate text-sm text-foreground">{option.label}</span>
-                {option.value === value ? (
-                  <Check className="size-4 shrink-0 text-primary" aria-hidden />
-                ) : null}
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <div className="px-3 py-2 text-sm text-muted-foreground">No projects found</div>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
 
 function CollapsibleSection({
   title,

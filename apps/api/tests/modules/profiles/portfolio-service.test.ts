@@ -25,6 +25,7 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     updateProfileInTx: vi.fn(),
     setLogoIfMatch: vi.fn(),
     setHeroImageIfMatch: vi.fn(),
+    setCompanyImageIfMatch: vi.fn(),
     reserveLogoUpload: vi.fn(),
     releaseUploadLease: vi.fn(),
     activateIfDraft: vi.fn(async () => true),
@@ -115,6 +116,10 @@ const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfile
 });
 
 const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => ({
+  showAboutCompany: true,
+  aboutCompany: null,
+  founderImageId: null,
+  studioImageId: null,
   id: 'portfolio-1',
   profileId: 'profile-1',
   publicLinkEnabled: true,
@@ -174,6 +179,39 @@ beforeEach(() => {
 
 describe('portfolioService.commitHeroCoverUpload', () => {
   const objectKey = 'originals/portfolio-covers/profile-1/new-cover';
+
+  it.each(['founder', 'studio'] as const)(
+    'saves a %s photo without changing the hero cover',
+    async (target) => {
+      setupResolveProfile();
+      setupGetPortfolio();
+      vi.mocked(objectExists).mockResolvedValue(true);
+      vi.mocked(portfolioRepository.setCompanyImageIfMatch).mockResolvedValue(true);
+      await portfolioService.commitHeroCoverUpload({ objectKey, target }, caller);
+      expect(portfolioRepository.setCompanyImageIfMatch).toHaveBeenCalledWith(
+        'profile-1',
+        target === 'founder' ? 'founderImageId' : 'studioImageId',
+        null,
+        objectKey,
+      );
+      expect(portfolioRepository.setHeroImageIfMatch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects another profile company photo and missing uploaded objects', async () => {
+    setupResolveProfile();
+    await expect(
+      portfolioService.commitHeroCoverUpload(
+        { objectKey: 'originals/portfolio-covers/other/cover', target: 'founder' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    vi.mocked(objectExists).mockResolvedValue(false);
+    await expect(
+      portfolioService.commitHeroCoverUpload({ objectKey, target: 'studio' }, caller),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(portfolioRepository.setCompanyImageIfMatch).not.toHaveBeenCalled();
+  });
 
   it('persists a profile-owned uploaded cover and returns its signed URL', async () => {
     setupResolveProfile();

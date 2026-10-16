@@ -21,7 +21,7 @@ import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-ct
 import { ConsultationCta } from '@/components/consultation-cta';
 import { PublicProjectGallery } from '@/components/public-project-gallery';
 import { ProfileClientRatings } from '@/components/profile-client-ratings';
-import { ProfileTestimonialQuote } from '@/components/profile-testimonial-quote';
+import { ProfileCompanyAbout } from '@/components/profile-company-about';
 import { ProfileExperienceCentres } from '@/components/profile-experience-centres';
 import {
   GoogleBrandIcon,
@@ -625,87 +625,6 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
   );
 }
 
-function clientNoteAvatarUrl(
-  portfolio: PublicPortfolioResponse,
-  author: string | null,
-): string | null {
-  if (!author) return null;
-  const authorTokens = new Set(
-    author
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter((token) => token.length > 1),
-  );
-  return (
-    portfolio.reviews.find((review) => {
-      if (!review.avatarUrl) return false;
-      const reviewTokens = review.author
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .split(/\s+/)
-        .filter((token) => token.length > 1);
-      return reviewTokens.some((token) => authorTokens.has(token));
-    })?.avatarUrl ?? null
-  );
-}
-
-function ClientNoteAvatar({ author, avatarUrl }: { author: string; avatarUrl: string | null }) {
-  if (avatarUrl) {
-    return (
-      <Image
-        src={avatarUrl}
-        alt=""
-        width={40}
-        height={40}
-        unoptimized
-        className="profile-note-avatar"
-      />
-    );
-  }
-  return <span className="profile-note-avatar">{studioInitials(author)}</span>;
-}
-
-function StorySection({ portfolio }: SectionProps) {
-  const testimonial = portfolio.testimonial;
-  const quote = testimonial?.words ?? portfolio.tagline ?? portfolio.bio;
-  if (!quote) return null;
-  const isClientNote = Boolean(testimonial);
-  const noteMeta = [isClientNote ? 'Client note' : 'Studio note', testimonial?.projectTitle]
-    .filter(Boolean)
-    .join(' · ');
-  const author = testimonial?.author ?? portfolio.displayName;
-  const authorMeta = isClientNote
-    ? [testimonial?.projectTitle, 'Homeowner'].filter(Boolean).join(' · ')
-    : 'Published portfolio';
-  const avatarUrl = isClientNote ? clientNoteAvatarUrl(portfolio, author) : null;
-  return (
-    <section aria-label="Client note" className="profile-shell">
-      <div className="profile-story">
-        <p className="profile-story-pill">
-          <span aria-hidden="true" />
-          {noteMeta}
-        </p>
-        <ProfileTestimonialQuote quote={quote} />
-        {author ? (
-          <footer className="profile-story-author">
-            <ClientNoteAvatar author={author} avatarUrl={avatarUrl} />
-            <div>
-              <p>{author}</p>
-              {authorMeta ? (
-                <span>
-                  {isClientNote ? <BadgeCheck aria-hidden="true" className="size-3" /> : null}
-                  {authorMeta}
-                </span>
-              ) : null}
-            </div>
-          </footer>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
 function hasGoogleClientRatings(portfolio: PublicPortfolioResponse) {
   return (
     (portfolio.reviewVisibility.google.reviews &&
@@ -1066,6 +985,12 @@ function ProfileNavigation({ portfolio, view }: SectionProps) {
         <div className="profile-nav-actions">
           <nav aria-label="Portfolio sections" className="profile-nav-links">
             {hasWork ? <a href="#work">Work</a> : null}
+            {portfolio.sections.aboutCompany !== false &&
+            (portfolio.aboutCompany
+              ? portfolio.aboutCompany.story.trim()
+              : portfolio.bio?.trim()) ? (
+              <a href="#about">About</a>
+            ) : null}
             {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
               <a href="#recognition">Recognition</a>
             ) : null}
@@ -1281,7 +1206,7 @@ export function PublicDesignerProfile({
             <CredentialsSection {...props} />
           ) : null}
           <PortfolioSection {...props} />
-          {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
+          <ProfileCompanyAbout portfolio={portfolio} />
           <ReviewsSection {...props} />
           {tickifReviews}
           <ExperienceCentersSection {...props} />

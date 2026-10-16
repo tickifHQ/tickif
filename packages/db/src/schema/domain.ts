@@ -18,6 +18,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { PortfolioCompanyAbout } from '@repo/contracts';
 import {
   INTERACTION_EVENT_TYPE_VALUES,
   DEFAULT_PORTFOLIO_ACCENT,
@@ -1369,6 +1370,10 @@ export const designerPortfolio = pgTable(
     tagline: text('tagline'),
 
     // Featured testimonial
+    showAboutCompany: boolean('show_about_company').default(true).notNull(),
+    aboutCompany: jsonb('about_company').$type<PortfolioCompanyAbout>(),
+    founderImageId: text('founder_image_id'),
+    studioImageId: text('studio_image_id'),
     testimonialWords: text('testimonial_words'),
     testimonialAuthor: text('testimonial_author'),
     testimonialProjectId: uuid('testimonial_project_id').references(() => project.id, {

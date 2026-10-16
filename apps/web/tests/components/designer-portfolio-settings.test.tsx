@@ -1186,8 +1186,8 @@ describe('DesignerPortfolioSettings', () => {
         getContent: () => screen.getByText('Identity verified', { exact: true }),
       },
       {
-        name: 'Featured testimonial',
-        getContent: () => screen.getByRole('button', { name: /project/i }),
+        name: 'About the company',
+        getContent: () => screen.getByLabelText('Company headline'),
       },
       {
         name: 'Reviews',
@@ -1507,7 +1507,7 @@ describe('DesignerPortfolioSettings', () => {
     expect(mock.updatePortfolio).not.toHaveBeenCalled();
   });
 
-  it('uses a published project select for the featured testimonial project', async () => {
+  it('edits company information separately from saved client testimonials', async () => {
     mock.updatePortfolio.mockResolvedValue({
       ...basePortfolio,
       testimonialProjectId: '22222222-2222-4222-8222-222222222222',
@@ -1515,21 +1515,23 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Toggle Featured testimonial details' }));
-    const projectSelect = await screen.findByRole('button', { name: /project/i });
-
-    expect(projectSelect).toHaveTextContent('Select a project');
-
-    await user.click(projectSelect);
-    await user.type(screen.getByPlaceholderText('Search projects'), 'omr');
-    await user.click(screen.getByRole('menuitem', { name: '4BHK Villa in OMR - OMR, Chennai' }));
-    expect(projectSelect).toHaveTextContent('4BHK Villa in OMR - OMR, Chennai');
+    await user.click(screen.getByRole('button', { name: 'Toggle About the company details' }));
+    fireEvent.change(screen.getByLabelText('Company headline'), {
+      target: { value: 'Our company' },
+    });
+    fireEvent.change(screen.getByLabelText('Company story'), {
+      target: { value: 'Built around your life.' },
+    });
+    expect(screen.queryByText('Their words')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
       expect(mock.updatePortfolio).toHaveBeenCalledWith({
-        testimonialProjectId: '22222222-2222-4222-8222-222222222222',
+        aboutCompany: expect.objectContaining({
+          headline: 'Our company',
+          story: 'Built around your life.',
+        }),
       });
     });
   });

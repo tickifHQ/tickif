@@ -591,4 +591,23 @@ export const portfolioRepository = {
       return true;
     });
   },
+  async setCompanyImageIfMatch(
+    profileId: string,
+    field: 'founderImageId' | 'studioImageId',
+    previous: string | null,
+    key: string,
+  ): Promise<boolean> {
+    const column = schema.designerPortfolio[field];
+    const rows = await db
+      .update(schema.designerPortfolio)
+      .set({ [field]: key, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.designerPortfolio.profileId, profileId),
+          previous ? eq(column, previous) : sql`${column} IS NULL`,
+        ),
+      )
+      .returning({ id: schema.designerPortfolio.id });
+    return rows.length > 0;
+  },
 };
