@@ -15,7 +15,7 @@ function renderInput(value: string) {
 }
 
 describe('compact social profile input', () => {
-  it('keeps the safe external action inside the input group without below-input copy', () => {
+  it('shows the generated URL beneath the input with a safe verification link', () => {
     renderInput('@social.studio');
     const input = screen.getByRole('textbox', { name: 'Instagram' });
     const action = screen.getByRole('link', { name: /Open Instagram profile/ });
@@ -23,8 +23,33 @@ describe('compact social profile input', () => {
     expect(action).toHaveAttribute('rel', 'noopener noreferrer');
     expect(action).toHaveAttribute('target', '_blank');
     expect(action.parentElement).toBe(input.parentElement);
-    expect(screen.queryByText('https://www.instagram.com/social.studio')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Check that this opens/)).not.toBeInTheDocument();
+    const preview = screen.getByRole('link', { name: 'https://www.instagram.com/social.studio' });
+    expect(preview).toHaveAttribute('href', action.getAttribute('href'));
+    expect(preview).toHaveAttribute('target', '_blank');
+    expect(preview).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(input).toHaveAttribute('aria-describedby', 'social-instagram-preview');
+    expect(screen.getByText(/Check that this opens your profile/)).toBeVisible();
+  });
+
+  it('updates the preview when the handle changes and removes it for invalid or empty values', () => {
+    const { rerender } = renderInput('@first');
+    const update = (value: string) =>
+      rerender(
+        <SocialProfileInput
+          id="social-instagram"
+          platform="instagram"
+          value={value}
+          onValueChange={vi.fn()}
+        />,
+      );
+    update('@second');
+    expect(screen.queryByText('https://www.instagram.com/first')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'https://www.instagram.com/second' })).toBeVisible();
+    update('https://linkedin.com/in/second');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    update('');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).not.toHaveAttribute('aria-describedby');
   });
 
   it('leaves the optional empty input without an action or helper block', () => {
