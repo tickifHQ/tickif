@@ -108,5 +108,10 @@ The idempotent taxonomy seed includes the requested material/finish vocabulary
 and a standalone `hospital` subtype of `commercial-workspace`. Legacy
 `clinic-hospital` remains under `institutional-public` for saved projects.
 Deployment must rerun `pnpm db:seed` before verifying these additional choices.
-Custom locations do not infer GPS coordinates: nearby recommendations currently
-use a selected city and the project's existing location metadata.
+Custom locations do not infer project GPS coordinates. The Near me search resolves
+an explicitly shared, approximate device location to an existing saved city and
+uses that city's ordinary project filters; it does not rank individual projects
+by distance. Location autocomplete includes active saved cities and city-scoped
+areas independently of published-project counts and Typesense availability.
+See [ADR 0015](../adr/0015-nearby-city-discovery.md) for the transient provider
+lookup, privacy, availability and quota policy.

@@ -507,7 +507,12 @@ export async function suggest(query: SearchSuggestQuery): Promise<SearchSuggestR
 
   // Execute multi-search
   const [result, filters] = await Promise.all([
-    repository.multiSearch(query.q),
+    repository.multiSearch(query.q).catch(() => {
+      // Saved locations are canonical in Postgres and remain searchable while
+      // the optional project/designer index is rebuilding or unavailable.
+      log.warn({ event: 'search.suggest.index_unavailable' });
+      return { projects: [], designers: [], processingTimeMs: 0 };
+    }),
     repository.findFilterSuggestions(query.q),
   ]);
 
