@@ -20,7 +20,9 @@ export function ReactivateStep({ currentTier, onConfirm }: ReactivateStepProps) 
   return (
     <div>
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-foreground">Reactivate Subscription</h2>
+        <h2 className="font-sans text-xl text-foreground font-medium tracking-normal">
+          Reactivate Subscription
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Your account is locked. Reactivate {plan.label} to restore full access.
         </p>
@@ -28,10 +30,10 @@ export function ReactivateStep({ currentTier, onConfirm }: ReactivateStepProps) 
 
       <div className="mt-6 rounded-lg border border-border bg-muted/30 px-4 py-3">
         <p className="text-xs text-muted-foreground">Current plan</p>
-        <p className="mt-0.5 text-base font-bold text-foreground">{plan.label}</p>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {formatCurrency(plan.price)} / month
+        <p className="font-sans mt-0.5 text-base font-medium text-foreground tracking-normal">
+          {plan.label}
         </p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{formatCurrency(plan.price)} / month</p>
       </div>
 
       <Alert variant="info" className="mt-5">

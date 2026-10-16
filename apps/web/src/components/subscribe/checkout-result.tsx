@@ -152,7 +152,7 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
         <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
           {label}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="font-sans text-2xl font-medium tracking-normal">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           {error
             ? 'We couldn’t check your payment status. We’ll try again automatically. Please wait before starting another payment.'

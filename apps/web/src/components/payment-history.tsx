@@ -59,7 +59,9 @@ function PaymentHistoryPage({
   return (
     <Card radius="lg" className="overflow-hidden shadow-none">
       <CardHeader className="gap-1 border-b border-border bg-muted/30 px-5 py-4">
-        <CardTitle className="text-sm leading-5">Payment history</CardTitle>
+        <CardTitle className="font-sans text-sm leading-5 font-medium tracking-normal">
+          Payment history
+        </CardTitle>
         <CardDescription>
           Payments recorded from Razorpay. Recent payments can take a moment to appear.
         </CardDescription>

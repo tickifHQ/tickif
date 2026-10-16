@@ -471,7 +471,7 @@ function ScopedCheckoutFlow({
                   aria-hidden="true"
                 />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1 className="font-sans text-2xl font-medium tracking-normal">
                 {step === 'pending' ? 'Confirming your payment' : 'Opening secure checkout'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -645,7 +645,7 @@ function ScopedCheckoutFlow({
               )}
               {step === 'recovery' && (
                 <div className="flex flex-col gap-4" role="status">
-                  <h2 className="text-lg font-semibold">Plan saved</h2>
+                  <h2 className="font-sans text-lg font-medium tracking-normal">Plan saved</h2>
                   <p>
                     {recovery?.status === 'waiting_for_expiry'
                       ? recovery.eligibleAt
@@ -693,7 +693,9 @@ function ScopedCheckoutFlow({
               )}
               {step === 'pending' && (
                 <div className="flex flex-col gap-4" role="status">
-                  <h2 className="text-lg font-semibold">Confirmation pending</h2>
+                  <h2 className="font-sans text-lg font-medium tracking-normal">
+                    Confirmation pending
+                  </h2>
                   <p>
                     {label} remains selected.{' '}
                     {message ||
@@ -740,7 +742,7 @@ export function SuccessStep({
 }) {
   return (
     <div role="status" className="flex flex-col gap-4 py-8 text-center">
-      <h2 className="text-lg font-semibold">
+      <h2 className="font-sans text-lg font-medium tracking-normal">
         {kind === 'activated' ? 'Plan activated' : 'Plan change scheduled'}
       </h2>
       <p>

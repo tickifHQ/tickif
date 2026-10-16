@@ -36,7 +36,9 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
       </button>
 
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Review Order</h2>
+        <h2 className="font-sans text-xl text-foreground font-medium tracking-normal">
+          Review Order
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Review display pricing before proceeding. The final payment authorization is shown at
           checkout.
@@ -45,7 +47,9 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
 
       {/* Order Summary */}
       <div className="mt-6 space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Order Summary</h3>
+        <h3 className="font-sans text-sm text-foreground font-medium tracking-normal">
+          Order Summary
+        </h3>
         <div className="space-y-2.5">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Plan</span>

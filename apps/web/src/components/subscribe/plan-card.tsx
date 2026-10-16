@@ -53,8 +53,8 @@ export function PlanCard({
     >
       <CardHeader className="gap-3 p-5">
         <div className="flex min-h-7 flex-wrap items-center gap-2">
-          <CardTitle className="text-base leading-6">
-            <h3>{plan.label}</h3>
+          <CardTitle className="font-sans text-base leading-6 font-medium tracking-normal">
+            <h3 className="font-sans font-medium tracking-normal">{plan.label}</h3>
           </CardTitle>
           {isCurrent ? (
             <Badge

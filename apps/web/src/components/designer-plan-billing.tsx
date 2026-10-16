@@ -136,7 +136,7 @@ function CurrentPlanCard({
             <p className="text-xs font-medium text-muted-foreground">Current Plan</p>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]">
+                <h2 className="font-sans text-base text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))] font-medium tracking-normal">
                   {tierLabel}
                 </h2>
                 {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
@@ -213,7 +213,7 @@ function CurrentPlanCard({
           </div>
         </div>
         {checkoutTarget && (
-          <Button asChild variant="fancy" size="sm" className="w-full shrink-0 sm:w-auto">
+          <Button asChild variant="default" className="w-full shrink-0 sm:w-auto">
             <Link href={`/designer/plan-billing/subscribe/complete?plan=${checkoutTarget}`}>
               View checkout status
             </Link>
@@ -226,8 +226,7 @@ function CurrentPlanCard({
             (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')) && (
             <Button
               asChild={billing.lifecycle === 'active' && cta.kind === 'subscribe'}
-              variant="fancy"
-              size="sm"
+              variant="default"
               className="w-full shrink-0 sm:w-auto"
               disabled={paymentBusy}
               onClick={
@@ -313,7 +312,7 @@ function UsageSummary({ billing }: { billing: BillingState }) {
   return (
     <Card radius="lg" className="overflow-hidden shadow-none">
       <div>
-        <h2 className="border-b border-border bg-muted/30 px-5 py-4 text-sm font-semibold text-foreground">
+        <h2 className="font-sans border-b border-border bg-muted/30 px-5 py-4 text-sm text-foreground font-medium tracking-normal">
           Usage Summary
         </h2>
         <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
@@ -369,7 +368,7 @@ function BillingSummary({
 
   return (
     <Card radius="lg" className="overflow-hidden shadow-none">
-      <h2 className="border-b border-border bg-muted/30 px-5 py-4 text-sm font-semibold text-foreground">
+      <h2 className="font-sans border-b border-border bg-muted/30 px-5 py-4 text-sm text-foreground font-medium tracking-normal">
         Billing Summary
       </h2>
       <div className="p-5">
@@ -444,7 +443,9 @@ function FrozenResourcesCard({
       <div className="p-5">
         <div className="flex items-center gap-2">
           <Snowflake className="size-5 text-warning-foreground" />
-          <h2 className="text-base font-semibold text-foreground">Frozen Resources</h2>
+          <h2 className="font-sans text-base text-foreground font-medium tracking-normal">
+            Frozen Resources
+          </h2>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
           These resources are preserved and will be restored when you upgrade. Nothing has been
@@ -472,7 +473,7 @@ function FrozenResourcesCard({
           ))}
         </div>
         {!suppressPlanActions && (
-          <Button variant="fancy" className="mt-5 w-full" onClick={() => onSubscribe()}>
+          <Button variant="default" className="mt-5 w-full" onClick={() => onSubscribe()}>
             Upgrade to Restore
             <ArrowRight className="size-4" />
           </Button>
@@ -488,7 +489,9 @@ function LockedAccessCard({ access }: { access: NonNullable<BillingState['locked
   return (
     <Card radius="lg" className="shadow-none">
       <div className="p-5">
-        <h2 className="text-base font-semibold text-foreground">Account Access</h2>
+        <h2 className="font-sans text-base text-foreground font-medium tracking-normal">
+          Account Access
+        </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-destructive">
@@ -618,7 +621,7 @@ function PlanIncludesCard({
 
   return (
     <Card radius="lg" className="overflow-hidden shadow-none">
-      <h2 className="border-b border-border bg-muted/30 px-5 py-4 text-sm font-semibold text-foreground">
+      <h2 className="font-sans border-b border-border bg-muted/30 px-5 py-4 text-sm text-foreground font-medium tracking-normal">
         Your Plan Includes
       </h2>
       <div>
@@ -641,7 +644,7 @@ function PlanIncludesCard({
                   <Icon className="size-4" />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="font-sans text-sm font-medium tracking-normal text-foreground">
                     {feature.title}
                     {suspended && (
                       <Badge variant="outline" className="ml-1.5 text-[9px]">
@@ -663,8 +666,7 @@ function PlanIncludesCard({
                 : 'Need more team members or branches?'}
             </p>
             <Button
-              variant="fancy"
-              size="sm"
+              variant="default"
               className="w-full sm:w-auto"
               onClick={() => onSubscribe(nextTier)}
             >
@@ -684,7 +686,9 @@ function HelpCard() {
     <Card radius="lg" variant="muted" className="shadow-none">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Need Help?</h2>
+          <h2 className="font-sans text-sm text-foreground font-medium tracking-normal">
+            Need Help?
+          </h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             Our support team is here to help you with any billing queries.
           </p>
@@ -818,7 +822,9 @@ function ScopedDesignerPlanBilling({
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Plan & Billing</h1>
+        <h1 className="font-sans text-2xl text-foreground font-medium tracking-normal">
+          Plan & Billing
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Manage your subscription, billing details and usage.
         </p>
@@ -924,7 +930,7 @@ function ScopedDesignerPlanBilling({
                   <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">
                     <CreditCard className="size-4 text-warning-foreground" />
                   </span>
-                  <h2 className="text-base font-bold text-warning-foreground">
+                  <h2 className="font-sans text-base text-warning-foreground font-medium tracking-normal">
                     {billing.lifecycle === 'payment_failed' ? 'Payment Failed' : 'Payment Due Soon'}
                   </h2>
                 </div>

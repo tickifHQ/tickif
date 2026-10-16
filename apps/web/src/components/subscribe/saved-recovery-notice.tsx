@@ -122,7 +122,7 @@ export function BillingStatusNotice({
       <Alert className="mt-4" role="status" aria-label="Billing status">
         <div className="col-start-2 flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
-            <AlertTitle>{title}</AlertTitle>
+            <AlertTitle className="font-sans font-medium tracking-normal">{title}</AlertTitle>
             <AlertDescription>
               <p>{body}</p>
               {action && (
@@ -177,7 +177,9 @@ export function BillingStatusNotice({
           onInteractOutside={(event) => event.preventDefault()}
           onEscapeKeyDown={busy ? (event) => event.preventDefault() : undefined}
         >
-          <DialogTitle>Remove saved plan?</DialogTitle>
+          <DialogTitle className="font-sans font-medium tracking-normal">
+            Remove saved plan?
+          </DialogTitle>
           <DialogDescription>
             Removing this selection does not undo a scheduled cancellation or plan change.
           </DialogDescription>

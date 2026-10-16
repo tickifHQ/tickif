@@ -83,8 +83,8 @@ export function PlanSelection({
         <Heading
           className={
             headingLevel === 1
-              ? 'text-2xl font-semibold tracking-tight text-foreground'
-              : 'text-lg font-semibold text-foreground'
+              ? 'font-sans text-2xl font-medium tracking-normal text-foreground'
+              : 'font-sans text-lg font-medium tracking-normal text-foreground'
           }
         >
           Choose your plan
@@ -157,7 +157,7 @@ export function PlanSelection({
                 <TableHead
                   scope="rowgroup"
                   colSpan={4}
-                  className="px-0 pt-7 pb-3 font-sans text-sm font-semibold tracking-normal text-foreground"
+                  className="px-0 pt-7 pb-3 font-sans text-sm font-medium tracking-normal text-foreground"
                 >
                   {group.label}
                 </TableHead>
@@ -184,10 +184,10 @@ export function PlanSelection({
       <section className="flex flex-col gap-6 md:hidden" aria-label="Plan features by tier">
         {PLAN_FEATURE_GROUPS.map((group) => (
           <section key={group.label} className="flex flex-col gap-4" aria-label={group.label}>
-            <h3 className="font-semibold">{group.label}</h3>
+            <h3 className="font-sans font-medium tracking-normal">{group.label}</h3>
             {group.features.map((feature) => (
               <div key={feature.label} className="flex flex-col gap-2">
-                <h4 className="text-sm font-medium">{feature.label}</h4>
+                <h4 className="font-sans text-sm font-medium tracking-normal">{feature.label}</h4>
                 <dl className="flex flex-col gap-2 text-sm">
                   {PLANS.map((plan) => (
                     <div key={plan.tier} className="flex items-start justify-between gap-4">
