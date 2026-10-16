@@ -8,6 +8,7 @@ import {
   markProviderCleanupAttemptFailed,
   prepareOrganizationPurge,
   runProviderCleanup,
+  finalizeOrganizationPurge,
 } from '../../src/organization-retention/repository.js';
 
 async function seedPurgingOrganization(now: Date) {
@@ -47,6 +48,31 @@ async function seedPurgingOrganization(now: Date) {
 }
 
 describe('organization purge fencing', () => {
+  it('retains abandoned provider IDs and blocks erasure while a refund remains unresolved', async () => {
+    const now = new Date('2026-09-04T11:00:00.000Z');
+    const seeded = await seedPurgingOrganization(now);
+    await db.insert(schema.billingAbandonedCheckout).values({
+      organizationId: seeded.organization.id,
+      razorpaySubscriptionId: 'sub_abandoned',
+    });
+    const prepared = await prepareOrganizationPurge(seeded.organization.id, now);
+    expect(prepared).not.toBeNull();
+    const [cleanup] = await claimPendingProviderCleanup(now, 10);
+    expect(cleanup).toEqual(expect.objectContaining({ razorpaySubscriptionId: 'sub_abandoned' }));
+    await runProviderCleanup(cleanup!, now, async () => undefined);
+    // Cancelling the agreement alone does not prove its late payments refunded.
+    expect(await finalizeOrganizationPurge(prepared!, now)).toBe(false);
+    const [tracked] = await db
+      .select()
+      .from(schema.billingAbandonedCheckout)
+      .where(eq(schema.billingAbandonedCheckout.razorpaySubscriptionId, 'sub_abandoned'));
+    expect(tracked?.organizationId).toBe(seeded.organization.id);
+    await db
+      .update(schema.billingAbandonedCheckout)
+      .set({ resolvedAt: now })
+      .where(eq(schema.billingAbandonedCheckout.razorpaySubscriptionId, 'sub_abandoned'));
+    expect(await finalizeOrganizationPurge(prepared!, now)).toBe(true);
+  });
   it('waits for the latest project, logo, or verification upload plus settling time', async () => {
     const now = new Date('2026-09-04T12:00:00.000Z');
     const seeded = await seedPurgingOrganization(now);

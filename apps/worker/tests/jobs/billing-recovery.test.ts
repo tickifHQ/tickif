@@ -68,6 +68,28 @@ const source: RazorpaySubscription = {
 describe('durable billing recovery reconciliation', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('makes an unauthenticated recovery checkout eligible for a different explicit selection', () => {
+    expect(
+      resolveRecovery(
+        { ...intent, status: 'checkout_pending' },
+        { ...local, razorpaySubscriptionId: 'replacement', planTier: 'hobby' },
+        { ...source, status: 'cancelled' },
+        { ...source, id: 'replacement', plan_id: 'plan_corp', status: 'created' },
+      ),
+    ).toEqual({ status: 'eligible', eligibleAt: null, reason: 'source_subscription_terminated' });
+  });
+
+  it('protects an authenticated recovery mandate while activation is pending', () => {
+    expect(
+      resolveRecovery(
+        { ...intent, status: 'checkout_pending' },
+        { ...local, razorpaySubscriptionId: 'replacement', planTier: 'hobby' },
+        { ...source, status: 'cancelled' },
+        { ...source, id: 'replacement', plan_id: 'plan_corp', status: 'authenticated' },
+      ).status,
+    ).toBe('checkout_pending');
+  });
+
   it('does not permit checkout merely because the eligible date elapsed', () => {
     expect(resolveRecovery(intent, local, source, source).status).toBe('waiting_for_expiry');
   });

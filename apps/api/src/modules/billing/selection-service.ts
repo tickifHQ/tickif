@@ -15,6 +15,7 @@ import { operationRepository } from './operation-repository.js';
 import { recoveryService } from './recovery-service.js';
 import { subscribeRepository } from './subscribe-repository.js';
 import { getPlanChangeTiming } from './plan-change-policy.js';
+import { canSupersedeReplacement } from './abandoned-checkout-policy.js';
 import { replacementRepository, reconcileReplacement, upgradeAmount } from '@repo/billing';
 import { activeEarlyBirdTrial } from '@repo/billing';
 import {
@@ -117,9 +118,6 @@ async function snapshot(
     if (checkout) {
       if (!checkout.targetTier) return result('blocked', 'unknown_checkout_plan');
       if (checkout.status === 'authenticated') return result('blocked', 'activation_pending');
-      return targetTier === checkout.targetTier
-        ? result('subscribe')
-        : result('blocked', 'unfinished_checkout_conflict');
     }
     if (scheduledChange) return result('blocked', 'scheduled_change_pending');
     if (terminal && currentTier !== 'hobby')
@@ -135,6 +133,8 @@ async function snapshot(
       return result('blocked', 'billing_not_configured');
     if (targetTier !== 'hobby' && !resolveRazorpayPlanId(targetTier))
       return result('blocked', 'plan_not_configured');
+    if (checkout?.status === 'created' && currentTier === 'hobby')
+      return targetTier === 'hobby' ? result('current') : result('subscribe');
     if (!remote && currentTier !== 'hobby')
       return result('blocked', 'subscription_state_unverified');
     if (!remote || terminal)
@@ -182,7 +182,11 @@ async function buildPreview(
   quotedAt = Math.floor(Date.now() / 1000),
 ) {
   const pending = await replacementRepository.current(caller.activeOrgId!);
-  if (pending) {
+  if (
+    pending &&
+    ((targetTier === pending.targetTier && pending.expiresAt.getTime() > Date.now()) ||
+      !(await canSupersedeReplacement(pending)))
+  ) {
     const resume = targetTier === pending.targetTier && pending.status === 'checkout';
     const cancel = targetTier === 'hobby' && pending.status === 'confirmed';
     const local = await (reader ?? subscribeRepository).find(caller.activeOrgId!);
@@ -321,12 +325,14 @@ export const billingSelectionService = {
   async context(caller: BillingCaller) {
     await assertBillingAccess(caller);
     const replacement = await replacementRepository.current(caller.activeOrgId!);
+    let replaceableOperationId: string | null = null;
     if (replacement) {
       await reconcileReplacement(caller.activeOrgId!);
       await invalidateEntitlementCache(caller.activeOrgId!);
       const current = await replacementRepository.current(caller.activeOrgId!);
       const local = await subscribeRepository.find(caller.activeOrgId!);
-      if (current)
+      if (current && (await canSupersedeReplacement(current))) replaceableOperationId = current.id;
+      else if (current)
         return {
           organizationId: caller.activeOrgId!,
           currentTier: local?.planTier ?? 'hobby',
@@ -376,6 +382,7 @@ export const billingSelectionService = {
     const state = await snapshot(caller);
     const context = state.context;
     let pending = await operationRepository.findOpenOperation(caller.activeOrgId!);
+    if (pending?.operationId === replaceableOperationId) pending = undefined;
     let cancellationSource = state.remote;
     if (
       pending?.kind === 'cancel' &&

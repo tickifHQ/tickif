@@ -55,6 +55,8 @@ export function resolveRecovery(
     return pending('source_subscription_live');
   }
   if (current && current.id !== source.id && !TERMINAL.has(current.status)) {
+    if (current.status === 'created')
+      return { status: 'eligible', eligibleAt: null, reason: 'source_subscription_terminated' };
     const currentTier = tierForPlan(current.plan_id);
     if (
       current.status === 'active' &&
@@ -65,10 +67,7 @@ export function resolveRecovery(
     ) {
       return { status: 'superseded', eligibleAt: null, reason: 'another_plan_activated' };
     }
-    if (
-      currentTier === intent.targetTier &&
-      ['created', 'authenticated', 'active'].includes(current.status)
-    ) {
+    if (currentTier === intent.targetTier && ['authenticated', 'active'].includes(current.status)) {
       return { status: 'checkout_pending', eligibleAt: null, reason: 'awaiting_activation' };
     }
     return pending('another_subscription_live');

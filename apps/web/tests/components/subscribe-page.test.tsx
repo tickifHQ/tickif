@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   refresh: vi.fn(),
   paymentMethod: vi.fn(),
+  sync: vi.fn(),
+}));
+
+vi.mock('@/components/workspace-entitlement-sync', () => ({
+  useWorkspaceEntitlementSync: () => mocks.sync,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -43,7 +48,7 @@ vi.mock('@/components/subscribe/checkout-flow', () => ({
     onSubscriptionChange: () => void;
   }) =>
     open ? (
-      <div role="dialog">
+      <div role="dialog" aria-label="Plan subscription">
         {initialTargetTier}
         <button onClick={() => onOpenChange(false)}>Close billing</button>
         <button onClick={onSubscriptionChange}>Refresh from checkout</button>
@@ -54,6 +59,7 @@ vi.mock('@/components/subscribe/checkout-flow', () => ({
 import { SubscribePage } from '../../src/components/subscribe/subscribe-page';
 
 beforeEach(() => {
+  mocks.sync.mockClear();
   mocks.refresh.mockImplementation(async () => new Response(null, { status: 200 }));
 });
 
@@ -133,6 +139,62 @@ describe('SubscribePage support recovery', () => {
 });
 
 describe('SubscribePage visible comparison and retained selection', () => {
+  it.each(['failed request', 'invalid response'] as const)(
+    'does not sync workspace entitlements from a %s',
+    async (failure) => {
+      mocks.getSubscription.mockImplementation(async () =>
+        failure === 'failed request'
+          ? new Response(null, { status: 503 })
+          : Response.json({ tier: 'corporate', lifecycleState: 'active' }),
+      );
+      render(<SubscribePage userId="user-sync" organizationId="org-sync" />);
+      await screen.findByText(
+        failure === 'failed request'
+          ? 'We could not load your subscription'
+          : 'We could not verify your subscription',
+      );
+      expect(mocks.sync).not.toHaveBeenCalled();
+    },
+  );
+
+  it('shows the pricing loading state until the initial subscription is available', async () => {
+    let complete: ((response: Response) => void) | undefined;
+    mocks.selection.mockImplementation(async () =>
+      Response.json({
+        organizationId: 'org-loading',
+        currentTier: 'hobby',
+        sourceSubscriptionId: null,
+        providerState: 'known',
+        unfinishedCheckout: null,
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: ['professional_plus', 'corporate'].map((targetTier) => ({
+          targetTier,
+          action: 'subscribe',
+          reason: null,
+          effectiveAt: null,
+        })),
+      }),
+    );
+    mocks.getSubscription.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    render(<SubscribePage />);
+    expect(screen.getByRole('status', { name: 'Loading plans' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: /Upgrade to/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(complete).toBeDefined());
+    await act(async () => complete?.(Response.json({ ...subscription('active'), tier: 'hobby' })));
+    expect(await screen.findByRole('table', { name: 'Compare plan features' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading plans' })).not.toBeInTheDocument();
+  });
+
   it('updates pending checkout to the active plan automatically while preserving the mounted dialog', async () => {
     sessionStorage.clear();
     let active = false;
@@ -164,10 +226,10 @@ describe('SubscribePage visible comparison and retained selection', () => {
       }),
     );
     render(<SubscribePage userId="user-auto" organizationId="org-auto" />);
-    await screen.findByText('Checkout in progress');
+    await screen.findByRole('button', { name: 'Upgrade to Corporate' });
     expect(screen.queryByRole('button', { name: /refresh|check status/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Continue checkout' }));
-    const dialog = screen.getByRole('dialog');
+    await userEvent.click(screen.getByRole('button', { name: 'Upgrade to Corporate' }));
+    const dialog = screen.getByRole('dialog', { name: 'Plan subscription' });
     let finish: ((value: Response) => void) | undefined;
     mocks.getSubscription.mockImplementationOnce(
       () =>
@@ -177,18 +239,17 @@ describe('SubscribePage visible comparison and retained selection', () => {
     );
     fireEvent(window, new Event('focus'));
     await waitFor(() => expect(finish).toBeDefined());
-    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(screen.getByRole('dialog', { name: 'Plan subscription' })).toBe(dialog);
     expect(dialog).toHaveTextContent('corporate');
-    expect(sessionStorage.getItem('tickif:billing-selection:v1:user-auto:org-auto')).toBe(
-      'corporate',
-    );
+    expect(sessionStorage.length).toBe(0);
     active = true;
     await act(async () => {
       finish?.(Response.json(subscription('active')));
     });
     await waitFor(() => expect(screen.queryByText('Checkout in progress')).not.toBeInTheDocument());
+    expect(screen.getByRole('dialog', { name: 'Plan subscription' })).toBe(dialog);
+    await userEvent.click(screen.getByRole('button', { name: 'Close billing' }));
     expect(screen.getByRole('button', { name: 'Corporate is your current plan' })).toBeDisabled();
-    expect(screen.getByRole('dialog')).toBe(dialog);
   });
 
   it('ignores an old organization response after changing scope', async () => {
@@ -257,7 +318,7 @@ describe('SubscribePage visible comparison and retained selection', () => {
     );
     render(<SubscribePage userId="user-a" organizationId="org-a" />);
     await userEvent.click(await screen.findByRole('button', { name: 'Upgrade to Corporate' }));
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('dialog', { name: 'Plan subscription' });
     let completeRefresh: ((response: Response) => void) | undefined;
     mocks.getSubscription.mockImplementationOnce(
       () =>
@@ -266,15 +327,15 @@ describe('SubscribePage visible comparison and retained selection', () => {
         }),
     );
     await userEvent.click(screen.getByRole('button', { name: 'Refresh from checkout' }));
-    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(screen.getByRole('dialog', { name: 'Plan subscription' })).toBe(dialog);
     expect(dialog).toHaveTextContent('corporate');
     completeRefresh?.(new Response(null, { status: 502 }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Previously loaded billing details are shown',
     );
-    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(screen.getByRole('dialog', { name: 'Plan subscription' })).toBe(dialog);
   });
-  it('shows every plan and retains Corporate through close, remount, and organization change', async () => {
+  it('shows every plan and clears abandoned intent through close, remount, and organization change', async () => {
     const user = userEvent.setup();
     sessionStorage.clear();
     mocks.getSubscription.mockImplementation(async () =>
@@ -311,21 +372,68 @@ describe('SubscribePage visible comparison and retained selection', () => {
       '/designer/plan-billing',
     );
     expect(screen.getByRole('table', { name: 'Compare plan features' })).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Plan subscription' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Upgrade Plan' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Upgrade to Corporate' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
+    expect(screen.getByRole('dialog', { name: 'Plan subscription' })).toHaveTextContent(
+      'corporate',
+    );
     await user.click(screen.getByRole('button', { name: 'Close billing' }));
     first.unmount();
     const second = render(<SubscribePage userId="user-a" organizationId="org-a" />);
-    await user.click(await screen.findByRole('button', { name: 'Continue Corporate' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
+    expect(await screen.findByRole('button', { name: 'Upgrade to Corporate' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Continue Corporate' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Selected', { exact: true })).not.toBeInTheDocument();
     second.rerender(<SubscribePage userId="user-a" organizationId="org-b" />);
     await screen.findByRole('heading', { name: 'Choose your plan', level: 1 });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Plan subscription' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue Corporate' })).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Upgrade to Corporate' })).toBeDisabled(),
     );
+  });
+  it('consumes explicit URL intent once and returns to unselected plan choices when review closes', async () => {
+    mocks.getSubscription.mockImplementation(async () =>
+      Response.json({ ...subscription('active'), tier: 'hobby' }),
+    );
+    mocks.selection.mockImplementation(async () =>
+      Response.json({
+        organizationId: 'org-url',
+        currentTier: 'hobby',
+        sourceSubscriptionId: null,
+        providerState: 'known',
+        unfinishedCheckout: null,
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: ['professional_plus', 'corporate'].map((targetTier) => ({
+          targetTier,
+          action: 'subscribe',
+          reason: null,
+          effectiveAt: null,
+        })),
+      }),
+    );
+    window.history.replaceState(null, '', '/designer/plan-billing/subscribe?tier=corporate');
+    const view = render(
+      <SubscribePage userId="user-url" organizationId="org-url" initialTargetTier="corporate" />,
+    );
+    expect(await screen.findByRole('dialog', { name: 'Plan subscription' })).toHaveTextContent(
+      'corporate',
+    );
+    expect(mocks.sync).toHaveBeenCalledWith(
+      'org-url',
+      expect.objectContaining({ tier: 'hobby', lifecycleState: 'active' }),
+    );
+    expect(window.location.search).toBe('');
+    await userEvent.click(screen.getByRole('button', { name: 'Close billing' }));
+    // Browser Back can remount cached server props after the URL intent was consumed.
+    view.unmount();
+    render(
+      <SubscribePage userId="user-url" organizationId="org-url" initialTargetTier="corporate" />,
+    );
+    expect(await screen.findByRole('button', { name: 'Upgrade to Corporate' })).toBeEnabled();
+    expect(screen.queryByRole('dialog', { name: 'Plan subscription' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Selected', { exact: true })).not.toBeInTheDocument();
   });
 });

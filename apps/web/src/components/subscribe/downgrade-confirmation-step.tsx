@@ -47,7 +47,7 @@ export function DowngradeConfirmationStep({
       </button>
 
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-foreground">
+        <h2 className="font-sans text-xl text-foreground font-medium tracking-normal">
           {isCancellation ? 'Cancel Subscription' : 'Confirm Downgrade'}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -61,7 +61,9 @@ export function DowngradeConfirmationStep({
       <div className="mt-6 flex items-center justify-center gap-4">
         <Card radius="xl" className="flex-1 p-4 text-center">
           <p className="text-xs text-muted-foreground">Current Plan</p>
-          <p className="mt-1 text-base font-bold text-foreground">{current.label}</p>
+          <p className="font-sans mt-1 text-base font-medium text-foreground tracking-normal">
+            {current.label}
+          </p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {formatCurrency(current.price)}/month
           </p>
@@ -69,7 +71,9 @@ export function DowngradeConfirmationStep({
         <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
         <Card radius="xl" className="flex-1 p-4 text-center">
           <p className="text-xs text-muted-foreground">New Plan</p>
-          <p className="mt-1 text-base font-bold text-foreground">{target.label}</p>
+          <p className="font-sans mt-1 text-base font-medium text-foreground tracking-normal">
+            {target.label}
+          </p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {formatCurrency(target.price)}/month
           </p>

@@ -91,7 +91,7 @@ const requiredEntries: [file: string, title: string][] = [
   ...[1412, 390].flatMap((width): [string, string][] => [
     [
       'billing-checkout-return.spec.ts',
-      `checkout loader, close, resume and verified success at ${width}px`,
+      `checkout close restores plan choices and another plan completes safely at ${width}px`,
     ],
     [
       'billing-checkout-return.spec.ts',
@@ -117,7 +117,7 @@ const requiredEntries: [file: string, title: string][] = [
     'lost cancellation response reconciles from live provider state without a second cancellation',
     'invalid duplicate and stale signed webhooks cannot grant or roll back a paid tier',
     'lost recovery cancellation retains the accepted target and reconciles without cancelling twice',
-    'unfinished checkout rejects another tier and resumes the same provider subscription',
+    'unfinished checkout can resume its tier or safely replace it with another available plan',
     'authenticated checkout waits for activation and cannot create a second subscription',
     'pending mandate requires payment recovery and blocks a replacement purchase',
     'halted mandate requires payment recovery and blocks a replacement purchase',
@@ -176,14 +176,22 @@ const requiredEntries: [file: string, title: string][] = [
     'billing-management.spec.ts',
     'fresh Hobby organization shows actual seat and branch usage without a subscription',
   ],
+  [
+    'billing-management.spec.ts',
+    'Corporate checkout refreshes the retained workspace and unlocks team and branch management without a reload',
+  ],
   ...(['Hobby', 'Professional+', 'Corporate'] as const).map((label): [string, string] => [
     'billing-management.spec.ts',
     `${label} owner opens comparison from billing or directly at desktop and mobile widths`,
   ]),
   [
     'billing-management.spec.ts',
-    'direct Corporate checkout survives provider dismissal and reload, then activates only from provider evidence',
+    'direct Corporate checkout restores choices after dismissal and activates only from provider evidence',
   ],
+  ...['professional_plus', 'corporate'].map((source): [string, string] => [
+    'billing-management.spec.ts',
+    `abandoning ${source} plan change restores choices including Hobby`,
+  ]),
   [
     'billing-management.spec.ts',
     'paid recovery preserves the accepted downgrade across session loss and cancellation requires a fresh preview',

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Loader2, ShieldCheck } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Button } from '@repo/ui/components/button';
+import { Dialog, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import type {
   BillingChangePreview,
   BillingRecovery,
@@ -21,7 +21,6 @@ import {
   subscriptionResponseSchema,
 } from '@repo/contracts';
 import { isUpgrade, isValidTier, PLAN_MAP } from '@/lib/plan-config';
-import { PlanSelection } from './plan-selection';
 import { api } from '@/lib/api';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
@@ -42,6 +41,7 @@ interface CheckoutFlowProps {
   scopeKey?: string;
   onSubscriptionChange?: () => void | Promise<void>;
   onCheckoutResult?: (outcome: 'complete' | 'closed') => void;
+  onRestoreFocus?: () => void;
 }
 
 type Step =
@@ -83,6 +83,7 @@ function ScopedCheckoutFlow({
   onTargetChange,
   onSubscriptionChange,
   onCheckoutResult,
+  onRestoreFocus,
 }: CheckoutFlowProps) {
   const router = useRouter();
   const [target, setTarget] = useState<PlanTier | null>(initialTargetTier);
@@ -106,6 +107,7 @@ function ScopedCheckoutFlow({
     return () => {
       mounted.current = false;
       sequence.current += 1;
+      previousInput.current = { open: false, target: null };
     };
   }, []);
 
@@ -154,7 +156,7 @@ function ScopedCheckoutFlow({
     // A concurrent billing user may replace the recovery intent. Never adopt their target.
     if (recovery && !sameRecovery) {
       setMessage(
-        'Your saved plan changed elsewhere. Close this dialog to review the latest billing details.',
+        'Your saved plan changed elsewhere. Return to plans to review the latest billing details.',
       );
       return;
     }
@@ -259,14 +261,11 @@ function ScopedCheckoutFlow({
     // A fresh explicit opening always revalidates; server subscription refresh must not resubmit.
   }, [open, initialTargetTier, currentTier, lifecycleState, restoreTier, review]);
 
-  function choose(tier: PlanTier) {
-    onTargetChange?.(tier);
-    void review(tier);
-  }
   function finishCheckout(outcome: 'complete' | 'closed') {
     if (!mounted.current || !target) return;
     // Keep the loading screen until navigation completes. The result page reads
     // authoritative billing state; a provider callback alone never grants access.
+    onTargetChange?.(null);
     onOpenChange(false);
     if (onCheckoutResult) {
       externalCheckout.current = false;
@@ -363,7 +362,6 @@ function ScopedCheckoutFlow({
         onSubscriptionChange?.();
         externalCheckout.current = true;
         setProviderOpen(true);
-        onOpenChange(false);
         await openRazorpayCheckout({
           keyId: data.razorpayKeyId,
           subscriptionId: data.razorpaySubscriptionId,
@@ -473,7 +471,7 @@ function ScopedCheckoutFlow({
                   aria-hidden="true"
                 />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1 className="font-sans text-2xl font-medium tracking-normal">
                 {step === 'pending' ? 'Confirming your payment' : 'Opening secure checkout'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -489,17 +487,24 @@ function ScopedCheckoutFlow({
           document.body,
         )}
       <Dialog
-        open={open}
+        open={open && !providerOpen}
         modal={!providerOpen}
-        onOpenChange={(value) => {
-          if (!blocking && !providerOpen) onOpenChange(value);
+        onOpenChange={(next) => {
+          if (!blocking && !providerOpen) {
+            if (!next) onTargetChange?.(null);
+            onOpenChange(next);
+          }
         }}
       >
         <DialogContent
-          className={`${step === 'select' ? 'sm:max-w-5xl' : 'sm:max-w-lg'} ${providerOpen ? 'invisible pointer-events-none' : ''}`}
+          className="sm:max-w-lg"
           showCloseButton={!blocking}
           onInteractOutside={blocking ? (event) => event.preventDefault() : undefined}
           onEscapeKeyDown={blocking ? (event) => event.preventDefault() : undefined}
+          onCloseAutoFocus={(event) => {
+            if (providerOpen || onRestoreFocus) event.preventDefault();
+            if (!providerOpen) onRestoreFocus?.();
+          }}
         >
           <DialogTitle className="sr-only">Plan subscription</DialogTitle>
           {!isValidTier(currentTier) ? (
@@ -513,12 +518,9 @@ function ScopedCheckoutFlow({
           ) : (
             <>
               {step === 'select' && (
-                <PlanSelection
-                  currentTier={currentTier}
-                  lifecycleState={lifecycleState}
-                  selectedTier={target}
-                  onSelectPlan={choose}
-                />
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Choose a plan on the pricing page
+                </Button>
               )}
               {(step === 'loading' || step === 'processing') && (
                 <p role="status">
@@ -527,26 +529,42 @@ function ScopedCheckoutFlow({
               )}
               {step === 'review' && preview && (
                 <div className="flex flex-col gap-4">
-                  <h2 className="text-xl font-semibold">{title}</h2>
+                  <h2 className="font-sans text-xl leading-7 font-medium tracking-normal">
+                    {title}
+                  </h2>
                   <p className="text-sm text-muted-foreground">
                     Selected plan: {label}. Current plan: {PLAN_MAP[preview.currentTier].label}.
                   </p>
                   <dl className="grid grid-cols-2 gap-3 text-sm">
-                    <dt>Effective date</dt>
+                    <dt>{preview.action === 'subscribe' ? 'Starts' : 'Effective date'}</dt>
                     <dd>
-                      {preview.timing === 'now' ? 'Once confirmed' : dateLabel(preview.effectiveAt)}
+                      {preview.action === 'subscribe'
+                        ? 'After successful payment'
+                        : preview.timing === 'now'
+                          ? 'Once confirmed'
+                          : dateLabel(preview.effectiveAt)}
                     </dd>
                     <dt>Next renewal</dt>
-                    <dd>{dateLabel(preview.nextRenewalAt)}</dd>
+                    <dd>
+                      {preview.action === 'subscribe' && !preview.nextRenewalAt
+                        ? 'Monthly after activation'
+                        : dateLabel(preview.nextRenewalAt)}
+                    </dd>
                     <dt>Monthly price</dt>
                     <dd>{money(preview.recurringAmount, preview.currency)}</dd>
-                    <dt>
-                      {preview.adjustmentDirection === 'refund' ? 'Refund' : 'Additional charge'}
-                    </dt>
-                    <dd>
-                      {money(preview.adjustmentAmount, preview.currency)}
-                      {preview.amountCertainty === 'estimated' ? ' (estimate)' : ''}
-                    </dd>
+                    {preview.action !== 'subscribe' && (
+                      <>
+                        <dt>
+                          {preview.adjustmentDirection === 'refund'
+                            ? 'Refund'
+                            : 'Additional charge'}
+                        </dt>
+                        <dd>
+                          {money(preview.adjustmentAmount, preview.currency)}
+                          {preview.amountCertainty === 'estimated' ? ' (estimate)' : ''}
+                        </dd>
+                      </>
+                    )}
                   </dl>
                   {preview.action === 'change_plan' && (
                     <p className="text-sm text-muted-foreground">
@@ -557,8 +575,7 @@ function ScopedCheckoutFlow({
                   )}
                   {preview.action === 'subscribe' && (
                     <p className="text-sm text-muted-foreground">
-                      Review the final recurring amount and payment authorization in Razorpay
-                      Checkout. Monthly display pricing is not today’s charge.
+                      Review today’s charge and authorize monthly payments in Razorpay Checkout.
                     </p>
                   )}
                   {replacingSavedPlan && recovery && (
@@ -604,15 +621,17 @@ function ScopedCheckoutFlow({
                               : 'Confirm plan change'}
                     </Button>
                   )}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (preview.confirmationAllowed) setStep('select');
-                      else onOpenChange(false);
-                    }}
-                  >
-                    {preview.confirmationAllowed ? 'Choose another plan' : 'Close'}
-                  </Button>
+                  {!preview.confirmationAllowed && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        onTargetChange?.(null);
+                        onOpenChange(false);
+                      }}
+                    >
+                      Close
+                    </Button>
+                  )}
                 </div>
               )}
               {step === 'replacement' && (
@@ -626,7 +645,7 @@ function ScopedCheckoutFlow({
               )}
               {step === 'recovery' && (
                 <div className="flex flex-col gap-4" role="status">
-                  <h2 className="text-lg font-semibold">Plan saved</h2>
+                  <h2 className="font-sans text-lg font-medium tracking-normal">Plan saved</h2>
                   <p>
                     {recovery?.status === 'waiting_for_expiry'
                       ? recovery.eligibleAt
@@ -637,7 +656,7 @@ function ScopedCheckoutFlow({
                         : recovery?.status === 'checkout_pending'
                           ? 'Your checkout is being confirmed. Please wait before making another purchase.'
                           : recovery?.status === 'dismissed' || recovery?.status === 'superseded'
-                            ? 'This saved selection is no longer active. Close this dialog to review your available plans.'
+                            ? 'This saved selection is no longer active. Return to plans to review your available plans.'
                             : 'Your cancellation is being confirmed. You can purchase your saved plan after your current subscription ends.'}
                   </p>
                   {message && <p>{message}</p>}
@@ -660,7 +679,13 @@ function ScopedCheckoutFlow({
                       Close
                     </Button>
                   ) : (
-                    <Button variant="outline" onClick={() => setStep('select')}>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        onTargetChange?.(null);
+                        onOpenChange(false);
+                      }}
+                    >
                       Choose another plan
                     </Button>
                   )}
@@ -668,15 +693,17 @@ function ScopedCheckoutFlow({
               )}
               {step === 'pending' && (
                 <div className="flex flex-col gap-4" role="status">
-                  <h2 className="text-lg font-semibold">Confirmation pending</h2>
+                  <h2 className="font-sans text-lg font-medium tracking-normal">
+                    Confirmation pending
+                  </h2>
                   <p>
                     {label} remains selected.{' '}
                     {message ||
                       'This change is still being confirmed. Your access will update once confirmed.'}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    We’ll keep checking automatically. You can close this dialog while confirmation
-                    is pending.
+                    We’ll keep checking automatically. You can return to plans while confirmation is
+                    pending.
                   </p>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Close
@@ -715,7 +742,7 @@ export function SuccessStep({
 }) {
   return (
     <div role="status" className="flex flex-col gap-4 py-8 text-center">
-      <h2 className="text-lg font-semibold">
+      <h2 className="font-sans text-lg font-medium tracking-normal">
         {kind === 'activated' ? 'Plan activated' : 'Plan change scheduled'}
       </h2>
       <p>

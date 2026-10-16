@@ -8,7 +8,7 @@
 import { headers } from 'next/headers';
 import { api } from '@/lib/api';
 import type { BillingState } from './billing-types';
-import type { SubscriptionResponse } from '@repo/contracts';
+import { subscriptionResponseSchema } from '@repo/contracts';
 import { mapSubscriptionToBillingState } from './billing-state';
 
 /**
@@ -41,8 +41,8 @@ export async function getBillingState(): Promise<BillingState | null> {
       return null;
     }
 
-    const data = (await response.json()) as SubscriptionResponse;
-    return mapSubscriptionToBillingState(data);
+    const parsed = subscriptionResponseSchema.safeParse(await response.json());
+    return parsed.success ? mapSubscriptionToBillingState(parsed.data) : null;
   } catch {
     // Preserve uncertainty: an unavailable API is not evidence of a downgrade.
     return null;

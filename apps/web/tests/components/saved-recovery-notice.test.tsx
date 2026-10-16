@@ -98,10 +98,11 @@ describe('unified billing status notice', () => {
     expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
-  it('resumes a created checkout without any recovery removal menu', async () => {
+  it('does not present abandoned checkout as a selected plan', () => {
     const review = vi.fn();
     notice(
       {
+        recovery: null,
         unfinishedCheckout: {
           targetTier: 'corporate',
           status: 'created',
@@ -110,8 +111,9 @@ describe('unified billing status notice', () => {
       },
       review,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Continue checkout' }));
-    expect(review).toHaveBeenCalledWith('corporate');
+    expect(screen.queryByRole('button', { name: 'Continue checkout' })).not.toBeInTheDocument();
+    expect(review).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Saved plan options' })).not.toBeInTheDocument();
   });
   it('shows payment confirmation without purchase actions for authenticated checkout', () => {

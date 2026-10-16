@@ -2,6 +2,7 @@ import { SubscribePage } from '@/components/subscribe/subscribe-page';
 import { requireAuth } from '@/lib/auth-guard';
 import { getCurrentOrgCapabilities, hasBillingAccess } from '@/lib/current-org-role';
 import { BillingAccessDenied } from '@/components/billing-access-denied';
+import { planTierSchema } from '@repo/contracts';
 
 export const metadata = {
   title: 'Plans · Tickif',
@@ -11,11 +12,21 @@ export const metadata = {
  * E-120 Subscribe page.
  * Server component wrapper — the client component handles state and API calls.
  */
-export default async function DesignerSubscribePage() {
+export default async function DesignerSubscribePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tier?: string | string[] }>;
+} = {}) {
   const session = await requireAuth({ requiredRole: 'designer' });
   const capabilities = await getCurrentOrgCapabilities();
   if (!hasBillingAccess(capabilities)) return <BillingAccessDenied />;
+  const query = await searchParams;
+  const target = planTierSchema.safeParse(query?.tier);
   return (
-    <SubscribePage userId={session.user.id} organizationId={session.session.activeOrganizationId} />
+    <SubscribePage
+      userId={session.user.id}
+      organizationId={session.session.activeOrganizationId}
+      initialTargetTier={target.success ? target.data : null}
+    />
   );
 }

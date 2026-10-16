@@ -247,6 +247,16 @@ test('choosing another eligible saved plan requires confirmation before its repl
   context,
 }) => {
   const owner = await createBillingOwner(context, 'corporate', { unverifiedPeriod: true });
+  await page.addInitScript(() => {
+    class DismissedCheckout {
+      constructor(private options: { modal: { ondismiss: () => void } }) {}
+      on() {}
+      open() {
+        this.options.modal.ondismiss();
+      }
+    }
+    Object.assign(window, { Razorpay: DismissedCheckout });
+  });
   try {
     const quote = await preview(context, 'professional_plus');
     expect(quote.action).toBe('recover');
@@ -275,9 +285,7 @@ test('choosing another eligible saved plan requires confirmation before its repl
     expect((await recovery(context))?.targetTier).toBe('corporate');
     expect(await providerMutationCount(context, '/subscriptions')).toBe(before);
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-    await expect(
-      page.getByRole('button', { name: 'Continue checkout', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Choose your plan', exact: true })).toBeVisible();
     expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 1);
     expect((await owner.subscription())?.razorpaySubscriptionId).not.toBe(owner.provider.id);
   } finally {

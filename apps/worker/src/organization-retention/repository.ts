@@ -586,6 +586,27 @@ export async function prepareOrganizationPurge(
       .returning({ id: schema.organizationPurgeManifest.id });
     if (!manifest) throw new Error('Failed to prepare organization purge manifest');
 
+    // Retired checkout links outlive their active subscription pointer. Preserve
+    // every provider identity in the manifest before organization cascades.
+    const abandoned = await tx
+      .select({ id: schema.billingAbandonedCheckout.razorpaySubscriptionId })
+      .from(schema.billingAbandonedCheckout)
+      .where(eq(schema.billingAbandonedCheckout.organizationId, organizationId));
+    if (abandoned.length > 0) {
+      await tx
+        .insert(schema.organizationPurgeManifestItem)
+        .values(
+          abandoned.map(({ id }) => ({
+            manifestId: manifest.id,
+            kind: 'razorpay_subscription' as const,
+            resourceKey: id,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
     const resourceKeys = uniqueStorageKeys({
       profileLogoKeys: profiles.map(({ logoImageId }) => logoImageId),
       images,
@@ -799,6 +820,18 @@ export async function finalizeOrganizationPurge(
       )
       .limit(1);
     if (pending) return false;
+
+    const [unresolvedCheckout] = await tx
+      .select({ id: schema.billingAbandonedCheckout.razorpaySubscriptionId })
+      .from(schema.billingAbandonedCheckout)
+      .where(
+        and(
+          eq(schema.billingAbandonedCheckout.organizationId, prepared.organizationId),
+          isNull(schema.billingAbandonedCheckout.resolvedAt),
+        ),
+      )
+      .limit(1);
+    if (unresolvedCheckout) return false;
 
     const profiles = await tx
       .select({ id: schema.designerProfile.id })

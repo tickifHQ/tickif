@@ -12,7 +12,9 @@ export function BillingAccessDenied() {
       <div className="flex size-16 items-center justify-center rounded-full bg-muted">
         <Lock className="size-7 text-muted-foreground" />
       </div>
-      <h1 className="mt-5 text-xl font-semibold text-foreground">Billing access restricted</h1>
+      <h1 className="font-sans mt-5 text-xl text-foreground font-medium tracking-normal">
+        Billing access restricted
+      </h1>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
         Only the organization Owner can view Plan & Billing. Contact your organization owner for
         billing questions.

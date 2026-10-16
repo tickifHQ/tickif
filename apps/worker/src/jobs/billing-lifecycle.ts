@@ -16,6 +16,8 @@ import {
   refundAbandonedReplacement,
   earlyBirdRepository,
   expireEarlyBird,
+  abandonedCheckoutRepository,
+  reconcileAbandonedCheckout,
 } from '@repo/billing';
 
 /** Cap the fan-out of one sweep tick so a backlog can't run unbounded. */
@@ -122,6 +124,37 @@ export async function processBillingLifecycleSweep(
     } finally {
       await replacementRepository.update(candidate.id, {});
     }
+  }
+
+  try {
+    for (const candidate of await abandonedCheckoutRepository.candidates()) {
+      try {
+        await reconcileAbandonedCheckout(candidate.razorpaySubscriptionId);
+      } catch {
+        refundFailures += 1;
+        logger.error(
+          { event: 'billing.abandoned_checkout_reconciliation_failed' },
+          'Abandoned checkout compensation failed',
+        );
+      } finally {
+        // Include failed and already-settled rows in rotation for late captures.
+        try {
+          await abandonedCheckoutRepository.touch(candidate.razorpaySubscriptionId);
+        } catch {
+          refundFailures += 1;
+          logger.error(
+            { event: 'billing.abandoned_checkout_rotation_failed' },
+            'Abandoned checkout rotation failed',
+          );
+        }
+      }
+    }
+  } catch {
+    refundFailures += 1;
+    logger.error(
+      { event: 'billing.abandoned_checkout_sweep_failed' },
+      'Abandoned checkout compensation sweep failed',
+    );
   }
 
   // grace → locked

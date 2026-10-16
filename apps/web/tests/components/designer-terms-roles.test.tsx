@@ -256,12 +256,188 @@ describe('DesignerTermsRoles', () => {
     );
 
     expect(screen.getByText(/Corporate feature/i)).toBeInTheDocument();
-    expect(screen.getByText(/Owner solo with 1 of 1 seats/i)).toBeInTheDocument();
+    expect(
+      screen.getByText('Upgrade to Corporate to invite teammates, assign roles, and manage seats.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Owner solo|is on a single-user plan/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
       'href',
-      '/designer/plan-billing',
+      '/designer/plan-billing/subscribe?tier=corporate',
     );
+  });
+
+  it.each([
+    { planTier: 'hobby', subscriptionState: 'active' },
+    { planTier: 'professional_plus', subscriptionState: 'active' },
+    { planTier: 'corporate', subscriptionState: 'locked' },
+  ] as const)(
+    'keeps summaries but hides all lower team panels for $planTier/$subscriptionState',
+    ({ planTier, subscriptionState }) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            planTier,
+            subscriptionState,
+            ownershipTransfer: {
+              id: 'transfer-hidden',
+              organizationId: 'org-1',
+              status: 'pending',
+              initiator: { userId: 'user-owner', name: 'Asha Rao', email: 'asha@example.com' },
+              target: {
+                memberId: 'member-rohan',
+                userId: 'user-rohan',
+                name: 'Rohan Shah',
+                email: 'rohan@example.com',
+                role: 'member',
+              },
+              expiresAt: '2099-08-10T00:00:00.000Z',
+              createdAt: '2026-08-03T00:00:00.000Z',
+              resolvedAt: null,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText('Active members')).toBeInTheDocument();
+      expect(screen.getByText('Pending invites')).toBeInTheDocument();
+      expect(screen.getByText('Your access')).toBeInTheDocument();
+      expect(screen.getByText('2', { selector: '[data-metric="members"]' })).toBeInTheDocument();
+      for (const name of [
+        'Members',
+        'Leave organisation',
+        'Invitations',
+        'Ownership transfer',
+        'Invite a teammate',
+      ])
+        expect(screen.queryByRole('heading', { name })).not.toBeInTheDocument();
+      expect(screen.queryByText('Rohan Shah')).not.toBeInTheDocument();
+      expect(screen.queryByText('new@example.com')).not.toBeInTheDocument();
+    },
+  );
+
+  it('keeps read-only Members and Leave organisation for an active Corporate member', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          currentUserRole: 'member',
+          canManage: false,
+          capabilities: {
+            ...ownerWorkspace.capabilities,
+            billing: false,
+            manageMembers: false,
+            changeMemberRoles: false,
+            transferOwnership: false,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Members' })).toBeInTheDocument();
+    expect(screen.getByText('Rohan Shah')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Leave organisation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave organisation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
+  });
+
+  it.each(['owner', 'billing_admin'] as const)(
+    'gives an unsupported-plan %s the explicit Corporate upgrade target',
+    (currentUserRole) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole,
+            planTier: 'professional_plus',
+            rbacEnabled: false,
+            canManage: false,
+            capabilities: {
+              ...ownerWorkspace.capabilities,
+              billing: true,
+              manageMembers: false,
+              changeMemberRoles: false,
+              transferOwnership: false,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+        'href',
+        '/designer/plan-billing/subscribe?tier=corporate',
+      );
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['admin', 'member', 'viewer'] as const)(
+    'gives an unsupported-plan %s owner-contact guidance without billing actions',
+    (currentUserRole) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole,
+            planTier: 'hobby',
+            rbacEnabled: false,
+            canManage: false,
+            capabilities: {
+              ...ownerWorkspace.capabilities,
+              billing: false,
+              manageMembers: false,
+              changeMemberRoles: false,
+              transferOwnership: false,
+            },
+          }}
+        />,
+      );
+      expect(
+        screen.getByText('Contact your organization Owner to change plans.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('link', { name: /Corporate plans|Restore access/i }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['owner', 'billing_admin'] as const)(
+    'keeps locked Corporate %s on restore billing even if an older capability snapshot allows RBAC',
+    (currentUserRole) => {
+      render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole,
+            subscriptionState: 'locked',
+            rbacEnabled: true,
+          }}
+        />,
+      );
+      expect(screen.getByText('Team access is suspended')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Restore access' })).toHaveAttribute(
+        'href',
+        '/designer/plan-billing',
+      );
+      expect(screen.queryByRole('link', { name: /Corporate plans/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it('does not expose member mutations from stale RBAC on an unsupported plan', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{ ...ownerWorkspace, planTier: 'hobby', rbacEnabled: true }}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing/subscribe?tier=corporate',
+    );
+    expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
   });
 
   it('prompts locked Corporate orgs to restore billing instead of upgrading', () => {
@@ -754,11 +930,12 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByRole('status')).toHaveTextContent('previous Owner is now an Admin');
   });
 
-  it('keeps leave available below Corporate while hiding ownership transfer', () => {
+  it('hides leave below Corporate together with member and ownership panels', () => {
     render(
       <DesignerTermsRoles
         workspace={{
           ...ownerWorkspace,
+          planTier: 'hobby',
           currentUserRole: 'member',
           rbacEnabled: false,
           canManage: false,
@@ -777,7 +954,8 @@ describe('DesignerTermsRoles', () => {
     );
 
     expect(screen.getByText(/Corporate feature/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Leave organisation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Leave organisation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Members' })).not.toBeInTheDocument();
     expect(screen.queryByText('Ownership transfer')).not.toBeInTheDocument();
   });
 

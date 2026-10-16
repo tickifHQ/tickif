@@ -13,8 +13,16 @@ vi.mock('@/lib/current-org-role', () => ({
   hasBillingAccess: (value: { billing: boolean } | null) => value?.billing === true,
 }));
 vi.mock('@/components/subscribe/subscribe-page', () => ({
-  SubscribePage: ({ userId, organizationId }: { userId: string; organizationId: string }) => (
-    <div>
+  SubscribePage: ({
+    userId,
+    organizationId,
+    initialTargetTier,
+  }: {
+    userId: string;
+    organizationId: string;
+    initialTargetTier?: string | null;
+  }) => (
+    <div data-target={initialTargetTier ?? undefined}>
       {userId}:{organizationId}
     </div>
   ),
@@ -34,4 +42,20 @@ describe('Subscribe server billing permission guard', () => {
     render(await DesignerSubscribePage());
     expect(screen.getByText('user-a:org-a')).toBeInTheDocument();
   });
+  it.each(['corporate', 'professional_plus', 'hobby'] as const)(
+    'passes explicit %s URL intent only after the permission guard',
+    async (tier) => {
+      mocks.capabilities.mockResolvedValue({ billing: true });
+      render(await DesignerSubscribePage({ searchParams: Promise.resolve({ tier }) }));
+      expect(screen.getByText('user-a:org-a')).toHaveAttribute('data-target', tier);
+    },
+  );
+  it.each([{ tier: 'enterprise' }, { tier: ['corporate', 'hobby'] }])(
+    'rejects an invalid or ambiguous URL plan',
+    async ({ tier }) => {
+      mocks.capabilities.mockResolvedValue({ billing: true });
+      render(await DesignerSubscribePage({ searchParams: Promise.resolve({ tier }) }));
+      expect(screen.getByText('user-a:org-a')).not.toHaveAttribute('data-target');
+    },
+  );
 });

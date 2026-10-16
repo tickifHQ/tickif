@@ -9,21 +9,26 @@ import {
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 
-const getCurrentOrgWorkspace = cache(async (): Promise<OrganizationWorkspaceResponse | null> => {
-  const reqHeaders = await headers();
-  const cookie = reqHeaders.get('cookie');
-  if (!cookie) return null;
+export const getCurrentOrgWorkspace = cache(
+  async (): Promise<OrganizationWorkspaceResponse | null> => {
+    const reqHeaders = await headers();
+    const cookie = reqHeaders.get('cookie');
+    if (!cookie) return null;
 
-  try {
-    const response = await api.api.orgs.current.$get({}, { headers: { cookie } });
-    if (!response.ok) return null;
-    const parsed = organizationWorkspaceResponseSchema.safeParse(await response.json());
-    if (!parsed.success) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-});
+    try {
+      const response = await api.api.orgs.current.$get(
+        {},
+        { headers: { cookie }, init: { cache: 'no-store' } },
+      );
+      if (!response.ok) return null;
+      const parsed = organizationWorkspaceResponseSchema.safeParse(await response.json());
+      if (!parsed.success) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  },
+);
 
 /** Current org membership role, cached with the workspace request. */
 export async function getCurrentOrgRole(): Promise<OrganizationMemberRole | null> {

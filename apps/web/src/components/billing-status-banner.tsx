@@ -35,7 +35,7 @@ export function BillingStatusBanner({
     return (
       <Alert variant="destructive">
         <XCircle />
-        <AlertTitle>Payment failed</AlertTitle>
+        <AlertTitle className="font-sans font-medium tracking-normal">Payment failed</AlertTitle>
         <AlertDescription>
           <p>
             Your last payment could not be processed. Update your payment method to avoid service
@@ -53,12 +53,14 @@ export function BillingStatusBanner({
     return (
       <Alert variant="warning">
         <AlertTriangle />
-        <AlertTitle>Payment due</AlertTitle>
+        <AlertTitle className="font-sans font-medium tracking-normal">Payment due</AlertTitle>
         <AlertDescription>
           <p>
             Your payment is overdue.
-            {graceDaysRemaining != null ? daysRemainingCopy(graceDaysRemaining, 'grace') : null} Full
-            access continues during this period.
+            {graceDaysRemaining != null
+              ? daysRemainingCopy(graceDaysRemaining, 'grace')
+              : null}{' '}
+            Full access continues during this period.
           </p>
           <Button asChild variant="outline" size="sm" className="mt-3">
             <Link href="/designer/plan-billing">Make payment</Link>
@@ -72,7 +74,9 @@ export function BillingStatusBanner({
     return (
       <Alert variant="destructive">
         <Lock />
-        <AlertTitle>Locked – reactivate to restore full access</AlertTitle>
+        <AlertTitle className="font-sans font-medium tracking-normal">
+          Locked – reactivate to restore full access
+        </AlertTitle>
         <AlertDescription>
           <p>
             Your subscription has been suspended due to non-payment.

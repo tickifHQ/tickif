@@ -7,12 +7,15 @@ const replacements = vi.hoisted(() => ({
   refund: vi.fn(),
 }));
 const trials = vi.hoisted(() => ({ expired: vi.fn(), expire: vi.fn() }));
+const abandoned = vi.hoisted(() => ({ candidates: vi.fn(), touch: vi.fn(), reconcile: vi.fn() }));
 vi.mock('@repo/billing', () => ({
   earlyBirdRepository: { expired: trials.expired },
   expireEarlyBird: trials.expire,
   replacementRepository: replacements,
   reconcileReplacement: replacements.reconcile,
   refundAbandonedReplacement: replacements.refund,
+  abandonedCheckoutRepository: abandoned,
+  reconcileAbandonedCheckout: abandoned.reconcile,
 }));
 
 const repository = vi.hoisted(() => ({
@@ -47,12 +50,58 @@ describe('processBillingLifecycleSweep failure reporting', () => {
     trials.expire.mockResolvedValue(false);
     replacements.candidates.mockResolvedValue([]);
     replacements.abandonedOrders.mockResolvedValue([]);
+    abandoned.candidates.mockResolvedValue([]);
     recovery.processBillingRecoverySweep.mockResolvedValue({ reconciled: 0, failed: 0 });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('retries abandoned checkouts independently and rotates provider failures', async () => {
+    abandoned.candidates.mockResolvedValue([
+      { razorpaySubscriptionId: 'sub_first' },
+      { razorpaySubscriptionId: 'sub_second' },
+    ]);
+    abandoned.reconcile
+      .mockRejectedValueOnce(new Error('provider unavailable'))
+      .mockResolvedValueOnce(undefined);
+    repository.findGraceExpired.mockResolvedValue([]);
+    repository.findLockedExpired.mockResolvedValue([]);
+    sharedDb.sweepOrgExpirations.mockResolvedValue({ invitations: 0, transfers: 0 });
+    retention.processOrganizationRetentionSweep.mockResolvedValue({
+      archived: 0,
+      purged: 0,
+      failed: 0,
+    });
+    const result = await processBillingLifecycleSweep();
+    expect(abandoned.reconcile).toHaveBeenCalledTimes(2);
+    expect(abandoned.touch).toHaveBeenCalledWith('sub_first');
+    expect(abandoned.touch).toHaveBeenCalledWith('sub_second');
+    expect(result.refundFailures).toBe(1);
+  });
+
+  it('continues compensating other checkouts if rotating one attempt fails', async () => {
+    abandoned.candidates.mockResolvedValue([
+      { razorpaySubscriptionId: 'sub_first' },
+      { razorpaySubscriptionId: 'sub_second' },
+    ]);
+    abandoned.reconcile.mockResolvedValue(undefined);
+    abandoned.touch
+      .mockRejectedValueOnce(new Error('row unavailable'))
+      .mockResolvedValue(undefined);
+    repository.findGraceExpired.mockResolvedValue([]);
+    repository.findLockedExpired.mockResolvedValue([]);
+    sharedDb.sweepOrgExpirations.mockResolvedValue({ invitations: 0, transfers: 0 });
+    retention.processOrganizationRetentionSweep.mockResolvedValue({
+      archived: 0,
+      purged: 0,
+      failed: 0,
+    });
+    const result = await processBillingLifecycleSweep();
+    expect(abandoned.reconcile).toHaveBeenCalledTimes(2);
+    expect(result.refundFailures).toBe(1);
   });
 
   it('expires trials and isolates failures without skipping the other billing sweeps', async () => {

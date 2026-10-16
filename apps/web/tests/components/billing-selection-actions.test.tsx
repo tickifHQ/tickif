@@ -88,7 +88,41 @@ describe('pricing action presentation', () => {
     expect(actions.hobby?.disabled).toBe(false);
   });
 
-  it.each(['created', 'authenticated'])(
+  it('permits the server-approved review of a protected replacement checkout', async () => {
+    const actions = await load(
+      context({
+        pendingOperation: {
+          operationId: 'b81a87f4-f765-4a40-9e84-bdca02f83c56',
+          targetTier: 'professional_plus',
+          status: 'checkout',
+          reason: 'replacement_checkout_pending',
+        },
+        actions: context().actions.map((action) =>
+          action.targetTier === 'hobby'
+            ? { ...action, action: 'blocked', reason: 'replacement_pending' }
+            : action,
+        ),
+      }),
+    );
+    expect(actions.professional_plus).toMatchObject({ disabled: false, hidden: false });
+    expect(actions.hobby).toMatchObject({ disabled: true });
+  });
+
+  it('keeps Buy/Upgrade choices available after an unpaid checkout is abandoned', async () => {
+    const actions = await load(
+      context({
+        unfinishedCheckout: {
+          targetTier: 'professional_plus',
+          status: 'created',
+          razorpaySubscriptionId: 'sub_checkout',
+        },
+      }),
+    );
+    expect(actions.professional_plus).toMatchObject({ disabled: false, hidden: false });
+    expect(actions.hobby).toMatchObject({ disabled: false, hidden: false });
+  });
+
+  it.each(['authenticated'])(
     'keeps %s checkout continuation exclusively in the status notice',
     async (status) => {
       const actions = await load(

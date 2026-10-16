@@ -70,9 +70,12 @@ export const recoveryService = {
             eligibleAt: null,
             reason: tier === row.targetTier ? null : 'another_plan_activated',
           };
-        } else if (sourceEnded && (!current || terminal.includes(current.status))) {
-          // The stored date is never authority: both old/current provider state
-          // must establish that a replacement cannot overlap a live mandate.
+        } else if (
+          sourceEnded &&
+          (!current || current.status === 'created' || terminal.includes(current.status))
+        ) {
+          // A created checkout has no authorized mandate. The next explicit
+          // purchase can retire it while retaining compensation for late events.
           change = {
             status: 'eligible',
             eligibleAt: null,
@@ -173,8 +176,10 @@ export const recoveryService = {
         if (
           preview.sourceSubscriptionId &&
           preview.sourceSubscriptionId !== current.sourceSubscriptionId
-        )
-          throw revisionConflict();
+        ) {
+          const checkout = await fetchSubscription(preview.sourceSubscriptionId);
+          if (checkout.status !== 'created') throw revisionConflict();
+        }
         const source = await fetchSubscription(current.sourceSubscriptionId);
         if (!['cancelled', 'completed', 'expired'].includes(source.status))
           throw new AppError(

@@ -308,7 +308,7 @@ test('lost recovery cancellation retains the accepted target and reconciles with
   }
 });
 
-test('unfinished checkout rejects another tier and resumes the same provider subscription', async ({
+test('unfinished checkout can resume its tier or safely replace it with another available plan', async ({
   context,
 }) => {
   const owner = await createBillingOwner(context);
@@ -321,7 +321,11 @@ test('unfinished checkout rejects another tier and resumes the same provider sub
       status: 'created',
       razorpaySubscriptionId: initial.razorpaySubscriptionId,
     });
-    await rejectPurchase(context, 'professional_plus', 'unfinished_checkout_conflict');
+    expect(state.actions.find((action) => action.targetTier === 'professional_plus')).toMatchObject(
+      {
+        action: 'subscribe',
+      },
+    );
     const resumed = await checkout(context, 'corporate');
     expect(resumed.razorpaySubscriptionId).toBe(initial.razorpaySubscriptionId);
     expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 1);
@@ -329,6 +333,31 @@ test('unfinished checkout rejects another tier and resumes the same provider sub
     expect((await owner.subscription())?.razorpaySubscriptionId).toBe(
       initial.razorpaySubscriptionId,
     );
+    const replacement = await checkout(context, 'professional_plus');
+    expect(replacement.razorpaySubscriptionId).not.toBe(initial.razorpaySubscriptionId);
+    expect(await providerMutationCount(context, '/subscriptions')).toBe(before + 2);
+    expect((await selection(context)).unfinishedCheckout).toMatchObject({
+      targetTier: 'professional_plus',
+      razorpaySubscriptionId: replacement.razorpaySubscriptionId,
+    });
+    // A late activation from another tab must not grant the abandoned plan.
+    await deliverSubscriptionEvent(context, 'subscription.activated', {
+      ...owner.provider,
+      id: initial.razorpaySubscriptionId,
+      plan_id: 'plan_e2e_corporate',
+      status: 'active',
+      notes: { organizationId: owner.org.id, tier: 'corporate' },
+    });
+    expect(await owner.subscription()).toMatchObject({
+      planTier: 'hobby',
+      razorpaySubscriptionId: replacement.razorpaySubscriptionId,
+    });
+    expect(
+      await providerMutationCount(
+        context,
+        `/subscriptions/${initial.razorpaySubscriptionId}/cancel`,
+      ),
+    ).toBe(1);
   } finally {
     await owner.dispose();
   }

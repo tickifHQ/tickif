@@ -88,7 +88,6 @@ const growItems: NavItem[] = [
     label: 'Team & Roles',
     href: '/designer/terms-roles',
     icon: UsersRound,
-    visible: (capabilities) => capabilities.manageMembers,
   },
   {
     label: 'Branches',
@@ -274,7 +273,7 @@ function SidebarContent({
         <div className="space-y-3">
           <div className="flex flex-col gap-3">
             <DesignerBranchSelector
-              key={activeOrganizationId}
+              key={JSON.stringify([activeOrganizationId, planLabel, capabilities])}
               organizationId={activeOrganizationId}
             />
             <a

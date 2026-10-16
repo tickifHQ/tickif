@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   validate: vi.fn(),
   findOperation: vi.fn(),
+  findReplacement: vi.fn(),
+  checkoutWasSuperseded: vi.fn(),
+  supersedeReplacement: vi.fn(),
+  canSupersede: vi.fn(),
   findOpenOperation: vi.fn(),
   insertOperation: vi.fn(),
   updateOperation: vi.fn(),
@@ -17,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   change: vi.fn(),
   cancel: vi.fn(),
   committed: false,
+}));
+vi.mock('../../../src/modules/billing/abandoned-checkout-policy.js', () => ({
+  canSupersedeReplacement: mocks.canSupersede,
 }));
 vi.mock('../../../src/modules/billing/subscribe-repository.js', () => ({
   subscribeRepository: {
@@ -59,6 +66,39 @@ beforeEach(() => {
   });
 });
 describe('durable billing mutation operations', () => {
+  it('supersedes an unpaid replacement atomically before confirming a different plan', async () => {
+    const old = { id: 'old-operation', status: 'checkout', targetTier: 'professional_plus' };
+    mocks.findReplacement.mockResolvedValue(old);
+    mocks.findOpenOperation.mockResolvedValue({ operationId: old.id });
+    mocks.canSupersede.mockResolvedValue(true);
+    mocks.create.mockResolvedValue({ razorpaySubscriptionId: 'provider_new' });
+    await billingMutationService.execute(caller, params, 'subscribe');
+    expect(mocks.supersedeReplacement).toHaveBeenCalledWith(old);
+    expect(mocks.insertOperation).toHaveBeenCalled();
+  });
+  it('does not supersede a checkout whose authorization began after review', async () => {
+    const old = { id: 'old-operation', status: 'checkout', targetTier: 'professional_plus' };
+    mocks.findReplacement.mockResolvedValue(old);
+    mocks.canSupersede.mockResolvedValue(false);
+    await expect(billingMutationService.execute(caller, params, 'subscribe')).rejects.toMatchObject(
+      { status: 409 },
+    );
+    expect(mocks.supersedeReplacement).not.toHaveBeenCalled();
+    expect(mocks.insertOperation).not.toHaveBeenCalled();
+  });
+  it('rejects replay of an older operation after its checkout was superseded', async () => {
+    mocks.findOperation.mockResolvedValue({
+      targetTier: 'corporate',
+      kind: 'subscribe',
+      status: 'scheduled',
+      result: { razorpaySubscriptionId: 'old_sub' },
+    });
+    mocks.checkoutWasSuperseded.mockResolvedValue(true);
+    await expect(billingMutationService.execute(caller, params, 'subscribe')).rejects.toMatchObject(
+      { code: 'operation_superseded' },
+    );
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
   it.each(['now', 'cycle_end'])(
     'keeps a %s plan change pending until reconciliation',
     async (timing) => {

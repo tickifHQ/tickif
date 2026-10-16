@@ -100,7 +100,7 @@ for (const policy of cases) {
         ['Analytics', true],
         ['Portfolio', policy.manage],
         ['Verification', policy.manage],
-        ['Team & Roles', policy.manage],
+        ['Team & Roles', true],
         ['Branches', policy.manage],
         ['Plan & billing', policy.billing],
         ['Add new project', policy.write],

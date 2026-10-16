@@ -53,18 +53,11 @@ export function PlanCard({
     >
       <CardHeader className="gap-3 p-5">
         <div className="flex min-h-7 flex-wrap items-center gap-2">
-          <CardTitle className="text-base leading-6">
-            <h3>{plan.label}</h3>
+          <CardTitle className="font-sans text-base leading-6 font-medium tracking-normal">
+            <h3 className="font-sans font-medium tracking-normal">{plan.label}</h3>
           </CardTitle>
-          {isCurrent ? (
-            <Badge
-              variant="outline"
-              className="border-primary/20 bg-primary/10 text-[color-mix(in_oklab,var(--primary)_75%,var(--foreground))]"
-            >
-              Current plan
-            </Badge>
-          ) : null}
-          {isSelected && !isCurrent ? <Badge variant="outline">Selected plan</Badge> : null}
+          {isCurrent ? <Badge variant="default">Current plan</Badge> : null}
+          {isSelected && !isCurrent ? <Badge variant="default">Selected plan</Badge> : null}
         </div>
         <div className="flex flex-wrap items-baseline gap-1">
           <span className="text-2xl font-semibold tracking-tight">
@@ -91,8 +84,8 @@ export function PlanCard({
           <p className="min-h-10 text-sm text-muted-foreground">{actionReason}</p>
         ) : (
           <Button
-            variant={currentActionDisabled ? 'outline' : 'fancy'}
-            className="h-auto min-h-9 w-full whitespace-normal text-xs leading-snug md:h-10 md:py-0"
+            variant={currentActionDisabled ? 'outline' : 'default'}
+            className="w-full leading-snug whitespace-normal"
             disabled={currentActionDisabled || isLocked}
             onClick={() => onSelect(plan.tier)}
             aria-label={currentActionDisabled ? `${plan.label} is your current plan` : label}

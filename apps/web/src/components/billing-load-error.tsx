@@ -9,7 +9,9 @@ export function BillingLoadError() {
   return (
     <div className="p-8">
       <Alert variant="destructive">
-        <AlertTitle>Billing information unavailable</AlertTitle>
+        <AlertTitle className="font-sans font-medium tracking-normal">
+          Billing information unavailable
+        </AlertTitle>
         <AlertDescription>
           <p>We could not load your subscription. Please retry before making billing changes.</p>
           <Button variant="outline" onClick={() => router.refresh()}>

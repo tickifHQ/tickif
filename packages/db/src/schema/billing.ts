@@ -46,6 +46,24 @@ export const billingReplacementStatusEnum = pgEnum('billing_replacement_status',
   'failed',
 ]);
 
+/** Old checkout links may still authorize: retain their identity for compensation. */
+export const billingAbandonedCheckout = pgTable(
+  'billing_abandoned_checkout',
+  {
+    razorpaySubscriptionId: text().primaryKey(),
+    resolvedAt: timestamp({ withTimezone: true }),
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('billing_abandoned_checkout_org_idx').on(t.organizationId),
+    index('billing_abandoned_checkout_sweep_idx').on(t.updatedAt),
+  ],
+);
+
 /** Retains both mandate identities after rollover; provider events never define access alone. */
 export const billingReplacement = pgTable(
   'billing_replacement',

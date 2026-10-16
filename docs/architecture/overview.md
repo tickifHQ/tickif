@@ -143,6 +143,12 @@ enquiries, reviews, billing, organization access/retention, verification and
 moderation. Use `apps/api/src/app.ts` for mounted routes and each module's source
 for its implemented behavior.
 
+Billing plan selection uses a dedicated subpage and temporary browsing intent.
+Unused checkout attempts can be superseded after a fresh verified review;
+retired provider identities remain durable for late-payment compensation.
+See [ADR 0016](../adr/0016-billing-checkout-abandonment-and-pricing-navigation.md)
+and the [billing staging checks](../runbooks/billing-staging-smoke.md).
+
 Consultation scheduling remains disabled by default even though booking code and
 tests exist. [ADR 0003](../adr/0003-consultation-enquiries.md) establishes enquiries
 as the current public action. Read applicable ADRs before extending a domain.

@@ -225,6 +225,57 @@ describe('billing management safety', () => {
     ]);
     expect(provider.createSubscription).toHaveBeenCalledOnce();
   });
+  it('serializes abandoned checkout replacement and durably tracks the superseded mandate', async () => {
+    const caller = await owner();
+    const sub = await subscription(caller, { planTier: 'hobby', razorpayStatus: 'created' });
+    vi.mocked(provider.fetchSubscription).mockImplementation(async (id) => ({
+      ...remote(id, 'created'),
+      plan_id: id === sub.razorpaySubscriptionId ? 'plan_corp' : 'plan_pro',
+    }));
+    vi.mocked(provider.createSubscription).mockResolvedValue(remote('sub_new', 'created'));
+    const results = await Promise.all([
+      subscribeService.createSubscription(caller, { targetTier: 'professional_plus' }),
+      subscribeService.createSubscription(caller, { targetTier: 'professional_plus' }),
+    ]);
+    expect(results.map((result) => result.razorpaySubscriptionId)).toEqual(['sub_new', 'sub_new']);
+    expect(provider.createSubscription).toHaveBeenCalledOnce();
+    const [retired] = await db
+      .select()
+      .from(schema.billingAbandonedCheckout)
+      .where(
+        eq(schema.billingAbandonedCheckout.razorpaySubscriptionId, sub.razorpaySubscriptionId!),
+      );
+    expect(retired?.organizationId).toBe(caller.activeOrgId);
+    const [stored] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(stored).toMatchObject({ planTier: 'hobby', razorpaySubscriptionId: 'sub_new' });
+  });
+  it('rolls back supersession if creating the newly chosen checkout fails', async () => {
+    const caller = await owner();
+    const sub = await subscription(caller, { planTier: 'hobby', razorpayStatus: 'created' });
+    vi.mocked(provider.fetchSubscription).mockResolvedValue({
+      ...remote(sub.razorpaySubscriptionId!, 'created'),
+      plan_id: 'plan_corp',
+    });
+    vi.mocked(provider.createSubscription).mockRejectedValue(new Error('provider timeout'));
+    await expect(
+      subscribeService.createSubscription(caller, { targetTier: 'professional_plus' }),
+    ).rejects.toThrow('provider timeout');
+    const [retired] = await db
+      .select()
+      .from(schema.billingAbandonedCheckout)
+      .where(
+        eq(schema.billingAbandonedCheckout.razorpaySubscriptionId, sub.razorpaySubscriptionId!),
+      );
+    expect(retired).toBeUndefined();
+    const [stored] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(stored?.razorpaySubscriptionId).toBe(sub.razorpaySubscriptionId);
+  });
   it('serializes duplicate cancellation and blocks a subsequent plan change', async () => {
     const caller = await owner();
     const sub = await subscription(caller);

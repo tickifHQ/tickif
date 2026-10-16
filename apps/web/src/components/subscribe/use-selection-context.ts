@@ -30,13 +30,16 @@ export function getResumableCheckoutTier(context: BillingSelectionContext | null
 
 function pricingRestriction(context: BillingSelectionContext | null): string | undefined {
   if (!context) return undefined;
-  if (context.pendingOperation)
+  if (
+    context.pendingOperation &&
+    !(
+      context.pendingOperation.status === 'checkout' &&
+      context.pendingOperation.reason === 'replacement_checkout_pending'
+    )
+  )
     return 'Your billing change is being confirmed. You can choose another plan once it is complete.';
-  if (context.unfinishedCheckout) {
-    return context.unfinishedCheckout.status === 'created'
-      ? 'Continue your existing checkout above before choosing another plan.'
-      : 'Your payment is being confirmed. No further purchase is needed.';
-  }
+  if (context.unfinishedCheckout && context.unfinishedCheckout.status !== 'created')
+    return 'Your payment is being confirmed. No further purchase is needed.';
   if (context.recovery?.status === 'checkout_pending')
     return 'Your payment is being confirmed. No further purchase is needed.';
   if (context.recovery?.status === 'requested')

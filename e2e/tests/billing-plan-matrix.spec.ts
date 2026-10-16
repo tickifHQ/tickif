@@ -146,6 +146,11 @@ for (const entry of entryPoints) {
             .getByRole('region', { name: 'Choose your plan', exact: true })
             .getByRole('button', { name: label, exact: true })
             .click();
+          const confirmation = page.getByRole('dialog', { name: 'Plan subscription', exact: true });
+          await expect(confirmation).toBeVisible();
+          await expect(
+            confirmation.getByRole('region', { name: 'Choose your plan', exact: true }),
+          ).toHaveCount(0);
           await expect(page.getByRole('heading', { name: label, exact: true })).toBeVisible();
 
           if (current.tier === 'hobby') {
@@ -154,7 +159,7 @@ for (const entry of entryPoints) {
               `${webUrl}/designer/plan-billing/subscribe/closed?plan=${target.tier}`,
             );
             await expect(
-              page.getByRole('button', { name: 'Continue checkout', exact: true }),
+              page.getByRole('link', { name: 'Choose your plan', exact: true }),
             ).toBeVisible();
             expect(mutations).toEqual([
               { path: '/api/billing/subscribe', targetTier: target.tier },

@@ -4,6 +4,7 @@ import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { AppError } from '../../lib/errors.js';
 import { operationQueries } from './operation-repository.js';
 import { recoveryQueries } from './recovery-repository.js';
+import { abandonedCheckoutQueries } from '@repo/billing';
 
 export type SubscriptionUpdate = Partial<typeof schema.subscription.$inferInsert>;
 
@@ -11,6 +12,55 @@ function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert' | 'e
   return {
     ...operationQueries(connection),
     ...recoveryQueries(connection),
+    ...abandonedCheckoutQueries(connection),
+    async checkoutWasSuperseded(razorpaySubscriptionId: string) {
+      const [row] = await connection
+        .select({ id: schema.billingAbandonedCheckout.razorpaySubscriptionId })
+        .from(schema.billingAbandonedCheckout)
+        .where(eq(schema.billingAbandonedCheckout.razorpaySubscriptionId, razorpaySubscriptionId))
+        .limit(1);
+      return !!row;
+    },
+    async findReplacement(organizationId: string) {
+      const [row] = await connection
+        .select()
+        .from(schema.billingReplacement)
+        .where(
+          and(
+            eq(schema.billingReplacement.organizationId, organizationId),
+            inArray(schema.billingReplacement.status, [
+              'creating',
+              'checkout',
+              'confirmed',
+              'aborting',
+            ]),
+          ),
+        )
+        .limit(1);
+      return row;
+    },
+    async supersedeReplacement(row: typeof schema.billingReplacement.$inferSelect) {
+      if (!row.replacementSubscriptionId)
+        throw AppError.conflict('Checkout is still being created.');
+      await abandonedCheckoutQueries(connection).trackAbandonedCheckout({
+        organizationId: row.organizationId,
+        razorpaySubscriptionId: row.replacementSubscriptionId,
+      });
+      await connection
+        .update(schema.billingReplacement)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(schema.billingReplacement.id, row.id));
+      await operationQueries(connection).updateOperation(row.organizationId, row.id, {
+        status: 'failed',
+        result: {
+          operationId: row.id,
+          targetTier: row.targetTier,
+          outcome: 'failed',
+          effectiveAt: null,
+          razorpaySubscriptionId: row.replacementSubscriptionId,
+        },
+      });
+    },
     async find(organizationId: string) {
       const [row] = await connection
         .select()
