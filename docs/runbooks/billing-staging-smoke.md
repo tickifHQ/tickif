@@ -28,8 +28,8 @@ Verify on desktop and mobile:
 
 - Manage Subscription, Upgrade, reactivation, restore and saved-plan review open
   `/designer/plan-billing/subscribe`. Plan comparison renders on that subpage;
-  selecting a plan opens a subscription confirmation dialog. Choosing another
-  plan closes the dialog and returns to pricing. The table never appears inside
+  selecting a plan opens a subscription confirmation dialog. Closing the dialog
+  clears the selection and returns to pricing. The table never appears inside
   the dialog.
 - Close an unused checkout, return to billing, and reopen plans. Buy/Upgrade
   options are available and no previous browsing selection is restored. Repeat
