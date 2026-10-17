@@ -28,6 +28,13 @@ classification described in [ADR 0010](../adr/0010-saved-custom-location-classif
 
 ## Near me
 
+The public HTTPS response must allow same-origin location access with
+`Permissions-Policy: camera=(), microphone=(), geolocation=(self)`. Traefik's
+versioned `secure-headers` middleware supplies this policy on staging. A policy
+of `geolocation=()` blocks device location even when site permission is allowed,
+and the browser reports the same permission-denied error. Deploy the updated
+Traefik configuration with the application, then reload the page before retrying.
+
 The server key in `GOOGLE_PLACES_API_KEY` must have Google's Geocoding API v4
 enabled, with appropriate API/server restrictions and billing. A missing key
 produces a clear unavailable message. A Places/reviews-only key may be rejected

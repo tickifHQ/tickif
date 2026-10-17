@@ -274,7 +274,7 @@ export function HomeSearchBar({
       return;
     }
     if (event.key === 'Escape') {
-      // Return focus first: the refocus fires the form's onFocus, so closing
+      // Return focus first: the refocus fires the input's onFocus, so closing
       // afterwards is what makes the dropdown stay shut.
       inputRef.current?.focus();
       setIsFocused(false);
@@ -309,6 +309,8 @@ export function HomeSearchBar({
         name="q"
         autoComplete="off"
         value={query}
+        onFocus={() => setIsFocused(true)}
+        onClick={() => setIsFocused(true)}
         onChange={(event) => {
           const nextQuery = event.target.value;
           setQuery(nextQuery);
@@ -427,9 +429,13 @@ export function HomeSearchBar({
       role="search"
       className="relative w-full"
       onSubmit={submitSearch}
-      onFocus={() => setIsFocused(true)}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setIsFocused(false);
+        if (
+          event.relatedTarget !== inputRef.current &&
+          !dropdownRef.current?.contains(event.relatedTarget)
+        ) {
+          setIsFocused(false);
+        }
       }}
     >
       <div

@@ -388,6 +388,44 @@ describe('HomeSearchBar', () => {
     expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
   });
 
+  it.each(['hero', 'header'] as const)(
+    'opens %s history only from the text input and closes it when another control is focused',
+    (variant) => {
+      window.localStorage.setItem('tickif.homeSearchRecents.v1', JSON.stringify(['kitchen']));
+      render(<HomeSearchBar variant={variant} cities={[{ slug: 'chennai', label: 'Chennai' }]} />);
+      const input = screen.getByRole('searchbox');
+      const controls = [
+        screen.getByRole('combobox'),
+        screen.getByRole('button', { name: 'Near me' }),
+        screen.getByRole('button', {
+          name: variant === 'hero' ? 'Search' : 'Search from header',
+        }),
+      ];
+
+      for (const control of controls) {
+        act(() => control.focus());
+        expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
+        act(() => input.focus());
+        expect(screen.getByRole('group', { name: 'Recent searches' })).toBeInTheDocument();
+        act(() => control.focus());
+        expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('reopens history when the focused input is clicked after Escape', () => {
+    window.localStorage.setItem('tickif.homeSearchRecents.v1', JSON.stringify(['kitchen']));
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox');
+    act(() => input.focus());
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
+
+    fireEvent.click(input);
+
+    expect(screen.getByRole('group', { name: 'Recent searches' })).toBeInTheDocument();
+  });
+
   it('walks the suggestion dropdown with the arrow keys', async () => {
     render(<HomeSearchBar />);
     const input = screen.getByRole('searchbox', { name: 'Search homes' });
