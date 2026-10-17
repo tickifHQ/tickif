@@ -176,23 +176,25 @@ function ScopedSubscribePage({
         </div>
       )}
 
-      {!reviewOpen && (
-        <BillingStatusNotice
-          context={selection.context}
-          currentTier={tier}
-          cancellationScheduled={subscription.cancellationScheduled}
-          currentPeriodEnd={subscription.currentPeriodEnd}
-          onDismissed={refreshNow}
-          onReview={(target) => {
-            setSelectedTier(target);
-            setReviewOpen(true);
-          }}
-        />
-      )}
-
       <PlanSelection
         headingLevel={1}
         description="Compare plans and manage your subscription"
+        statusNotice={
+          !reviewOpen && (
+            <BillingStatusNotice
+              className="mt-0"
+              context={selection.context}
+              currentTier={tier}
+              cancellationScheduled={subscription.cancellationScheduled}
+              currentPeriodEnd={subscription.currentPeriodEnd}
+              onDismissed={refreshNow}
+              onReview={(target) => {
+                setSelectedTier(target);
+                setReviewOpen(true);
+              }}
+            />
+          )
+        }
         currentTier={tier}
         lifecycleState={lifecycleState}
         selectedTier={selectedTier}
