@@ -52,7 +52,7 @@ describe('real payment controls', () => {
         razorpaySubscriptionId: 'sub_existing',
         razorpayKeyId: 'rzp_test_public',
         shortUrl: null,
-        prefill: {},
+        prefill: { name: null, email: null, contact: null },
       }),
     );
     mocks.verify.mockResolvedValue(Response.json({ verified: true }));
@@ -111,6 +111,54 @@ describe('real payment controls', () => {
     await userEvent.click(screen.getByRole('button'));
 
     expect(await screen.findByText('Support recommended')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeEnabled();
+  });
+
+  it('shows an actionable API rejection instead of replacing it with a generic recovery error', async () => {
+    mocks.method.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'conflict',
+            message: 'This subscription has ended. Choose a plan to continue.',
+          },
+        },
+        { status: 409 },
+      ),
+    );
+    render(<Harness />);
+
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(
+      await screen.findByText('This subscription has ended. Choose a plan to continue.'),
+    ).toBeInTheDocument();
+    expect(mocks.checkout).not.toHaveBeenCalled();
+    expect(screen.getByRole('button')).toBeEnabled();
+  });
+  it.each([
+    Response.json(
+      { error: { code: 'internal_error', message: 'Private upstream diagnostics' } },
+      { status: 502 },
+    ),
+    new Response('gateway unavailable', { status: 503 }),
+  ])(
+    'keeps provider outages actionable without exposing upstream diagnostics',
+    async (response) => {
+      mocks.method.mockResolvedValue(response);
+      render(<Harness />);
+      await userEvent.click(screen.getByRole('button'));
+      expect(await screen.findByText(/Unable to open payment method update/)).toBeInTheDocument();
+      expect(screen.queryByText(/Private upstream diagnostics/)).not.toBeInTheDocument();
+      expect(mocks.checkout).not.toHaveBeenCalled();
+    },
+  );
+  it('does not open checkout with invalid configuration', async () => {
+    mocks.method.mockResolvedValue(Response.json({ razorpaySubscriptionId: 'sub_existing' }));
+    render(<Harness />);
+    await userEvent.click(screen.getByRole('button'));
+    expect(await screen.findByText(/Unable to verify payment update details/)).toBeInTheDocument();
+    expect(mocks.checkout).not.toHaveBeenCalled();
     expect(screen.getByRole('button')).toBeEnabled();
   });
 

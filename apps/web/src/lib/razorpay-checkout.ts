@@ -115,7 +115,9 @@ export async function openRazorpayCheckout(params: {
     subscription_id: params.subscriptionId,
     name: 'Tickif',
     ...(params.changePaymentMethod ? { subscription_card_change: true } : {}),
-    description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
+    description: params.changePaymentMethod
+      ? 'Update subscription payment method'
+      : `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
     ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
     handler: (response: Record<string, string>) => {
       if (completed) return;

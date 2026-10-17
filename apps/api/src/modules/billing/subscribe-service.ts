@@ -4,6 +4,7 @@ import { activeEarlyBirdTrial, expireEarlyBird } from '@repo/billing';
 import { subscribeRepository, type SubscriptionUpdate } from './subscribe-repository.js';
 import {
   ORGANIZATION_CAPABILITY,
+  canUpdateSubscriptionPaymentMethod,
   type PlanTier,
   type BillingVerifyRequest,
   type BillingPaymentsResponse,
@@ -89,7 +90,7 @@ export const subscribeService = {
     // provider identity under the lock before returning checkout details so a
     // replacement that races this request cannot reopen an obsolete mandate.
     const remote = await fetchSubscription(providerId);
-    if (!['active', 'pending', 'halted'].includes(remote.status)) {
+    if (!canUpdateSubscriptionPaymentMethod(remote.status)) {
       throw AppError.conflict(
         'This subscription cannot update its payment method. Refresh billing and choose a plan if it has ended.',
       );

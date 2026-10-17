@@ -302,6 +302,40 @@ describe('billing management safety', () => {
     });
     expect(provider.createSubscription).not.toHaveBeenCalled();
   });
+  it('updates an authenticated replacement mandate without altering paid Corporate access', async () => {
+    const caller = await owner();
+    const periodEnd = new Date('2099-11-17T00:00:00.000Z');
+    const sub = await subscription(caller, {
+      planTier: 'corporate',
+      razorpayStatus: 'authenticated',
+      currentPeriodEnd: periodEnd,
+    });
+    vi.mocked(provider.fetchSubscription).mockResolvedValue({
+      ...remote(sub.razorpaySubscriptionId!, 'authenticated'),
+      plan_id: 'plan_corp',
+      current_start: null,
+      current_end: null,
+      start_at: Math.floor(periodEnd.getTime() / 1000),
+    });
+    await expect(subscribeService.paymentMethod(caller)).resolves.toMatchObject({
+      razorpaySubscriptionId: sub.razorpaySubscriptionId,
+    });
+    await subscribeService.verifyPayment(caller, callback(sub.razorpaySubscriptionId!));
+    const [stored] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.id, sub.id));
+    expect(stored).toMatchObject({
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      currentPeriodEnd: periodEnd,
+      razorpaySubscriptionId: sub.razorpaySubscriptionId,
+      razorpayStatus: 'authenticated',
+    });
+    expect(provider.createSubscription).not.toHaveBeenCalled();
+    expect(provider.updateSubscription).not.toHaveBeenCalled();
+    expect(provider.cancelSubscription).not.toHaveBeenCalled();
+  });
   it('paginates real payment amounts and never leaks another organization payments', async () => {
     const caller = await owner();
     const sub = await subscription(caller);

@@ -35,7 +35,11 @@ import { mapSubscriptionToBillingState } from '@/lib/billing-state';
 import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import { subscriptionResponseSchema, type BillingSelectionContext } from '@repo/contracts';
+import {
+  canUpdateSubscriptionPaymentMethod,
+  subscriptionResponseSchema,
+  type BillingSelectionContext,
+} from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { EarlyBirdActive } from '@/components/early-bird-trial';
 import { useWorkspaceEntitlementSync } from '@/components/workspace-entitlement-sync';
@@ -74,6 +78,11 @@ function formatDate(dateStr: string | null): string {
 function lifecycleCta(
   state: BillingState,
 ): { label: string; kind: 'subscribe' | 'payment' } | null {
+  if (
+    ['payment_failed', 'grace'].includes(state.lifecycle) &&
+    (!state.subscriptionId || !canUpdateSubscriptionPaymentMethod(state.razorpayStatus))
+  )
+    return null;
   switch (state.lifecycle) {
     case 'active':
       return { label: 'Manage Subscription', kind: 'subscribe' };
@@ -348,10 +357,14 @@ function BillingSummary({
   billing,
   onPayment,
   paymentBusy,
+  paymentMessage,
+  paymentSupportRecommended,
 }: {
   billing: BillingState;
   onPayment: () => void;
   paymentBusy: boolean;
+  paymentMessage: string | null;
+  paymentSupportRecommended: boolean;
 }) {
   if (!billing.billing) return null;
   if (isImpaired(billing.lifecycle)) return null;
@@ -391,9 +404,41 @@ function BillingSummary({
                 </div>
               </div>
             )}
-            <Button variant="outline" disabled={paymentBusy} onClick={onPayment}>
-              Update Payment Method
-            </Button>
+            {billing.subscriptionId &&
+            canUpdateSubscriptionPaymentMethod(billing.razorpayStatus) ? (
+              <Button
+                variant="outline"
+                disabled={paymentBusy}
+                aria-busy={paymentBusy}
+                onClick={onPayment}
+              >
+                {paymentBusy ? 'Opening Razorpay…' : 'Update Payment Method'}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Payment details cannot be updated right now. Open Manage Subscription to see your
+                options.
+              </p>
+            )}
+            {paymentMessage && (
+              <p role="status" className="text-sm text-muted-foreground">
+                <span>{paymentMessage}</span>
+                {paymentSupportRecommended && (
+                  <>
+                    {' '}
+                    <a
+                      href={SUPPORT_WHATSAPP_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-primary underline underline-offset-2"
+                    >
+                      Contact support
+                    </a>
+                    .
+                  </>
+                )}
+              </p>
+            )}
           </div>
           <div className="space-y-3 self-start rounded-lg bg-muted/30 p-4">
             <div className="flex items-center justify-between text-sm">
@@ -761,6 +806,7 @@ function ScopedDesignerPlanBilling({
     ),
   });
   const payment = usePaymentMethod(billing.tier, refreshNow);
+  const paymentFeedbackInSummary = !!billing.billing && !isImpaired(billing.lifecycle);
 
   const openSubscribe = useCallback(
     (tier?: PlanTier) => {
@@ -837,12 +883,12 @@ function ScopedDesignerPlanBilling({
         </div>
       )}
 
-      {(payment.message || refreshError) && (
+      {((payment.message && !paymentFeedbackInSummary) || refreshError) && (
         <Alert className="mt-6">
           <AlertDescription>
             <p>
-              {payment.message ?? refreshError}
-              {payment.supportRecommended ? (
+              {(!paymentFeedbackInSummary && payment.message) || refreshError}
+              {!paymentFeedbackInSummary && payment.supportRecommended ? (
                 <>
                   {' '}
                   <a
@@ -906,7 +952,13 @@ function ScopedDesignerPlanBilling({
             />
           )}
 
-          <BillingSummary billing={billing} onPayment={payment.open} paymentBusy={payment.busy} />
+          <BillingSummary
+            billing={billing}
+            onPayment={payment.open}
+            paymentBusy={payment.busy}
+            paymentMessage={payment.message}
+            paymentSupportRecommended={payment.supportRecommended}
+          />
 
           <PlanIncludesCard
             suppressPlanActions={suppressPlanActions}
@@ -920,42 +972,45 @@ function ScopedDesignerPlanBilling({
           <PaymentHistory />
           {/* Payment notice and support */}
           <aside className="space-y-5">
-            {showPaymentDueCard && billing.billing && (
-              <Card radius="lg" className="border-warning bg-warning/10 shadow-none">
-                <div className="p-5">
-                  <div className="flex items-center gap-2">
-                    <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">
-                      <CreditCard className="size-4 text-warning-foreground" />
-                    </span>
-                    <h2 className="font-sans text-base text-warning-foreground font-medium tracking-normal">
+            {showPaymentDueCard &&
+              billing.billing &&
+              billing.subscriptionId &&
+              canUpdateSubscriptionPaymentMethod(billing.razorpayStatus) && (
+                <Card radius="lg" className="border-warning bg-warning/10 shadow-none">
+                  <div className="p-5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">
+                        <CreditCard className="size-4 text-warning-foreground" />
+                      </span>
+                      <h2 className="font-sans text-base text-warning-foreground font-medium tracking-normal">
+                        {billing.lifecycle === 'payment_failed'
+                          ? 'Payment Failed'
+                          : 'Payment Due Soon'}
+                      </h2>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      Your payment of{' '}
+                      <span className="font-semibold text-foreground">
+                        {formatCurrency(billing.billing.total)}
+                      </span>{' '}
+                      {billing.lastPaymentFailedDate
+                        ? `failed on ${formatDate(billing.lastPaymentFailedDate)}.`
+                        : `is due on ${formatDate(billing.billing.nextBillingDate)}.`}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
+                      disabled={payment.busy}
+                      onClick={payment.open}
+                    >
                       {billing.lifecycle === 'payment_failed'
-                        ? 'Payment Failed'
-                        : 'Payment Due Soon'}
-                    </h2>
+                        ? 'Update Payment Method'
+                        : 'Make Payment'}
+                    </Button>
                   </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    Your payment of{' '}
-                    <span className="font-semibold text-foreground">
-                      {formatCurrency(billing.billing.total)}
-                    </span>{' '}
-                    {billing.lastPaymentFailedDate
-                      ? `failed on ${formatDate(billing.lastPaymentFailedDate)}.`
-                      : `is due on ${formatDate(billing.billing.nextBillingDate)}.`}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
-                    disabled={payment.busy}
-                    onClick={payment.open}
-                  >
-                    {billing.lifecycle === 'payment_failed'
-                      ? 'Update Payment Method'
-                      : 'Make Payment'}
-                  </Button>
-                </div>
-              </Card>
-            )}
+                </Card>
+              )}
 
             <HelpCard />
           </aside>

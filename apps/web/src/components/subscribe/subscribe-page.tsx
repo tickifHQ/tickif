@@ -11,7 +11,7 @@ import { useSelectionContext } from './use-selection-context';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import type { PlanTier, SubscriptionState, SubscriptionResponse } from '@repo/contracts';
-import { subscriptionResponseSchema } from '@repo/contracts';
+import { canUpdateSubscriptionPaymentMethod, subscriptionResponseSchema } from '@repo/contracts';
 import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
@@ -211,9 +211,9 @@ function ScopedSubscribePage({
       )}
 
       {/* Payment recovery remains separate from plan selection. */}
-      {needsPaymentRecovery && (
+      {needsPaymentRecovery && canUpdateSubscriptionPaymentMethod(subscription.razorpayStatus) && (
         <Button variant="fancy" className="mt-4" onClick={payment.open} disabled={payment.busy}>
-          Update Payment Method
+          {payment.busy ? 'Opening Razorpay…' : 'Update Payment Method'}
         </Button>
       )}
       {payment.message && (
