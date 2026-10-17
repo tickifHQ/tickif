@@ -83,11 +83,17 @@ test('invitation acceptance, role changes and studio switching preserve organiza
     await selectOrganization(context, first.id);
     await page.goto('/designer/terms-roles');
     await expect(page.getByRole('heading', { name: 'Team & Roles' })).toBeVisible();
-    await page.getByLabel('Work email').fill(guest.email);
-    await page.getByLabel('Role', { exact: true }).click();
+    await page.getByRole('tab', { name: 'Invitations', exact: true }).click();
+    await page.getByRole('button', { name: 'Invite a teammate', exact: true }).click();
+    const inviteDialog = page.getByRole('dialog', { name: 'Invite a teammate', exact: true });
+    await inviteDialog.getByLabel('Work email').fill(guest.email);
+    await inviteDialog.getByLabel('Role', { exact: true }).click();
     await page.getByRole('option', { name: 'Viewer', exact: true }).click();
-    await page.getByRole('button', { name: 'Send invite', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(`Invitation created for ${guest.email}`);
+    await inviteDialog.getByRole('button', { name: 'Send invite', exact: true }).click();
+    await expect(inviteDialog).not.toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: `Invitation created for ${guest.email}` }),
+    ).toBeVisible();
     const invitation = (await workspace(context)).invitations.find(
       (entry) => entry.email === guest.email,
     );
@@ -133,6 +139,10 @@ test('invitation acceptance, role changes and studio switching preserve organiza
     expect((await workspace(guestContext)).currentUserRole).toBe('viewer');
 
     await page.reload();
+    await expect(page.getByRole('tab', { name: 'Members', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await page.getByRole('button', { name: 'Manage Invited Teammate', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Change role to Member', exact: true }).click();
     await expect.poll(async () => (await workspace(guestContext)).currentUserRole).toBe('member');

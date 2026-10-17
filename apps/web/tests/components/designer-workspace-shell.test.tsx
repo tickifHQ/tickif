@@ -104,6 +104,25 @@ vi.mock('@/components/designer-branch-selector', async () => {
 });
 
 describe('DesignerWorkspaceShell', () => {
+  it('places the branch switcher between the logo and studio navigation', () => {
+    render(
+      <DesignerWorkspaceShell
+        capabilities={FULL_CAPABILITIES}
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        planLabel="Corporate plan"
+      >
+        Content
+      </DesignerWorkspaceShell>,
+    );
+    const logo = screen.getByRole('link', { name: 'Tickif' });
+    const switcher = screen.getByTestId('branch-selector');
+    const overview = screen.getByRole('link', { name: 'Overview' });
+    expect(logo.compareDocumentPosition(switcher) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      switcher.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
   it('shows consultation navigation only when its feature flag is enabled', () => {
     const { rerender } = render(
       <DesignerWorkspaceShell
@@ -158,7 +177,10 @@ describe('DesignerWorkspaceShell', () => {
       'href',
       '/designer/terms-roles',
     );
-    expect(screen.queryByRole('link', { name: 'Branches' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Branches' })).toHaveAttribute(
+      'href',
+      '/designer/branches',
+    );
     expect(screen.queryByRole('link', { name: 'Add new project' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Analytics' })).toBeInTheDocument();
     expect(screen.getByText(/^Grow$/i)).toBeInTheDocument();
@@ -166,7 +188,7 @@ describe('DesignerWorkspaceShell', () => {
   });
 
   it.each(['Hobby plan', 'Professional+ plan', 'Corporate plan'])(
-    'keeps Team & Roles discoverable with restricted capabilities on %s',
+    'keeps Team & Roles and Branches discoverable with restricted capabilities on %s',
     (planLabel) => {
       render(
         <DesignerWorkspaceShell
@@ -182,7 +204,10 @@ describe('DesignerWorkspaceShell', () => {
         'href',
         '/designer/terms-roles',
       );
-      expect(screen.queryByRole('link', { name: 'Branches' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Branches' })).toHaveAttribute(
+        'href',
+        '/designer/branches',
+      );
       expect(screen.queryByRole('link', { name: 'Plan & billing' })).not.toBeInTheDocument();
     },
   );

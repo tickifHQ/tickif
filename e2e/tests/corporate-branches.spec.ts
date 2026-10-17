@@ -1,6 +1,6 @@
 import '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext } from '@playwright/test';
 import { and, db, eq, inArray, schema } from '@repo/db';
 import {
   assertTestDb,
@@ -23,10 +23,6 @@ async function selectBranch(context: BrowserContext, organizationId: string, tea
     data: { kind: 'organization', organizationId, teamId },
   });
   expect(response.status()).toBe(200);
-}
-
-function section(page: Page, name: string) {
-  return page.getByRole('heading', { name, exact: true }).locator('..');
 }
 
 test('Corporate branch management enforces roles and preserves operational data', async ({
@@ -167,40 +163,54 @@ test('Corporate branch management enforces roles and preserves operational data'
     }
 
     await page.goto('/designer/branches');
+    await page.getByRole('button', { name: 'Create new branch', exact: true }).click();
     await page.getByLabel('Branch name').fill(`Owner Created ${label}`);
     await page.getByRole('button', { name: 'Create branch', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(`Branch Owner Created ${label} created.`);
+    await expect(
+      page.getByRole('status').filter({ hasText: `Branch Owner Created ${label} created.` }),
+    ).toBeVisible();
 
     const adminPage = await adminContext.newPage();
     await adminPage.goto('/designer/branches');
+    await adminPage.getByRole('button', { name: 'Create new branch', exact: true }).click();
     await adminPage.getByLabel('Branch name').fill(`Admin Created ${label}`);
     await adminPage.getByRole('button', { name: 'Create branch', exact: true }).click();
-    await expect(adminPage.getByRole('status')).toContainText(
+    await expect(adminPage.getByRole('status').filter({ hasText: 'created.' })).toContainText(
       `Branch Admin Created ${label} created.`,
     );
 
-    const adminAssignment = section(adminPage, 'Assign a member to a branch');
-    await adminAssignment.getByLabel('Member').click();
+    await adminPage.getByRole('link', { name: removableTeam.name, exact: true }).click();
+    await expect(adminPage).toHaveURL(`/designer/branches/${removableTeam.id}`);
+    await expect(adminPage.getByRole('button', { name: 'Send invite' })).toHaveCount(0);
+    await adminPage.getByRole('button', { name: 'Add members', exact: true }).click();
+    const adminAssignment = adminPage.getByRole('dialog');
+    await adminAssignment.getByRole('combobox', { name: 'Member', exact: true }).click();
     await adminPage
       .getByRole('option', { name: `${member.name} (${member.email})`, exact: true })
       .click();
-    await adminAssignment.getByLabel('Branch').click();
-    await adminPage.getByRole('option', { name: removableTeam.name, exact: true }).click();
-    await adminAssignment.getByRole('button', { name: 'Assign', exact: true }).click();
-    await expect(adminPage.getByRole('status')).toContainText(
-      `${member.name} assigned to the branch.`,
+    await adminAssignment.getByRole('button', { name: 'Add member', exact: true }).click();
+    await expect(adminPage.getByRole('status').filter({ hasText: 'added to' })).toContainText(
+      `${member.name} added to ${removableTeam.name}.`,
     );
-    await adminPage.getByRole('button', { name: `Show members of ${removableTeam.name}` }).click();
     await expect(adminPage.getByText(member.email, { exact: true })).toBeVisible();
+    await page.goto(`/designer/branches/${removableTeam.id}`);
+    await expect(page.getByRole('combobox', { name: /Role for/ })).toHaveCount(0);
+    await expect(
+      page.getByRole('row').filter({ hasText: member.email }).getByText('Member', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('link', { name: 'Change roles in team and roles', exact: true }).click();
+    await expect(page).toHaveURL(/\/designer\/terms-roles$/);
+    await expect(page.getByRole('heading', { name: 'Team & Roles', exact: true })).toBeVisible();
     await adminPage
       .getByRole('button', { name: `Remove ${member.name} from ${removableTeam.name}` })
       .click();
     await adminPage
       .getByRole('button', {
-        name: `Confirm removal of ${member.name} from ${removableTeam.name}`,
+        name: 'Remove member',
+        exact: true,
       })
       .click();
-    await expect(adminPage.getByRole('status')).toContainText(
+    await expect(adminPage.getByRole('status').filter({ hasText: 'removed from' })).toContainText(
       `${member.name} removed from the branch.`,
     );
     await expect
@@ -218,12 +228,11 @@ test('Corporate branch management enforces roles and preserves operational data'
       })
       .toBe(0);
 
-    const removableCard = adminPage
-      .getByText(removableTeam.name, { exact: true })
-      .locator('..')
-      .locator('..');
-    await removableCard.getByRole('button', { name: 'Switch Branch', exact: true }).click();
-    await expect(adminPage).toHaveURL(/\/designer\/dashboard$/);
+    await adminPage.getByRole('button', { name: 'Switch branch', exact: true }).click();
+    await adminPage.getByRole('menuitem', { name: removableTeam.name, exact: true }).click();
+    await expect(
+      adminPage.getByRole('button', { name: 'Switch branch', exact: true }),
+    ).toContainText(removableTeam.name);
     await adminPage.goto('/designer/projects');
     await expect(
       adminPage.getByText(removableProject.title, { exact: true }).first(),
@@ -236,11 +245,11 @@ test('Corporate branch management enforces roles and preserves operational data'
     ] as const) {
       const limitedPage = await limitedContext.newPage();
       await limitedPage.goto('/designer/branches');
-      await expect(
-        limitedPage.getByText('Branch management is available to studio owners and admins.'),
-      ).toBeVisible();
-      await expect(limitedPage.getByRole('button', { name: 'Create branch' })).toHaveCount(0);
-      await expect(limitedPage.getByRole('button', { name: 'Assign' })).toHaveCount(0);
+      await expect(limitedPage.getByRole('table', { name: 'Branches', exact: true })).toBeVisible();
+      await expect(limitedPage.getByRole('button', { name: 'Create new branch' })).toHaveCount(0);
+      await limitedPage.getByRole('link', { name: primaryTeam.name, exact: true }).click();
+      await expect(limitedPage.getByRole('button', { name: 'Add members' })).toHaveCount(0);
+      await expect(limitedPage.getByRole('combobox', { name: /Role for/ })).toHaveCount(0);
       await expect(limitedPage.getByRole('button', { name: /Remove .* from/ })).toHaveCount(0);
       const forbidden = await limitedContext.request.post(
         `${apiUrl}/api/auth/organization/create-team`,
@@ -253,15 +262,13 @@ test('Corporate branch management enforces roles and preserves operational data'
       await limitedPage.close();
     }
 
-    await page.reload();
+    await page.goto(`/designer/branches/${removableTeam.id}`);
     await page.getByRole('button', { name: `Remove branch ${removableTeam.name}` }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Move projects to').click();
     await page.getByRole('option', { name: primaryTeam.name, exact: true }).click();
     await dialog.getByRole('button', { name: 'Confirm removal', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(
-      `Branch ${removableTeam.name} removed. 1 project moved.`,
-    );
+    await expect(page).toHaveURL('/designer/branches');
     await expect(page.getByText(removableTeam.name, { exact: true })).toHaveCount(0);
 
     await expect

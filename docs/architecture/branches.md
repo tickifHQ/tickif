@@ -79,3 +79,88 @@ conflicts. Lifecycle reconciliation continues to use freeze and restore instead.
 
 The billing webhook calls both member-seat and branch reconciliation. The same
 `orgsService.reconcileBranches()` helper is available to lifecycle sweeps.
+
+## Branch management screens
+
+Branches and Team & Roles are always visible in the designer sidebar, including
+for lower plans and roles without member-management capabilities. Both pages use
+the shared organization-management blocking card when Corporate management is
+unavailable. Branches checks both the server entitlement flag and the shared
+plan/state policy, and blocks the table and detail controls behind that card.
+The card offers Corporate plans or billing recovery only to callers with billing
+access; other members are directed to the organization Owner.
+
+`/designer/branches` lists accessible branches in a table with branch name,
+location (the profile's saved footprint), member count, an edit action and a
+branch-details icon link. Current and frozen labels use the shared Badge defaults.
+Member roles use the shared secondary variant for Owner and outline for all other
+roles. Branch names can be searched;
+member search matches name or email, case-insensitively. Both tables use API
+search and pagination, defaulting to 12 rows with shared ListPagination controls.
+Search and page-size changes reset to the first page; shrinking results clamp
+the page. Debounced requests are canceled when superseded and stale responses
+cannot replace newer data. Mutations reload the list and workspace summary.
+
+`GET /api/orgs/branches/list` returns paged branch summaries with empty embedded
+member arrays. `GET /api/orgs/branches/:branchId` reads one authorized summary,
+and `GET /api/orgs/branches/:branchId/members` pages its members. Organization
+members and invitations are paged through `/api/orgs/members` and
+`/api/orgs/invitations`. Lists accept validated `page` (default 1), `limit`
+(default 12, maximum 100), and `q` (maximum 200 characters), and return `items`,
+`page`, `limit`, `total` and `totalPages`. Literal, case-insensitive SQL search
+precedes pagination. Count and page queries share a repeatable-read snapshot.
+Owners/Admins retain visibility of every branch; other members see assignments.
+Invitation reads require member-management access. Foreign/unassigned branch
+reads return not found. The summary workspace endpoint `/api/orgs/summary` omits
+member/invitation arrays and provides counts and current-member identity needed
+for ownership protections. Legacy `/api/orgs/branches` and `/api/orgs/current`
+snapshots remain available for existing non-table callers.
+
+Assignment choices use `/members?availableForBranchId=...` to exclude assigned
+and frozen members, with management authorization. Ownership nominee choices use
+`transferEligible=true`, limited to authorized owners and eligible active members.
+Removal targets use `/branches/list?removalTargetFor=...` to select another active
+branch with an active profile. These choices support search and pagination too.
+The branch list heading has no organization-name subtitle.
+The Create new branch action opens a name dialog above the table. Selecting a
+branch opens `/designer/branches/[branchId]` without changing active context.
+The server checks the branch with the same visibility rules as the authorized
+list; unavailable branch ids return not found. Management components reset their
+table and dialog state when the studio or branch identity changes.
+
+The detail page shows members and their organization roles. Managers can add
+existing, unfrozen studio members who are not already assigned, remove branch
+assignments, and see organization-wide roles as read-only badges. The
+"Change roles in team and roles" link sits to the right of member search and opens
+Team & Roles, which owns role editing. The controls stack on narrow screens.
+No branch-specific role model is introduced. Branch pages no longer offer
+invitations; organization invitations remain in Team & Roles. See
+[ADR 0018](../adr/0018-branch-member-management.md) and its role-editing replacement,
+[ADR 0019](../adr/0019-centralized-branch-role-management.md).
+
+Branch profile links, billing recovery and owner-only branch removal with project
+reassignment remain on the
+detail page. Edit and owner-only removal actions sit together in the page header;
+removal still requires confirmation and an eligible reassignment target. Frozen
+branches remain listed with recovery guidance on their detail.
+Location, project count and portfolio status replace the organization name and
+member count directly beneath the branch heading, separated by decorative dots.
+An active portfolio status links to the branch's public profile.
+The sidebar branch selector sits below the Tickif logo, before Studio navigation,
+including in the mobile navigation drawer. Branch switching is available through
+that selector; the detail page has no duplicate Switch Branch action. The
+selector's visibility and switching rules stay the same.
+
+## Team & Roles
+
+Members and Invitations are separate tabs, with Invitations visible to authorized
+managers. Both use shared searchable, paginated tables. Members show name, email,
+joined date, role and actions, matching the branch member table styling. Owner
+roles use secondary badges; other roles use outline badges. Existing role-action
+menus exclude Owner, current-user and frozen rows and honor role-change capability.
+Invitations use a dialog for sending and retain expiry, resend/revoke and
+organization-wide invitation semantics. Ownership nominees use one searchable
+dropdown; additional results load inside its menu, without a separate search
+field or table pagination. The default-size transfer button aligns with the
+dropdown. The two-party handshake and sole-owner leave restrictions remain.
+See [ADR 0020](../adr/0020-paginated-organization-management.md).

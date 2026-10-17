@@ -33,6 +33,13 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires the two-party ownership transfer journey without omissions or skips', () => {
+    const title =
+      'ownership transfer requires nominee acceptance and preserves roles after cancellation and decline';
+    expect(requiredTests).toContainEqual({ file: 'ownership-transfer.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/Critical E2E/);
+    expect(() => assertCompleteCoverage(report({ skippedTitle: title }))).toThrow(/Critical E2E/);
+  });
   it('requires private admin lead and reporting visibility without omissions or skips', () => {
     const title =
       'admin lead visibility and company reporting retain filters through drill-down without changing enquiry milestones';

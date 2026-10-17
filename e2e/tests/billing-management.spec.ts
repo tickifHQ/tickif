@@ -654,6 +654,12 @@ test('Corporate checkout refreshes the retained workspace and unlocks team and b
     });
     const workspaceSwitcher = page.getByRole('button', { name: 'Switch context', exact: true });
     await expect(workspaceSwitcher).toContainText('Hobby');
+    await page.getByRole('link', { name: 'Branches', exact: true }).click();
+    await expect(page).toHaveURL(`${stackWebUrl}/designer/branches`);
+    await expect(
+      page.getByRole('heading', { name: 'Branch management is a Corporate feature', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Branches', exact: true })).toHaveCount(0);
     await page.getByRole('link', { name: 'Team & Roles', exact: true }).click();
     await expect(page).toHaveURL(`${stackWebUrl}/designer/terms-roles`);
     await expect(
@@ -702,17 +708,26 @@ test('Corporate checkout refreshes the retained workspace and unlocks team and b
       page.getByRole('heading', { name: 'Team management is a Corporate feature', exact: true }),
     ).toHaveCount(0);
     const inviteEmail = `workspace-${owner.org.id}@example.test`;
-    await page.getByLabel('Work email', { exact: true }).fill(inviteEmail);
-    await page.getByRole('button', { name: 'Send invite', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(`Invitation created for ${inviteEmail}.`);
+    await page.getByRole('tab', { name: 'Invitations', exact: true }).click();
+    await page.getByRole('button', { name: 'Invite a teammate', exact: true }).click();
+    const inviteDialog = page.getByRole('dialog', { name: 'Invite a teammate', exact: true });
+    await inviteDialog.getByLabel('Work email', { exact: true }).fill(inviteEmail);
+    await inviteDialog.getByRole('button', { name: 'Send invite', exact: true }).click();
+    await expect(inviteDialog).not.toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: `Invitation created for ${inviteEmail}.` }),
+    ).toBeVisible();
     await expect(page.getByText(inviteEmail, { exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Branches', exact: true }).click();
     await expect(page).toHaveURL(`${stackWebUrl}/designer/branches`);
     const branchName = `Upgraded branch ${owner.org.id.slice(0, 8)}`;
+    await page.getByRole('button', { name: 'Create new branch', exact: true }).click();
     await page.getByLabel('Branch name', { exact: true }).fill(branchName);
     await page.getByRole('button', { name: 'Create branch', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(`Branch ${branchName} created.`);
-    await expect(page.getByRole('paragraph').filter({ hasText: branchName })).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: `Branch ${branchName} created.` }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: branchName, exact: true })).toBeVisible();
     expect(documentNavigations).toEqual([]);
     expect(errors).toEqual([]);
   } finally {

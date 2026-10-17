@@ -20,8 +20,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       orgs: {
-        branches: { $get: mocks.branchesGet },
-        current: { $get: mocks.workspaceGet },
+        branches: { list: { $get: mocks.branchesGet } },
+        summary: { $get: mocks.workspaceGet },
       },
     },
   },
@@ -41,7 +41,11 @@ describe('DesignerBranchesPage', () => {
         activeTeamId: 'team-1',
         branchUsage: 1,
         branchLimit: -1,
-        branches: [],
+        items: [],
+        page: 1,
+        limit: 12,
+        total: 0,
+        totalPages: 1,
       }),
     });
     mocks.workspaceGet.mockResolvedValue({
@@ -82,7 +86,14 @@ describe('DesignerBranchesPage', () => {
     render(await Page());
 
     expect(mocks.requireAuth).toHaveBeenCalledWith({ requiredRole: 'designer' });
-    expect(mocks.branchesGet).toHaveBeenCalledWith({}, { headers: { cookie: 'session=abc' } });
+    expect(mocks.branchesGet).toHaveBeenCalledWith(
+      { query: { page: '1', limit: '12', q: '' } },
+      { headers: { cookie: 'session=abc' }, init: { cache: 'no-store' } },
+    );
+    expect(mocks.workspaceGet).toHaveBeenCalledWith(
+      {},
+      { headers: { cookie: 'session=abc' }, init: { cache: 'no-store' } },
+    );
     expect(screen.getByTestId('branches')).toBeInTheDocument();
   });
 });

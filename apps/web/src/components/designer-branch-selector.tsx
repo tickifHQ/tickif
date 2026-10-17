@@ -19,8 +19,8 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 
 /**
- * Subordinate branch selector rendered above Contact support in the lower
- * navigation group. It stays hidden in personal context and whenever fewer
+ * Branch selector rendered below the Tickif logo, before studio navigation.
+ * It stays hidden in personal context and whenever fewer
  * than two branches exist, so it never renders a dead control. There is
  * deliberately no "All branches" option until org-roll-up reads exist.
  */
