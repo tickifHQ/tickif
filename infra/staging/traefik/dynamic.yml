@@ -8,7 +8,7 @@ http:
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
-        permissionsPolicy: 'camera=(), microphone=(), geolocation=()'
+        permissionsPolicy: 'camera=(), microphone=(), geolocation=(self)'
   serversTransports:
     staging-default:
       forwardingTimeouts:

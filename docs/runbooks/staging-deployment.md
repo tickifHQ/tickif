@@ -5,6 +5,16 @@ public service and publishes ports 80/443. API, web, worker health, Postgres,
 Redis, Typesense, Docker socket proxy, and Traefik ping ports remain private.
 Cloudflare R2 stays external; staging does not run MinIO.
 
+Traefik's `secure-headers` middleware permits same-origin geolocation for the
+explicit Near me flow while denying camera and microphone access. After a
+release, check the public homepage's `Permissions-Policy` response header is
+`camera=(), microphone=(), geolocation=(self)`, then reload the page and test
+Near me with browser permission allowed. `geolocation=()` blocks the feature
+regardless of site permission. The deploy script versions `traefik/dynamic.yml`
+as a Docker config; application-only restarts do not update this header. See
+[Near me testing](../guides/custom-location-discovery-testing.md#near-me) for
+device and Google provider prerequisites.
+
 ## Host, DNS, and registry prerequisites
 
 Use a supported Linux Docker Engine host (or swarm) with a manager and a durable

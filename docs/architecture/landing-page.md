@@ -41,6 +41,9 @@ designer/admin routing and other public pages retain their existing behavior.
   button. The header forms a layer above the hero so suggestions remain unobscured.
   Search and suggestions preserve
   filters, reset pagination and navigate to the existing discovery/search route.
+  Recent searches and suggestions open from the text input; moving focus to the
+  city picker, Near me or submit controls closes them. Keyboard focus within the
+  suggestion list keeps it open, and Escape dismisses it.
 - Bookmarks reuse `ProjectActions` and the saved-project endpoints. Anonymous
   visitors enter the existing login dialog; repeated project cards synchronize
   successful saves within the page.

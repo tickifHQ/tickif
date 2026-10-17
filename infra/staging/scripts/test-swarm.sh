@@ -158,7 +158,10 @@ docker service scale --detach=true "${STACK_NAME}_traefik=1"
 source infra/staging/scripts/lib.sh
 wait_healthy traefik 1
 curl -fsS --retry 20 --retry-all-errors --retry-delay 2 -k --resolve "$STAGING_HOST:443:127.0.0.1" "https://$STAGING_HOST/readyz"
-curl -fsS -k --resolve "$STAGING_HOST:443:127.0.0.1" "https://$STAGING_HOST/login" >/dev/null
+curl -fsS -k --resolve "$STAGING_HOST:443:127.0.0.1" \
+  -D "$fixture/web-headers" "https://$STAGING_HOST/login" >/dev/null
+tr -d '\r' <"$fixture/web-headers" | \
+  grep -Fxi 'permissions-policy: camera=(), microphone=(), geolocation=(self)'
 docker service scale --detach=true "${STACK_NAME}_traefik=0"
 bash infra/staging/scripts/test-backup.sh
 echo 'Two releases, fail-closed recovery, real image readiness and Traefik routing passed. Real ACME/provider/R2 remain unverified.'
