@@ -7,6 +7,7 @@ export {
   cancelReplacementRenewal,
 } from './service.js';
 export { replacementRepository } from './repository.js';
+export type { Replacement } from './repository.js';
 export { upgradeAmount } from './quote.js';
 export { replacementProvider } from './provider.js';
 export {

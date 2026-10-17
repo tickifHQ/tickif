@@ -14,7 +14,7 @@ import { invalidateEntitlementCache } from '../../lib/redis.js';
 import { operationRepository } from './operation-repository.js';
 import { recoveryService } from './recovery-service.js';
 import { subscribeRepository } from './subscribe-repository.js';
-import { getPlanChangeTiming } from './plan-change-policy.js';
+import { getPlanChangeTiming, canDowngradeConfirmedUpgrade } from './plan-change-policy.js';
 import { canSupersedeReplacement } from './abandoned-checkout-policy.js';
 import { replacementRepository, reconcileReplacement, upgradeAmount } from '@repo/billing';
 import { activeEarlyBirdTrial } from '@repo/billing';
@@ -181,7 +181,13 @@ async function buildPreview(
   reader?: Reader,
   quotedAt = Math.floor(Date.now() / 1000),
 ) {
-  const pending = await replacementRepository.current(caller.activeOrgId!);
+  let pending = await replacementRepository.current(caller.activeOrgId!);
+  if (
+    pending?.supersedesId &&
+    (targetTier !== pending.targetTier || pending.expiresAt.getTime() <= Date.now()) &&
+    (await canSupersedeReplacement(pending))
+  )
+    pending = await replacementRepository.predecessor(pending);
   if (
     pending &&
     ((targetTier === pending.targetTier && pending.expiresAt.getTime() > Date.now()) ||
@@ -190,27 +196,56 @@ async function buildPreview(
     const resume = targetTier === pending.targetTier && pending.status === 'checkout';
     const cancel = targetTier === 'hobby' && pending.status === 'confirmed';
     const local = await (reader ?? subscribeRepository).find(caller.activeOrgId!);
+    const downgrade = canDowngradeConfirmedUpgrade(pending, local, targetTier);
+    const targetPlan = downgrade
+      ? await fetchPlan(resolveRazorpayPlanId('professional_plus')!)
+      : null;
+    const mandate = downgrade ? await fetchSubscription(pending.replacementSubscriptionId!) : null;
+    const downgradeAllowed =
+      downgrade &&
+      targetPlan?.period === 'monthly' &&
+      targetPlan.interval === 1 &&
+      targetPlan.item.currency === pending.currency &&
+      mandate?.id === pending.replacementSubscriptionId &&
+      mandate.status === 'authenticated' &&
+      mandate.plan_id === pending.targetPlanId &&
+      mandate.start_at === Math.floor(pending.periodEnd.getTime() / 1000);
     const preview: Omit<BillingChangePreview, 'expiresAt' | 'previewToken'> = {
       organizationId: caller.activeOrgId!,
-      sourceSubscriptionId: pending.sourceSubscriptionId,
+      sourceSubscriptionId: downgradeAllowed
+        ? pending.replacementSubscriptionId
+        : pending.sourceSubscriptionId,
       currentTier: local?.planTier ?? pending.sourceTier,
       targetTier,
-      action: cancel ? 'cancel' : resume ? 'change_plan' : 'blocked',
-      timing: cancel ? 'cycle_end' : pending.targetTier === 'corporate' ? 'now' : 'cycle_end',
+      action: cancel ? 'cancel' : resume || downgradeAllowed ? 'change_plan' : 'blocked',
+      timing:
+        cancel || downgradeAllowed
+          ? 'cycle_end'
+          : pending.targetTier === 'corporate'
+            ? 'now'
+            : 'cycle_end',
       effectiveAt:
-        !cancel && pending.targetTier === 'corporate'
+        !cancel && !downgradeAllowed && pending.targetTier === 'corporate'
           ? pending.createdAt.toISOString()
           : pending.periodEnd.toISOString(),
       nextRenewalAt: pending.periodEnd.toISOString(),
       nextEligibleAction: null,
       nextEligibleAt: null,
-      reason: 'replacement_pending',
-      recurringAmount: cancel ? 0 : pending.recurringAmount,
-      adjustmentAmount: cancel ? 0 : pending.amount,
+      reason: downgradeAllowed
+        ? 'confirmed_upgrade_downgrade'
+        : pending.status === 'confirmed'
+          ? 'renewal_pending'
+          : 'replacement_pending',
+      recurringAmount: cancel
+        ? 0
+        : downgradeAllowed
+          ? targetPlan!.item.amount
+          : pending.recurringAmount,
+      adjustmentAmount: cancel || downgradeAllowed ? 0 : pending.amount,
       currency: pending.currency,
       amountCertainty: 'confirmed',
-      adjustmentDirection: !cancel && pending.amount ? 'charge' : 'none',
-      confirmationAllowed: resume || cancel,
+      adjustmentDirection: !cancel && !downgradeAllowed && pending.amount ? 'charge' : 'none',
+      confirmationAllowed: resume || cancel || !!downgradeAllowed,
     };
     return {
       preview,
@@ -329,7 +364,9 @@ export const billingSelectionService = {
     if (replacement) {
       await reconcileReplacement(caller.activeOrgId!);
       await invalidateEntitlementCache(caller.activeOrgId!);
-      const current = await replacementRepository.current(caller.activeOrgId!);
+      let current = await replacementRepository.current(caller.activeOrgId!);
+      if (current?.supersedesId && (await canSupersedeReplacement(current)))
+        current = await replacementRepository.predecessor(current);
       const local = await subscribeRepository.find(caller.activeOrgId!);
       if (current && (await canSupersedeReplacement(current))) replaceableOperationId = current.id;
       else if (current)
@@ -365,7 +402,8 @@ export const billingSelectionService = {
                 ? ('cancel' as const)
                 : targetTier === local?.planTier
                   ? ('current' as const)
-                  : targetTier === current.targetTier && current.status === 'checkout'
+                  : canDowngradeConfirmedUpgrade(current, local, targetTier) ||
+                      (targetTier === current.targetTier && current.status === 'checkout')
                     ? ('change_plan' as const)
                     : ('blocked' as const),
             reason:
@@ -373,7 +411,11 @@ export const billingSelectionService = {
                 ? current.targetTier === 'hobby' || local?.cancelAtPeriodEnd
                   ? 'cancellation_scheduled'
                   : null
-                : 'replacement_pending',
+                : canDowngradeConfirmedUpgrade(current, local, targetTier)
+                  ? 'confirmed_upgrade_downgrade'
+                  : current.status === 'confirmed'
+                    ? 'renewal_pending'
+                    : 'replacement_pending',
             effectiveAt: current.periodEnd.toISOString(),
           })),
         };

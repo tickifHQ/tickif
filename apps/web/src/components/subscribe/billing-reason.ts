@@ -1,5 +1,9 @@
 export function reasonLabel(reason: string | null) {
   switch (reason) {
+    case 'confirmed_upgrade_downgrade':
+      return 'Your current paid plan stays active until the renewal date.';
+    case 'renewal_pending':
+      return 'Your plan is confirmed. The renewal mandate starts at the next billing boundary.';
     case 'early_bird_trial_active':
       return 'Your no-card trial is active. You can choose a paid subscription after it ends.';
     case 'replacement_pending':

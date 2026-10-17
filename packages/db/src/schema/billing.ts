@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   index,
+  foreignKey,
   integer,
   jsonb,
   pgEnum,
@@ -73,6 +74,7 @@ export const billingReplacement = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     sourceSubscriptionId: text().notNull(),
+    supersedesId: uuid(),
     replacementSubscriptionId: text().unique(),
     orderId: text().unique(),
     paymentId: text().unique(),
@@ -93,9 +95,14 @@ export const billingReplacement = pgTable(
     index('billing_replacement_org_idx').on(t.organizationId),
     index('billing_replacement_source_idx').on(t.sourceSubscriptionId),
     index('billing_replacement_sweep_idx').on(t.updatedAt),
-    uniqueIndex('billing_replacement_open_org_unique')
+    index('billing_replacement_supersedes_idx').on(t.supersedesId),
+    foreignKey({ columns: [t.supersedesId], foreignColumns: [t.id] }),
+    uniqueIndex('billing_replacement_pending_org_unique')
       .on(t.organizationId)
-      .where(sql`${t.status} not in ('completed', 'failed')`),
+      .where(sql`${t.status} in ('creating', 'checkout', 'aborting')`),
+    uniqueIndex('billing_replacement_confirmed_org_unique')
+      .on(t.organizationId)
+      .where(sql`${t.status} = 'confirmed'`),
   ],
 );
 

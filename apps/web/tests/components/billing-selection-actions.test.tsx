@@ -87,6 +87,22 @@ describe('pricing action presentation', () => {
     expect(actions.professional_plus?.hidden).not.toBe(true);
     expect(actions.hobby?.disabled).toBe(false);
   });
+  it('allows a reviewed downgrade while the paid upgrade awaits its first renewal', async () => {
+    const actions = await load(
+      context({
+        actions: context().actions.map((action) => ({
+          ...action,
+          reason:
+            action.targetTier === 'professional_plus'
+              ? 'confirmed_upgrade_downgrade'
+              : 'renewal_pending',
+        })),
+      }),
+    );
+    expect(actions.professional_plus).toMatchObject({ disabled: false, hidden: false });
+    expect(actions.professional_plus?.reason).not.toMatch(/checkout|in progress/i);
+    expect(actions.corporate?.reason).not.toMatch(/checkout|in progress/i);
+  });
 
   it('permits the server-approved review of a protected replacement checkout', async () => {
     const actions = await load(

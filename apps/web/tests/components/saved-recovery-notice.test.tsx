@@ -46,6 +46,24 @@ beforeEach(() => {
   mocks.dismiss.mockResolvedValue(Response.json({ recovery: null }));
 });
 describe('unified billing status notice', () => {
+  it('describes a fulfilled plan awaiting renewal without asking to resume checkout', () => {
+    notice({
+      recovery: null,
+      actions: [
+        {
+          targetTier: 'professional_plus',
+          action: 'current',
+          reason: 'renewal_pending',
+          effectiveAt: '2026-10-01T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(screen.getByText('Plan confirmed')).toBeInTheDocument();
+    expect(
+      screen.getByText('Professional+ is active. Your next renewal is on 1 Oct 2026.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/checkout|confirming/i)).not.toBeInTheDocument();
+  });
   it('retains the selected plan and next action when the end date is unknown', () => {
     notice({ recovery: { ...saved, eligibleAt: null } });
     expect(

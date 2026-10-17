@@ -29,6 +29,12 @@ export async function startReplacement(
   const periodEnd = new Date(preview.nextRenewalAt);
   if (periodEnd.getTime() <= Date.now() + 60_000)
     throw AppError.conflict('Renewal is in progress. Refresh billing after it completes.');
+  const predecessor =
+    preview.reason === 'confirmed_upgrade_downgrade'
+      ? await replacementRepository.current(caller.activeOrgId!)
+      : null;
+  if (preview.reason === 'confirmed_upgrade_downgrade' && !predecessor)
+    throw AppError.conflict('The renewal changed. Refresh billing before continuing.');
   await createReplacement({
     id,
     organizationId: caller.activeOrgId!,
@@ -41,6 +47,7 @@ export async function startReplacement(
     currency: preview.currency,
     periodEnd,
     expiresAt: new Date(Math.min(Date.now() + 15 * 60_000, periodEnd.getTime() - 30_000)),
+    supersedesId: predecessor?.id ?? null,
   });
   return {
     razorpaySubscriptionId: (await replacementRepository.current(caller.activeOrgId!))!

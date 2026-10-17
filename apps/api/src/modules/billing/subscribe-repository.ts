@@ -36,6 +36,7 @@ function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert' | 'e
             ]),
           ),
         )
+        .orderBy(desc(schema.billingReplacement.createdAt), desc(schema.billingReplacement.id))
         .limit(1);
       return row;
     },

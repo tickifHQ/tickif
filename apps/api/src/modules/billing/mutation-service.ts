@@ -23,7 +23,6 @@ export const billingMutationService = {
   ) {
     await assertBillingAccess(caller);
     const org = caller.activeOrgId!;
-    const replacement = await replacementRepository.current(org);
     const reserved = await subscribeRepository.withOrganizationLock(org, async (repository) => {
       const currentReplacement = await repository.findReplacement(org);
       const existing = await repository.findOperation(org, params.operationId);
@@ -93,7 +92,14 @@ export const billingMutationService = {
           'Review the available recovery action before continuing.',
           409,
         );
-      if (currentReplacement && !(kind === 'cancel' && currentReplacement.status === 'confirmed')) {
+      if (
+        currentReplacement &&
+        !(
+          currentReplacement.status === 'confirmed' &&
+          (kind === 'cancel' ||
+            (kind === 'change_plan' && preview.reason === 'confirmed_upgrade_downgrade'))
+        )
+      ) {
         if (!(await canSupersedeReplacement(currentReplacement)))
           throw AppError.conflict(
             'Payment is already in progress. Refresh billing before continuing.',
@@ -120,7 +126,7 @@ export const billingMutationService = {
         kind === 'subscribe'
           ? await subscribeService.createSubscription(caller, params)
           : kind === 'cancel'
-            ? replacement?.status === 'confirmed'
+            ? (await replacementRepository.current(org))?.status === 'confirmed'
               ? await cancelReplacementRenewal(org)
               : await subscribeService.cancelSubscription(caller, params)
             : await startReplacement(caller, params.operationId, reserved.preview!);

@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type * as Billing from '@repo/billing';
 vi.mock('@repo/billing', async (original) => ({
   ...(await original<typeof Billing>()),
-  replacementRepository: { current: mocks.replacement },
+  replacementRepository: { current: mocks.replacement, predecessor: mocks.predecessor },
   replacementProvider: { subscription: mocks.mandate, payments: mocks.payments },
   reconcileReplacement: vi.fn(),
 }));
@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   replacement: vi.fn(),
   mandate: vi.fn(),
   payments: vi.fn(),
+  predecessor: vi.fn(),
 }));
 vi.mock('../../../src/lib/redis.js', () => ({ invalidateEntitlementCache: vi.fn() }));
 vi.mock('@repo/config', () => ({
@@ -217,6 +218,98 @@ describe('billing selection and signed consent', () => {
     recurringAmount: 799900,
     currency: 'INR',
   };
+  it('offers a cycle-end downgrade after a paid upgrade is confirmed before renewal', async () => {
+    mocks.find.mockResolvedValue({
+      ...active,
+      planTier: 'corporate',
+      razorpaySubscriptionId: 'rzp_next',
+    });
+    mocks.replacement.mockResolvedValue({ ...checkout, status: 'confirmed' });
+    mocks.fetch.mockResolvedValue({
+      id: 'rzp_next',
+      status: 'authenticated',
+      plan_id: 'plan_corp',
+      start_at: checkout.periodEnd.getTime() / 1000,
+    });
+    const context = await billingSelectionService.context(caller);
+    expect(context.unfinishedCheckout).toBeNull();
+    expect(context.pendingOperation).toBeNull();
+    expect(context.actions.find((x) => x.targetTier === 'professional_plus')).toMatchObject({
+      action: 'change_plan',
+      reason: 'confirmed_upgrade_downgrade',
+    });
+    expect(
+      await billingSelectionService.preview(caller, { targetTier: 'professional_plus' }),
+    ).toMatchObject({
+      action: 'change_plan',
+      timing: 'cycle_end',
+      confirmationAllowed: true,
+      adjustmentAmount: 0,
+      recurringAmount: 299900,
+      effectiveAt: checkout.periodEnd.toISOString(),
+      sourceSubscriptionId: 'rzp_next',
+    });
+  });
+  it.each(['active', 'pending', 'cancelled'])(
+    'rejects the old downgrade quote when the future source becomes %s',
+    async (status) => {
+      mocks.find.mockResolvedValue({
+        ...active,
+        planTier: 'corporate',
+        razorpaySubscriptionId: 'rzp_next',
+      });
+      mocks.replacement.mockResolvedValue({ ...checkout, status: 'confirmed' });
+      mocks.fetch.mockResolvedValue({
+        id: 'rzp_next',
+        status,
+        plan_id: 'plan_corp',
+        start_at: checkout.periodEnd.getTime() / 1000,
+      });
+      expect(
+        await billingSelectionService.preview(caller, { targetTier: 'professional_plus' }),
+      ).toMatchObject({
+        action: 'blocked',
+        confirmationAllowed: false,
+      });
+    },
+  );
+  it('allows Hobby cancellation and a fresh downgrade after an unused successor expires', async () => {
+    const parent = { ...checkout, status: 'confirmed' };
+    mocks.find.mockResolvedValue({
+      ...active,
+      planTier: 'corporate',
+      razorpaySubscriptionId: 'rzp_next',
+    });
+    mocks.replacement.mockResolvedValue({
+      ...checkout,
+      id: 'child',
+      supersedesId: checkout.id,
+      targetTier: 'professional_plus',
+      targetPlanId: 'plan_pro',
+      replacementSubscriptionId: 'rzp_child',
+      expiresAt: new Date('2026-09-22T00:00:00Z'),
+    });
+    mocks.predecessor.mockResolvedValue(parent);
+    mocks.mandate.mockResolvedValue({ status: 'created', plan_id: 'plan_pro' });
+    mocks.payments.mockResolvedValue([]);
+    mocks.fetch.mockResolvedValue({
+      id: 'rzp_next',
+      status: 'authenticated',
+      plan_id: 'plan_corp',
+      start_at: checkout.periodEnd.getTime() / 1000,
+    });
+    expect(
+      (await billingSelectionService.context(caller)).actions.find((a) => a.targetTier === 'hobby')
+        ?.action,
+    ).toBe('cancel');
+    expect(await billingSelectionService.preview(caller, { targetTier: 'hobby' })).toMatchObject({
+      action: 'cancel',
+      confirmationAllowed: true,
+    });
+    expect(
+      await billingSelectionService.preview(caller, { targetTier: 'professional_plus' }),
+    ).toMatchObject({ action: 'change_plan', confirmationAllowed: true, adjustmentAmount: 0 });
+  });
   it('allows other source-plan actions after an unpaid replacement checkout closes', async () => {
     mocks.find.mockResolvedValue(active);
     mocks.fetch.mockResolvedValue(remote);

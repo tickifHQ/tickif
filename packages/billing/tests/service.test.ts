@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   local: vi.fn(),
   locked: vi.fn(),
   insert: vi.fn(),
+  reserve: vi.fn(),
+  predecessor: vi.fn(),
   create: vi.fn(),
   createOrder: vi.fn(),
   capture: vi.fn(),
@@ -24,8 +26,10 @@ vi.mock('../src/repository.js', () => ({
   replacementRepository: {
     locked: mocks.locked,
     insert: mocks.insert,
+    reserve: mocks.reserve,
     update: mocks.update,
     current: mocks.current,
+    predecessor: mocks.predecessor,
     cancellationPending: mocks.cancellationPending,
   },
 }));
@@ -66,6 +70,7 @@ beforeEach(() => {
     id: 'operation',
     organizationId: 'org',
     sourceSubscriptionId: 'old',
+    supersedesId: null,
     replacementSubscriptionId: 'new',
     orderId: 'order_upgrade',
     paymentId: null,
@@ -102,6 +107,7 @@ beforeEach(() => {
     graceStartedAt: null,
   });
   mocks.payments.mockResolvedValue([payment]);
+  mocks.reserve.mockResolvedValue(true);
   mocks.capture.mockResolvedValue({ ...payment, status: 'authorized' });
   mocks.cancel.mockImplementation(async (id: string) => {
     if (id === 'old') source.cancel_at_cycle_end = true;
@@ -400,7 +406,7 @@ describe('replacement mandate transitions', () => {
   it('retains a durable creation reservation on an ambiguous provider timeout', async () => {
     mocks.create.mockRejectedValue(new Error('timeout'));
     await expect(createReplacement(row)).rejects.toThrow('timeout');
-    expect(mocks.insert).toHaveBeenCalledBefore(mocks.create);
+    expect(mocks.reserve).toHaveBeenCalledBefore(mocks.create);
     expect(mocks.create).toHaveBeenCalledTimes(1);
   });
 });

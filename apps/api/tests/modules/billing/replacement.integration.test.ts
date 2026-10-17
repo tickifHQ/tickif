@@ -92,6 +92,157 @@ async function setup(downgrade = false) {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('replacement billing database transitions', () => {
+  async function upgradeThenReviewDowngrade() {
+    const local = await setup();
+    await reconcileReplacement(local.organizationId, now);
+    const previous = (await replacementRepository.current(local.organizationId))!;
+    const successorId = '75c23b21-0f48-4c8e-baa1-f16d34d6123c';
+    const next = {
+      ...previous,
+      id: successorId,
+      supersedesId: previous.id,
+      sourceSubscriptionId: 'sub_next',
+      sourceTier: 'corporate' as const,
+      targetTier: 'professional_plus' as const,
+      targetPlanId: 'plan_pro',
+      replacementSubscriptionId: 'sub_downgrade',
+      orderId: null,
+      paymentId: null,
+      amount: 0,
+      recurringAmount: 299900,
+      status: 'checkout' as const,
+      sourceStoppedAt: null,
+      createdAt: new Date(previous.createdAt.getTime() + 1000),
+    };
+    await replacementRepository.reserve(next);
+    const originalFetch = vi.mocked(replacementProvider.subscription).getMockImplementation()!;
+    const source = await originalFetch('sub_next');
+    const mandate = {
+      ...source,
+      id: 'sub_downgrade',
+      plan_id: 'plan_pro',
+      status: 'created' as string,
+    };
+    vi.mocked(replacementProvider.subscription).mockImplementation(async (id) =>
+      id === source.id ? source : id === mandate.id ? mandate : originalFetch(id),
+    );
+    vi.mocked(replacementProvider.cancel).mockImplementation(async (id) => {
+      const remote = id === source.id ? source : mandate;
+      remote.status = 'cancelled';
+      return remote;
+    });
+    return { local, previous, next, source, mandate };
+  }
+
+  it('keeps the paid Corporate upgrade while an unused downgrade checkout expires', async () => {
+    const { local, previous, next, mandate } = await upgradeThenReviewDowngrade();
+    await reconcileReplacement(local.organizationId, now);
+    expect(replacementProvider.cancel).toHaveBeenCalledTimes(1); // original source only
+    expect((await db.select().from(schema.subscription))[0]).toMatchObject({
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_next',
+      currentPeriodEnd: end,
+    });
+    mandate.status = 'expired';
+    await reconcileReplacement(local.organizationId, new Date(next.expiresAt.getTime() + 1000));
+    expect(await replacementRepository.current(local.organizationId)).toMatchObject({
+      id: previous.id,
+      status: 'confirmed',
+    });
+    expect(await db.select().from(schema.paymentTransaction)).toHaveLength(1);
+  });
+
+  it('replaces only the future Corporate mandate after downgrade authorization and applies Professional+ at the boundary', async () => {
+    const { local, previous, next, mandate, source } = await upgradeThenReviewDowngrade();
+    mandate.status = 'authenticated';
+    source.cancel_at_cycle_end = true; // A schedule flag cannot prove a future mandate stopped.
+    await reconcileReplacement(local.organizationId, now);
+    expect(replacementProvider.cancel).toHaveBeenLastCalledWith('sub_next', false);
+    expect(await replacementRepository.current(local.organizationId)).toMatchObject({
+      id: next.id,
+      status: 'confirmed',
+    });
+    expect(
+      await db
+        .select()
+        .from(schema.billingReplacement)
+        .where(eq(schema.billingReplacement.id, previous.id)),
+    ).toEqual([
+      expect.objectContaining({
+        status: 'completed',
+        paymentId: 'pay_upgrade',
+        targetTier: 'corporate',
+      }),
+    ]);
+    expect((await db.select().from(schema.subscription))[0]).toMatchObject({
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_downgrade',
+      currentPeriodEnd: end,
+    });
+    await reconcileReplacement(local.organizationId, now); // late/repeated callback cannot restore Corporate renewal
+    expect(replacementProvider.cancel).toHaveBeenCalledTimes(2);
+    vi.mocked(replacementProvider.subscription).mockRejectedValue(new Error('provider outage'));
+    await expect(reconcileReplacement(local.organizationId, end)).rejects.toThrow(
+      'provider outage',
+    );
+    expect((await db.select().from(schema.subscription))[0]).toMatchObject({
+      planTier: 'professional_plus',
+      subscriptionState: 'grace',
+      graceStartedAt: end,
+    });
+  });
+
+  it('retains paid access and retries an uncertain future-mandate cancellation without creating another checkout', async () => {
+    const { local, previous, mandate, source } = await upgradeThenReviewDowngrade();
+    mandate.status = 'authenticated';
+    vi.mocked(replacementProvider.cancel).mockImplementation(async () => {
+      source.status = 'cancelled';
+      throw new Error('lost cancellation response');
+    });
+    await expect(reconcileReplacement(local.organizationId, now)).rejects.toThrow(
+      'lost cancellation response',
+    );
+    expect((await db.select().from(schema.subscription))[0]).toMatchObject({
+      planTier: 'corporate',
+      currentPeriodEnd: end,
+    });
+    expect(
+      await db
+        .select()
+        .from(schema.billingReplacement)
+        .where(eq(schema.billingReplacement.id, previous.id)),
+    ).toEqual([expect.objectContaining({ status: 'confirmed' })]);
+    await reconcileReplacement(local.organizationId, now);
+    expect(await replacementRepository.current(local.organizationId)).toMatchObject({
+      status: 'confirmed',
+      targetTier: 'professional_plus',
+    });
+    expect(replacementProvider.cancel).toHaveBeenCalledTimes(2); // source upgrade cancellation + one downgrade attempt
+  });
+  it.each(['active', 'cancelled'])(
+    'preserves a new Corporate cycle when its source is %s',
+    async (status) => {
+      const { local, previous, mandate, source } = await upgradeThenReviewDowngrade();
+      mandate.status = 'authenticated';
+      source.status = status;
+      source.current_end = Math.floor(end.getTime() / 1000) + 30 * 86400;
+      await reconcileReplacement(local.organizationId, now);
+      expect(await replacementRepository.current(local.organizationId)).toMatchObject({
+        status: 'aborting',
+      });
+      expect(replacementProvider.cancel).toHaveBeenCalledTimes(1); // the original Professional+ source, never the renewed Corporate mandate
+      await reconcileReplacement(local.organizationId, now);
+      expect(replacementProvider.cancel).toHaveBeenLastCalledWith('sub_downgrade', false);
+      expect(await replacementRepository.current(local.organizationId)).toMatchObject({
+        id: previous.id,
+      });
+      expect((await db.select().from(schema.subscription))[0]).toMatchObject({
+        planTier: 'corporate',
+      });
+    },
+  );
   it('cancels a confirmed upgrade and converges a pending cancellation without losing the paid period', async () => {
     const local = await setup();
     await reconcileReplacement(local.organizationId, now);
