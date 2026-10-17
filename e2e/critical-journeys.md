@@ -47,6 +47,10 @@ coverage gate.
 
 ## Coverage and evidence
 
+- `billing-payment-method.spec.ts` and `billing-upgrade-downgrade.spec.ts`: authenticated
+  future-mandate payment updates with inline feedback; confirmed paid upgrades followed
+  by successor downgrades, dismissal/reuse, verified cancellation and preserved paid access.
+
 - `admin-visibility.spec.ts`: admin company selection, dated lead pipeline,
   full private lead/enquiry details and studio messages, unchanged read milestones,
   company → designer → lead drill-down, enquiry response/progression reporting,

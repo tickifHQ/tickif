@@ -92,6 +92,14 @@ const requiredEntries: [file: string, title: string][] = [
     'admin summary matches live totals on desktop and mobile and excludes anonymous visitors',
   ],
   ...billingMatrixEntries,
+  [
+    'billing-payment-method.spec.ts',
+    'authenticated future mandate supports payment update, dismissal and inline failure without changing paid access',
+  ],
+  [
+    'billing-upgrade-downgrade.spec.ts',
+    'confirmed upgrade can schedule a downgrade without checkout warnings or losing paid access',
+  ],
   ...[1412, 390].flatMap((width): [string, string][] => [
     [
       'billing-checkout-return.spec.ts',

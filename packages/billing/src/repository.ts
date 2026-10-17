@@ -6,6 +6,7 @@ import {
   or,
   notInArray,
   asc,
+  desc,
   sql,
   inArray,
   freezeMembersToLimitOnTx,
@@ -21,6 +22,24 @@ const open = notInArray(schema.billingReplacement.status, ['completed', 'failed'
 
 export function billingQueries(tx: DbTransaction) {
   return {
+    async predecessor(row: Replacement) {
+      if (!row.supersedesId) return undefined;
+      return (
+        await tx
+          .select()
+          .from(schema.billingReplacement)
+          .where(
+            and(
+              eq(schema.billingReplacement.id, row.supersedesId),
+              eq(schema.billingReplacement.organizationId, row.organizationId),
+            ),
+          )
+          .limit(1)
+      )[0];
+    },
+    async insert(values: NewReplacement) {
+      await tx.insert(schema.billingReplacement).values(values);
+    },
     async finishCancellation(row: Replacement) {
       const pending = await tx
         .select()
@@ -160,6 +179,21 @@ export function billingQueries(tx: DbTransaction) {
 }
 
 export const replacementRepository = {
+  async predecessor(row: Replacement) {
+    if (!row.supersedesId) return undefined;
+    return (
+      await db
+        .select()
+        .from(schema.billingReplacement)
+        .where(
+          and(
+            eq(schema.billingReplacement.id, row.supersedesId),
+            eq(schema.billingReplacement.organizationId, row.organizationId),
+          ),
+        )
+        .limit(1)
+    )[0];
+  },
   async cancellationPending(org: string) {
     return (
       (
@@ -183,12 +217,38 @@ export const replacementRepository = {
   async insert(values: NewReplacement) {
     await db.insert(schema.billingReplacement).values(values);
   },
+  async reserve(values: NewReplacement) {
+    return this.locked(values.organizationId, async (current, repo) => {
+      if (values.supersedesId) {
+        const local = await repo.subscription(values.organizationId);
+        if (
+          !current ||
+          current.id !== values.supersedesId ||
+          current.status !== 'confirmed' ||
+          current.targetTier !== 'corporate' ||
+          values.targetTier !== 'professional_plus' ||
+          values.sourceTier !== 'corporate' ||
+          values.amount !== 0 ||
+          values.sourceSubscriptionId !== current.replacementSubscriptionId ||
+          values.periodEnd.getTime() !== current.periodEnd.getTime() ||
+          local?.razorpaySubscriptionId !== current.replacementSubscriptionId ||
+          local.planTier !== 'corporate' ||
+          local.subscriptionState !== 'active' ||
+          local.cancelAtPeriodEnd
+        )
+          throw new Error('Confirmed upgrade changed before downgrade checkout');
+      } else if (current) throw new Error('Another replacement is already open');
+      await repo.insert(values);
+      return true;
+    });
+  },
   async current(org: string) {
     return (
       await db
         .select()
         .from(schema.billingReplacement)
         .where(and(eq(schema.billingReplacement.organizationId, org), open))
+        .orderBy(desc(schema.billingReplacement.createdAt), desc(schema.billingReplacement.id))
         .limit(1)
     )[0];
   },
@@ -269,6 +329,7 @@ export const replacementRepository = {
         .select()
         .from(schema.billingReplacement)
         .where(and(eq(schema.billingReplacement.organizationId, org), open))
+        .orderBy(desc(schema.billingReplacement.createdAt), desc(schema.billingReplacement.id))
         .limit(1);
       return work(row, billingQueries(tx));
     });

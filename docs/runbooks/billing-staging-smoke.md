@@ -7,7 +7,15 @@ The deterministic suite verifies local PostgreSQL concurrency, authorization, ca
 1. Configure the staging secret store with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` and both paid `RAZORPAY_PLAN_ID_*` values. Use plans from the same Test Mode account. Configure the public API webhook URL `/api/billing/webhook` and the supported subscription/payment events in the Razorpay dashboard.
 2. Sign in as the synthetic studio owner. Open Plan & Billing, upgrade Hobby to Professional+, complete the official Test Mode Checkout, and wait for the signed webhook or reconciliation. Confirm the plan stays Hobby if Checkout is dismissed or payment fails. After dismissal, Buy/Upgrade options must be available again. Explicitly choosing the same unused checkout may reuse its subscription ID; choosing another tier must obtain a fresh review and safely supersede the unused attempt.
 3. On Professional+, review the immediate Corporate upgrade and its adjustment payment. On Corporate, review the cycle-end Professional+ downgrade. Mandate authorization alone must not grant an unpaid upgrade; deferred downgrades retain current access until the verified end date. Schedule Hobby cancellation and confirm the paid plan stays available to the end date; repeated cancellation must remain idempotent.
-4. For an active or pending subscription, choose Update Payment Method. Confirm Razorpay opens against the existing subscription ID with `subscription_card_change`. Complete the Test Mode authorization and check the updated status after refresh. Repeated callbacks must not downgrade a webhook-confirmed active status to authenticated.
+   Also review Professional+ immediately after a confirmed Corporate upgrade whose renewal
+   mandate is still authenticated. It must quote zero adjustment and the existing paid
+   boundary, without a resume-checkout warning. Dismiss an unused downgrade checkout:
+   Corporate access and its renewal must remain intact. Authorize the downgrade only on
+   an approved Test Mode fixture; verify the future Corporate mandate is cancelled,
+   the Professional+ mandate starts at the same boundary, and Corporate access remains
+   until then. Unknown cancellation outcomes must reconcile without another purchase.
+   Deploy generated migration 0088 before the successor-aware API/worker; see ADR 0017.
+4. For an authenticated future-start mandate, active or pending subscription, choose Update Payment Method. Confirm Razorpay opens against the existing subscription ID with `subscription_card_change`. Complete the Test Mode authorization and check the updated status after refresh. Repeated callbacks must not downgrade a webhook-confirmed active status to authenticated. A paid upgrade can legitimately have active Corporate access while its replacement mandate remains authenticated until the next renewal. Updating that mandate must preserve the paid tier, lifecycle and existing renewal boundary. Unsupported provider states must not offer an executable update action, and request errors must appear beside the Billing Summary control.
 5. For a halted subscription, use the same recovery control. Confirm it updates the existing mandate. Historical unpaid invoices can still require support intervention: do not represent updating the mandate as paying every old invoice. Test card/UPI/eMandate behavior supported by this account; the hosted payment-failure email link offers the provider's supported method-switching choices.
 6. Verify recorded payments, paise-to-rupee conversion and pagination. The history contains signed-webhook transactions, including failures, and may lag until webhook delivery. It does not fabricate invoices, tax amounts, card details or a payment receipt.
 7. In an isolated test webhook setup, pause delivery, allow a paid plan/cycle transition, then refresh. The local tier and period end must reconcile even if Razorpay status remains active. Restore delivery afterward. For an original provider replay, use Razorpay's documented support process; a newly created webhook may not be eligible for older events. Transaction IDs must stay unique. Never disable a shared webhook to isolate one subscription.
@@ -16,6 +24,29 @@ The deterministic suite verifies local PostgreSQL concurrency, authorization, ca
 Sources: [Razorpay payment retries and card changes](https://razorpay.com/docs/payments/subscriptions/payment-retries/), [subscription updates](https://razorpay.com/docs/api/payments/subscriptions/update-subscription/), [Test Mode subscriptions](https://razorpay.com/docs/payments/subscriptions/test/).
 
 The development-only `subscribe-demo` route remains inaccessible in production; all production billing actions use `CheckoutFlow` or the existing-subscription payment recovery flow.
+
+## Authenticated replacement card change — 17 October 2026
+
+Read-only staging inspection of QA Complete Designer's QA Blue Verification studio
+found active Corporate access backed by a captured upgrade adjustment, with its
+replacement `sub_TogEhtF650gYN4` still authenticated and scheduled for 17 November
+2026 at 00:00 IST. The deployed payment-method endpoint excluded authenticated
+mandates, returning 409 before Checkout opened.
+
+A temporary local diagnostic page exercised the real Razorpay Checkout SDK with
+the staging merchant's **Test Mode public key**, this existing subscription ID and
+`subscription_card_change: true`. Razorpay accepted the documented sandbox
+Mastercard ending 5558 and returned payment `pay_ToxJxDMINcbPhO`. Server-side HMAC
+verification passed; the provider reported its INR 500-paise authorization fully
+refunded. The subscription remained authenticated, `start_at` remained unchanged,
+and staging readback retained active Corporate access and the same renewal date.
+No live payment, new subscription, provider activation or database repair was used.
+
+This verifies Razorpay's real card-change boundary for an authenticated mandate;
+it is not a claim that the application fix was deployed during this check. Local
+regressions cover the API, signed callback, unchanged paid access, UI eligibility,
+dismissal/retry and inline feedback. After deployment, repeat the application
+button path on this state to confirm it no longer returns 409.
 
 ## Checkout abandonment and pricing navigation
 

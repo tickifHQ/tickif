@@ -96,6 +96,48 @@ beforeEach(() => {
 });
 
 describe('billing provider lock boundaries', () => {
+  it.each(['authenticated', 'active', 'pending', 'halted'])(
+    'opens the existing %s mandate without changing paid access or the renewal date',
+    async (status) => {
+      const local = {
+        ...localSubscription('sub-replacement', status),
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        currentPeriodEnd: new Date('2099-11-17T00:00:00.000Z'),
+      };
+      mocks.repositoryFind.mockResolvedValue(local);
+      mocks.lockedFind.mockResolvedValue(local);
+      mocks.fetchSubscription.mockResolvedValue({
+        ...remoteSubscription('sub-replacement'),
+        status,
+        start_at: 4098556800,
+        current_start: null,
+        current_end: null,
+      });
+      mocks.withOrganizationLock.mockImplementation(async (_org, action) =>
+        action({ find: mocks.lockedFind, update: mocks.repositoryUpdate }),
+      );
+
+      await expect(subscribeService.paymentMethod(caller)).resolves.toMatchObject({
+        razorpaySubscriptionId: 'sub-replacement',
+      });
+      expect(mocks.repositoryUpdate).not.toHaveBeenCalled();
+      expect(mocks.invalidateEntitlementCache).not.toHaveBeenCalled();
+      expect(mocks.cancel).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['created', 'cancelled', 'completed', 'expired', 'paused', 'unknown'])(
+    'does not open a payment update for a %s mandate',
+    async (status) => {
+      mocks.repositoryFind.mockResolvedValue(localSubscription('sub-existing', status));
+      mocks.fetchSubscription.mockResolvedValue({ ...remoteSubscription('sub-existing'), status });
+
+      await expect(subscribeService.paymentMethod(caller)).rejects.toMatchObject({ status: 409 });
+      expect(mocks.withOrganizationLock).not.toHaveBeenCalled();
+    },
+  );
+
   it('records an acknowledged cancellation without an echoed request parameter', async () => {
     mocks.lockedFind.mockResolvedValue(localSubscription('sub-cancel', 'active'));
     mocks.cancel.mockResolvedValue({ id: 'sub-cancel', status: 'active', current_end: 1800000000 });

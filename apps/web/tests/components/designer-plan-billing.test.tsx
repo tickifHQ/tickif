@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { resolveEntitlements } from '@repo/contracts';
 import type { BillingState } from '../../src/lib/billing-types';
@@ -314,6 +314,45 @@ describe('DesignerPlanBilling', () => {
   });
 
   describe('active state', () => {
+    it('shows payment-update failures beside the Billing Summary control', async () => {
+      apiMocks.paymentMethod.mockResolvedValue(
+        Response.json(
+          {
+            error: { code: 'conflict', message: 'Payment details cannot be updated right now.' },
+          },
+          { status: 409 },
+        ),
+      );
+      render(<DesignerPlanBilling billing={makeBilling({ razorpayStatus: 'authenticated' })} />);
+      const summary = screen
+        .getByRole('heading', { name: 'Billing Summary' })
+        .closest('[data-slot="card"]');
+      expect(summary).not.toBeNull();
+
+      await userEvent.click(
+        within(summary as HTMLElement).getByRole('button', { name: 'Update Payment Method' }),
+      );
+
+      expect(
+        await within(summary as HTMLElement).findByText(
+          'Payment details cannot be updated right now.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it.each(['created', 'cancelled', 'completed', 'expired', 'paused', null])(
+      'does not offer a payment update for provider state %s',
+      async (razorpayStatus) => {
+        render(<DesignerPlanBilling billing={makeBilling({ razorpayStatus })} />);
+        await screen.findByText(
+          'We could not update billing. Your last loaded details are shown while we try again.',
+        );
+        expect(
+          screen.queryByRole('button', { name: 'Update Payment Method' }),
+        ).not.toBeInTheDocument();
+      },
+    );
+
     it('renders the current plan name and price', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
       expect(screen.getByRole('heading', { name: 'Professional+', level: 2 })).toBeInTheDocument();

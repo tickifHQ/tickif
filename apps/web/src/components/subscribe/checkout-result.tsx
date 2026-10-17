@@ -87,7 +87,7 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
     (action) =>
       action.targetTier === targetTier &&
       action.action === 'current' &&
-      action.reason === 'replacement_pending',
+      (action.reason === 'renewal_pending' || action.reason === 'replacement_pending'),
   );
   const active =
     known &&

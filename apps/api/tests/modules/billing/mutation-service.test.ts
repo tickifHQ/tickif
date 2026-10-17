@@ -66,6 +66,32 @@ beforeEach(() => {
   });
 });
 describe('durable billing mutation operations', () => {
+  it('reserves a reviewed downgrade without discarding the confirmed paid upgrade', async () => {
+    mocks.findReplacement.mockResolvedValue({
+      id: 'paid-upgrade',
+      status: 'confirmed',
+      targetTier: 'corporate',
+    });
+    mocks.validate.mockResolvedValue({
+      preview: {
+        action: 'change_plan',
+        reason: 'confirmed_upgrade_downgrade',
+        sourceSubscriptionId: 'future_corp',
+        effectiveAt: '2026-11-17T00:00:00.000Z',
+      },
+      revision: 'revision',
+    });
+    mocks.change.mockResolvedValue({ razorpaySubscriptionId: 'future_pro' });
+    expect(
+      await billingMutationService.execute(
+        caller,
+        { ...params, targetTier: 'professional_plus' },
+        'change_plan',
+      ),
+    ).toMatchObject({ outcome: 'processing', targetTier: 'professional_plus' });
+    expect(mocks.supersedeReplacement).not.toHaveBeenCalled();
+    expect(mocks.insertOperation).toHaveBeenCalled();
+  });
   it('supersedes an unpaid replacement atomically before confirming a different plan', async () => {
     const old = { id: 'old-operation', status: 'checkout', targetTier: 'professional_plus' };
     mocks.findReplacement.mockResolvedValue(old);

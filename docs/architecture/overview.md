@@ -148,6 +148,9 @@ Unused checkout attempts can be superseded after a fresh verified review;
 retired provider identities remain durable for late-payment compensation.
 See [ADR 0016](../adr/0016-billing-checkout-abandonment-and-pricing-navigation.md)
 and the [billing staging checks](../runbooks/billing-staging-smoke.md).
+Confirmed upgrades awaiting first renewal permit an explicitly authorized successor
+downgrade. The original paid upgrade and provider identities remain durable; current
+access continues through the verified boundary. See [ADR 0017](../adr/0017-confirmed-upgrade-renewal-downgrade.md).
 
 Consultation scheduling remains disabled by default even though booking code and
 tests exist. [ADR 0003](../adr/0003-consultation-enquiries.md) establishes enquiries

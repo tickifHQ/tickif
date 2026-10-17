@@ -50,6 +50,11 @@ export const subscriptionStateSchema = z
   .meta({ id: 'SubscriptionState' });
 export type SubscriptionState = z.infer<typeof subscriptionStateSchema>;
 
+/** Authorized future-start mandates can replace their card before the first recurring charge. */
+export function canUpdateSubscriptionPaymentMethod(status: string | null | undefined): boolean {
+  return status != null && ['authenticated', 'active', 'pending', 'halted'].includes(status);
+}
+
 /**
  * Razorpay webhook event types relevant to subscription billing.
  *

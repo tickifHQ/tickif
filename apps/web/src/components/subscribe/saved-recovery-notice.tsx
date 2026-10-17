@@ -58,6 +58,9 @@ export function BillingStatusNotice({
   const checkout = context?.unfinishedCheckout;
   const pending = context?.pendingOperation;
   const scheduled = context?.scheduledChange;
+  const confirmedPlan = context?.actions.find(
+    (action) => action.action === 'current' && action.reason === 'renewal_pending',
+  );
   const activeRecovery =
     recovery && !['completed', 'dismissed', 'superseded'].includes(recovery.status)
       ? recovery
@@ -110,6 +113,9 @@ export function BillingStatusNotice({
       ? `${currentLabel} stays active until ${formatDate(end)}. ${targetLabel ? `Your plan changes to ${targetLabel} after it ends.` : 'The new plan is awaiting confirmation.'}`
       : `${currentLabel} stays active until the scheduled change. The effective date is not yet confirmed.`;
     if (!end && !targetLabel) body += ' The new plan is awaiting confirmation.';
+  } else if (confirmedPlan?.effectiveAt) {
+    title = 'Plan confirmed';
+    body = `${currentLabel} is active. Your next renewal is on ${formatDate(confirmedPlan.effectiveAt)}.`;
   } else return null;
 
   const unchanged =

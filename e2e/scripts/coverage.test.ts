@@ -111,7 +111,7 @@ describe('critical E2E coverage gate', () => {
 
   it('requires every billing matrix and failure journey without omissions or skips', () => {
     const billing = requiredTests.filter(({ file }) => file.startsWith('billing-'));
-    expect(billing).toHaveLength(51);
+    expect(billing).toHaveLength(53);
     expect(billing).toContainEqual({
       file: 'billing-management.spec.ts',
       title:

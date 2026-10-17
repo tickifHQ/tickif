@@ -9,7 +9,7 @@ const terminal = (status: string) => ['cancelled', 'completed', 'expired'].inclu
 
 /** Reserve before external creates. Unknown create outcomes are never blindly retried. */
 export async function createReplacement(input: NewReplacement) {
-  await repository.insert(input);
+  if (!(await repository.reserve(input))) throw new Error('Organization billing is unavailable');
   const remote = await provider.create(
     input.targetPlanId,
     Math.floor(input.periodEnd.getTime() / 1000),
@@ -58,6 +58,15 @@ export async function reconcileReplacement(org: string, now = new Date()) {
     )
       throw new Error('Replacement mandate changed');
     const source = await provider.subscription(row.sourceSubscriptionId);
+    const predecessor = await repo.predecessor(row);
+    if (
+      row.supersedesId &&
+      (!predecessor ||
+        predecessor.replacementSubscriptionId !== source.id ||
+        predecessor.targetPlanId !== source.plan_id ||
+        predecessor.periodEnd.getTime() !== row.periodEnd.getTime())
+    )
+      throw new Error('Downgrade predecessor changed');
     const payments = row.orderId ? await provider.payments(row.orderId) : [];
     let payment = row.orderId
       ? payments.find(
@@ -123,18 +132,32 @@ export async function reconcileReplacement(org: string, now = new Date()) {
       if (
         source.current_end &&
         source.current_end * 1000 !== row.periodEnd.getTime() &&
-        !terminal(source.status)
+        (!terminal(source.status) || !!row.supersedesId)
       ) {
         await repo.update(row.id, { status: 'aborting' });
         return false;
       }
       const sourceCancellationAccepted =
-        source.cancel_at_cycle_end ||
-        (local.razorpaySubscriptionId === source.id && local.cancelAtPeriodEnd);
+        terminal(source.status) ||
+        (!row.supersedesId &&
+          (source.cancel_at_cycle_end ||
+            (local.razorpaySubscriptionId === source.id && local.cancelAtPeriodEnd)));
       if (!sourceCancellationAccepted && !terminal(source.status)) {
         // The acknowledged cancel response is authoritative. Razorpay does not
         // document cancel_at_cycle_end on subsequent subscription fetches.
-        const checked = await provider.cancel(source.id, true);
+        // A successor replaces only the future mandate, never the paid access boundary.
+        const futureMandate =
+          !!row.supersedesId &&
+          source.status === 'authenticated' &&
+          source.start_at === Math.floor(row.periodEnd.getTime() / 1000) &&
+          !(source.current_end && source.current_end * 1000 > row.periodEnd.getTime());
+        if (row.supersedesId && !futureMandate) {
+          await repo.update(row.id, { status: 'aborting' });
+          return false;
+        }
+        const checked = await provider.cancel(source.id, !futureMandate);
+        if (futureMandate && !terminal((await provider.subscription(source.id)).status))
+          return false;
         if (
           checked.current_end &&
           checked.current_end * 1000 !== row.periodEnd.getTime() &&
@@ -144,6 +167,8 @@ export async function reconcileReplacement(org: string, now = new Date()) {
           return false;
         }
       }
+      if (predecessor?.status === 'confirmed')
+        await repo.update(predecessor.id, { status: 'completed' });
       await repo.update(row.id, {
         status: 'confirmed',
         sourceStoppedAt: now,
@@ -210,12 +235,21 @@ export async function reconcileReplacement(org: string, now = new Date()) {
     else await repo.update(row.id, {});
     return true;
   });
-  if (previous && now >= previous.periodEnd) await auditSupersededAgreement(previous);
+  if (previous && now >= previous.periodEnd) {
+    await auditSupersededAgreement(previous);
+    const predecessor = await repository.predecessor(previous);
+    if (predecessor) await auditSupersededAgreement(predecessor);
+  }
   return result;
 }
 
 export async function applyReplacementSchedule(org: string, now = new Date()) {
-  return repository.locked(org, async (row, repo) => {
+  return repository.locked(org, async (current, repo) => {
+    // An unfinished successor must not erase the predecessor's paid boundary.
+    const row =
+      current?.supersedesId && current.status !== 'confirmed'
+        ? await repo.predecessor(current)
+        : current;
     if (!row || row.status !== 'confirmed' || now < row.periodEnd) return false;
     const local = await repo.subscription(org);
     if (
