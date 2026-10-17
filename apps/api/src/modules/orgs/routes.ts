@@ -25,6 +25,7 @@ import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { orgsService } from './service.js';
 import { profilesService } from '../profiles/service.js';
+import { organizationListsRoutes } from './lists-routes.js';
 
 const errorJson = (description: string) => ({
   description,
@@ -317,6 +318,7 @@ export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       action: 'cancel',
     });
     return c.json(result, 200);
-  });
+  })
+  .route('/', organizationListsRoutes);
 
 export type OrgsRoutes = typeof orgsRoutes;

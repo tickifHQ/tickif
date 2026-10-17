@@ -16,7 +16,10 @@ async function getOrganizationWorkspace() {
   }
 
   try {
-    const response = await api.api.orgs.current.$get({}, { headers: { cookie } });
+    const response = await api.api.orgs.summary.$get(
+      {},
+      { headers: { cookie }, init: { cache: 'no-store' } },
+    );
     if (!response.ok) {
       return { data: null, error: 'Could not load your studio team.' };
     }
@@ -35,5 +38,12 @@ async function getOrganizationWorkspace() {
 export default async function DesignerTermsRolesPage() {
   await requireAuth({ requiredRole: 'designer' });
   const workspace = await getOrganizationWorkspace();
-  return <DesignerTermsRoles workspace={workspace.data} error={workspace.error} />;
+  return (
+    <DesignerTermsRoles
+      key={workspace.data?.organization.id}
+      workspace={workspace.data}
+      error={workspace.error}
+      serverLists
+    />
+  );
 }

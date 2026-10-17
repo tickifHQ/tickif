@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { and, db, eq, inArray, schema } from '@repo/db';
+import { organizationBranchesResponseSchema } from '@repo/contracts';
 import {
   makeDesigner,
   makeConsultationBooking,
@@ -199,6 +200,71 @@ describe('corporate branch persistence', () => {
     const rejected = await createBranch(hobby.cookie, hobby.organization.id, 'Not Allowed');
     expect(rejected.status).toBe(402);
     expect(await rejected.json()).toMatchObject({ code: 'BRANCHES_REQUIRE_CORPORATE' });
+  });
+
+  it('returns the complete authorized branch and member snapshot for client pagination', async () => {
+    const corporate = await makeOwnerSession('corporate');
+    const teams: Awaited<ReturnType<typeof makeTeam>>[] = [];
+    for (let index = 1; index <= 24; index++) {
+      const team = await makeTeam({
+        organizationId: corporate.organization.id,
+        name: `Branch ${String(index).padStart(2, '0')}`,
+      });
+      await makeDesigner({
+        orgId: corporate.organization.id,
+        teamId: team.id,
+        userId: corporate.userId,
+      });
+      teams.push(team);
+    }
+    const memberTeam = teams[0]!;
+    for (let index = 1; index <= 24; index++) {
+      const user = await makeUser({
+        name: `Person ${String(index).padStart(2, '0')}`,
+        email: `person-${index}@example.com`,
+      });
+      await db.insert(schema.member).values({
+        id: `snapshot-member-${index}`,
+        organizationId: corporate.organization.id,
+        userId: user.id,
+        role: 'member',
+        createdAt: new Date(),
+      });
+      await db.insert(schema.teamMember).values({
+        id: `snapshot-assignment-${index}`,
+        teamId: memberTeam.id,
+        userId: user.id,
+        createdAt: new Date(),
+      });
+    }
+    const otherProfile = await makeDesigner();
+    const response = await app.request('/api/orgs/branches', {
+      headers: { cookie: corporate.cookie },
+    });
+    expect(response.status).toBe(200);
+    const snapshot = organizationBranchesResponseSchema.parse(await response.json());
+    expect(snapshot.branches).toHaveLength(25);
+    expect(snapshot.branchUsage).toBe(25);
+    expect(snapshot.branches.some(({ id }) => id === teams[23]!.id)).toBe(true);
+    expect(snapshot.branches.some(({ id }) => id === otherProfile.teamId)).toBe(false);
+    const members = snapshot.branches.find(({ id }) => id === memberTeam.id)!;
+    expect(members.memberCount).toBe(25);
+    expect(members.members).toHaveLength(25);
+    expect(members.members).toContainEqual(
+      expect.objectContaining({
+        name: 'Person 24',
+        email: 'person-24@example.com',
+        role: 'member',
+      }),
+    );
+
+    // This endpoint has no search/page query contract. Audit the current behavior
+    // explicitly so the UI cannot be mistaken for server-side pagination.
+    const queried = await app.request('/api/orgs/branches?page=2&limit=1&q=absent', {
+      headers: { cookie: corporate.cookie },
+    });
+    expect(queried.status).toBe(200);
+    expect(await queried.json()).toEqual(snapshot);
   });
 
   it('blocks hard deletion so branch projects cannot cascade', async () => {

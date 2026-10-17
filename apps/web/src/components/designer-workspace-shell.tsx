@@ -93,7 +93,6 @@ const growItems: NavItem[] = [
     label: 'Branches',
     href: '/designer/branches',
     icon: Building2,
-    visible: (capabilities) => capabilities.manageMembers,
   },
   {
     label: 'Plan & billing',
@@ -256,8 +255,12 @@ function SidebarContent({
         </Link>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-4 py-5">
+      <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-4 pt-2 pb-5">
         <div className="space-y-6">
+          <DesignerBranchSelector
+            key={JSON.stringify([activeOrganizationId, planLabel, capabilities])}
+            organizationId={activeOrganizationId}
+          />
           <SidebarSection
             title="Studio"
             items={visibleItems(studioItems, capabilities, consultationsEnabled)}
@@ -272,10 +275,6 @@ function SidebarContent({
 
         <div className="space-y-3">
           <div className="flex flex-col gap-3">
-            <DesignerBranchSelector
-              key={JSON.stringify([activeOrganizationId, planLabel, capabilities])}
-              organizationId={activeOrganizationId}
-            />
             <a
               href={SUPPORT_WHATSAPP_URL}
               target="_blank"

@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'ownership-transfer.spec.ts',
+    'ownership transfer requires nominee acceptance and preserves roles after cancellation and decline',
+  ],
+  [
     'admin-visibility.spec.ts',
     'admin lead visibility and company reporting retain filters through drill-down without changing enquiry milestones',
   ],

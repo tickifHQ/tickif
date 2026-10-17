@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   leave: vi.fn(),
   transferPost: vi.fn(),
   transferAction: vi.fn(),
+  membersPage: vi.fn(),
+  invitationsPage: vi.fn(),
   transferScope: new Proxy(
     {},
     {
@@ -45,6 +47,11 @@ vi.mock('../../src/lib/auth-client', () => ({
 
 vi.mock('@/lib/api', () => ({
   api: { api: { orgs: { 'ownership-transfers': mocks.transferScope } } },
+}));
+
+vi.mock('@/lib/organization-list-api', () => ({
+  loadOrganizationMembersPage: mocks.membersPage,
+  loadOrganizationInvitationsPage: mocks.invitationsPage,
 }));
 
 const ownerWorkspace: OrganizationWorkspaceResponse = {
@@ -116,6 +123,18 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
   ownershipTransfer: null,
 };
 
+function openInvitations() {
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Invitations' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+}
+
+function openInviteDialog() {
+  openInvitations();
+  fireEvent.click(screen.getByRole('button', { name: 'Invite a teammate' }));
+}
+
 describe('DesignerTermsRoles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -125,27 +144,190 @@ describe('DesignerTermsRoles', () => {
     mocks.leave.mockResolvedValue({ data: {}, error: null });
     mocks.transferPost.mockResolvedValue({ ok: true, json: async () => ({}) });
     mocks.transferAction.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mocks.membersPage.mockResolvedValue({
+      items: ownerWorkspace.members,
+      page: 1,
+      limit: 12,
+      total: 2,
+      totalPages: 1,
+    });
+    mocks.invitationsPage.mockResolvedValue({
+      items: ownerWorkspace.invitations,
+      page: 1,
+      limit: 12,
+      total: 1,
+      totalPages: 1,
+    });
   });
 
   it('renders the new layout from the live organization workspace', () => {
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
     expect(screen.getByRole('heading', { name: 'Team & Roles' })).toBeInTheDocument();
-    expect(screen.getByText('Studio One')).toBeInTheDocument();
+    expect(
+      screen.getByText("Manage your studio's members, roles, and invitations."),
+    ).toBeInTheDocument();
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getByText('Rohan Shah')).toBeInTheDocument();
-    expect(screen.getByText('new@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('new@example.com')).not.toBeInTheDocument();
     expect(screen.getByText('2', { selector: '[data-metric="members"]' })).toBeInTheDocument();
     expect(screen.queryByText('0 expiring soon')).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('teammate@studio.com')).toHaveValue('');
+    expect(screen.queryByPlaceholderText('teammate@studio.com')).not.toBeInTheDocument();
     expect(
       screen.getByText('Full control of this studio, including its team and settings.'),
     ).toBeInTheDocument();
 
-    const membersSection = screen.getByRole('heading', { name: 'Members' }).parentElement;
+    const membersSection = screen.getByRole('table');
     expect(membersSection).not.toBeNull();
     expect(within(membersSection!).getAllByText('Owner')).toHaveLength(1);
-    expect(within(membersSection!).getAllByText('Member')).toHaveLength(1);
+    expect(
+      within(membersSection!).getByText('Member', { selector: '[data-slot="badge"]' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows members and invitations as separate searchable tables', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+    expect(screen.getByRole('tab', { name: 'Members' })).toHaveAttribute('aria-selected', 'true');
+    for (const name of ['Member', 'Email', 'Joined date', 'Role', 'Actions']) {
+      expect(screen.getByRole('columnheader', { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByText('new@example.com')).not.toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search members' }), 'ROHAN@');
+    expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+    expect(screen.getByText('Rohan Shah')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Invitations' }));
+    expect(screen.getByRole('searchbox', { name: 'Search invitations' })).toBeInTheDocument();
+    expect(screen.getByText('new@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('Rohan Shah')).not.toBeInTheDocument();
+  });
+
+  it('paginates members and resets to the first page when searching', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          members: Array.from({ length: 25 }, (_, i) => ({
+            ...ownerWorkspace.members[1]!,
+            id: `member-${i}`,
+            userId: `user-${i}`,
+            name: `Person ${String(i + 1).padStart(2, '0')}`,
+            email: `person${i + 1}@example.com`,
+          })),
+        }}
+      />,
+    );
+    expect(screen.getByText('Person 01')).toBeInTheDocument();
+    expect(screen.queryByText('Person 13')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Person 13')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search members' }), 'person25@');
+    expect(screen.getByText('Person 25')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 1 · 1 member')).toBeInTheDocument();
+  });
+
+  it('paginates and searches invitations independently from members', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          invitations: Array.from({ length: 25 }, (_, i) => ({
+            ...ownerWorkspace.invitations[0]!,
+            id: `invitation-${i}`,
+            email: `invited${String(i + 1).padStart(2, '0')}@example.com`,
+          })),
+        }}
+      />,
+    );
+    openInvitations();
+    expect(screen.getByText('invited01@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('invited13@example.com')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('invited13@example.com')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search invitations' }), 'invited25@');
+    expect(screen.getByText('invited25@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 1 · 1 invitation')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Members' }));
+    expect(screen.getByRole('searchbox', { name: 'Search members' })).toHaveValue('');
+    expect(screen.getByText('Page 1 of 1 · 2 members')).toBeInTheDocument();
+  });
+
+  it('requests server pages and debounced search instead of filtering the loaded page', async () => {
+    const user = userEvent.setup();
+    const remoteMember = {
+      ...ownerWorkspace.members[1]!,
+      id: 'remote-member',
+      name: 'Remote Person',
+      email: 'remote@example.com',
+    };
+    mocks.membersPage.mockImplementation(async ({ page, limit, q }) => ({
+      items: q ? [remoteMember] : page === 1 ? ownerWorkspace.members : [remoteMember],
+      page,
+      limit,
+      total: q ? 1 : 25,
+      totalPages: q ? 1 : 3,
+    }));
+    render(
+      <DesignerTermsRoles
+        serverLists
+        workspace={{
+          ...ownerWorkspace,
+          members: [],
+          invitations: [],
+          ownerCount: 1,
+          currentUserMemberId: 'member-owner',
+          capabilities: { ...ownerWorkspace.capabilities, transferOwnership: false },
+        }}
+      />,
+    );
+    expect(await screen.findByText('Rohan Shah')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() =>
+      expect(mocks.membersPage).toHaveBeenCalledWith(
+        { page: 2, limit: 12, q: '' },
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(await screen.findByText('Remote Person')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search members' }), 'remote@');
+    await waitFor(() =>
+      expect(mocks.membersPage).toHaveBeenCalledWith(
+        { page: 1, limit: 12, q: 'remote@' },
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(await screen.findByText('Page 1 of 1 · 1 member')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Invitations' }));
+    expect(await screen.findByText('new@example.com')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search invitations' }), 'new@');
+    await waitFor(() =>
+      expect(mocks.invitationsPage).toHaveBeenCalledWith(
+        { page: 1, limit: 12, q: 'new@' },
+        expect.any(AbortSignal),
+      ),
+    );
+  });
+
+  it('shows server list errors with a retry action', async () => {
+    const user = userEvent.setup();
+    mocks.membersPage.mockRejectedValueOnce(new Error('Members are unavailable.'));
+    render(
+      <DesignerTermsRoles
+        serverLists
+        workspace={{
+          ...ownerWorkspace,
+          members: [],
+          invitations: [],
+          capabilities: { ...ownerWorkspace.capabilities, transferOwnership: false },
+        }}
+      />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Members are unavailable.');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Rohan Shah')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('uses role-specific access copy and keeps regular members read-only', () => {
@@ -560,6 +742,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInviteDialog();
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'tier@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
@@ -576,6 +759,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInviteDialog();
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'locked@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
@@ -588,6 +772,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInviteDialog();
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'teammate@example.com');
     await user.click(screen.getByRole('combobox', { name: 'Role' }));
     await user.click(screen.getByRole('option', { name: 'Admin' }));
@@ -610,6 +795,7 @@ describe('DesignerTermsRoles', () => {
     vi.useFakeTimers();
     try {
       render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+      openInviteDialog();
       fireEvent.change(screen.getByRole('textbox', { name: 'Work email' }), {
         target: { value: 'teammate@example.com' },
       });
@@ -635,6 +821,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInviteDialog();
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'asha@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
@@ -648,6 +835,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInviteDialog();
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'new@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
@@ -697,6 +885,7 @@ describe('DesignerTermsRoles', () => {
       />,
     );
 
+    openInvitations();
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.getByText('Accepted')).toBeInTheDocument();
     expect(screen.getByText('Declined')).toBeInTheDocument();
@@ -753,6 +942,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInvitations();
     await user.click(screen.getByRole('button', { name: 'Resend invitation to new@example.com' }));
 
     await waitFor(() => {
@@ -816,6 +1006,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInvitations();
     await user.click(screen.getByRole('button', { name: 'Revoke invitation for new@example.com' }));
 
     await waitFor(() => {
@@ -879,6 +1070,120 @@ describe('DesignerTermsRoles', () => {
       expect(mocks.transferPost).toHaveBeenCalled();
     });
     expect(screen.getByRole('status')).toHaveTextContent('your role becomes Admin on completion');
+  });
+
+  it('uses one searchable ownership dropdown without a nominee pager and aligns the default button', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+    expect(
+      screen.queryByRole('searchbox', { name: 'Search ownership nominees' }),
+    ).not.toBeInTheDocument();
+    const nominee = screen.getByRole('combobox', { name: 'Nominate an Admin or Member as Owner' });
+    expect(screen.getByRole('button', { name: 'Request transfer' })).toHaveClass('h-11');
+    expect(screen.queryByText(/Page .*eligible member/)).not.toBeInTheDocument();
+    await user.click(nominee);
+    await user.type(nominee, 'rohan');
+    await user.click(screen.getByRole('option', { name: 'Rohan Shah (Member)' }));
+    await user.click(screen.getByRole('button', { name: 'Request transfer' }));
+    await waitFor(() =>
+      expect(mocks.transferPost).toHaveBeenCalledWith({ json: { targetMemberId: 'member-rohan' } }),
+    );
+  });
+
+  it('loads more eligible nominees inside the dropdown and searches them through the API', async () => {
+    const user = userEvent.setup();
+    const nominees = Array.from({ length: 13 }, (_, index) => ({
+      ...ownerWorkspace.members[1]!,
+      id: `nominee-${index + 1}`,
+      name: `Nominee ${String(index + 1).padStart(2, '0')}`,
+      email: `nominee${index + 1}@example.com`,
+    }));
+    mocks.membersPage.mockImplementation(async ({ page, limit, q }, _signal, filters) =>
+      filters?.transferEligible
+        ? {
+            items: q
+              ? nominees.filter((member) => member.email.includes(q))
+              : nominees.slice((page - 1) * limit, page * limit),
+            page,
+            limit,
+            total: q ? 1 : 13,
+            totalPages: q ? 1 : 2,
+          }
+        : { items: ownerWorkspace.members, page: 1, limit, total: 2, totalPages: 1 },
+    );
+    render(
+      <DesignerTermsRoles
+        serverLists
+        workspace={{ ...ownerWorkspace, members: [], invitations: [] }}
+      />,
+    );
+    const nominee = screen.getByRole('combobox', { name: 'Nominate an Admin or Member as Owner' });
+    await user.click(nominee);
+    expect(await screen.findByRole('option', { name: 'Nominee 01 (Member)' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Nominee 13 (Member)' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Load more options' }));
+    expect(await screen.findByRole('option', { name: 'Nominee 13 (Member)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Nominee 01 (Member)' })).toBeInTheDocument();
+    await user.type(nominee, 'nominee13@');
+    await waitFor(() =>
+      expect(mocks.membersPage).toHaveBeenCalledWith(
+        { page: 1, limit: 12, q: 'nominee13@' },
+        expect.any(AbortSignal),
+        { transferEligible: true },
+      ),
+    );
+    await user.click(await screen.findByRole('option', { name: 'Nominee 13 (Member)' }));
+    await user.click(screen.getByRole('button', { name: 'Request transfer' }));
+    await waitFor(() =>
+      expect(mocks.transferPost).toHaveBeenCalledWith({ json: { targetMemberId: 'nominee-13' } }),
+    );
+  });
+
+  it('blocks requesting a transfer after nominee loading fails even with a previous selection', async () => {
+    const user = userEvent.setup();
+    mocks.membersPage.mockImplementation(async ({ page, limit }, _signal, filters) => {
+      if (filters?.transferEligible && page === 2) throw new Error('Could not load nominees.');
+      return {
+        items: filters?.transferEligible ? [ownerWorkspace.members[1]!] : ownerWorkspace.members,
+        page: 1,
+        limit,
+        total: 13,
+        totalPages: 2,
+      };
+    });
+    render(
+      <DesignerTermsRoles
+        serverLists
+        workspace={{ ...ownerWorkspace, members: [], invitations: [] }}
+      />,
+    );
+    const nominee = screen.getByRole('combobox', { name: 'Nominate an Admin or Member as Owner' });
+    await user.click(nominee);
+    await user.click(await screen.findByRole('option', { name: 'Rohan Shah (Member)' }));
+    expect(screen.getByRole('button', { name: 'Request transfer' })).toBeEnabled();
+    await user.click(nominee);
+    await user.click(screen.getByRole('button', { name: 'Load more options' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load nominees.');
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('button', { name: 'Request transfer' })).toBeDisabled();
+    expect(mocks.transferPost).not.toHaveBeenCalled();
+  });
+
+  it('clears the hidden nominee query when a transfer mutation refreshes the dropdown', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles serverLists workspace={ownerWorkspace} />);
+    const nominee = screen.getByRole('combobox', { name: 'Nominate an Admin or Member as Owner' });
+    await user.type(nominee, 'rohan@');
+    await user.click(await screen.findByRole('option', { name: 'Rohan Shah (Member)' }));
+    await user.click(screen.getByRole('button', { name: 'Request transfer' }));
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mocks.membersPage).toHaveBeenLastCalledWith(
+        { page: 1, limit: 12, q: '' },
+        expect.any(AbortSignal),
+        { transferEligible: true },
+      ),
+    );
   });
 
   it('lets the transfer target accept or decline', async () => {
@@ -967,6 +1272,7 @@ describe('DesignerTermsRoles', () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
+    openInviteDialog();
     await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'blocked@example.com');
     await user.click(screen.getByRole('button', { name: 'Send invite' }));
 

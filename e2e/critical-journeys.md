@@ -91,6 +91,10 @@ coverage gate.
   re-verification remains required.
 - `organization-access.spec.ts`: real invitations, acceptance, role changes,
   context switching and forbidden cross-organization mutations.
+- `ownership-transfer.spec.ts`: searchable nominee selection across API pages,
+  cancellation, decline, initiator acceptance denial and nominee acceptance;
+  only acceptance swaps Owner/Admin roles and sole-owner leave protection follows
+  the new Owner. All accounts and organizations are disposable local fixtures.
 - `organization-workflows.spec.ts`: projects, leads, profile, portfolio,
   verification, analytics and billing after organization switches, including
   owner/admin/member capabilities and private direct-ID isolation.

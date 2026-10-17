@@ -144,6 +144,12 @@ Generated components land in `src/components/` and already consume the semantic 
   The surface has a theme-aware dark counterpart; existing badge defaults stay unchanged.
 - `Select`: shadcn/Radix compound primitive with shared trigger, popup and option
   tokens. [API](https://www.radix-ui.com/primitives/docs/components/select).
+  `SearchableSelect` provides a labeled single searchable dropdown, composed from
+  the installed Base UI Combobox with shared control tokens. Callers own remote
+  filtering through `onSearchChange`, selection through `value`/`onValueChange`,
+  and optional in-menu loading, retry and Load more actions. The control uses the
+  default 44px field height and built-in keyboard navigation; it does not render
+  a separate search field or table pagination controls.
   `SelectTrigger variant="navigation"` opts into the measured 32px city pill,
   Label/M typography and 12px chevron without changing normal form fields.
   `SelectField` composes it with labels and errors; controlled `value` /

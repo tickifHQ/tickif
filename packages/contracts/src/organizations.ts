@@ -344,6 +344,9 @@ export const organizationWorkspaceResponseSchema = z
     members: z.array(organizationMemberSchema),
     invitations: z.array(organizationInvitationSchema),
     ownershipTransfer: ownershipTransferResponseSchema.nullable(),
+    ownerCount: z.number().int().min(0).optional(),
+    currentUserMemberId: z.string().optional(),
+    pendingInvitationCount: z.number().int().min(0).optional(),
   })
   .meta({ id: 'OrganizationWorkspaceResponse' });
 export type OrganizationWorkspaceResponse = z.infer<typeof organizationWorkspaceResponseSchema>;
@@ -396,6 +399,67 @@ export const organizationBranchesResponseSchema = z
   })
   .meta({ id: 'OrganizationBranchesResponse' });
 export type OrganizationBranchesResponse = z.infer<typeof organizationBranchesResponseSchema>;
+
+export const organizationListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(12),
+    q: z.string().trim().max(200).default(''),
+  })
+  .meta({ id: 'OrganizationListQuery' });
+export type OrganizationListQuery = z.infer<typeof organizationListQuerySchema>;
+
+export const organizationMembersQuerySchema = organizationListQuerySchema
+  .extend({
+    availableForBranchId: z.string().min(1).optional(),
+    transferEligible: z.enum(['true', 'false']).optional(),
+  })
+  .meta({ id: 'OrganizationMembersQuery' });
+
+export const organizationBranchesQuerySchema = organizationListQuerySchema
+  .extend({ removalTargetFor: z.string().min(1).optional() })
+  .meta({ id: 'OrganizationBranchesQuery' });
+
+export const organizationPageMetadataSchema = z
+  .object({
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1).max(100),
+    total: z.number().int().min(0),
+    totalPages: z.number().int().min(1),
+  })
+  .meta({ id: 'OrganizationPageMetadata' });
+export type OrganizationPage<T> = z.infer<typeof organizationPageMetadataSchema> & { items: T[] };
+
+export const organizationBranchesPageResponseSchema = organizationPageMetadataSchema
+  .extend({
+    items: z.array(organizationBranchSchema),
+    activeTeamId: z.string().nullable(),
+    branchUsage: z.number().int().min(0),
+    branchLimit: z.number().int(),
+  })
+  .meta({ id: 'OrganizationBranchesPageResponse' });
+export type OrganizationBranchesPageResponse = z.infer<
+  typeof organizationBranchesPageResponseSchema
+>;
+
+export const organizationBranchMembersPageResponseSchema = organizationPageMetadataSchema
+  .extend({ items: z.array(organizationBranchMemberSchema.extend({ frozen: z.boolean() })) })
+  .meta({ id: 'OrganizationBranchMembersPageResponse' });
+export type OrganizationBranchMembersPageResponse = z.infer<
+  typeof organizationBranchMembersPageResponseSchema
+>;
+
+export const organizationMembersPageResponseSchema = organizationPageMetadataSchema
+  .extend({ items: z.array(organizationMemberSchema) })
+  .meta({ id: 'OrganizationMembersPageResponse' });
+export type OrganizationMembersPageResponse = z.infer<typeof organizationMembersPageResponseSchema>;
+
+export const organizationInvitationsPageResponseSchema = organizationPageMetadataSchema
+  .extend({ items: z.array(organizationInvitationSchema) })
+  .meta({ id: 'OrganizationInvitationsPageResponse' });
+export type OrganizationInvitationsPageResponse = z.infer<
+  typeof organizationInvitationsPageResponseSchema
+>;
 
 export const removeOrganizationBranchParamsSchema = z
   .object({ branchId: z.string().min(1) })

@@ -7,6 +7,9 @@ these records preserve decision context and consequences.
 
 | ADR                                                                                                                        | Status            | Date                                        | Topic and applicability                                                                                                    |
 | -------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| [0020: Paginated organization management](./0020-paginated-organization-management.md)                                     | Accepted          | 2026-10-18                                  | API search and paging for branches, members and invitations; Team & Roles tables                                           |
+| [0019: Centralized branch role management](./0019-centralized-branch-role-management.md)                                   | Accepted; amended | 2026-10-17                                  | Branch roles become read-only badges; editing moves to Team & Roles                                                        |
+| [0018: Branch member management](./0018-branch-member-management.md)                                                       | Accepted; amended | 2026-10-17                                  | Branch tables and direct assignment; inline role editing replaced by ADR 0019                                              |
 | [0017: Confirmed upgrade renewal downgrade](./0017-confirmed-upgrade-renewal-downgrade.md)                                 | Accepted          | 2026-10-17                                  | Authorize a successor renewal while preserving the paid upgrade through its billing boundary                               |
 | [0016: Billing checkout abandonment and pricing navigation](./0016-billing-checkout-abandonment-and-pricing-navigation.md) | Accepted          | 2026-10-17                                  | Restore plan choices after unused checkout; route pricing entry points to the plans subpage; reconcile superseded attempts |
 | [0015 — City-level nearby discovery](./0015-nearby-city-discovery.md)                                                      | Proposed          | 2026-10-16                                  | Explicit device permission, transient Google city lookup, and city-scoped saved-location suggestions                       |
@@ -25,7 +28,9 @@ these records preserve decision context and consequences.
 | [0002 — Media pipeline](./0002-media-pipeline.md)                                                                          | Accepted          | 2026-06-14                                  | Direct upload, asynchronous derivation, idempotency and failure handling                                                   |
 | [0003 — Consultation enquiries](./0003-consultation-enquiries.md)                                                          | Accepted          | Original date unknown; confirmed 2026-10-02 | Enquiry CTAs and deferred consultation scheduling                                                                          |
 
-No record is currently marked superseded. ADR 0003 supersedes the older booking
+ADR 0019 replaces the inline role-editing portion of ADR 0018; its other decisions remain accepted.
+ADR 0020 replaces ADR 0019's complete-list client pagination with API search and pagination.
+ADR 0003 supersedes the older booking
 CTA request linked in that record; it does not remove the retained booking code.
 ADR 0001 distinguishes its original enforcement deferral from subsequent delivery.
 ADR 0012 replaces only ADR 0011's header-total policy; its other decisions remain accepted.

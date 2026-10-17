@@ -1,20 +1,20 @@
 'use client';
 
-import { useId, useState, useTransition, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useId, useState, useTransition, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   errorResponseSchema,
+  rbacEnabled,
   removeOrganizationBranchResponseSchema,
   type OrganizationBranchesResponse,
-  type OrganizationMemberRole,
+  type OrganizationPage,
   type OrganizationWorkspaceResponse,
 } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
-import { Card } from '@repo/ui/components/card';
+import { OrganizationManagementPrompt } from '@/components/organization-management-prompt';
 import {
   Dialog,
   DialogContent,
@@ -27,28 +27,36 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@repo/ui/components/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components/tooltip';
+import {
   AlertCircle,
-  ArrowLeftRight,
-  Building2,
-  Check,
+  ArrowLeft,
+  ArrowRight,
   CheckCircle2,
-  ChevronDown,
-  Copy,
   Loader2,
   Pencil,
-  Send,
-  SquareUser,
+  Plus,
+  Search,
   Trash2,
-  UserX,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { formatOrganizationMutationError } from '@/lib/organization-errors';
-import { OrganizationRoleBadge, formatSeatLimit } from '@/components/organization-presentation';
+import { formatSeatLimit } from '@/components/organization-presentation';
+import { DesignerBranchMembers } from '@/components/designer-branch-members';
+import { ListPagination } from '@/components/list-pagination';
+import { useOrganizationPage } from '@/lib/use-organization-page';
+import { loadBranchesPage } from '@/lib/organization-list-api';
 
 type Feedback = { tone: 'success' | 'error'; message: string };
-
-type AssignableRole = Exclude<OrganizationMemberRole, 'owner'>;
+type Branch = OrganizationBranchesResponse['branches'][number];
 
 function formatMutationError(fallback: string, error: unknown): string {
   return formatOrganizationMutationError(fallback, error, {
@@ -57,118 +65,104 @@ function formatMutationError(fallback: string, error: unknown): string {
   });
 }
 
-const profileStatusLabels: Record<
-  OrganizationBranchesResponse['branches'][number]['profileStatus'],
-  string
-> = {
-  active: 'Public',
-  draft: 'Draft',
-  suspended: 'Suspended',
-};
-
-function memberInitials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? '')
-      .join('') || 'TM'
-  );
-}
-
-function SectionCard({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-2xl bg-muted/30 p-1">
-      <h2 className="px-2 py-1.5 text-sm font-medium leading-relaxed text-muted-foreground">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
 export function DesignerBranches({
   branches,
   workspace,
   error,
+  branchId,
+  branchesPage,
+  serverLists = false,
 }: {
   branches: OrganizationBranchesResponse | null;
   workspace: OrganizationWorkspaceResponse | null;
   error?: string;
+  branchId?: string;
+  branchesPage?: OrganizationPage<Branch>;
+  serverLists?: boolean;
 }) {
   const router = useRouter();
   const createId = useId();
-  const inviteId = useId();
   const [name, setName] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<AssignableRole>('member');
-  const [inviteBranchId, setInviteBranchId] = useState('');
-  const [assignBranchId, setAssignBranchId] = useState('');
-  const [assignMemberId, setAssignMemberId] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [expandedBranches, setExpandedBranches] = useState<Record<string, boolean>>({});
-  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
-  const [confirmUnassignKey, setConfirmUnassignKey] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Record<string, string>>({});
-  const [removeDialogBranch, setRemoveDialogBranch] = useState<{
-    id: string;
-    name: string;
-    projectCount: number;
-  } | null>(null);
+  const [removeDialogBranch, setRemoveDialogBranch] = useState<Branch | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const branchList = useOrganizationPage<Branch>({
+    initialData: branchesPage ?? {
+      items: branches?.branches ?? [],
+      page: 1,
+      limit: 12,
+      total: branches?.branches.length ?? 0,
+      totalPages: 1,
+    },
+    load: loadBranchesPage,
+    enabled:
+      serverLists &&
+      !branchId &&
+      !!workspace?.rbacEnabled &&
+      rbacEnabled(workspace.planTier, workspace.subscriptionState),
+    refreshKey: branches,
+  });
+  const loadRemovalTargets = useCallback(
+    (query: Parameters<typeof loadBranchesPage>[0], signal: AbortSignal) =>
+      loadBranchesPage(query, signal, removeDialogBranch?.id),
+    [removeDialogBranch?.id],
+  );
+  const removalTargets = useOrganizationPage<Branch>({
+    initialData: {
+      items:
+        branches?.branches.filter(
+          (item) =>
+            !item.frozen && item.profileStatus === 'active' && item.id !== removeDialogBranch?.id,
+        ) ?? [],
+      page: 1,
+      limit: 12,
+      total: 0,
+      totalPages: 1,
+    },
+    load: loadRemovalTargets,
+    enabled: serverLists && !!removeDialogBranch,
+    refreshKey: branches,
+  });
 
-  if (!branches || !workspace) {
+  if (!branches || !workspace)
     return (
-      <div className="px-5 py-10 sm:px-8 lg:py-12">
-        <div className="mx-auto max-w-4xl space-y-4">
-          <h1 className="text-2xl font-medium leading-tight text-foreground">Branches</h1>
-          <Alert variant="destructive">
-            <AlertCircle aria-hidden="true" />
-            <AlertDescription>{error ?? 'Could not load your branches.'}</AlertDescription>
-          </Alert>
-        </div>
+      <div className="mx-auto max-w-6xl space-y-4 px-5 py-10 sm:px-8 lg:py-12">
+        <h1 className="text-2xl font-medium">Branches</h1>
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{error ?? 'Could not load your branches.'}</AlertDescription>
+        </Alert>
       </div>
     );
-  }
 
-  const canManageBranches = workspace.canManage && workspace.rbacEnabled;
-  const canRemoveBranches = workspace.currentUserRole === 'owner' && workspace.rbacEnabled;
-  const activeBranches = branches.branches.filter((branch) => !branch.frozen);
-  const publicRemovalTargets = activeBranches.filter((branch) => branch.profileStatus === 'active');
-  const frozenListedBranches = branches.branches.filter((branch) => branch.frozen);
-  const branchOptions = activeBranches.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-  }));
+  const hasBranchManagement =
+    workspace.rbacEnabled && rbacEnabled(workspace.planTier, workspace.subscriptionState);
+  const branch = branches.branches.find((item) => item.id === branchId);
+  const canManageBranches = workspace.canManage && hasBranchManagement;
+  const canRemoveBranches = workspace.currentUserRole === 'owner' && hasBranchManagement;
+  const publicRemovalTargets = branches.branches.filter(
+    (item) => !item.frozen && item.profileStatus === 'active',
+  );
+  const canRemoveBranch =
+    branch &&
+    canRemoveBranches &&
+    (serverLists
+      ? branches.branchUsage > (branch.frozen ? 0 : 1)
+      : publicRemovalTargets.some((target) => target.id !== branch.id));
   const organizationId = workspace.organization.id;
-  const orgMembers = workspace.members;
-  const assignableMembers = orgMembers.filter((member) => !member.frozen);
-  const currentUserId = orgMembers.find((member) => member.isCurrentUser)?.userId ?? null;
-  const billingLocked = workspace.subscriptionState === 'locked';
+  const branchSearch = branchList.search;
+  const branchQuery = branchSearch.trim();
+  const visibleBranches = branchList.data.items;
 
   function refresh() {
+    branchList.reload();
+    removalTargets.reload();
     router.refresh();
-  }
-
-  function copyProfileLink(profileSlug: string) {
-    const url = `${window.location.origin}/d/${profileSlug}`;
-    const done = () => {
-      setCopiedSlug(profileSlug);
-      window.setTimeout(() => {
-        setCopiedSlug((current) => (current === profileSlug ? null : current));
-      }, 2000);
-    };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).then(done, () => {
-        setFeedback({ tone: 'error', message: 'Could not copy the link.' });
-      });
-      return;
-    }
-    setFeedback({ tone: 'error', message: 'Copy is not supported in this browser.' });
   }
 
   function createBranch(event: FormEvent<HTMLFormElement>) {
@@ -190,6 +184,7 @@ export function DesignerBranches({
           return;
         }
         setName('');
+        setCreateOpen(false);
         setFeedback({ tone: 'success', message: `Branch ${trimmed} created.` });
         refresh();
       } catch {
@@ -225,34 +220,15 @@ export function DesignerBranches({
     });
   }
 
-  function unassignMember(teamId: string, memberUserId: string, memberName: string) {
-    setFeedback(null);
-    startTransition(async () => {
-      try {
-        const result = await authClient.organization.removeTeamMember({
-          teamId,
-          userId: memberUserId,
-        });
-        if (result.error) {
-          setFeedback({
-            tone: 'error',
-            message: formatMutationError('Could not remove the member.', result.error),
-          });
-          return;
-        }
-        setFeedback({
-          tone: 'success',
-          message: `${memberName} removed from the branch. Their studio membership is unchanged.`,
-        });
-        refresh();
-      } catch {
-        setFeedback({ tone: 'error', message: 'Could not remove the member.' });
-      }
-    });
-  }
   function removeBranch(branchId: string, branchName: string) {
     const targetBranchId = removeTarget[branchId];
-    if (!targetBranchId || targetBranchId === branchId) {
+    if (
+      !targetBranchId ||
+      targetBranchId === branchId ||
+      removalTargets.isLoading ||
+      removalTargets.error ||
+      !removalTargets.data.items.some((target) => target.id === targetBranchId)
+    ) {
       setRemoveError('Select a different active branch to receive the projects.');
       return;
     }
@@ -290,6 +266,7 @@ export function DesignerBranches({
         });
         const moved = ` ${parsed.data.reassignedProjectCount} ${parsed.data.reassignedProjectCount === 1 ? 'project' : 'projects'} moved.`;
         setFeedback({ tone: 'success', message: `Branch ${branchName} removed.${moved}` });
+        router.push('/designer/branches');
         refresh();
       } catch {
         const message = 'Could not remove the branch.';
@@ -299,115 +276,102 @@ export function DesignerBranches({
     });
   }
 
-  function openDashboard(teamId: string) {
+  function editBranch(item: Branch) {
     setFeedback(null);
-    startTransition(async () => {
-      try {
-        const response = await api.api.orgs.context.$put({
-          json: { kind: 'organization', organizationId, teamId },
-        });
-        if (!response.ok) {
-          setFeedback({ tone: 'error', message: 'Could not open the branch dashboard.' });
-          return;
-        }
-        router.push('/designer/dashboard');
-        router.refresh();
-      } catch {
-        setFeedback({ tone: 'error', message: 'Could not open the branch dashboard.' });
-      }
-    });
+    setEditingId(item.id);
+    setEditingName(item.name);
   }
 
-  function inviteIntoBranch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedEmail = inviteEmail.trim().toLowerCase();
-    if (!normalizedEmail || !inviteBranchId) return;
-    setFeedback(null);
-    startTransition(async () => {
-      try {
-        const result = await authClient.organization.inviteMember({
-          email: normalizedEmail,
-          role: inviteRole,
-          organizationId,
-          teamId: inviteBranchId,
-        });
-        if (result.error) {
-          setFeedback({
-            tone: 'error',
-            message: formatMutationError('Could not send the invitation.', result.error),
-          });
-          return;
-        }
-        setInviteEmail('');
-        setFeedback({ tone: 'success', message: `Invitation created for ${normalizedEmail}.` });
-        refresh();
-      } catch {
-        setFeedback({ tone: 'error', message: 'Could not send the invitation.' });
-      }
-    });
+  function clearRemovalSelection() {
+    if (removeDialogBranch)
+      setRemoveTarget((previous) => ({ ...previous, [removeDialogBranch.id]: '' }));
   }
 
-  function assignMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!assignBranchId || !assignMemberId) return;
-    const member = orgMembers.find((candidate) => candidate.userId === assignMemberId);
-    if (!member) return;
-    setFeedback(null);
-    startTransition(async () => {
-      try {
-        const result = await authClient.organization.addTeamMember({
-          teamId: assignBranchId,
-          userId: member.userId,
-        });
-        if (result.error) {
-          setFeedback({
-            tone: 'error',
-            message: formatMutationError('Could not assign the member.', result.error),
-          });
-          return;
-        }
-        setAssignBranchId('');
-        setAssignMemberId('');
-        setFeedback({ tone: 'success', message: `${member.name} assigned to the branch.` });
-        refresh();
-      } catch {
-        setFeedback({ tone: 'error', message: 'Could not assign the member.' });
-      }
-    });
-  }
-
+  if (!hasBranchManagement)
+    return (
+      <div className="px-5 py-10 sm:px-8 lg:py-12">
+        <div className="mx-auto max-w-4xl space-y-4">
+          <header className="space-y-1.5">
+            <h1 className="text-2xl font-medium leading-tight text-foreground">Branches</h1>
+          </header>
+          <OrganizationManagementPrompt
+            workspace={workspace}
+            feature="branches"
+            branchUsage={branches.branchUsage}
+          />
+        </div>
+      </div>
+    );
   return (
     <div className="px-5 py-10 sm:px-8 lg:py-12">
-      <div className="mx-auto max-w-4xl space-y-4">
-        <header className="space-y-1.5">
-          <h1 className="text-2xl font-medium leading-tight text-foreground">Branches</h1>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Each branch is its own public presence under{' '}
-            <span className="font-medium text-foreground">{workspace.organization.name}</span>.
-          </p>
+      <div className="mx-auto max-w-6xl space-y-6">
+        {branchId ? (
+          <Button asChild variant="muted-link" size="inline">
+            <Link href="/designer/branches">
+              <ArrowLeft aria-hidden="true" />
+              All branches
+            </Link>
+          </Button>
+        ) : null}
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-2">
+            <h1 className="break-words text-2xl font-medium leading-tight">
+              {branch?.name ?? 'Branches'}
+            </h1>
+            {branch ? (
+              <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>
+                  {branch.footprint.map((location) => location.label).join(', ') ||
+                    'Location not set'}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  {branch.projectCount} {branch.projectCount === 1 ? 'project' : 'projects'}
+                </span>
+                <span aria-hidden="true">·</span>
+                {branch.profileStatus === 'active' ? (
+                  <Link className="text-primary underline" href={`/d/${branch.profileSlug}`}>
+                    Portfolio is live
+                  </Link>
+                ) : (
+                  <span>Portfolio is not live</span>
+                )}
+              </p>
+            ) : null}
+          </div>
+          {branch && ((canManageBranches && !branch.frozen) || canRemoveBranch) ? (
+            <div
+              role="group"
+              aria-label="Branch actions"
+              className="flex flex-wrap items-center gap-2"
+            >
+              {canManageBranches && !branch.frozen ? (
+                <Button variant="outline" size="compact" onClick={() => editBranch(branch)}>
+                  <Pencil aria-hidden="true" />
+                  Edit branch
+                </Button>
+              ) : null}
+              {canRemoveBranch ? (
+                <Button
+                  variant="ghost"
+                  size="compact"
+                  className="text-destructive"
+                  aria-label={`Remove branch ${branch.name}`}
+                  disabled={isPending}
+                  onClick={() => {
+                    setRemoveDialogBranch(branch);
+                    setRemoveError(null);
+                  }}
+                >
+                  <Trash2 aria-hidden="true" />
+                  Remove branch
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </header>
 
-        {!workspace.rbacEnabled ? (
-          <Card className="space-y-3 p-5 shadow-none">
-            <p className="text-sm font-medium text-foreground">
-              {billingLocked
-                ? 'Branch management is suspended'
-                : 'Branches are a Corporate feature'}
-            </p>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {billingLocked
-                ? `${workspace.organization.name} keeps its public branch pages while billing is locked. Restore billing to manage branches again.`
-                : `${workspace.organization.name} is on a single-user plan with 1 studio. Upgrade to Corporate for unlimited branches and branch dashboards.`}
-            </p>
-            <Button type="button" size="compact" asChild>
-              <Link href="/designer/plan-billing">
-                {billingLocked ? 'Restore billing' : 'View Corporate plans'}
-              </Link>
-            </Button>
-          </Card>
-        ) : null}
-
-        {feedback ? (
+        {feedback && !removeDialogBranch && !createOpen && !editingId ? (
           <Alert
             variant={feedback.tone === 'error' ? 'destructive' : 'success'}
             role={feedback.tone === 'error' ? 'alert' : 'status'}
@@ -422,500 +386,316 @@ export function DesignerBranches({
           </Alert>
         ) : null}
 
-        <SectionCard
-          title={`Branches (${branches.branchUsage} of ${formatSeatLimit(branches.branchLimit)} used)`}
-        >
-          <div className="space-y-3 rounded-xl border bg-card p-3 shadow-xs">
-            {branches.branches.map((branch) => {
-              const isActive = branch.id === branches.activeTeamId;
-              const isEditing = editingId === branch.id;
-              return (
-                <Card key={branch.id} className="space-y-3 p-4 shadow-none">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Building2
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    {isEditing ? (
-                      <form
-                        className="flex min-w-0 flex-1 items-center gap-2"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          renameBranch(branch.id);
-                        }}
-                      >
-                        <Input
-                          aria-label={`Branch name for ${branch.name}`}
-                          value={editingName}
-                          disabled={isPending}
-                          onChange={(event) => setEditingName(event.target.value)}
-                          className="h-8 px-2 text-sm"
-                        />
-                        <Button
-                          type="submit"
-                          size="compact"
-                          disabled={isPending || !editingName.trim()}
-                        >
-                          {isPending ? <Loader2 className="animate-spin" /> : null}
-                          Save
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="neutral"
-                          size="compact"
-                          disabled={isPending}
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditingName('');
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </form>
-                    ) : (
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                        {branch.name}
-                      </p>
-                    )}
-                    {canManageBranches && !isEditing && !branch.frozen ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0"
-                        disabled={isPending}
-                        title="Edit name"
-                        aria-label={`Edit name of ${branch.name}`}
-                        onClick={() => {
-                          setEditingId(branch.id);
-                          setEditingName(branch.name);
-                        }}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                    ) : null}
-                    {isActive && !branch.frozen ? (
-                      <Badge
-                        shape="square"
-                        className="border-transparent bg-success-lighter px-2 py-1 text-xs leading-none text-success uppercase"
-                      >
-                        Current
-                      </Badge>
-                    ) : null}
-                    <Badge
-                      shape="square"
-                      className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
+        {branchId && !branch ? (
+          <Alert variant="destructive">
+            <AlertDescription>This branch is unavailable in your current studio.</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!branchId ? (
+          <section aria-label="Branches" className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                {branches.branchUsage} of {formatSeatLimit(branches.branchLimit)} branches used
+              </p>
+              {canManageBranches ? (
+                <Button
+                  size="compact"
+                  onClick={() => {
+                    setCreateOpen(true);
+                    setFeedback(null);
+                  }}
+                >
+                  <Plus aria-hidden="true" />
+                  Create new branch
+                </Button>
+              ) : null}
+            </div>
+            <div className="relative w-full sm:max-w-sm">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                aria-label="Search branches by name"
+                placeholder="Search branches by name"
+                className="pl-9"
+                value={branchSearch}
+                maxLength={200}
+                onChange={(event) => branchList.setSearch(event.target.value)}
+              />
+            </div>
+            {branchList.error ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {branchList.error}{' '}
+                  <Button variant="muted-link" size="inline" onClick={branchList.reload}>
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {branchList.isLoading ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Loading branches…
+              </p>
+            ) : null}
+            <div className="overflow-hidden rounded-xl border bg-card">
+              <Table aria-label="Branches" className="min-w-[34rem]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Branch name</TableHead>
+                    <TableHead scope="col">Location</TableHead>
+                    <TableHead scope="col">Members</TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleBranches.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      className="cursor-pointer"
+                      onClick={(event) => {
+                        if (!(event.target instanceof Element) || !event.target.closest('a,button'))
+                          router.push(`/designer/branches/${encodeURIComponent(item.id)}`);
+                      }}
                     >
-                      {profileStatusLabels[branch.profileStatus]}
-                    </Badge>
-                    {branch.frozen ? (
-                      <Badge
-                        shape="square"
-                        className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
-                      >
-                        Frozen
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    {branch.profileStatus === 'active' ? (
-                      <>
-                        <Link
-                          href={`/d/${branch.profileSlug}`}
-                          className="font-medium text-primary underline"
-                        >
-                          /d/{branch.profileSlug}
-                        </Link>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-6"
-                          aria-label={
-                            copiedSlug === branch.profileSlug
-                              ? `Link for ${branch.name} copied`
-                              : `Copy link for ${branch.name}`
-                          }
-                          onClick={() => copyProfileLink(branch.profileSlug)}
-                        >
-                          {copiedSlug === branch.profileSlug ? (
-                            <Check className="size-3.5" />
-                          ) : (
-                            <Copy className="size-3.5" />
-                          )}
-                        </Button>
-                      </>
-                    ) : (
-                      <span>Public profile is not live</span>
-                    )}
-                    <span>
-                      {branch.projectCount} {branch.projectCount === 1 ? 'project' : 'projects'}
-                    </span>
-                    <span>
-                      {branch.memberCount} {branch.memberCount === 1 ? 'member' : 'members'}
-                    </span>
-                    {branch.reviewCount > 0 ? (
-                      <span>
-                        {branch.averageRating.toFixed(1)} · {branch.reviewCount}{' '}
-                        {branch.reviewCount === 1 ? 'review' : 'reviews'}
-                      </span>
-                    ) : null}
-                    {branch.footprint.length ? (
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        {branch.footprint.map((entry) => (
-                          <Badge
-                            key={entry.id}
-                            shape="square"
-                            className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground"
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:underline"
+                            href={`/designer/branches/${encodeURIComponent(item.id)}`}
                           >
-                            {entry.label}
-                          </Badge>
-                        ))}
-                      </span>
-                    ) : null}
-                    {branch.members.length ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="compact"
-                        aria-expanded={expandedBranches[branch.id] === true}
-                        aria-label={`${expandedBranches[branch.id] === true ? 'Hide' : 'Show'} members of ${branch.name}`}
-                        onClick={() =>
-                          setExpandedBranches((previous) => ({
-                            ...previous,
-                            [branch.id]: previous[branch.id] !== true,
-                          }))
-                        }
-                      >
-                        <SquareUser className="size-4 text-muted-foreground" aria-hidden="true" />
-                        {branch.members.length} {branch.members.length === 1 ? 'member' : 'members'}
-                        <ChevronDown
-                          aria-hidden="true"
-                          className={`size-4 transition-transform ${expandedBranches[branch.id] === true ? 'rotate-180' : ''}`}
-                        />
-                      </Button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        <SquareUser className="size-4 text-muted-foreground" aria-hidden="true" />
-                        No members yet
-                      </span>
-                    )}
-                  </div>
-                  {expandedBranches[branch.id] === true ? (
-                    <ul className="divide-y divide-border/40 overflow-hidden rounded-lg border">
-                      {branch.members.map((member) => (
-                        <li
-                          key={member.userId}
-                          className="flex items-center gap-3 bg-background px-3 py-2"
-                        >
-                          <Avatar aria-hidden="true" className="size-7">
-                            <AvatarFallback className="text-[11px]">
-                              {memberInitials(member.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">
-                              {member.name}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">{member.email}</p>
-                          </div>
-                          <OrganizationRoleBadge role={member.role} />
-                          {canManageBranches && !branch.frozen ? (
-                            confirmUnassignKey === `${branch.id}:${member.userId}` ? (
-                              <>
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="compact"
-                                  disabled={isPending}
-                                  aria-label={`Confirm removal of ${member.name} from ${branch.name}`}
-                                  onClick={() => {
-                                    setConfirmUnassignKey(null);
-                                    unassignMember(branch.id, member.userId, member.name);
-                                  }}
-                                >
-                                  Confirm
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="neutral"
-                                  size="compact"
-                                  disabled={isPending}
-                                  aria-label={`Keep ${member.name} in ${branch.name}`}
-                                  onClick={() => setConfirmUnassignKey(null)}
-                                >
-                                  Keep
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                disabled={isPending}
-                                title="Remove"
-                                aria-label={`Remove ${member.name} from ${branch.name}`}
-                                onClick={() =>
-                                  setConfirmUnassignKey(`${branch.id}:${member.userId}`)
-                                }
-                              >
-                                <UserX className="size-4" />
-                              </Button>
-                            )
+                            {item.name}
+                          </Link>
+                          {item.frozen ? (
+                            <Badge>Frozen</Badge>
+                          ) : item.id === branches.activeTeamId ? (
+                            <Badge>Current</Badge>
                           ) : null}
-                        </li>
-                      ))}
-                    </ul>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {item.footprint.map((location) => location.label).join(', ') || 'Not set'}
+                      </TableCell>
+                      <TableCell>
+                        {item.memberCount} {item.memberCount === 1 ? 'member' : 'members'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {canManageBranches && !item.frozen ? (
+                            <Button
+                              variant="ghost"
+                              size="compact"
+                              aria-label={`Edit branch ${item.name}`}
+                              onClick={() => editBranch(item)}
+                            >
+                              <Pencil aria-hidden="true" />
+                              Edit
+                            </Button>
+                          ) : null}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button asChild variant="ghost" size="icon-sm">
+                                <Link
+                                  href={`/designer/branches/${encodeURIComponent(item.id)}`}
+                                  aria-label={`View branch details for ${item.name}`}
+                                >
+                                  <ArrowRight aria-hidden="true" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View branch details</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!visibleBranches.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                        {branchQuery ? 'No branches match your search.' : 'No branches to show.'}
+                      </TableCell>
+                    </TableRow>
                   ) : null}
-                  {canManageBranches && !isEditing && !branch.frozen ? (
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      {!isActive &&
-                      currentUserId !== null &&
-                      branch.members.some((member) => member.userId === currentUserId) ? (
-                        <Button
-                          type="button"
-                          variant="fancy"
-                          size="compact"
-                          disabled={isPending}
-                          onClick={() => openDashboard(branch.id)}
-                        >
-                          {isPending ? <Loader2 className="animate-spin" /> : <ArrowLeftRight />}
-                          Switch Branch
-                        </Button>
-                      ) : null}
-                      {canRemoveBranches &&
-                      publicRemovalTargets.some((target) => target.id !== branch.id) ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          disabled={isPending}
-                          title="Remove branch"
-                          aria-label={`Remove branch ${branch.name}`}
-                          onClick={() =>
-                            setRemoveDialogBranch({
-                              id: branch.id,
-                              name: branch.name,
-                              projectCount: branch.projectCount,
-                            })
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {branch.frozen ? (
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      Frozen, restores when you re-upgrade. Published projects stay publicly live.
-                    </p>
-                  ) : null}
-                </Card>
-              );
-            })}
-          </div>
-        </SectionCard>
-
-        {canManageBranches ? (
-          <SectionCard title="Create a branch">
-            <form
-              className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_auto] sm:items-end"
-              onSubmit={createBranch}
-            >
-              <div className="space-y-1">
-                <Label htmlFor={createId} className="text-sm font-medium text-muted-foreground">
-                  Branch name
-                </Label>
-                <Input
-                  id={createId}
-                  type="text"
-                  placeholder="Andheri studio"
-                  required
-                  className="h-8 px-2 text-sm"
-                  value={name}
-                  disabled={isPending}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </div>
-              <Button type="submit" size="compact" disabled={isPending || !name.trim()}>
-                {isPending ? <Loader2 className="animate-spin" /> : <Send />}
-                Create branch
-              </Button>
-            </form>
-          </SectionCard>
+                </TableBody>
+              </Table>
+            </div>
+            <ListPagination
+              page={branchList.data.page}
+              totalPages={branchList.data.totalPages}
+              total={branchList.data.total}
+              limit={branchList.data.limit}
+              itemName="branch"
+              itemNamePlural="branches"
+              disabled={branchList.isLoading}
+              onPageChange={branchList.setPage}
+              onLimitChange={branchList.setLimit}
+            />
+          </section>
         ) : null}
 
-        {canManageBranches ? (
-          <SectionCard title="Invite into a branch">
-            <form
-              className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.5fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto] sm:items-end"
-              onSubmit={inviteIntoBranch}
-            >
-              <div className="space-y-1">
-                <Label htmlFor={inviteId} className="text-sm font-medium text-muted-foreground">
-                  Work email
-                </Label>
-                <Input
-                  id={inviteId}
-                  type="email"
-                  autoComplete="email"
-                  placeholder="teammate@studio.com"
-                  required
-                  className="h-8 px-2 text-sm"
-                  value={inviteEmail}
-                  disabled={isPending}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                />
-              </div>
-              <SelectField
-                label="Role"
-                value={inviteRole}
-                placeholder="Select a role"
-                options={[
-                  { value: 'member', label: 'Member' },
-                  { value: 'viewer', label: 'Viewer' },
-                  { value: 'billing_admin', label: 'Billing Admin' },
-                  { value: 'admin', label: 'Admin' },
-                ]}
-                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
-                disabled={isPending}
-                onValueChange={(value) => setInviteRole(value as AssignableRole)}
-              />
-              <SelectField
-                label="Branch"
-                value={inviteBranchId}
-                placeholder="Select a branch"
-                options={branchOptions}
-                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
-                disabled={isPending}
-                onValueChange={setInviteBranchId}
-              />
-              <Button
-                type="submit"
-                size="compact"
-                disabled={isPending || !inviteEmail.trim() || !inviteBranchId}
-              >
-                {isPending ? <Loader2 className="animate-spin" /> : <Send />}
-                Send invite
-              </Button>
-            </form>
-            <p className="px-2 pt-2 text-xs leading-relaxed text-muted-foreground">
-              Invites are email only and land the teammate directly in the selected branch.
-            </p>
-          </SectionCard>
-        ) : null}
-
-        {canManageBranches ? (
-          <SectionCard title="Assign a member to a branch">
-            <form
-              className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
-              onSubmit={assignMember}
-            >
-              <SelectField
-                label="Member"
-                value={assignMemberId}
-                placeholder="Select a member"
-                options={assignableMembers.map((member) => ({
-                  value: member.userId,
-                  label: `${member.name} (${member.email})`,
-                }))}
-                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
-                disabled={isPending}
-                onValueChange={setAssignMemberId}
-              />
-              <SelectField
-                label="Branch"
-                value={assignBranchId}
-                placeholder="Select a branch"
-                options={branchOptions}
-                className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
-                disabled={isPending}
-                onValueChange={setAssignBranchId}
-              />
-              <Button
-                type="submit"
-                size="compact"
-                disabled={isPending || !assignBranchId || !assignMemberId}
-              >
-                {isPending ? <Loader2 className="animate-spin" /> : null}
-                Assign
-              </Button>
-            </form>
-          </SectionCard>
-        ) : null}
-
-        {frozenListedBranches.length ? (
-          <SectionCard title="Frozen branches">
-            <Card className="space-y-3 p-4 shadow-none">
-              {frozenListedBranches.map((branch) => (
-                <div key={branch.id} className="flex flex-wrap items-center gap-2">
-                  <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                    {branch.name}
-                  </p>
-                  <Badge
-                    shape="square"
-                    className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
-                  >
-                    Frozen
-                  </Badge>
-                </div>
-              ))}
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Frozen, restores when you re-upgrade. Published projects on frozen branches stay
-                publicly live.{' '}
-                <Link href="/designer/plan-billing" className="text-primary underline">
+        {branch ? (
+          <>
+            {branch.frozen ? (
+              <p className="text-sm text-muted-foreground">
+                Frozen, restores when you re-upgrade. Published projects stay publicly live.{' '}
+                <Link className="text-primary underline" href="/designer/plan-billing">
                   Re-upgrade to restore
                 </Link>
               </p>
-            </Card>
-          </SectionCard>
-        ) : null}
-
-        {!canManageBranches && workspace.rbacEnabled ? (
-          <SectionCard title="Branch access">
-            <Card className="px-5 py-8 text-center text-sm text-muted-foreground shadow-xs">
-              Branch management is available to studio owners and admins.
-            </Card>
-          </SectionCard>
+            ) : null}
+            <DesignerBranchMembers
+              key={branch.id}
+              branch={branch}
+              workspace={workspace}
+              serverLists={serverLists}
+            />
+          </>
         ) : null}
 
         <Dialog
+          open={createOpen || editingId !== null}
+          onOpenChange={(open) => {
+            if (!open && !isPending) {
+              setCreateOpen(false);
+              setEditingId(null);
+              setFeedback(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{createOpen ? 'Create new branch' : 'Edit branch'}</DialogTitle>
+              <DialogDescription>
+                {createOpen
+                  ? 'Give your new branch a name.'
+                  : 'Update the name shown for this branch.'}
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                if (createOpen) createBranch(event);
+                else {
+                  event.preventDefault();
+                  if (editingId) renameBranch(editingId);
+                }
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor={createId}>Branch name</Label>
+                <Input
+                  id={createId}
+                  value={createOpen ? name : editingName}
+                  required
+                  maxLength={255}
+                  disabled={isPending}
+                  onChange={(event) =>
+                    createOpen ? setName(event.target.value) : setEditingName(event.target.value)
+                  }
+                />
+              </div>
+              {feedback?.tone === 'error' ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {feedback.message}
+                </p>
+              ) : null}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="neutral"
+                  disabled={isPending}
+                  onClick={() => {
+                    setCreateOpen(false);
+                    setEditingId(null);
+                    setFeedback(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending || !(createOpen ? name : editingName).trim()}
+                >
+                  {isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+                  {createOpen ? 'Create branch' : 'Save changes'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
           open={removeDialogBranch !== null}
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) {
+          onOpenChange={(open) => {
+            if (!open && !isPending) {
               setRemoveDialogBranch(null);
               setRemoveError(null);
             }
           }}
         >
-          <DialogContent aria-describedby={undefined}>
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>
-                Remove {removeDialogBranch ? `“${removeDialogBranch.name}”` : 'branch'}?
-              </DialogTitle>
+              <DialogTitle>Remove {removeDialogBranch?.name}?</DialogTitle>
               <DialogDescription>
-                {removeDialogBranch
-                  ? `${removeDialogBranch.projectCount} ${removeDialogBranch.projectCount === 1 ? 'project' : 'projects'} will move to the branch you select. This cannot be undone.`
-                  : null}
+                {removeDialogBranch?.projectCount} projects will move to the branch you select. This
+                cannot be undone.
               </DialogDescription>
             </DialogHeader>
+            {serverLists ? (
+              <Input
+                type="search"
+                aria-label="Search reassignment branches"
+                placeholder="Search branches by name"
+                maxLength={200}
+                value={removalTargets.search}
+                onChange={(event) => {
+                  clearRemovalSelection();
+                  removalTargets.setSearch(event.target.value);
+                }}
+              />
+            ) : null}
             <SelectField
               label="Move projects to"
-              value={removeDialogBranch ? (removeTarget[removeDialogBranch.id] ?? '') : ''}
               placeholder="Select a branch"
-              options={publicRemovalTargets
+              value={removeDialogBranch ? (removeTarget[removeDialogBranch.id] ?? '') : ''}
+              options={removalTargets.data.items
                 .filter((target) => target.id !== removeDialogBranch?.id)
                 .map((target) => ({ value: target.id, label: target.name }))}
-              className="space-y-1 [&_label]:text-muted-foreground [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:py-1 [&_[data-slot=select-trigger]]:pr-8"
-              disabled={isPending}
+              disabled={isPending || removalTargets.isLoading}
               onValueChange={(value) => {
-                if (!removeDialogBranch) return;
-                const dialogBranchId = removeDialogBranch.id;
-                setRemoveTarget((previous) => ({ ...previous, [dialogBranchId]: value }));
+                if (removeDialogBranch)
+                  setRemoveTarget((previous) => ({ ...previous, [removeDialogBranch.id]: value }));
               }}
             />
+            {serverLists ? (
+              <ListPagination
+                page={removalTargets.data.page}
+                totalPages={removalTargets.data.totalPages}
+                total={removalTargets.data.total}
+                limit={removalTargets.data.limit}
+                itemName="branch"
+                itemNamePlural="branches"
+                disabled={removalTargets.isLoading}
+                onPageChange={(page) => {
+                  clearRemovalSelection();
+                  removalTargets.setPage(page);
+                }}
+                onLimitChange={(limit) => {
+                  clearRemovalSelection();
+                  removalTargets.setLimit(limit);
+                }}
+              />
+            ) : null}
+            {removalTargets.error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {removalTargets.error}
+              </p>
+            ) : null}
             {removeError ? (
               <p role="alert" className="text-sm text-destructive">
                 {removeError}
@@ -923,27 +703,30 @@ export function DesignerBranches({
             ) : null}
             <DialogFooter>
               <Button
-                type="button"
                 variant="neutral"
-                size="compact"
                 disabled={isPending}
                 onClick={() => setRemoveDialogBranch(null)}
               >
                 Keep
               </Button>
               <Button
-                type="button"
                 variant="destructive"
-                size="compact"
-                disabled={isPending}
+                disabled={
+                  isPending ||
+                  removalTargets.isLoading ||
+                  !!removalTargets.error ||
+                  !removeDialogBranch ||
+                  !removalTargets.data.items.some(
+                    (target) => target.id === removeTarget[removeDialogBranch.id],
+                  )
+                }
                 onClick={() => {
-                  if (removeDialogBranch) {
+                  if (removeDialogBranch)
                     removeBranch(removeDialogBranch.id, removeDialogBranch.name);
-                  }
                 }}
               >
-                {isPending ? <Loader2 className="animate-spin" /> : null}
-                Confirm removal
+                {isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}Confirm
+                removal
               </Button>
             </DialogFooter>
           </DialogContent>

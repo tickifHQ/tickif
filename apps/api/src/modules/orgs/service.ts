@@ -47,16 +47,16 @@ function hasWriteRole(role: string | null, frozen = false): boolean {
   return parsed.success && WRITE_ROLES.has(parsed.data);
 }
 
-function normalizeRole(role: string | null): OrganizationMemberRole {
+export function normalizeRole(role: string | null): OrganizationMemberRole {
   const parsed = organizationMemberRoleSchema.safeParse(role);
   return parsed.success ? parsed.data : ORGANIZATION_MEMBER_ROLE.MEMBER;
 }
 
-function accountDisplayName(name: string, email: string): string {
+export function accountDisplayName(name: string, email: string): string {
   return name.trim() || email;
 }
 
-function invitationState(status: string): OrganizationInvitationState {
+export function invitationState(status: string): OrganizationInvitationState {
   switch (status) {
     case 'pending':
       return ORGANIZATION_INVITATION_STATE.PENDING;
@@ -413,6 +413,7 @@ export const orgsService = {
   async getCurrentWorkspace(input: {
     userId: string;
     activeOrgId: string | null;
+    includeLists?: boolean;
   }): Promise<OrganizationWorkspaceResponse> {
     if (!input.activeOrgId) {
       throw AppError.unprocessable('Select an active organization');
@@ -439,8 +440,12 @@ export const orgsService = {
     const canManage = capabilities.manageMembers;
     const [memberRecords, invitationRecords, seatUsage, pendingTransfer, retained] =
       await Promise.all([
-        orgsRepository.listMembers(input.activeOrgId),
-        canManage ? orgsRepository.listInvitations(input.activeOrgId) : Promise.resolve([]),
+        input.includeLists === false
+          ? Promise.resolve([])
+          : orgsRepository.listMembers(input.activeOrgId),
+        canManage && input.includeLists !== false
+          ? orgsRepository.listInvitations(input.activeOrgId)
+          : Promise.resolve([]),
         orgsRepository.countActiveMembers(input.activeOrgId),
         orgsRepository.findPendingOwnershipTransfer(input.activeOrgId),
         orgsRepository.hasActiveRetention(input.activeOrgId),

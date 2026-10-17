@@ -20,7 +20,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       orgs: {
-        current: {
+        summary: {
           $get: mocks.getWorkspace,
         },
       },
@@ -89,7 +89,10 @@ describe('DesignerTermsRolesPage', () => {
     render(await Page());
 
     expect(mocks.requireAuth).toHaveBeenCalledWith({ requiredRole: 'designer' });
-    expect(mocks.getWorkspace).toHaveBeenCalledWith({}, { headers: { cookie: 'session=abc' } });
+    expect(mocks.getWorkspace).toHaveBeenCalledWith(
+      {},
+      { headers: { cookie: 'session=abc' }, init: { cache: 'no-store' } },
+    );
     expect(screen.getByTestId('organization')).toHaveTextContent('Studio One');
   });
 

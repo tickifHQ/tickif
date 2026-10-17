@@ -101,7 +101,7 @@ for (const policy of cases) {
         ['Portfolio', policy.manage],
         ['Verification', policy.manage],
         ['Team & Roles', true],
-        ['Branches', policy.manage],
+        ['Branches', true],
         ['Plan & billing', policy.billing],
         ['Add new project', policy.write],
       ] as const) {
@@ -113,6 +113,11 @@ for (const policy of cases) {
         path: testInfo.outputPath(`${policy.role}-dashboard.png`),
         fullPage: true,
       });
+      await page.getByRole('link', { name: 'Branches', exact: true }).click();
+      await expect(page.getByRole('table', { name: 'Branches', exact: true })).toBeVisible();
+      const createBranch = page.getByRole('button', { name: 'Create new branch', exact: true });
+      if (policy.manage) await expect(createBranch).toBeVisible();
+      else await expect(createBranch).toHaveCount(0);
       const create = await context.request.post(`${apiUrl}/api/projects`, {
         headers: { origin: webUrl },
         data: { title: `Permission probe ${suffix}` },
