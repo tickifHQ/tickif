@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type { PlanTier, SubscriptionState } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Separator } from '@repo/ui/components/separator';
@@ -20,6 +21,7 @@ import { PlanCard } from './plan-card';
 interface PlanSelectionProps {
   headingLevel?: 1 | 2;
   description?: string;
+  statusNotice?: ReactNode;
   currentTier: PlanTier;
   lifecycleState: SubscriptionState;
   selectedTier?: PlanTier | null;
@@ -50,6 +52,7 @@ function FeatureValue({ value }: { value: string | boolean }) {
 export function PlanSelection({
   headingLevel = 2,
   description = 'Compare plans for your design business.',
+  statusNotice,
   currentTier,
   lifecycleState,
   selectedTier,
@@ -91,6 +94,7 @@ export function PlanSelection({
         </Heading>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       </div>
+      {statusNotice}
       {lifecycleReason || lifecycleState === 'downgraded' ? (
         <Alert>
           <AlertDescription>

@@ -23,6 +23,7 @@ import { PLAN_MAP } from '@/lib/plan-config';
 import { api } from '@/lib/api';
 
 interface BillingStatusNoticeProps {
+  className?: string;
   context: BillingSelectionContext | null;
   currentTier: PlanTier;
   cancellationScheduled?: boolean;
@@ -41,6 +42,7 @@ function formatDate(value: string) {
 
 /** One authoritative status takes priority over the other billing records. */
 export function BillingStatusNotice({
+  className = 'mt-4',
   context,
   currentTier,
   cancellationScheduled = false,
@@ -125,7 +127,7 @@ export function BillingStatusNotice({
     canRemove;
   return (
     <>
-      <Alert className="mt-4" role="status" aria-label="Billing status">
+      <Alert className={className} role="status" aria-label="Billing status">
         <div className="col-start-2 flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <AlertTitle className="font-sans font-medium tracking-normal">{title}</AlertTitle>
