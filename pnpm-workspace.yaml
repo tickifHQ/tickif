@@ -94,8 +94,8 @@ catalog:
   # Data layer
   drizzle-orm: ^0.45.4
   drizzle-kit: ^0.31.11
-  pg: ^8.22.0
-  '@types/pg': ^8.11.10
+  pg: ^8.23.1
+  '@types/pg': ^8.23.1
 
   # Queue
   bullmq: ^5.78.0
