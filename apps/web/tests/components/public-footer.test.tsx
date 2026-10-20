@@ -3,11 +3,11 @@ import { render, screen, within } from '@testing-library/react';
 import { PublicFooter } from '../../src/components/public-footer';
 
 describe('PublicFooter', () => {
-  it.each([false, true])('offers WhatsApp support with landing=%s', (landing) => {
+  it.each([false, true])('offers the published company email with landing=%s', (landing) => {
     render(<PublicFooter landing={landing} />);
-    expect(screen.getByRole('link', { name: 'WhatsApp support' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Contact@tickif.com' })).toHaveAttribute(
       'href',
-      'https://wa.me/919994645911',
+      'mailto:Contact@tickif.com',
     );
   });
   it('links every Company entry to its Markdown-backed page', () => {

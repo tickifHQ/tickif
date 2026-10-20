@@ -2,21 +2,23 @@
 
 Company footer and login agreement pages render local Markdown:
 
-| URL                         | File in `apps/web/content/company/` | Status |
-| --------------------------- | ----------------------------------- | ------ |
-| `/company/about`            | `about.md`                          | Sample |
-| `/company/report-a-problem` | `report-a-problem.md`               | Draft  |
-| `/company/takedown-policy`  | `takedown-policy.md`                | Draft  |
-| `/company/terms`            | `terms.md`                          | Draft  |
-| `/company/privacy`          | `privacy.md`                        | Draft  |
+| URL                         | File in `apps/web/content/company/` |
+| --------------------------- | ----------------------------------- |
+| `/company/about`            | `about.md`                          |
+| `/company/report-a-problem` | `report-a-problem.md`               |
+| `/company/takedown-policy`  | `takedown-policy.md`                |
+| `/company/terms`            | `terms.md`                          |
+| `/company/privacy`          | `privacy.md`                        |
 
-The four report/policy drafts were prepared on **10 October 2026** at the product owner's request. They have no effective date and are not assertions of deployed legal compliance. About remains the previous sample. All retain `noindex, nofollow` until publication readiness is assessed.
+Updated on **20 October 2026** using the product owner's [TF Terms source](https://app.notion.com/p/TF-Terms-3f6ffe32b69c80609bdeec0893c7326a). About contains the supplied story and architecture/construction/interiors positioning. Company location is Tickif, Chennai, Tamil Nadu; this is not a confirmed registered address. The source's final contact note selects `Contact@tickif.com` for all company contacts, taking precedence over its earlier support email/WhatsApp examples. Public company pages and both footer variants use that email; existing in-app WhatsApp help remains available.
+
+Draft/sample badges and introductory labels have been removed at the product owner's request. This content update does not establish a legal entity, registered address, grievance officer, effective date or staffed rights-request process. Those gaps remain explicit. All pages retain `noindex, nofollow` until publication readiness is assessed.
 
 ## Rendering and editing
 
-Titles, descriptions and status live in `apps/web/src/lib/company-pages.ts`. The server-only loader reads only registered files and calculates reading estimates and a section index. Next standalone tracing includes the content files. The route uses shared Tickif text roles, semantic tokens, document spacing and responsive navigation. Use **plain-text ATX `##` headings** for indexed sections; fenced code is excluded. Section IDs use source line numbers to keep duplicate titles unique.
+Titles and descriptions live in `apps/web/src/lib/company-pages.ts`. The server-only loader reads only registered files and calculates reading estimates and a section index. Next standalone tracing includes the content files. The route uses shared Tickif text roles, semantic tokens, document spacing and responsive navigation. Use **plain-text ATX `##` headings** for indexed sections; fenced code is excluded. Section IDs use source line numbers to keep duplicate titles unique.
 
-BlogBody supplies IDs only with `sectionIds` enabled. Raw HTML, images and unsafe protocols remain excluded. The blog and documents share typography. Keep each Markdown notice, the route date and registry status consistent. A preparation date is not an effective date. Helvetica Neue retains the existing system fallback because no licensed webfont was supplied.
+BlogBody supplies IDs only with `sectionIds` enabled. Raw HTML, images and unsafe protocols remain excluded. The blog and documents share typography. Keep company facts and contact links consistent across the Markdown documents and public footer. Update the document revision date when its content changes. A preparation date is not an effective date. Helvetica Neue retains the existing system fallback because no licensed webfont was supplied.
 
 ## Primary research sources
 
@@ -34,16 +36,16 @@ Market references: [Houzz Terms](https://www.houzz.com/termsOfUse), [Houzz Priva
 
 ## Product evidence and publication prerequisites
 
-The drafts follow [ADR 0003](../adr/0003-consultation-enquiries.md) for enquiries and [ADR 0004](../adr/0004-early-bird-trials.md) for no-card trials without automatic conversion. Billing cancellation, refund assessment and deletion remain separate; this work adds no refund engine.
+The policies follow [ADR 0003](../adr/0003-consultation-enquiries.md) for enquiries and [ADR 0004](../adr/0004-early-bird-trials.md) for no-card trials without automatic conversion. Billing cancellation, refund assessment and deletion remain separate; this work adds no refund engine.
 
 Privacy descriptions were checked against auth and account settings, enquiry/team permissions, [media](../architecture/media-pipeline.md), search cleanup, billing, browser storage and [observability](../architecture/observability.md). Search cleanup uses 180 days; organisation lifecycle periods are configurable. Neither is a universal production retention guarantee.
 
 Before adoption:
 
-1. Confirm operator identity, registered/principal addresses, support email and grievance officer details. The existing canonical WhatsApp support link is retained in the footer and Report a problem guide; it does not establish a formal grievance officer. Add and test monitored notice/privacy channels, including urgent intake; the pages are not submission backends.
+1. Confirm legal operator identity, registered/principal addresses and grievance officer details. The published company email is `Contact@tickif.com`; it does not identify a formal grievance officer. Add and test monitored notice/privacy channels, including urgent intake; the pages are not submission backends.
 2. Obtain legal review of actual intermediary/e-commerce roles, consent/lawful basis, retention, remedies, current amending Gazettes and DPDP corrigendum/commencement.
 3. Verify production processors, regions, contracts, cookies/storage, consent controls, incident response and category-specific retention including backups and legal holds. Establish identity verification and rights/deletion handling.
-4. Staff and test receipt/reference/review procedures against applicable deadlines. Confirm the age policy and children's-data safeguards; the adult-only draft rule is not an implemented age gate.
-5. Confirm purchase disclosures, provider cancellation confirmations and refund processes. Set effective dates and appropriate notice/acceptance, then revise draft status and indexing deliberately.
+4. Staff and test receipt/reference/review procedures against applicable deadlines. Confirm the age policy and children's-data safeguards; the adult-only rule is not an implemented age gate.
+5. Confirm purchase disclosures, provider cancellation confirmations and refund processes. Set effective dates and appropriate notice/acceptance, then revise the content and indexing deliberately.
 
 Run `pnpm typecheck`, `pnpm lint`, `pnpm test` and Company browser tests. Verify footer routes, mobile wrapping, section anchors and login policy links. Login distinguishes agreement to Terms from acknowledgement of the Privacy notice; both links open in separate tabs to preserve login data. Company pages remain accessible without the scroll sign-up gate.

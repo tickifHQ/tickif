@@ -2,14 +2,14 @@ import { typography } from '@repo/ui/lib/typography';
 import { cn } from '@repo/ui/lib/utils';
 import Link from 'next/link';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
-import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
+import { COMPANY_CONTACT_EMAIL, COMPANY_CONTACT_URL } from '@/lib/support';
 import { companyPages } from '@/lib/company-pages';
 
 const links = [
   { href: '/', label: 'Browse' },
   { href: '/blog', label: 'Blog' },
   ...companyPages.map(({ slug, title }) => ({ href: `/company/${slug}`, label: title })),
-  { href: SUPPORT_WHATSAPP_URL, label: 'WhatsApp support' },
+  { href: COMPANY_CONTACT_URL, label: COMPANY_CONTACT_EMAIL },
 ];
 
 export function PublicFooter({ landing = false }: { landing?: boolean }) {
@@ -33,9 +33,9 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
               />
             </Link>
             <p className={cn(typography.bodySm, 'mt-4 text-muted-foreground')}>
-              Real Indian homes, reviewed by people,
+              Real projects.
               <br />
-              and the designers who made them.
+              The professionals behind them.
             </p>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-3 sm:gap-[72px]">
@@ -91,12 +91,10 @@ export function PublicFooter({ landing = false }: { landing?: boolean }) {
                 ))}
                 <li>
                   <a
-                    href={SUPPORT_WHATSAPP_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={COMPANY_CONTACT_URL}
                     className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    WhatsApp support
+                    {COMPANY_CONTACT_EMAIL}
                   </a>
                 </li>
               </ul>

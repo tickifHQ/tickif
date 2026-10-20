@@ -428,7 +428,7 @@ requiredEntries.push(
   ]),
   [
     'company-pages.spec.ts',
-    'every Company footer link opens its Markdown document with an honest publication status',
+    'every Company footer link opens its Markdown document with updated company information',
   ],
   ...[1512, 390, 320].map((width): [string, string] => [
     'company-pages.spec.ts',
@@ -436,7 +436,7 @@ requiredEntries.push(
   ]),
   [
     'company-pages.spec.ts',
-    'drafts expose official sources without inventing a reporting endpoint',
+    'company pages provide the published email and retain official reporting guidance',
   ],
   [
     'company-pages.spec.ts',

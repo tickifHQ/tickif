@@ -1,4 +1,4 @@
-> Draft for review. Prepared on 10 October 2026. A grievance officer and monitored notice channel are pending; this page does not receive a takedown request.
+> Updated on 20 October 2026.
 
 ## What this covers
 
@@ -8,7 +8,7 @@ Disliking a design, receiving a negative review or having a commercial disagreem
 
 ## Where to send a notice
 
-**Grievance officer name, designation, email and postal address: pending confirmation.** The operator and monitored channel must be published before this draft becomes operational. Visiting this page does not submit a notice; there is no automatic takedown form. This gap does not excuse legal obligations.
+Send content concerns and notices to [Contact@tickif.com](mailto:Contact@tickif.com). **Operated by:** Tickif, Chennai, Tamil Nadu. **Grievance officer name, designation and postal address: pending confirmation.** A dedicated grievance handling process has not been confirmed. Visiting this page does not submit a notice; there is no automatic takedown form. This gap does not excuse legal obligations.
 
 Affected people, rights holders and representatives may report concerns. A safety report does not require copyright ownership. For immediate danger, use [112](https://112.gov.in/); online crime can be reported through the [government cybercrime portal](https://cybercrime.gov.in/).
 
@@ -48,7 +48,7 @@ Under the [Intermediary Rules updated on 10 February 2026](https://www.meity.gov
 - Rule 3(2)(b) complaints concerning the affected person’s private-area exposure, nudity, sexual content or electronic impersonation including morphed images require reasonable and practicable removal or access restriction within 2 hours.
 - Actual knowledge through court orders or authorised government intimations specified by rule 3(1)(d) requires removal or access restriction within 3 hours.
 
-These are category-specific duties, not a universal deadline or guaranteed removal of every disputed post. Appropriate intake and staffing are required; this draft does not establish that they exist.
+These are category-specific duties, not a universal deadline or guaranteed removal of every disputed post. Appropriate intake and staffing are required; this policy does not establish that they exist.
 
 ## Challenging a decision
 

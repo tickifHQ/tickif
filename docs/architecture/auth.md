@@ -371,9 +371,10 @@ removes the lock and restores page interaction. It is suppressed on `/login` and
 `/company/*`.
 
 Company footer links resolve to `/company/[slug]`, using a fixed registry and
-Markdown in `apps/web/content/company/`. About remains a sample; Report a problem, Takedown policy,
-Terms and Privacy are researched drafts dated 10 October 2026, excluded
-from search indexing. The reporting pages describe preparation only; they do not
-submit reports. The reporting guide links the canonical WhatsApp support channel;
-formal grievance and privacy-notice contacts remain pending. See the
+Markdown in `apps/web/content/company/`. About uses the company-supplied story,
+architecture/construction/interiors positioning and Chennai location. All five pages
+and the public footer use `Contact@tickif.com` for company/support enquiries, with
+no draft/sample labels. Registered legal identity and grievance officer details
+remain unconfirmed; the pages retain `noindex, nofollow` and do not submit reports
+or introduce a rights-request backend. See the
 [company content guide](../guides/company-content.md) for research and publication prerequisites.

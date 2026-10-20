@@ -64,7 +64,7 @@ designer/admin routing and other public pages retain their existing behavior.
   so responsive eligibility changes cannot repeatedly remount the authentication
   controls. The mobile navigation wraps at narrow widths to avoid page overflow.
 - Company footer destinations use the public Markdown-backed `/company/*` pages.
-  Their draft/sample status and the login agreement links are described in
+  Their company content, contact email and login agreement links are described in
   [authentication architecture](./auth.md#public-sign-in-presentation).
 - `GET /api/billing/plans` supplies server-configured prices, tier features and the
   current promotion. The homepage validates this response and never invents prices
@@ -95,7 +95,7 @@ The approved early-bird offer has unlimited availability; no city scarcity or
 popularity badge is fabricated. The pricing sticker says “Recommended”, as approved
 by the product owner. The designer heading's Figma photo and three portraits are
 decorative editorial artwork, not customer identities or testimonials.
-Company destinations link to Markdown documents: About remains a sample; Report, Terms, Privacy and Takedown are researched drafts with pending operator contacts. See the
+Company destinations link to Markdown documents with the supplied About story, Chennai location and `Contact@tickif.com` contact details. Draft/sample labels are removed; registered legal identity and grievance officer details remain unconfirmed. See the
 [content replacement guide](../guides/company-content.md) before publishing
 approved company and policy content.
 
