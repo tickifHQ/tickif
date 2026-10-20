@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation';
 import { BlogBody } from '@/components/blog-body';
 import { getCompanyPage } from '@/lib/company-content';
 import { companyPages } from '@/lib/company-pages';
-import { Badge } from '@repo/ui/components/badge';
 import { typography } from '@repo/ui/lib/typography';
 import { cn } from '@repo/ui/lib/utils';
 
@@ -88,17 +87,6 @@ export default async function CompanyPage({ params }: Props) {
         <article id="document-top" className="order-1 min-w-0 lg:order-2">
           <header className="border-b border-border pb-7">
             <div className="mb-5 flex flex-wrap items-center gap-3">
-              <Badge variant="soft">
-                {page.status === 'draft' ? 'Draft for review' : 'Sample document'}
-              </Badge>
-              {page.status === 'draft' && (
-                <time
-                  dateTime="2026-10-10"
-                  className={cn(typography.monoSm, 'text-muted-foreground')}
-                >
-                  10 OCT 2026
-                </time>
-              )}
               <span className={cn(typography.monoSm, 'text-muted-foreground')}>
                 {page.readingMinutes} MIN READ
               </span>

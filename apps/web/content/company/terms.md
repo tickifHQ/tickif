@@ -1,10 +1,10 @@
-> Draft for review. Prepared on 10 October 2026. Operator and contact details must be completed before adoption. No effective date has been set.
+> Updated on 20 October 2026.
 
 ## Using Tickif
 
-Tickif helps people discover home design projects, save inspiration, find professionals and send enquiries. It also provides portfolio publishing and workspace tools for designers and their teams. These terms cover features that link to them. Read them with our [Privacy policy](/company/privacy) and [Takedown policy](/company/takedown-policy).
+Tickif helps people discover real architecture, construction and interior projects, save inspiration, find professionals and send enquiries. It also provides portfolio publishing and workspace tools for professionals and their teams. These terms cover features that link to them. Read them with our [Privacy policy](/company/privacy) and [Takedown policy](/company/takedown-policy).
 
-**Legal operator and registered address: pending confirmation.** Once identified, that entity is the proposed contracting party referred to as “Tickif”, “we” and “us”. “You” means the individual using Tickif or the organisation they are authorised to represent. [Report a problem](/company/report-a-problem) links the existing WhatsApp support channel.
+**Operated by:** Tickif, Chennai, Tamil Nadu. Contact [Contact@tickif.com](mailto:Contact@tickif.com) for company and support enquiries. **Legal entity name and registered address: pending confirmation.** “Tickif”, “we” and “us” refer to the operator. “You” means the individual using Tickif or the organisation they are authorised to represent. [Report a problem](/company/report-a-problem) explains what to include when contacting us.
 
 After adoption, creating an account or expressly accepting the terms at checkout forms an agreement with that operator. A privacy notice explains data use; accepting these terms is not blanket consent for unrelated processing or marketing.
 
@@ -74,7 +74,7 @@ Indian law governs these proposed terms, subject to mandatory protections applic
 
 Material changes should carry a revised date and appropriate notice before taking effect. Editing this page does not authorise a new charge or payment mandate.
 
-**Pending publication details:** legal entity; registered and principal addresses; support email; grievance officer name, designation, email and postal address; effective date. [Report a problem](/company/report-a-problem) explains how to prepare a complaint and links WhatsApp support. A formal grievance and rights-request intake process has not been confirmed.
+For support, billing, company or grievance enquiries, email [Contact@tickif.com](mailto:Contact@tickif.com). **Legal entity name, registered address, grievance officer name, designation and postal address: pending confirmation.** No effective date has been set. [Report a problem](/company/report-a-problem) explains how to prepare a complaint. A formal grievance and rights-request handling process has not been confirmed.
 
 ## Indian legal references
 

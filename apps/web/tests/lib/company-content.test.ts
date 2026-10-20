@@ -4,15 +4,26 @@ import { getCompanyPage } from '../../src/lib/company-content';
 import { getCompanySections } from '../../src/lib/company-sections';
 
 describe('Company Markdown content', () => {
-  it('loads each footer document with its publication status', async () => {
+  it('loads updated company documents with a consistent contact channel', async () => {
     for (const { slug, title } of companyPages) {
       expect(await getCompanyPage(slug)).toMatchObject({
         slug,
         title,
-        content: expect.stringMatching(slug === 'about' ? /^> Sample / : /^> Draft /),
-        status: slug === 'about' ? 'sample' : 'draft',
+        content: expect.stringContaining('[Contact@tickif.com](mailto:Contact@tickif.com)'),
       });
+      const page = await getCompanyPage(slug);
+      expect(page?.content).not.toMatch(/draft|sample content|support email: pending/i);
+      expect(page?.content).not.toContain('wa.me');
     }
+  });
+
+  it('publishes the supplied story and company location without inventing registration details', async () => {
+    const page = await getCompanyPage('about');
+    expect(page?.content).toContain('Real projects. The professionals behind them.');
+    expect(page?.content).toContain('architecture, construction and interiors');
+    expect(page?.content).toContain('Chennai, Tamil Nadu');
+    expect(page?.content).toContain('Grievance officer');
+    expect(page?.content).toContain('pending confirmation');
   });
 
   it.each(['\n', '\r\n'])(

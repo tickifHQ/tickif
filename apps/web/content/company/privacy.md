@@ -1,8 +1,8 @@
-> Draft for review. Prepared on 10 October 2026 from Tickif’s current implementation. Operator, production providers, retention periods and a working privacy contact must be confirmed before adoption.
+> Updated on 20 October 2026.
 
 ## Who handles your information
 
-This notice covers Tickif’s discovery, portfolio, account, enquiry and workspace features. **Legal operator name, business address and privacy/grievance contact: pending confirmation.** That operator will be responsible for Tickif’s processing. No effective date has been set for this draft.
+This notice covers Tickif’s discovery, portfolio, account, enquiry and workspace features. **Operated by:** Tickif, Chennai, Tamil Nadu. For privacy and grievance enquiries, email [Contact@tickif.com](mailto:Contact@tickif.com). **Legal entity name, registered address, grievance officer name, designation and postal address: pending confirmation.** No effective date has been set.
 
 A professional receiving your enquiry also handles it for their own client communications. Their service and practices are separate from Tickif’s. Our [Terms](/company/terms) explain that relationship.
 
@@ -29,7 +29,7 @@ When a professional connects a Google business listing, selected business and ra
 
 Relevant information supports accounts and authentication, permissions, authorised portfolio publishing, enquiries, saved projects, billing and entitlements, service messages, moderation, fraud prevention and diagnosis of technical problems. Public project and profile information supports discovery; interaction records support aggregated or workspace-scoped reporting. Complaint and payment records support reconciliation, disputes and legal duties.
 
-A new purpose should be explained before use and consent obtained where required. Accepting the Terms does not authorise unrelated marketing. This draft does not assert that Tickif sells personal information, uses advertising trackers or trains general-purpose AI models on private enquiries. Introducing such practices would require fresh disclosure and appropriate permission or lawful basis.
+A new purpose should be explained before use and consent obtained where required. Accepting the Terms does not authorise unrelated marketing. This notice does not assert that Tickif sells personal information, uses advertising trackers or trains general-purpose AI models on private enquiries. Introducing such practices would require fresh disclosure and appropriate permission or lawful basis.
 
 ## Visibility and sharing
 
@@ -65,20 +65,20 @@ Where applicable, the [Intermediary Rules](https://www.meity.gov.in/static/uploa
 
 Use settings to correct editable information and content controls to manage submissions. Organisation owners have closure controls, which are separate from personal account deletion. A general self-service personal-account deletion flow has not been confirmed for this notice.
 
-The intended route for access, correction, consent withdrawal, deletion or privacy complaints is the privacy/grievance contact once published. Provide your account identifier, the request and a safe reply address. Identity verification should be proportionate and never require sharing a password or OTP. Withdrawal may stop a feature working, but does not undo earlier lawful processing or required retention. A refusal or partial response should explain why and how to escalate.
+For access, correction, consent withdrawal, deletion or privacy complaints, email [Contact@tickif.com](mailto:Contact@tickif.com). Provide your account identifier, the request and a safe reply address. Identity verification should be proportionate and never require sharing a password or OTP. Withdrawal may stop a feature working, but does not undo earlier lawful processing or required retention. A refusal or partial response should explain why and how to escalate.
 
 Where the [SPDI Rules, 2011, rule 5(9)](https://www.wipo.int/wipolex/en/text/494931) apply, the grievance officer must address information-processing grievances expeditiously and within one month of receipt. This existing duty is separate from future DPDP procedures; it is not a claim that Tickif already has a working intake channel.
 
-**Privacy contact and secure request channel: pending confirmation.** This page does not submit a request or establish an operational rights-request process. [Report a problem](/company/report-a-problem) explains what to prepare and independent escalation options.
+Contact [Contact@tickif.com](mailto:Contact@tickif.com) before sharing sensitive evidence so an appropriate verification route can be agreed. This page does not submit a request or establish a self-service rights-request process. [Report a problem](/company/report-a-problem) explains what to prepare and independent escalation options.
 
 ## Children and security
 
-Accounts are intended for adults aged 18 or older. Do not create a child’s account or upload children’s personal information without appropriate permissions and a lawful basis. Concerns should reach the privacy or content channel once available. This proposed age rule does not mean age verification or parental consent has been implemented.
+Accounts are intended for adults aged 18 or older. Do not create a child’s account or upload children’s personal information without appropriate permissions and a lawful basis. Send privacy or content concerns to [Contact@tickif.com](mailto:Contact@tickif.com). This age rule does not mean age verification or parental consent has been implemented.
 
 Tickif’s code includes access controls, private originals, authenticated permissions, rate limits and log sanitisation. Security also depends on deployment and operations; absolute security cannot be guaranteed. Suspected breaches should be assessed, contained and notified to people and authorities when legally required. A tested incident-response process is a publication prerequisite.
 
 ## Indian privacy framework and updates
 
-The [government’s SPDI Rules clarification](https://www.pib.gov.in/newsite/erelcontent.aspx?lang=2&reg=48&relid=74990) explains the existing sensitive-information framework. The [DPDP commencement notification](https://www.meity.gov.in/static/uploads/2025/11/c56ceae6c383460ca69577428d36828b.pdf) phases the 2023 Act: most processing duties and individual rights commence 18 months after Gazette publication on 13 November 2025, rather than all being operative on this draft’s date. The [DPDP Rules, 2025](https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf), read with the [December 2025 corrigendum](https://www.meity.gov.in/static/uploads/2025/12/3c7ebbae0e5456f493f486e6845df86b.pdf), also have phased commencement.
+The [government’s SPDI Rules clarification](https://www.pib.gov.in/newsite/erelcontent.aspx?lang=2&reg=48&relid=74990) explains the existing sensitive-information framework. The [DPDP commencement notification](https://www.meity.gov.in/static/uploads/2025/11/c56ceae6c383460ca69577428d36828b.pdf) phases the 2023 Act: most processing duties and individual rights commence 18 months after Gazette publication on 13 November 2025, rather than all being operative on 20 October 2026. The [DPDP Rules, 2025](https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf), read with the [December 2025 corrigendum](https://www.meity.gov.in/static/uploads/2025/12/3c7ebbae0e5456f493f486e6845df86b.pdf), also have phased commencement.
 
-Review the notice and controls before relevant provisions commence, including consent, children’s data, rights, safeguards and breach procedures. This draft does not claim every DPDP control or Board complaint process is already available. Reflect processing changes here with a revised date and appropriate notice. Statutory rights remain available regardless of this wording.
+Review the notice and controls before relevant provisions commence, including consent, children’s data, rights, safeguards and breach procedures. This notice does not claim every DPDP control or Board complaint process is already available. Reflect processing changes here with a revised date and appropriate notice. Statutory rights remain available regardless of this wording.

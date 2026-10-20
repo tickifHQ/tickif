@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('every Company footer link opens its Markdown document with an honest publication status', async ({
+test('every Company footer link opens its Markdown document with updated company information', async ({
   page,
 }) => {
   await page.goto('/');
@@ -35,11 +35,12 @@ test('every Company footer link opens its Markdown document with an honest publi
       .getByRole('link', { name: title, exact: true })
       .click();
     await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
-    await expect(
-      page.getByText(title === 'About' ? 'Sample document' : 'Draft for review', { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(/Draft for review|Sample document/, { exact: true })).toHaveCount(
+      0,
+    );
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
-    await expect(page.getByRole('article')).toContainText(title === 'About' ? 'Sample' : 'pending');
+    await expect(page.getByRole('article')).toContainText('Contact@tickif.com');
+    await expect(page.getByRole('article')).toContainText('pending confirmation');
     await expect(page.getByTestId('scroll-signup-gate')).toHaveCount(0);
   }
 });
@@ -67,13 +68,16 @@ for (const width of [1512, 390, 320]) {
   });
 }
 
-test('drafts expose official sources without inventing a reporting endpoint', async ({ page }) => {
+test('company pages provide the published email and retain official reporting guidance', async ({
+  page,
+}) => {
   await page.goto('/company/report-a-problem');
   const article = page.getByRole('article');
-  await expect(article).toContainText('Support email: pending confirmation');
-  await expect(
-    article.getByRole('link', { name: 'WhatsApp support', exact: true }),
-  ).toHaveAttribute('href', 'https://wa.me/919994645911');
+  const contactLinks = article.getByRole('link', { name: 'Contact@tickif.com', exact: true });
+  await expect(contactLinks).toHaveCount(2);
+  for (const link of await contactLinks.all()) {
+    await expect(link).toHaveAttribute('href', 'mailto:Contact@tickif.com');
+  }
   await expect(article.locator('form')).toHaveCount(0);
   await expect(article.getByRole('link', { name: '112 emergency service' })).toHaveAttribute(
     'href',

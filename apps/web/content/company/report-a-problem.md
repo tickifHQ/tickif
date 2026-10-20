@@ -1,4 +1,4 @@
-> Draft reporting guide. Prepared on 10 October 2026. WhatsApp support is available; the formal grievance officer details are pending. This page does not submit a report.
+> Updated on 20 October 2026.
 
 ## Choose the right route
 
@@ -8,11 +8,11 @@ A bug, payment complaint and content-removal notice need different evidence. Sta
 
 ## Support and grievance contact
 
-For service problems, use [WhatsApp support](https://wa.me/919994645911). Opening the link does not send a message; review what you share before sending. **Support email: pending confirmation.**
+For service problems, email [Contact@tickif.com](mailto:Contact@tickif.com). Opening the email link does not send a message; review what you share before sending. Tickif operates from Chennai, Tamil Nadu.
 
-**Grievance officer name, designation, email and postal address: pending confirmation.**
+For grievance enquiries, use [Contact@tickif.com](mailto:Contact@tickif.com). **Grievance officer name, designation and postal address: pending confirmation.**
 
-The formal grievance details must be published and monitored before this becomes an operational grievance policy. WhatsApp support does not establish a statutory grievance officer or a verified privacy/copyright-notice intake process. There is no submission form here. Preparing details, visiting this page or opening a policy link does not submit a complaint or generate a reference. A missing formal contact does not remove statutory rights or duties.
+The formal grievance details must be published and monitored before this becomes an operational grievance policy. The contact email does not identify a statutory grievance officer or confirm a dedicated privacy/copyright-notice handling process. There is no submission form here. Preparing details, visiting this page or opening a policy link does not submit a complaint or generate a reference. A missing formal contact does not remove statutory rights or duties.
 
 ## What to include
 
