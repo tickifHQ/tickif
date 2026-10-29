@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
+import { phoneNumber, admin, organization, emailOTP, oneTap } from 'better-auth/plugins';
 import crypto from 'node:crypto';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
@@ -26,7 +26,7 @@ assertProductionEmailConfig();
  * Tickif auth — better-auth instance.
  *
  * - Phone OTP is primary (Indian market) via the phoneNumber plugin.
- * - Gmail SSO for designers via the Google social provider.
+ * - Gmail SSO via the Google social provider, plus Google One Tap on public pages.
  * - The 4-role RBAC rides on the admin + organization plugins rather than a
  *   hand-rolled layer.
  *
@@ -508,6 +508,13 @@ export const auth = betterAuth({
         defaultValue: 'pending',
       },
     },
+    // Google can return an unverified address for accounts on non-Gmail domains. Both the
+    // redirect flow and One Tap pass through here, so neither can create, link or sign in
+    // a Tickif account on an email the person hasn't proven they own.
+    validateUserInfo: ({ user, source }) =>
+      source.oauth?.providerId === 'google' && !user.emailVerified
+        ? { error: 'email_not_verified', errorDescription: 'Your Google email is not verified' }
+        : undefined,
   },
 
   database: drizzleAdapter(db, {
@@ -549,6 +556,9 @@ export const auth = betterAuth({
   },
 
   plugins: [
+    // Verifies the One Tap ID token against socialProviders.google, then reuses the same
+    // account lookup and linking as the redirect flow.
+    oneTap(),
     phoneNumber({
       sendOTP: async ({ phoneNumber: phone, code }) => {
         await sendPhoneOtp({ phoneNumber: phone, code });

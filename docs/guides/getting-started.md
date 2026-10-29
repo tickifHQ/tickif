@@ -39,7 +39,8 @@ openssl rand -base64 32
 
 The defaults in `.env.example` already match the Docker Postgres/Redis below, so
 that's the only value you must change to boot. `GOOGLE_CLIENT_ID/SECRET` are only
-needed if you're working on Gmail SSO; phone-OTP login works without them.
+needed if you're working on Gmail SSO; phone-OTP login works without them. Set
+`NEXT_PUBLIC_GOOGLE_CLIENT_ID` to the same client id to see Google One Tap locally.
 
 > Env is loaded and **validated** by `@repo/config` (`packages/config/src/index.ts`).
 > If a required var is missing or malformed, the app fails fast at startup with a

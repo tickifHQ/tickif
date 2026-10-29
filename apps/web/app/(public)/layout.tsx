@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { PublicShell } from '@/components/public-shell';
 import { getServerSession } from '@/lib/auth-guard';
 import { ScrollGate } from '@/components/scroll-gate';
+import { GoogleOneTap } from '@/components/google-one-tap';
 import { LandingProjectPreviewProvider } from '@/components/landing-project-preview';
 
 /**
@@ -9,7 +10,7 @@ import { LandingProjectPreviewProvider } from '@/components/landing-project-prev
  *
  * SSR content is always rendered (crawlable by bots). The scroll-gate is a
  * client-side sibling — NOT wrapping children — so SSR output is never withheld.
- * Omitted entirely for authenticated users.
+ * It and Google One Tap are omitted entirely for authenticated users.
  */
 export default async function PublicLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession({ disableCookieCache: true });
@@ -20,7 +21,12 @@ export default async function PublicLayout({ children }: { children: ReactNode }
       <PublicShell isAuthenticated={isAuthenticated} userRole={session?.user.role ?? null}>
         {children}
       </PublicShell>
-      {!isAuthenticated && <ScrollGate />}
+      {!isAuthenticated && (
+        <>
+          <ScrollGate />
+          <GoogleOneTap />
+        </>
+      )}
     </LandingProjectPreviewProvider>
   );
 }

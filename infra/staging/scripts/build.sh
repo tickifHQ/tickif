@@ -13,6 +13,7 @@ for service in api worker web operations; do
     --build-arg "NEXT_PUBLIC_WEB_URL=https://$STAGING_DOMAIN" \
     --build-arg "NEXT_PUBLIC_TELEMETRY_ENABLED=${NEXT_PUBLIC_TELEMETRY_ENABLED:-false}" \
     --build-arg "NEXT_PUBLIC_APP_VERSION=$revision" \
+    --build-arg "NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}" \
     --tag "$REGISTRY/$service:$revision" .
 done
 echo "Built $revision. Push these tags explicitly, then record registry digests in the release environment."
