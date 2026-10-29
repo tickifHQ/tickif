@@ -83,6 +83,21 @@ describe('Google SSO (E-85)', () => {
     expect(users).toHaveLength(1);
   });
 
+  it('refuses a Google identity whose email Google has not verified', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-5',
+      email: 'erin@example.com',
+      emailVerified: false,
+    });
+
+    expect(cookie).not.toMatch(/session_token/);
+    const users = await db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.email, 'erin@example.com'));
+    expect(users).toHaveLength(0);
+  });
+
   it('re-uses the account on a repeat Google sign-in (idempotent, no duplicate)', async () => {
     await signInWithGoogle({ sub: 'g-4', email: 'dave@gmail.com', name: 'Dave' });
     await signInWithGoogle({ sub: 'g-4', email: 'dave@gmail.com', name: 'Dave' });

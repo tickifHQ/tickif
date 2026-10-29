@@ -6,6 +6,7 @@ import {
   accountStatusSchema,
   platformRoleSchema,
 } from '@repo/contracts';
+import { GoogleOneTap } from '@/components/google-one-tap';
 import { LoginCard } from '@/components/login-card';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { ADMIN_DASHBOARD_PATH, safeCallbackPath } from '@/lib/auth-paths';
@@ -65,6 +66,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <LoginCard initialMode={initialMode} callbackPath={callbackPath} />
+      <GoogleOneTap />
     </main>
   );
 }

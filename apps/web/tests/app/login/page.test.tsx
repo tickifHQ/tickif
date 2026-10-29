@@ -26,6 +26,10 @@ vi.mock('@/components/login-card', () => ({
   ),
 }));
 
+vi.mock('@/components/google-one-tap', () => ({
+  GoogleOneTap: () => <div data-testid="google-one-tap" />,
+}));
+
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,6 +42,7 @@ describe('LoginPage', () => {
 
     expect(mock.getServerSession).toHaveBeenCalledWith({ disableCookieCache: true });
     expect(screen.getByTestId('login-card')).toHaveAttribute('data-mode', 'designer');
+    expect(screen.getByTestId('google-one-tap')).toBeInTheDocument();
   });
 
   it('passes the transitional next alias to the signed-out login flow', async () => {

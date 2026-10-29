@@ -67,9 +67,27 @@ Custom account SVG assets and reference screenshots are not shipped.
 | -------------------------- | ------------------------ | -------------------------------------------------------------------------------- |
 | Phone OTP (primary, India) | `phoneNumber` plugin     | OTP is the main login path.                                                      |
 | Gmail SSO                  | `google` social provider | For designers; only active if `GOOGLE_CLIENT_ID/SECRET` are set.                 |
+| Google One Tap             | `oneTap` plugin          | Signed-out public and login pages; needs `NEXT_PUBLIC_GOOGLE_CLIENT_ID` on web.  |
 | Role-based access          | `admin` plugin           | Four platform roles with superadmin-only account administration; see RBAC below. |
 | Orgs / membership          | `organization` plugin    | Implemented org access, invitations, fixed role capabilities and freeze/restore. |
 | Email + password           | —                        | Disabled (`emailAndPassword.enabled: false`).                                    |
+
+## Google sign-in
+
+The redirect flow and One Tap both end in Better Auth's OAuth account handling, so
+an email that already belongs to a verified Tickif user links to that user instead of
+creating a second one. One Tap verifies Google's ID token on the API (signature,
+audience = `GOOGLE_CLIENT_ID`, issuer, expiry). `user.validateUserInfo` rejects any
+Google identity whose email Google has not verified, in either flow.
+
+After One Tap signs someone in, the browser goes through `/login`, which routes new
+accounts to onboarding and everyone else back to the page they were on. Under
+FedCM, Google reports a closed prompt and one it could not show the same way, so
+either snoozes the prompt on that browser for 30 days (`localStorage`), on top of
+Google's own cooldown ([ADR 0021](../adr/0021-google-one-tap-snooze.md)).
+
+Each web origin that shows One Tap must be listed under "Authorized JavaScript
+origins" on the Google OAuth client.
 
 ## Temporary phone OTP delivery by email
 

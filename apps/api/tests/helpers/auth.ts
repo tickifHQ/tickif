@@ -63,6 +63,7 @@ export function makeGoogleIdToken(claims: {
   email: string;
   name?: string;
   picture?: string;
+  emailVerified?: boolean;
 }): string {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', kid: 'test', typ: 'JWT' };
@@ -71,7 +72,7 @@ export function makeGoogleIdToken(claims: {
     aud: process.env.GOOGLE_CLIENT_ID ?? 'test-google-client-id',
     sub: claims.sub,
     email: claims.email,
-    email_verified: true,
+    email_verified: claims.emailVerified ?? true,
     name: claims.name ?? claims.email,
     picture: claims.picture,
     iat: now,
@@ -90,6 +91,7 @@ export async function signInWithGoogle(profile: {
   sub: string;
   email: string;
   name?: string;
+  emailVerified?: boolean;
 }): Promise<{ response: Response; cookie: string }> {
   // 1. Kick off social sign-in → authorization URL (+ any state cookies).
   const start = await auth.api.signInSocial({

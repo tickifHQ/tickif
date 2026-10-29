@@ -27,6 +27,8 @@ export const env = createEnv({
       .default('false')
       .transform((value) => value === 'true'),
     NEXT_PUBLIC_APP_VERSION: z.string().trim().min(1).max(120).default('development'),
+    // Same OAuth client as the API's GOOGLE_CLIENT_ID. Unset hides Google One Tap.
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().trim().min(1).optional(),
     // Public scroll gate switch. 0 disables it; any positive value enables the
     // scroll-linked reveal near the page midpoint. The positive numeric shape is
     // retained for compatibility with existing deployment configuration.
@@ -48,6 +50,7 @@ export const env = createEnv({
     NEXT_PUBLIC_WEB_URL: process.env.NEXT_PUBLIC_WEB_URL,
     NEXT_PUBLIC_TELEMETRY_ENABLED: process.env.NEXT_PUBLIC_TELEMETRY_ENABLED,
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
     NEXT_PUBLIC_SCROLL_GATE_LIMIT: process.env.NEXT_PUBLIC_SCROLL_GATE_LIMIT,
   },
   emptyStringAsUndefined: true,
