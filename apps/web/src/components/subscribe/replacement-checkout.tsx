@@ -6,6 +6,7 @@ import { Button } from '@repo/ui/components/button';
 import { api } from '@/lib/api';
 import { openRazorpayCheckout, openRazorpayOrder } from '@/lib/razorpay-checkout';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
+import { rememberCheckoutPayment } from './checkout-payment';
 
 /** Each provider callback is verified; reloading resumes the same mandate and order. */
 export function ReplacementCheckout({
@@ -105,6 +106,7 @@ export function ReplacementCheckout({
             },
             onSuccess: (payment) => {
               paymentReturned = true;
+              rememberCheckoutPayment(next.targetTier, payment.razorpay_payment_id);
               void verify({
                 operationId: next.operationId,
                 kind: 'order',
