@@ -151,6 +151,10 @@ and the [billing staging checks](../runbooks/billing-staging-smoke.md).
 Confirmed upgrades awaiting first renewal permit an explicitly authorized successor
 downgrade. The original paid upgrade and provider identities remain durable; current
 access continues through the verified boundary. See [ADR 0017](../adr/0017-confirmed-upgrade-renewal-downgrade.md).
+After a Razorpay payment made in the same tab, the checkout result page prints a
+receipt. It prints only once the plan is active and the webhook has recorded that
+captured payment, shows only values the billing API returned, and after 30 seconds
+without both says billing is still updating. Other returns keep the plain status.
 
 Consultation scheduling remains disabled by default even though booking code and
 tests exist. [ADR 0003](../adr/0003-consultation-enquiries.md) establishes enquiries

@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), capabilities: vi.fn(), notFound: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  capabilities: vi.fn(),
+  identity: vi.fn(),
+  notFound: vi.fn(),
+}));
 vi.mock('next/navigation', () => ({ notFound: mocks.notFound }));
 vi.mock('@/lib/auth-guard', () => ({ requireAuth: mocks.auth }));
 vi.mock('@/lib/current-org-role', () => ({
   getCurrentOrgCapabilities: mocks.capabilities,
+  getCurrentOrgIdentity: mocks.identity,
   hasBillingAccess: (capabilities: { billing: boolean } | null) => capabilities?.billing === true,
 }));
 vi.mock('@/components/subscribe/checkout-result', () => ({
@@ -19,6 +25,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.auth.mockResolvedValue({ user: { id: 'owner' }, session: { activeOrganizationId: 'org' } });
   mocks.capabilities.mockResolvedValue({ billing: true });
+  mocks.identity.mockResolvedValue({ id: 'org', name: 'Studio Meraki', slug: 'studio-meraki' });
   mocks.notFound.mockImplementation(() => {
     throw new Error('NEXT_NOT_FOUND');
   });
@@ -40,6 +47,7 @@ describe('checkout return route', () => {
           targetTier: 'corporate',
           userId: 'owner',
           organizationId: 'org',
+          studioName: 'Studio Meraki',
         }),
       );
       expect(mocks.auth).toHaveBeenCalledWith({ requiredRole: 'designer' });

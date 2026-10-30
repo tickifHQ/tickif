@@ -16,6 +16,7 @@ vi.mock('@/lib/razorpay-checkout', () => ({
 }));
 import { ReplacementCheckout } from '../../src/components/subscribe/replacement-checkout';
 import type { openRazorpayCheckout, openRazorpayOrder } from '../../src/lib/razorpay-checkout';
+import { readCheckoutPayment } from '../../src/components/subscribe/checkout-payment';
 const checkout = {
   operationId: 'f9722d1a-343d-42b0-961e-78c72e54839c',
   status: 'checkout',
@@ -93,6 +94,8 @@ describe('replacement checkout', () => {
       },
     });
     expect(changed).toHaveBeenCalled();
+    // The receipt is for the upgrade charge, never the mandate authorization.
+    expect(readCheckoutPayment('corporate')).toBe('pay_upgrade');
   });
   it('resumes the existing order without reauthorizing an authenticated mandate', async () => {
     render(<ReplacementCheckout onChange={vi.fn()} onProviderOpen={vi.fn()} />);

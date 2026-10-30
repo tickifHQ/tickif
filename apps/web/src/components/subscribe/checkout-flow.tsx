@@ -27,6 +27,7 @@ import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { reasonLabel } from './billing-reason';
 import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { ReplacementCheckout } from './replacement-checkout';
+import { rememberCheckoutPayment } from './checkout-payment';
 
 interface CheckoutFlowProps {
   open: boolean;
@@ -372,6 +373,7 @@ function ScopedCheckoutFlow({
             finishCheckout('closed');
           },
           onSuccess: async (payment) => {
+            rememberCheckoutPayment(target, payment.razorpay_payment_id);
             if (!mounted.current) return;
             setStep('pending');
             try {
