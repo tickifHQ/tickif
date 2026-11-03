@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { apiUrl, webUrl } from '../lib/environment';
-import { phoneCode, signInPhone } from '../lib/auth';
+import { phoneCode, signInPhone, verifyWhatsappContact } from '../lib/auth';
 import { db, eq, inArray, schema } from '@repo/db';
 import { assertTestDb, makeUser } from '@repo/db/testing';
 import { deleteObject } from '@repo/storage';
@@ -455,6 +455,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await visitor.getByLabel(/^Display name/).fill(`Journey Visitor ${suffix}`);
     await visitor.getByLabel('Personal address (optional)').fill('Mumbai');
     await visitor.getByLabel('WhatsApp number (optional)').fill(visitorPhone);
+    await verifyWhatsappContact(visitor, visitorPhone);
     await visitor.getByRole('button', { name: 'Save changes' }).click();
     await expect(visitor.getByRole('status')).toContainText('Personal settings saved.');
     const [persistedVisitor] = await db
