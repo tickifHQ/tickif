@@ -96,7 +96,14 @@ const mediaWorker = new Worker<MediaProcessJob>(QUEUES.media, observeProcessor(p
   telemetry,
 });
 
-await retireBookingNotificationScheduler();
+// Redis may be unavailable at startup. Keep health endpoints reachable while
+// cleanup reconnects; retired booking handlers below always reject delivery.
+void retireBookingNotificationScheduler().catch((err) =>
+  logger.error(
+    { event: 'scheduler.retirement_failed', scheduler: 'booking-notifications', err },
+    'Could not retire booking notification scheduler',
+  ),
+);
 
 // Legacy local test queue; production phone codes are delivered directly by the API.
 const smsService = new SmsService(

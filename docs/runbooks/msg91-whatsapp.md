@@ -53,11 +53,24 @@ See [MSG91's authentication documentation](https://msg91.com/help/whatsapp/whats
 7. Verify wrong/expired codes, resend limits and edited-number invalidation.
 8. Confirm email OTP still reaches the entered email through Resend.
 
-The worker retires the dormant booking scheduler at startup. Quarantine pending
+The worker starts retirement of the dormant booking scheduler without blocking
+its health listener on Redis. Retired booking jobs are rejected even if cleanup
+is delayed; unavailable Redis must leave liveness at 200 and readiness at 503.
+The Swarm deployment smoke exercises this with invalid Redis credentials.
+Quarantine pending
 legacy production SMS jobs; never replay old OTPs through the new provider. Local
 test fixtures retain the legacy queue with console delivery and telemetry disabled.
 
 ## Validation on 2026-11-02
+
+For repeatable UI recordings, run
+`pnpm --filter @repo/e2e exec playwright test --config whatsapp-evidence.config.ts`
+with the isolated E2E environment. The Critical E2E workflow uploads the five
+successful/failing journey recordings, screenshots and HTML report as the
+`whatsapp-ui-verification` artifact for 30 days. The recordings exercise the real
+application and browser with synthetic provider delivery; they do not establish
+real MSG91 or Resend deliverability. Keep recordings out of Git and link the
+workflow artifact from the PR.
 
 Local Chromium journeys passed for login, individual/company onboarding, personal
 settings and profile contact replacement. Additional direct API bypass attempts
@@ -87,3 +100,22 @@ passed 2,324 tests; its three remaining assertions expected API port `8008` whil
 the local environment used `3001`. The affected auth-guard file passed all 44
 tests when rerun with `NEXT_PUBLIC_API_URL=http://localhost:8008`. Other workspace
 package suites passed in the preceding serial run.
+
+## PR follow-up on 2026-11-03
+
+The dependency audit was repaired with patched Next.js, Better Auth, Zod,
+Happy DOM, Vitest, Vite and HTTP-client dependencies. `pnpm audit --audit-level=high`
+now passes with zero high/critical findings; three moderate and one low advisory
+remain. No advisory suppression or audit-threshold change was added. Upstream
+patch guidance includes [Next.js](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw)
+and [Better Auth](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm).
+
+The Swarm failure exposed blocking scheduler cleanup before the worker's health
+listener. Cleanup now runs asynchronously; retired booking jobs still fail closed.
+`apps/worker/scripts/readiness-smoke.mjs` verifies the compiled worker against a
+loopback Redis authentication-rejection fixture: liveness stays 200 and readiness
+stays 503. CI runs this smoke as well as the actual Swarm credential-failure test.
+
+Five recorded local browser journeys passed with the patched dependencies:
+phone login, email login, individual onboarding, personal settings, and company
+onboarding/profile contact replacement. Recordings use synthetic provider delivery.
