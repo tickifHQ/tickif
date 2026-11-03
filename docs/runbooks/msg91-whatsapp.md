@@ -51,6 +51,11 @@ See [MSG91's authentication documentation](https://msg91.com/help/whatsapp/whats
 6. Verify login to the entered WhatsApp number and a new onboarding/settings/profile
    contact. Check the provider delivery report as well as the application session/save.
 7. Verify wrong/expired codes, resend limits and edited-number invalidation.
+   Use the read-only WhatsApp field's pencil action: enter the number, request
+   its code, then verify in the same dialog. Confirm Cancel preserves the current
+   number, failed verification never updates it, and verified edits appear in
+   the field before saving the enclosing form. Repeat in individual/company
+   onboarding, personal settings and company profile settings, including mobile.
 8. Confirm email OTP still reaches the entered email through Resend.
 
 The worker starts retirement of the dormant booking scheduler without blocking

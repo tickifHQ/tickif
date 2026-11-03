@@ -94,6 +94,12 @@ Draft inputs confer no verification. Contact verification does not change the lo
 phone or publication eligibility. The challenge retains verification/consumption
 timestamps; historical contacts are not retroactively treated as verified.
 
+Onboarding, personal settings and company profile settings share
+`WhatsappContactField`. Its read-only display opens a small pencil-action dialog
+for number entry and OTP. The displayed contact changes only after verification;
+cancellation discards the draft. Onboarding keeps the complete interaction beside
+the number field and routes unverified resumed drafts back to that page.
+
 WHATSAPP_PROVIDER=console is exclusively for local, telemetry-disabled tests. It
 uses the legacy sms queue for test-harness compatibility. Production OTPs bypass
 that queue, so old SMS jobs cannot trigger unexpected WhatsApp sends. Dormant

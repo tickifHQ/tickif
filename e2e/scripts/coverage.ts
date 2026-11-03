@@ -20,6 +20,10 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'whatsapp-contact-mobile.spec.ts',
+    'WhatsApp contact dialog verifies and saves on a narrow mobile screen',
+  ],
+  [
     'whatsapp-verification.spec.ts',
     'individual onboarding cannot skip WhatsApp verification for an entered contact',
   ],

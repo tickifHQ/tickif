@@ -1,9 +1,9 @@
 'use client';
 
 import {
-  WhatsappContactVerification,
+  WhatsappContactField,
   type WhatsappContactProof,
-} from '@/components/whatsapp-contact-verification';
+} from '@/components/whatsapp-contact-field';
 import { useState, type FormEvent } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -185,28 +185,24 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
                 data-invalid={invalidFields.includes('whatsappNumber')}
               >
                 <FieldLabel htmlFor="personal-whatsapp">WhatsApp number (optional)</FieldLabel>
-                <Input
+                <WhatsappContactField
                   id="personal-whatsapp"
-                  type="tel"
-                  autoComplete="tel"
-                  maxLength={16}
-                  value={whatsappNumber}
-                  aria-invalid={invalidFields.includes('whatsappNumber')}
-                  aria-describedby="whatsapp-help"
-                  onChange={(e) => {
+                  phoneNumber={whatsappNumber}
+                  target="personal"
+                  disabled={busy}
+                  ariaInvalid={invalidFields.includes('whatsappNumber')}
+                  ariaDescribedBy="whatsapp-help"
+                  onVerified={(proof) => {
+                    setWhatsappNumber(proof.phoneNumber);
+                    setWhatsappProof(proof);
+                    setSaved(false);
+                  }}
+                  onClear={() => {
+                    setWhatsappNumber('');
                     setWhatsappProof(undefined);
-                    setWhatsappNumber(e.target.value);
                     setSaved(false);
                   }}
                 />
-                {whatsappNumber.trim() && whatsappNumber.trim() !== account.whatsappNumber ? (
-                  <WhatsappContactVerification
-                    key={whatsappNumber.trim()}
-                    phoneNumber={whatsappNumber.trim()}
-                    target="personal"
-                    onVerified={setWhatsappProof}
-                  />
-                ) : null}
                 <FieldDescription id="whatsapp-help">
                   Include the country code, for example +919876543210. This does not change your
                   sign-in phone.

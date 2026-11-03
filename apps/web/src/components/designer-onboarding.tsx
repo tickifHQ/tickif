@@ -2,9 +2,9 @@
 
 import type { FormEvent, ReactNode } from 'react';
 import {
-  WhatsappContactVerification,
+  WhatsappContactField,
   type WhatsappContactProof,
-} from '@/components/whatsapp-contact-verification';
+} from '@/components/whatsapp-contact-field';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -47,7 +47,7 @@ import {
 import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
 import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
-import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/phone-number-input';
+import { countries, normalizePhoneInput, toE164PhoneNumber } from '@/components/phone-number-input';
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
@@ -239,6 +239,16 @@ export function DesignerOnboarding({
   const [whatsappCountry, setWhatsappCountry] = useState(
     countryFromIsoCode(seedFields?.phoneCountry),
   );
+  function handleWhatsappVerified(proof: WhatsappContactProof) {
+    const next = normalizePhoneInput(proof.phoneNumber, whatsappCountry);
+    setWhatsappCountry(next.country);
+    setWhatsappNumber(next.phone);
+    setWhatsappProof(proof);
+  }
+  function clearWhatsapp() {
+    setWhatsappNumber('');
+    setWhatsappProof(undefined);
+  }
   const [websiteUrl, setWebsiteUrl] = useState(seedFields?.websiteUrl ?? '');
   const [googleBusinessUrl, setGoogleBusinessUrl] = useState(seedFields?.googleBusinessUrl ?? '');
   const [websiteUrlError, setWebsiteUrlError] = useState('');
@@ -508,10 +518,12 @@ export function DesignerOnboarding({
     try {
       const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
       if (whatsappNumber.trim() && !phone) {
+        setStep(entityType === designerEntityType.enum.individual ? 'details' : 'presence');
         setError('Enter a valid WhatsApp number with country code.');
         return;
       }
       if (phone && whatsappProof?.phoneNumber !== phone) {
+        setStep(entityType === designerEntityType.enum.individual ? 'details' : 'presence');
         setError('Verify this WhatsApp number before continuing.');
         return;
       }
@@ -706,22 +718,13 @@ export function DesignerOnboarding({
                 WhatsApp number{' '}
                 <span className="font-normal text-muted-foreground">(Recommended)</span>
               </Label>
-              <PhoneNumberInput
+              <WhatsappContactField
                 id={`${formId}-whatsapp`}
-                phone={whatsappNumber}
-                selectedCountry={whatsappCountry}
-                onPhoneChange={(value) => {
-                  setWhatsappProof(undefined);
-                  setWhatsappNumber(value);
-                }}
-                onSelectedCountryChange={(value) => {
-                  setWhatsappProof(undefined);
-                  setWhatsappCountry(value);
-                }}
-                placeholder="9123456789"
-                wrapperClassName="h-8"
-                countryButtonClassName="h-8 px-2 py-0 text-[13px]"
-                inputClassName="h-8 text-[13px] font-medium"
+                phoneNumber={toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? whatsappNumber}
+                target="onboarding"
+                disabled={submitting}
+                onVerified={handleWhatsappVerified}
+                onClear={clearWhatsapp}
               />
             </div>
           </div>
@@ -767,14 +770,9 @@ export function DesignerOnboarding({
             onInstagramHandleChange={setInstagramHandle}
             onLinkedinHandleChange={setLinkedinHandle}
             onWebsiteUrlChange={handleWebsiteUrlChange}
-            onWhatsappCountryChange={(value) => {
-              setWhatsappProof(undefined);
-              setWhatsappCountry(value);
-            }}
-            onWhatsappNumberChange={(value) => {
-              setWhatsappProof(undefined);
-              setWhatsappNumber(value);
-            }}
+            onWhatsappVerified={handleWhatsappVerified}
+            onWhatsappClear={clearWhatsapp}
+            disabled={submitting}
             onYoutubeHandleChange={setYoutubeHandle}
             websiteUrlError={websiteUrlError}
             googleBusinessUrlError={googleBusinessUrlError}
@@ -805,14 +803,6 @@ export function DesignerOnboarding({
           />
         ) : null}
 
-        {whatsappNumber.trim() ? (
-          <WhatsappContactVerification
-            key={whatsappCountry.isoCode + whatsappNumber}
-            phoneNumber={toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? ''}
-            target="onboarding"
-            onVerified={setWhatsappProof}
-          />
-        ) : null}
         {error && (
           <Alert variant="destructive">
             <AlertTitle>Could not continue</AlertTitle>
@@ -1012,8 +1002,9 @@ function CompanyPresenceFields({
   onInstagramHandleChange,
   onLinkedinHandleChange,
   onWebsiteUrlChange,
-  onWhatsappCountryChange,
-  onWhatsappNumberChange,
+  onWhatsappVerified,
+  onWhatsappClear,
+  disabled,
   onYoutubeHandleChange,
   placeholderHandle,
   websiteUrl,
@@ -1037,8 +1028,9 @@ function CompanyPresenceFields({
   onInstagramHandleChange: (value: string) => void;
   onLinkedinHandleChange: (value: string) => void;
   onWebsiteUrlChange: (value: string) => void;
-  onWhatsappCountryChange: (value: (typeof countries)[number]) => void;
-  onWhatsappNumberChange: (value: string) => void;
+  onWhatsappVerified: (proof: WhatsappContactProof) => void;
+  onWhatsappClear: () => void;
+  disabled: boolean;
   onYoutubeHandleChange: (value: string) => void;
 }) {
   return (
@@ -1050,16 +1042,13 @@ function CompanyPresenceFields({
         >
           WhatsApp number
         </Label>
-        <PhoneNumberInput
+        <WhatsappContactField
           id={`${formId}-company-whatsapp`}
-          phone={whatsappNumber}
-          selectedCountry={whatsappCountry}
-          onPhoneChange={onWhatsappNumberChange}
-          onSelectedCountryChange={onWhatsappCountryChange}
-          placeholder="9123456789"
-          wrapperClassName="h-8"
-          countryButtonClassName="h-8 px-2 py-0 text-[13px]"
-          inputClassName="h-8 text-[13px] font-medium"
+          phoneNumber={toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? whatsappNumber}
+          target="onboarding"
+          disabled={disabled}
+          onVerified={onWhatsappVerified}
+          onClear={onWhatsappClear}
         />
       </div>
 

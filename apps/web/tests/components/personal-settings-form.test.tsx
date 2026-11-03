@@ -188,16 +188,14 @@ describe('personal settings', () => {
       },
     });
   });
-  it('rejects malformed WhatsApp before sending and labels its invalid field', async () => {
+  it('keeps the WhatsApp field read-only and validates the dialog locally', async () => {
     const user = userEvent.setup();
     render(<PersonalSettingsForm initialAccount={original} />);
-    await user.type(screen.getByLabelText('WhatsApp number (optional)'), 'not a number');
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('country code');
-    expect(screen.getByLabelText('WhatsApp number (optional)')).toHaveAttribute(
-      'aria-invalid',
-      'true',
-    );
+    expect(screen.getByLabelText('WhatsApp number (optional)')).toHaveAttribute('readonly');
+    await user.click(screen.getByRole('button', { name: 'Edit WhatsApp number' }));
+    await user.type(screen.getByRole('textbox', { name: 'Phone number' }), '123');
+    expect(screen.getByRole('button', { name: 'Send OTP' })).toBeDisabled();
+    expect(screen.getByLabelText('WhatsApp number (optional)')).toHaveValue('');
     expect(mock.patch).not.toHaveBeenCalled();
   });
 });

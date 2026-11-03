@@ -1,8 +1,8 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { expect, test, type Page, type BrowserContext } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { makeUser } from '@repo/db/testing';
-import { signInPhone, emailCode, verifyWhatsappContact } from '../lib/auth';
+import { signInPhone, verifyWhatsappContact } from '../lib/auth';
 import { apiUrl } from '../lib/environment';
 
 test('individual onboarding cannot skip WhatsApp verification for an entered contact', async ({
@@ -26,12 +26,17 @@ test('individual onboarding cannot skip WhatsApp verification for an entered con
     await page.goto('/designer/onboarding');
     await page.getByRole('button', { name: /Just me/i }).click();
     await page.getByLabel(/Display name/).fill('Individual Studio');
-    await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill(contact.slice(3));
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('button', { name: 'Finish later', exact: true }).click();
-    await expect(
-      page.getByText('Verify this WhatsApp number before continuing.', { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('textbox', { name: /WhatsApp number/ })).toHaveAttribute(
+      'readonly',
+      '',
+    );
+    await page.getByRole('button', { name: 'Edit WhatsApp number', exact: true }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('textbox', { name: 'Phone number', exact: true })
+      .fill(contact.slice(3));
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: /WhatsApp number/ })).toHaveValue('');
     const bypass = await context.request.post(apiUrl + '/api/profiles/me', {
       data: {
         entityType: 'individual',
@@ -43,6 +48,7 @@ test('individual onboarding cannot skip WhatsApp verification for an entered con
     });
     expect(bypass.status()).toBe(422);
     await verifyWhatsappContact(page, contact);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const finished = page.waitForResponse(
       (r) => r.request().method() === 'POST' && r.url().endsWith('/api/profiles/me'),
     );
@@ -60,15 +66,6 @@ test('individual onboarding cannot skip WhatsApp verification for an entered con
     await db.delete(schema.user).where(eq(schema.user.id, user.id));
   }
 });
-
-async function verifyContact(page: Page, context: BrowserContext, phone: string) {
-  await page.getByRole('button', { name: 'Verify WhatsApp number', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'OTP digit 1', exact: true })).toBeVisible();
-  const code = await emailCode(context, phone.replace('+', '') + '@whatsapp.test');
-  await page.getByRole('textbox', { name: 'OTP digit 1', exact: true }).fill(code);
-  await page.getByRole('button', { name: 'Verify', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('WhatsApp verified');
-}
 
 test('personal WhatsApp changes require OTP and leave the login number unchanged', async ({
   page,
@@ -88,12 +85,18 @@ test('personal WhatsApp changes require OTP and leave the login number unchanged
   try {
     await signInPhone(context, phone);
     await page.goto('/home/settings');
-    await page.getByLabel('WhatsApp number (optional)', { exact: true }).fill(contact);
-    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect(
-      page.getByText('Verify this WhatsApp number before saving.', { exact: true }),
-    ).toBeVisible();
-    await verifyContact(page, context, contact);
+    await expect(page.getByLabel('WhatsApp number (optional)', { exact: true })).toHaveAttribute(
+      'readonly',
+      '',
+    );
+    await page.getByRole('button', { name: 'Edit WhatsApp number', exact: true }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('textbox', { name: 'Phone number', exact: true })
+      .fill(contact.slice(3));
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByLabel('WhatsApp number (optional)', { exact: true })).toHaveValue('');
+    await verifyWhatsappContact(page, contact);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.getByRole('status')).toHaveText('Personal settings saved.');
     await page.reload();
@@ -130,8 +133,7 @@ test('company onboarding and profile contact replacement both verify WhatsApp', 
     await page.getByRole('button', { name: /Interior company/i }).click();
     await page.getByLabel(/^Company name/).fill('WhatsApp Studio');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill(contact.slice(3));
-    await verifyContact(page, context, contact);
+    await verifyWhatsappContact(page, contact);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const onboarded = page.waitForResponse(
       (r) => r.request().method() === 'POST' && r.url().endsWith('/api/profiles/me'),
@@ -142,12 +144,11 @@ test('company onboarding and profile contact replacement both verify WhatsApp', 
     orgId = (await response.json()).organization.id;
     await page.goto('/designer/profile');
     const replacement = `+9194${randomInt(10_000_000, 99_999_999)}`;
-    await page.getByLabel('WhatsApp / phone', { exact: true }).fill(replacement.slice(3));
     const bypass = await context.request.patch(apiUrl + '/api/profiles/me', {
       data: { phone: replacement },
     });
     expect(bypass.status()).toBe(422);
-    await verifyContact(page, context, replacement);
+    await verifyWhatsappContact(page, replacement);
     const save = page.waitForResponse(
       (r) => r.request().method() === 'PATCH' && r.url().endsWith('/api/profiles/me'),
     );

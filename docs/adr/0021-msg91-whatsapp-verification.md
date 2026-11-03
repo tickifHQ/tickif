@@ -49,3 +49,15 @@ On 2026-11-03 the owner created `tickif_otp` manually. MSG91 confirmed it is
 approved with language `en`. A live browser run using real provider delivery
 completed phone login and personal-contact verification/save with codes supplied
 by the recipient. This resolves the delivery blocker for the approved template.
+
+## Contact editor amendment — 2026-11-04
+
+The owner requested one shared contact editor in onboarding and company/personal
+settings. Display the current number in a read-only field with a pencil action.
+The small dialog handles number entry and OTP together; only successful verification
+updates the parent field and its single-use proof. Cancelling keeps the current
+number. Optional removal still follows the existing no-OTP clearing rule.
+Onboarding shows this editor on the page containing the number, replacing the
+separate verification control on later pages. Resumed drafts with an unverified
+contact return to its editor before submission. Proofs remain ephemeral and the
+existing server-side verification/consumption rules are unchanged.

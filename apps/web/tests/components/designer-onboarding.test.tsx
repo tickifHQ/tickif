@@ -1,3 +1,4 @@
+import { verifyWhatsappContact } from '../helpers/whatsapp-contact';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -73,6 +74,14 @@ vi.mock('@/lib/auth-client', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     api: {
+      whatsapp: {
+        send: { $post: vi.fn(async () => Response.json({ challengeId: 'challenge' })) },
+        verify: {
+          $post: vi.fn(async () =>
+            Response.json({ verificationId: '11111111-1111-4111-8111-111111111111' }),
+          ),
+        },
+      },
       taxonomy: {
         terms: {
           $get: mock.taxonomyGet,
@@ -343,7 +352,7 @@ describe('DesignerOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
-    await user.type(screen.getByLabelText(/whatsapp number/i), '9123456789');
+    await verifyWhatsappContact(user, '9123456789');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
@@ -406,7 +415,7 @@ describe('DesignerOnboarding', () => {
     await user.type(screen.getByLabelText(/company name/i), 'Mahi Interiors');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await user.type(screen.getByLabelText(/whatsapp number/i), '9123456789');
+    await verifyWhatsappContact(user, '9123456789');
     await user.type(screen.getByLabelText(/website/i), 'mahi.example');
     await user.type(screen.getByLabelText(/google business/i), 'google.com/maps/place/mahi');
     await user.type(screen.getByLabelText('Instagram'), '@mahi');
@@ -851,7 +860,7 @@ describe('DesignerOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(screen.getByLabelText(/whatsapp number/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/whatsapp number/i, { selector: 'input' })).toBeInTheDocument();
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/google business/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
@@ -942,7 +951,7 @@ describe('DesignerOnboarding', () => {
     });
   });
 
-  it('rejects short WhatsApp numbers before submitting', async () => {
+  it('keeps invalid WhatsApp drafts inside the dialog', async () => {
     const submit = vi.fn().mockResolvedValue({
       created: true,
       data: {
@@ -962,13 +971,10 @@ describe('DesignerOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
-    await user.type(screen.getByLabelText(/whatsapp number/i), '123');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Finish later' }));
-
-    expect(
-      await screen.findByText('Enter a valid WhatsApp number with country code.'),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit WhatsApp number' }));
+    await user.type(screen.getByRole('textbox', { name: 'Phone number' }), '123');
+    expect(screen.getByRole('button', { name: 'Send OTP' })).toBeDisabled();
+    expect(screen.getByLabelText(/whatsapp number/i, { selector: 'input' })).toHaveValue('');
     expect(submit).not.toHaveBeenCalled();
   });
 
@@ -1065,6 +1071,34 @@ describe('DesignerOnboarding — E-298 draft persistence', () => {
     expect(screen.queryByRole('button', { name: /just me/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
   });
+
+  it.each(['9123456789', '123'])(
+    'returns a resumed contact %s to its editor before submitting',
+    async (phoneNumber) => {
+      const user = userEvent.setup();
+      const submit = vi.fn();
+      render(
+        <DesignerOnboarding
+          signedInAs="mahi@test.com"
+          onSubmitOnboarding={submit}
+          initialDraft={{
+            step: 'presence',
+            updatedAt: '2026-02-01T00:00:00.000Z',
+            fields: {
+              entityType: 'individual',
+              userName: 'Mahi Studio',
+              phoneCountry: 'IN',
+              phoneNumber,
+            },
+          }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Finish later' }));
+      expect(await screen.findByLabelText(/display name/i)).toHaveValue('Mahi Studio');
+      expect(screen.getByRole('button', { name: 'Edit WhatsApp number' })).toBeVisible();
+      expect(submit).not.toHaveBeenCalled();
+    },
+  );
 
   it('rehydrates company-only fields and the entity type', async () => {
     render(

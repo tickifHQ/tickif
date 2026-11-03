@@ -454,7 +454,6 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await visitor.goto('/home/settings');
     await visitor.getByLabel(/^Display name/).fill(`Journey Visitor ${suffix}`);
     await visitor.getByLabel('Personal address (optional)').fill('Mumbai');
-    await visitor.getByLabel('WhatsApp number (optional)').fill(visitorPhone);
     await verifyWhatsappContact(visitor, visitorPhone);
     await visitor.getByRole('button', { name: 'Save changes' }).click();
     await expect(visitor.getByRole('status')).toContainText('Personal settings saved.');

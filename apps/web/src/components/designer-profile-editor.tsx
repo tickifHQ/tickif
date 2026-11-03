@@ -1,9 +1,9 @@
 'use client';
 
 import {
-  WhatsappContactVerification,
+  WhatsappContactField,
   type WhatsappContactProof,
-} from '@/components/whatsapp-contact-verification';
+} from '@/components/whatsapp-contact-field';
 import {
   useMemo,
   useRef,
@@ -37,7 +37,6 @@ import { SocialProfileInput } from '@/components/social-profile-confirmation';
 import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
 import { ProfileCompletionStepper } from '@/components/profile-completion-stepper';
 import {
-  PhoneNumberInput,
   countries,
   normalizePhoneInput,
   toE164PhoneNumber,
@@ -617,27 +616,23 @@ export function DesignerProfileEditor({
             )}
           </Field>
 
-          {form.phone &&
-          (form.phone !== savedForm.phone || form.country.isoCode !== savedForm.country.isoCode) ? (
-            <WhatsappContactVerification
-              key={form.country.isoCode + form.phone}
-              phoneNumber={toE164PhoneNumber(form.country, form.phone) ?? ''}
-              target={`profile:${initialProfile.id}`}
-              onVerified={setWhatsappProof}
-            />
-          ) : null}
           <Field htmlFor="profile-phone" label="WhatsApp / phone" error={validationErrors.phone}>
             {(aria) => (
-              <PhoneNumberInput
+              <WhatsappContactField
                 id="profile-phone"
                 ariaLabel="WhatsApp / phone"
-                phone={form.phone}
-                selectedCountry={form.country}
-                onPhoneChange={(value) => updateField('phone', value)}
-                onSelectedCountryChange={(country) => updateField('country', country)}
-                placeholder="9123456789"
+                phoneNumber={toE164PhoneNumber(form.country, form.phone) ?? form.phone}
+                target={`profile:${initialProfile.id}`}
+                disabled={isSaving}
                 ariaInvalid={aria['aria-invalid']}
                 ariaDescribedBy={aria['aria-describedby']}
+                onVerified={(proof) => {
+                  const next = normalizePhoneInput(proof.phoneNumber, form.country);
+                  updateField('country', next.country);
+                  updateField('phone', next.phone);
+                  setWhatsappProof(proof);
+                }}
+                onClear={() => updateField('phone', '')}
               />
             )}
           </Field>

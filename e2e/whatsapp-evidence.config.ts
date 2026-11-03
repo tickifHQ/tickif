@@ -5,7 +5,7 @@ import base from './playwright.config';
 export default defineConfig({
   ...base,
   // Recording deliberately spaces actions; ordinary assertions retain base deadlines.
-  timeout: 90_000,
+  timeout: 120_000,
   testMatch: ['authentication.spec.ts', 'whatsapp-verification.spec.ts'],
   grep: /phone OTP creates a visitor session|email OTP creates a real session|individual onboarding cannot skip WhatsApp verification|personal WhatsApp changes require OTP|company onboarding and profile contact replacement/,
   outputDir: '../test-results/whatsapp-ui',

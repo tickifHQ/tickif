@@ -1,3 +1,4 @@
+import { verifyWhatsappContact } from '../lib/auth';
 import { emailCode } from '../lib/auth';
 import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
@@ -117,13 +118,7 @@ test.describe('personal settings with persisted accounts', () => {
     await expect(page.getByRole('status')).toHaveCount(0);
     await page.getByLabel('Display name').fill('Updated Person');
     await page.getByLabel('Personal address (optional)').fill('Bandra West, Mumbai');
-    await page.getByLabel('WhatsApp number (optional)').fill('+919876543210');
-    await page.getByRole('button', { name: 'Verify WhatsApp number', exact: true }).click();
-    await page
-      .getByRole('textbox', { name: 'OTP digit 1', exact: true })
-      .fill(await emailCode(context, '919876543210@whatsapp.test'));
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('WhatsApp verified');
+    await verifyWhatsappContact(page, '+919876543210');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByRole('status')).toHaveText('Personal settings saved.');
     const updatedMenu = page.getByRole('button', {

@@ -1,3 +1,4 @@
+import { verifyWhatsappContact } from '../helpers/whatsapp-contact';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement, type ComponentProps } from 'react';
@@ -16,23 +17,19 @@ const mock = vi.hoisted(() => ({
   updateDesignerProfile: vi.fn(),
 }));
 
-vi.mock('@/components/whatsapp-contact-verification', () => ({
-  WhatsappContactVerification: ({
-    phoneNumber,
-    onVerified,
-  }: {
-    phoneNumber: string;
-    onVerified: (value: { phoneNumber: string; verificationId: string }) => void;
-  }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onVerified({ phoneNumber, verificationId: '11111111-1111-4111-8111-111111111111' })
-      }
-    >
-      Verify WhatsApp number
-    </button>
-  ),
+vi.mock('@/lib/api', () => ({
+  api: {
+    api: {
+      whatsapp: {
+        send: { $post: vi.fn(async () => Response.json({ challengeId: 'challenge' })) },
+        verify: {
+          $post: vi.fn(async () =>
+            Response.json({ verificationId: '11111111-1111-4111-8111-111111111111' }),
+          ),
+        },
+      },
+    },
+  },
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: mock.refresh }),
@@ -390,7 +387,7 @@ describe('DesignerProfileEditor', () => {
     );
     expect(screen.getByLabelText(/bio/i)).toHaveValue('Warm, practical homes.');
     expect(screen.getByLabelText(/address/i)).toHaveValue('Bandra West, Mumbai');
-    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('9876543210');
+    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('+919876543210');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://mahi.example.com');
     // The Google Business Profile link is now editable in settings and prefilled
     // from the saved googleBusinessUrl.
@@ -931,7 +928,6 @@ describe('DesignerProfileEditor', () => {
       ['Display name', 'Updated Studio'],
       ['Bio', 'Updated studio bio.'],
       ['Address', 'Pune, Maharashtra'],
-      ['WhatsApp / phone', '9123456789'],
       ['Website', 'updated.example.com'],
       ['Instagram', '@updatedstudio'],
       ['LinkedIn', '/company/updatedstudio'],
@@ -943,8 +939,7 @@ describe('DesignerProfileEditor', () => {
     for (const [label, value] of changes) {
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
     }
-    if (screen.queryByRole('button', { name: 'Verify WhatsApp number' }))
-      await user.click(screen.getByRole('button', { name: 'Verify WhatsApp number' }));
+    await verifyWhatsappContact(user, '9123456789');
     await user.click(screen.getByRole('button', { name: /services: full home interiors/i }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: 'Full Home Interiors' }));
     await user.keyboard('{Escape}');
@@ -1006,8 +1001,8 @@ describe('DesignerProfileEditor', () => {
       />,
     );
 
-    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('15112345678');
-    expect(screen.getByRole('button', { name: /country code, germany \+49/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('+4915112345678');
+    expect(screen.queryByRole('button', { name: /country code/ })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/bio/i), ' More detail.');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
@@ -1028,12 +1023,10 @@ describe('DesignerProfileEditor', () => {
       />,
     );
 
-    expect(
-      screen.getByRole('button', { name: /country code, united states \+1/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('+13124567890');
   });
 
-  it('rejects invalid phone numbers with a visible field error', async () => {
+  it('keeps invalid replacement numbers in the contact dialog', async () => {
     const user = userEvent.setup();
     render(
       <DesignerProfileEditor
@@ -1044,13 +1037,12 @@ describe('DesignerProfileEditor', () => {
       />,
     );
 
-    const phone = screen.getByLabelText(/whatsapp \/ phone/i);
+    await user.click(screen.getByRole('button', { name: 'Edit WhatsApp number' }));
+    const phone = screen.getByRole('textbox', { name: 'Phone number' });
     await user.clear(phone);
     await user.type(phone, '1234567');
-    await user.click(screen.getByRole('button', { name: /save changes/i }));
-
-    expect(await screen.findByText('Enter a valid phone number.')).toBeInTheDocument();
-    expect(phone).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Send OTP' })).toBeDisabled();
+    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue(profile.phone);
     expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
   });
 
