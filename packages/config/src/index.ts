@@ -12,7 +12,6 @@ const LOCAL_TYPESENSE_API_KEY = 'tickif-local-typesense-key';
 const DEFAULT_EMAIL_FROM = 'Tickif <noreply@tickif.com>';
 const DEFAULT_EMAIL_ADDRESS = 'noreply@tickif.com';
 const NAMED_EMAIL_FROM_PATTERN = /^[^<>\r\n]+<([^<>\r\n]+)>$/;
-const E164_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
 
 /**
  * Only credentials in this allow-list support Docker/Swarm's conventional
@@ -29,7 +28,7 @@ export const sensitiveFileVariables = [
   'BETTER_AUTH_SECRET',
   'GOOGLE_CLIENT_SECRET',
   'GOOGLE_PLACES_API_KEY',
-  'NOVU_SECRET_KEY',
+  'MSG91_KEY',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
   'RESEND_API_KEY',
@@ -90,17 +89,6 @@ const emailFromSchema = z
     },
     { message: 'must be an email address or Name <email@example.com>' },
   );
-
-const phoneOtpEmailAllowedNumbersSchema = z.preprocess(
-  (value) => {
-    if (typeof value !== 'string') return value ?? [];
-    return value
-      .split(',')
-      .map((phoneNumber) => phoneNumber.trim())
-      .filter(Boolean);
-  },
-  z.array(z.string().regex(E164_PHONE_PATTERN, 'must be an E.164 phone number')).min(1),
-);
 
 /**
  * Single source of truth for environment configuration.
@@ -183,20 +171,20 @@ const envSchema = z.object({
     .positive()
     .default(7 * 24 * 60 * 60),
 
-  // SMS provider. Selection is explicit; credentials and workflows are per-provider.
-  SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
-  // Temporary phone-login delivery override: allowlisted codes go to one test inbox.
-  PHONE_OTP_DELIVERY: z.enum(['sms', 'email']).default('sms'),
-  PHONE_OTP_EMAIL_TO: z.preprocess(blankStringToUndefined, z.email().optional()),
-  PHONE_OTP_EMAIL_ALLOWED_NUMBERS: phoneOtpEmailAllowedNumbersSchema.optional().default([]),
-  PHONE_OTP_EMAIL_ALLOW_ALL: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
-  NOVU_SECRET_KEY: z.string().trim().min(1).optional(),
-  NOVU_OTP_WORKFLOW_ID: z.string().trim().min(1).optional(),
-  NOVU_BOOKING_WORKFLOW_ID: z.string().trim().min(1).optional(),
-  NOVU_API_URL: z.string().url().default('https://api.novu.co'),
+  WHATSAPP_PROVIDER: z.enum(['console', 'msg91']).default('console'),
+  MSG91_KEY: z.preprocess(blankStringToUndefined, z.string().trim().min(1).optional()),
+  MSG91_WHATSAPP_NUMBER: z.preprocess(
+    blankStringToUndefined,
+    z
+      .string()
+      .regex(/^[1-9]\d{7,14}$/)
+      .optional(),
+  ),
+  MSG91_WHATSAPP_TEMPLATE: z.preprocess(
+    blankStringToUndefined,
+    z.string().trim().min(1).optional(),
+  ),
+  MSG91_WHATSAPP_LANGUAGE: z.string().trim().min(1).default('en'),
 
   // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
   // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
@@ -396,17 +384,22 @@ function assertProductionMediaConfig(env: RawEnv): void {
   }
 }
 
-function assertProductionSmsConfig(env: RawEnv): void {
-  if (env.NODE_ENV !== 'production' || env.SMS_PROVIDER !== 'novu') return;
-  const missing = [
-    ['NOVU_SECRET_KEY', env.NOVU_SECRET_KEY],
-    ['NOVU_OTP_WORKFLOW_ID', env.NOVU_OTP_WORKFLOW_ID],
-    ['NOVU_BOOKING_WORKFLOW_ID', env.NOVU_BOOKING_WORKFLOW_ID],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => `  - ${name}: required when SMS_PROVIDER=novu in production`);
-  if (missing.length > 0) {
-    throw new Error(`Invalid environment configuration:\n${missing.join('\n')}`);
+export function assertWhatsappConfig(env: Config): void {
+  if (
+    env.WHATSAPP_PROVIDER === 'console' &&
+    env.NODE_ENV !== 'production' &&
+    !env.TELEMETRY_ENABLED
+  )
+    return;
+  if (
+    env.WHATSAPP_PROVIDER !== 'msg91' ||
+    !env.MSG91_KEY ||
+    !env.MSG91_WHATSAPP_NUMBER ||
+    !env.MSG91_WHATSAPP_TEMPLATE
+  ) {
+    throw new Error(
+      'WhatsApp delivery requires MSG91_KEY, MSG91_WHATSAPP_NUMBER and MSG91_WHATSAPP_TEMPLATE',
+    );
   }
 }
 
@@ -444,30 +437,16 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   );
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map((i) => `  - ${i.path.join('.') || '(root)'}: ${Object.hasOwn(telemetrySchema.shape, String(i.path[0])) ? 'invalid telemetry setting' : i.message}`)
+      .map(
+        (i) =>
+          `  - ${i.path.join('.') || '(root)'}: ${Object.hasOwn(telemetrySchema.shape, String(i.path[0])) ? 'invalid telemetry setting' : i.message}`,
+      )
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   const env = parsed.data;
-  if (env.PHONE_OTP_EMAIL_ALLOW_ALL && env.DEPLOYMENT_ENV !== 'staging') {
-    throw new Error('PHONE_OTP_EMAIL_ALLOW_ALL is restricted to staging');
-  }
-  if (env.PHONE_OTP_DELIVERY === 'email') {
-    if (env.NODE_ENV === 'production' && env.DEPLOYMENT_ENV !== 'staging') {
-      throw new Error('PHONE_OTP_DELIVERY=email must not be enabled in production');
-    }
-    if (
-      !env.PHONE_OTP_EMAIL_TO ||
-      (!env.PHONE_OTP_EMAIL_ALLOW_ALL && env.PHONE_OTP_EMAIL_ALLOWED_NUMBERS.length === 0) ||
-      !env.RESEND_API_KEY
-    ) {
-      throw new Error(
-        'Email OTP delivery requires PHONE_OTP_EMAIL_TO, PHONE_OTP_EMAIL_ALLOWED_NUMBERS, and RESEND_API_KEY',
-      );
-    }
-  }
   assertProductionMediaConfig(env);
-  assertProductionSmsConfig(env);
+
   return {
     ...env,
     ...telemetryIdentity(env),

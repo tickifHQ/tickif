@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  WhatsappContactField,
+  type WhatsappContactProof,
+} from '@/components/whatsapp-contact-field';
 import { useState, type FormEvent } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -27,6 +31,7 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
   );
   const [address, setAddress] = useState(initialAccount.address ?? '');
   const [whatsappNumber, setWhatsappNumber] = useState(initialAccount.whatsappNumber ?? '');
+  const [whatsappProof, setWhatsappProof] = useState<WhatsappContactProof>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -82,12 +87,24 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
       address: address.trim() || null,
       whatsappNumber: whatsappNumber.trim() || null,
       revision: account.revision,
+      whatsappVerificationId:
+        whatsappProof?.phoneNumber === whatsappNumber.trim()
+          ? whatsappProof.verificationId
+          : undefined,
     });
     if (!input.success) {
       setInvalidFields(input.error.issues.map((issue) => String(issue.path[0])));
       setError(
         'Enter a name between 2 and 100 characters, an address up to 300 characters, and a WhatsApp number with country code (for example +919876543210). Optional fields can be left blank.',
       );
+      return;
+    }
+    if (
+      whatsappNumber.trim() &&
+      whatsappNumber.trim() !== account.whatsappNumber &&
+      whatsappProof?.phoneNumber !== whatsappNumber.trim()
+    ) {
+      setError('Verify this WhatsApp number before saving.');
       return;
     }
     setInvalidFields([]);
@@ -168,16 +185,21 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
                 data-invalid={invalidFields.includes('whatsappNumber')}
               >
                 <FieldLabel htmlFor="personal-whatsapp">WhatsApp number (optional)</FieldLabel>
-                <Input
+                <WhatsappContactField
                   id="personal-whatsapp"
-                  type="tel"
-                  autoComplete="tel"
-                  maxLength={16}
-                  value={whatsappNumber}
-                  aria-invalid={invalidFields.includes('whatsappNumber')}
-                  aria-describedby="whatsapp-help"
-                  onChange={(e) => {
-                    setWhatsappNumber(e.target.value);
+                  phoneNumber={whatsappNumber}
+                  target="personal"
+                  disabled={busy}
+                  ariaInvalid={invalidFields.includes('whatsappNumber')}
+                  ariaDescribedBy="whatsapp-help"
+                  onVerified={(proof) => {
+                    setWhatsappNumber(proof.phoneNumber);
+                    setWhatsappProof(proof);
+                    setSaved(false);
+                  }}
+                  onClear={() => {
+                    setWhatsappNumber('');
+                    setWhatsappProof(undefined);
                     setSaved(false);
                   }}
                 />

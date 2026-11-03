@@ -77,6 +77,35 @@ jobs:
           pnpm --filter @repo/e2e build:launchers
       - name: Wait for search
         run: curl --retry 30 --retry-all-errors --retry-delay 1 --fail http://localhost:8108/health
+      - name: Record WhatsApp UI verification videos
+        run: pnpm --filter @repo/e2e exec playwright test --config whatsapp-evidence.config.ts
+      - name: Export and validate compatible MP4 videos
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          node e2e/scripts/export-ui-videos.mjs
+          pnpm --filter @repo/e2e exec playwright install chrome
+          node e2e/scripts/verify-ui-videos.mjs
+      - name: Upload playable MP4 gallery
+        uses: actions/upload-artifact@v7
+        with:
+          name: whatsapp-ui-mp4
+          path: test-results/whatsapp-ui-mp4/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload WhatsApp UI verification videos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: whatsapp-ui-verification
+          path: |
+            test-results/whatsapp-ui/
+            test-results/whatsapp-ui-report/
+            test-results/whatsapp-ui-results.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Run critical journeys with real local stack
         run: pnpm --filter @repo/e2e test:e2e
       - name: Assert every critical journey ran and passed

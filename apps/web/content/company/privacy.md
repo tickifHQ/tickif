@@ -41,7 +41,7 @@ Original image files are stored privately with restricted authorised access. The
 
 ## Providers and transfers
 
-The code supports Cloudflare R2 for media, Razorpay for subscription payments, Resend for email, Novu-backed messaging where configured, Google sign-in and business listings, and Typesense-powered search. Providers receive information needed for their functions. Activation depends on deployment; this is an implementation inventory, not a verified list of every production processor.
+The code supports Cloudflare R2 for media, Razorpay for subscription payments, Resend for email, MSG91 WhatsApp authentication where configured, Google sign-in and business listings, and Typesense-powered search. Providers receive information needed for their functions. Activation depends on deployment; this is an implementation inventory, not a verified list of every production processor.
 
 Hosting, database, network and observability providers may also process information. **Production provider names, regions and transfer safeguards: pending confirmation.** We do not claim all information stays in India. Transfers must meet the restrictions and protections applicable at the time, including applicable sensitive-information requirements.
 

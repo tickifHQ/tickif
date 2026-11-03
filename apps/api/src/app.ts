@@ -1,3 +1,4 @@
+import { whatsappRoutes } from './modules/whatsapp/routes.js';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
@@ -98,6 +99,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  .route('/api/whatsapp', whatsappRoutes)
   .route('/api/telemetry', telemetryRoutes)
   .route('/api/admin/activity', adminActivityRoutes)
   .route('/api/admin/insights', adminVisibilityRoutes)

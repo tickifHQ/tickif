@@ -298,6 +298,11 @@ export async function enqueueBookingNotification(job: BookingNotification): Prom
   });
 }
 
+/** Retire the old scheduler on worker startup without replaying old messages. */
+export async function retireBookingNotificationScheduler(): Promise<void> {
+  await getSmsQueue().removeJobScheduler(BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER);
+}
+
 export async function scheduleBookingNotificationSweep(everyMs: number): Promise<void> {
   await getSmsQueue().upsertJobScheduler(
     BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER,

@@ -1,6 +1,10 @@
 'use client';
 
 import {
+  WhatsappContactField,
+  type WhatsappContactProof,
+} from '@/components/whatsapp-contact-field';
+import {
   useMemo,
   useRef,
   useState,
@@ -33,7 +37,6 @@ import { SocialProfileInput } from '@/components/social-profile-confirmation';
 import { DesignerLogoInput, type DesignerLogoValue } from '@/components/designer-logo-input';
 import { ProfileCompletionStepper } from '@/components/profile-completion-stepper';
 import {
-  PhoneNumberInput,
   countries,
   normalizePhoneInput,
   toE164PhoneNumber,
@@ -363,6 +366,7 @@ export function DesignerProfileEditor({
   taxonomyError: string | null;
 }) {
   const router = useRouter();
+  const [whatsappProof, setWhatsappProof] = useState<WhatsappContactProof>();
   const initialForm = useMemo(() => profileToForm(initialProfile), [initialProfile]);
   const [form, setForm] = useState<FormState>(() => initialForm);
   const [savedForm, setSavedForm] = useState<FormState>(() => initialForm);
@@ -417,6 +421,7 @@ export function DesignerProfileEditor({
   }
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
+    if (key === 'phone' || key === 'country') setWhatsappProof(undefined);
     formRevisionRef.current += 1;
     setForm((current) => ({ ...current, [key]: value }));
     const validationKey = key === 'country' ? 'phone' : key;
@@ -440,6 +445,13 @@ export function DesignerProfileEditor({
       return;
     }
 
+    if (input.phone) {
+      if (whatsappProof?.phoneNumber !== input.phone) {
+        setSaveError('Verify this WhatsApp number before saving.');
+        return;
+      }
+      input.whatsappVerificationId = whatsappProof.verificationId;
+    }
     const submittedRevision = formRevisionRef.current;
     setSaveError(null);
     setSaveSuccess(false);
@@ -606,16 +618,21 @@ export function DesignerProfileEditor({
 
           <Field htmlFor="profile-phone" label="WhatsApp / phone" error={validationErrors.phone}>
             {(aria) => (
-              <PhoneNumberInput
+              <WhatsappContactField
                 id="profile-phone"
                 ariaLabel="WhatsApp / phone"
-                phone={form.phone}
-                selectedCountry={form.country}
-                onPhoneChange={(value) => updateField('phone', value)}
-                onSelectedCountryChange={(country) => updateField('country', country)}
-                placeholder="9123456789"
+                phoneNumber={toE164PhoneNumber(form.country, form.phone) ?? form.phone}
+                target={`profile:${initialProfile.id}`}
+                disabled={isSaving}
                 ariaInvalid={aria['aria-invalid']}
                 ariaDescribedBy={aria['aria-describedby']}
+                onVerified={(proof) => {
+                  const next = normalizePhoneInput(proof.phoneNumber, form.country);
+                  updateField('country', next.country);
+                  updateField('phone', next.phone);
+                  setWhatsappProof(proof);
+                }}
+                onClear={() => updateField('phone', '')}
               />
             )}
           </Field>

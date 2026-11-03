@@ -9,6 +9,7 @@ export const upsertVisitorProfileSchema = z
   .object({
     address: visitorAddressSchema.nullable(),
     whatsappNumber: e164PhoneNumberSchema.nullable(),
+    whatsappVerificationId: z.uuid().optional(),
   })
   .strict()
   .meta({ id: 'UpsertVisitorProfile' });

@@ -11,7 +11,6 @@ export const emailFixtures = [
   { kind: 'otp', purpose: 'email-verification', code: '234567' },
   { kind: 'otp', purpose: 'forget-password', code: '345678' },
   { kind: 'otp', purpose: 'change-email', code: '567890' },
-  { kind: 'phone-otp', phoneNumber: '+919800000010', code: '456789' },
   {
     kind: 'invitation',
     organization: 'Studio Forma',

@@ -1,3 +1,4 @@
+import { verifyWhatsappContact } from '../lib/auth';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { ACCOUNT_STATUS } from '@repo/contracts';
@@ -88,7 +89,7 @@ test('phone OTP creates a visitor session, completes onboarding, and opens perso
     await expect(page).toHaveURL(/\/home\/settings$/);
     await page.getByLabel('Display name').fill('Synthetic Visitor');
     await page.getByLabel('Personal address (optional)').fill('Bandra West, Mumbai');
-    await page.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
+    await verifyWhatsappContact(page, phoneNumber);
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByRole('status')).toContainText('Personal settings saved.');
 
@@ -136,7 +137,6 @@ test('visitor personal settings keep client validation local and persist details
 
     // Two raw characters satisfy the native minimum while the trimmed name remains invalid.
     await settingsForm.getByLabel('Display name').fill(' A');
-    await settingsForm.getByLabel('WhatsApp number (optional)').fill(phoneNumber);
     await settingsForm.getByRole('button', { name: 'Save changes' }).click();
     await expect(settingsForm.getByRole('alert')).toContainText(
       'Enter a name between 2 and 100 characters',
@@ -146,6 +146,7 @@ test('visitor personal settings keep client validation local and persist details
 
     await settingsForm.getByLabel('Display name').fill('Reload Visitor');
     await settingsForm.getByLabel('Personal address (optional)').fill('Khar West, Mumbai');
+    await verifyWhatsappContact(page, phoneNumber);
     await settingsForm.getByRole('button', { name: 'Save changes' }).click();
     await expect(settingsForm.getByRole('status')).toContainText('Personal settings saved.');
 

@@ -42,6 +42,10 @@ For later media settings and regeneration, also read
 [media architecture](../architecture/media-pipeline.md) and its
 [runbook](../runbooks/media-pipeline.md).
 
+## WhatsApp authentication
+
+[0021: MSG91 WhatsApp authentication and verified contacts](./0021-msg91-whatsapp-verification.md) is accepted (2026-11-02).
+
 ## Admin visibility
 
 [0016: Admin lead visibility and cohort reporting](./0016-admin-lead-visibility-and-cohort-reporting.md)

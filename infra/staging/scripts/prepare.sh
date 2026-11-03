@@ -8,9 +8,6 @@ release_job="${release_job:0:63}"
 run_swarm_job "$release_job" "$OPERATIONS_IMAGE" \
   --env NODE_ENV=production \
   --env DEPLOYMENT_ENV=staging \
-  --env PHONE_OTP_DELIVERY="${PHONE_OTP_DELIVERY:-sms}" \
-  --env PHONE_OTP_EMAIL_TO="${PHONE_OTP_EMAIL_TO:-}" \
-  --env PHONE_OTP_EMAIL_ALLOW_ALL="${PHONE_OTP_EMAIL_ALLOW_ALL:-false}" \
   --env GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --env GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google_client_secret \
   --env RAZORPAY_KEY_ID="$RAZORPAY_KEY_ID" --env RAZORPAY_KEY_SECRET_FILE=/run/secrets/razorpay_key_secret \
   --env RAZORPAY_WEBHOOK_SECRET_FILE=/run/secrets/razorpay_webhook_secret \
@@ -28,14 +25,14 @@ run_swarm_job "$release_job" "$OPERATIONS_IMAGE" \
   --env R2_ENDPOINT="$R2_ENDPOINT" --env R2_BUCKET="$R2_BUCKET" \
   --env R2_ACCESS_KEY_ID_FILE=/run/secrets/r2_access_key_id --env R2_SECRET_ACCESS_KEY_FILE=/run/secrets/r2_secret_access_key \
   --env RESEND_API_KEY_FILE=/run/secrets/resend_api_key --env EMAIL_FROM="$EMAIL_FROM" \
-  --env SMS_PROVIDER="$SMS_PROVIDER" --env NOVU_SECRET_KEY_FILE=/run/secrets/novu_secret \
-  --env NOVU_OTP_WORKFLOW_ID="$NOVU_OTP_WORKFLOW_ID" --env NOVU_BOOKING_WORKFLOW_ID="$NOVU_BOOKING_WORKFLOW_ID" --env NOVU_API_URL="$NOVU_API_URL" \
+  --env MSG91_WHATSAPP_NUMBER="$MSG91_WHATSAPP_NUMBER" --env MSG91_WHATSAPP_TEMPLATE="$MSG91_WHATSAPP_TEMPLATE" --env MSG91_WHATSAPP_LANGUAGE="${MSG91_WHATSAPP_LANGUAGE:-en}" \
+  --env WHATSAPP_PROVIDER="$WHATSAPP_PROVIDER" --env MSG91_KEY_FILE=/run/secrets/msg91_auth_key \
   --secret source="$POSTGRES_PASSWORD_SECRET",target=postgres_password \
   --secret source="$REDIS_PASSWORD_SECRET",target=redis_password \
   --secret source="$TYPESENSE_ADMIN_KEY_SECRET",target=typesense_admin_key \
   --secret source="$TYPESENSE_SEARCH_KEY_SECRET",target=typesense_search_key \
   --secret source="$BETTER_AUTH_SECRET_NAME",target=better_auth_secret \
-  --secret source="$NOVU_SECRET_NAME",target=novu_secret \
+  --secret source="$MSG91_SECRET_NAME",target=msg91_auth_key \
   --secret source="$R2_ACCESS_KEY_ID_SECRET",target=r2_access_key_id \
   --secret source="$R2_SECRET_ACCESS_KEY_SECRET",target=r2_secret_access_key \
   --secret source="$RESEND_API_KEY_SECRET",target=resend_api_key \

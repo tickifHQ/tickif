@@ -67,3 +67,24 @@ export async function removeSyntheticUserByPhone(phoneNumber: string) {
   await assertTestDb();
   await db.delete(schema.user).where(eq(schema.user.phoneNumber, phoneNumber));
 }
+
+/** Exercises contact verification through the browser and isolated MSG91 mailbox. */
+export async function verifyWhatsappContact(page: Page, phoneNumber: string) {
+  await page.getByRole('button', { name: 'Edit WhatsApp number', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeInViewport();
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog
+    .getByRole('textbox', { name: 'Phone number', exact: true })
+    .fill(phoneNumber.slice(3));
+  await dialog.getByRole('button', { name: 'Send OTP', exact: true }).click();
+  await expect(dialog.getByRole('textbox', { name: 'OTP digit 1', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Verify', exact: true })).toBeInViewport();
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog
+    .getByRole('textbox', { name: 'OTP digit 1', exact: true })
+    .fill(await emailCode(page.context(), phoneNumber.replace('+', '') + '@whatsapp.test'));
+  await dialog.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('WhatsApp number verified.', { exact: true })).toBeVisible();
+}

@@ -119,17 +119,20 @@ hydration errors.
 The Browser plugin is not available in this environment; these checks use the
 repository's Playwright Chromium runner.
 
+WhatsApp contact coverage includes personal settings, individual/company onboarding and
+studio profile replacement. Unverified contacts cannot be saved, including via Skip.
+
 ## Provider boundary and staging smoke
 
 Local tests exercise real application routes, sessions, PostgreSQL, queues,
 Typesense and S3-compatible storage. Only external provider boundaries are doubled:
-phone OTP uses the configured console delivery adapter; Resend messages are captured
+MSG91 WhatsApp OTP payloads and Resend messages are captured
 by a loopback mailbox; Google authorization/token exchange returns a synthetic
 identity to the real callback. The double refuses unconfigured external hosts and
 synthetic email delivery cannot reach real recipients. No provider-double flag or
 endpoint is added to deployed application code.
 
-These checks **do not validate real Google, SMS, Resend, Razorpay or Cloudflare R2
+These checks **do not validate real Google, WhatsApp, Resend, Razorpay or Cloudflare R2
 configuration**. Run the following separately on the Azure staging Docker stack
 after its URL and sandbox configuration are available. Do not point this local
 fixture launcher at staging.
@@ -148,7 +151,7 @@ fixture launcher at staging.
    signed callback and webhook record, retry a duplicate webhook, refresh state,
    update the mandate and cancel at period end. Confirm UI and persisted plan state
    agree. Record test payment/subscription/event IDs, never credentials.
-6. Trigger an invitation and a moderation notification; verify approved email/SMS
+6. Trigger an invitation and a moderation notification; verify approved email
    recipients receive them and retries do not duplicate application transitions.
 
 Capture pass/fail and provider event references for each step. Until these are

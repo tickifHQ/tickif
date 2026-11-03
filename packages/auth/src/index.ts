@@ -5,7 +5,7 @@ import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins'
 import crypto from 'node:crypto';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
-import { assertProductionEmailConfig, config } from '@repo/config';
+import { assertProductionEmailConfig, assertWhatsappConfig, config } from '@repo/config';
 import { sendPhoneOtp } from './phone-otp.js';
 import { ac, orgAc, orgRoles, roles } from './permissions.js';
 import {
@@ -21,6 +21,7 @@ import { sendNotificationEmail } from './notification-email.js';
 import { renderTickifEmail } from './email-templates.js';
 
 assertProductionEmailConfig();
+if (config.NODE_ENV === 'production') assertWhatsappConfig(config);
 
 /**
  * Tickif auth — better-auth instance.

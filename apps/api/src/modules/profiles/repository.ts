@@ -1,3 +1,4 @@
+import { consumeWhatsappProof } from '../whatsapp/repository.js';
 import { db, schema, eq, and, inArray, sql } from '@repo/db';
 import {
   ACCOUNT_STATUS,
@@ -282,6 +283,7 @@ export const profilesRepository = {
     bio: string | null;
     address: string | null;
     phone: string | null;
+    whatsappVerificationId?: string;
     websiteUrl: string | null;
     googleBusinessUrl: string | null;
     instagramHandle: string | null;
@@ -339,6 +341,14 @@ export const profilesRepository = {
           ? canCreateAdditionalOrganization
           : account?.role === PLATFORM_ROLE.VISITOR && account.status === ACCOUNT_STATUS.PENDING);
       if (!canOnboard) throw new DesignerOnboardingAccessDeniedError();
+      if (data.phone)
+        await consumeWhatsappProof(
+          tx,
+          data.userId,
+          'onboarding',
+          data.phone,
+          data.whatsappVerificationId,
+        );
 
       const [org] = await tx
         .insert(schema.organization)
@@ -515,8 +525,23 @@ export const profilesRepository = {
       scopeIds?: string[];
       themeIds?: string[];
     },
+    verification?: { userId: string; verificationId?: string },
   ): Promise<DesignerProfileRecord> {
     return db.transaction(async (tx) => {
+      const [previous] = await tx
+        .select({ phone: schema.designerProfile.phone })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, profileId))
+        .for('update');
+      if (data.phone && data.phone !== previous?.phone) {
+        await consumeWhatsappProof(
+          tx,
+          verification?.userId ?? '',
+          'profile:' + profileId,
+          data.phone,
+          verification?.verificationId,
+        );
+      }
       const now = new Date();
       const hasMutation =
         Object.keys(data).length > 0 ||

@@ -48,7 +48,7 @@ describe('LoginCard', () => {
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
     await user.click(screen.getByRole('button', { name: 'Get OTP' }));
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
-    expect(screen.getByText('We sent a 6-digit code to')).toBeInTheDocument();
+    expect(screen.getByText('We sent a 6-digit WhatsApp code to')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Edit phone number' }));
     expect(screen.getByRole('textbox', { name: /phone/i })).toHaveValue('9876543210');
   });

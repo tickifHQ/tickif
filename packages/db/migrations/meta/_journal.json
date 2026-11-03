@@ -610,6 +610,13 @@
       "when": 1792238129606,
       "tag": "0088_faithful_tana_nile",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793558443882,
+      "tag": "0089_certain_goliath",
+      "breakpoints": true
     }
   ]
 }

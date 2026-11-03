@@ -13,6 +13,7 @@ export const updatePersonalAccountSchema = upsertVisitorProfileSchema
 export type UpdatePersonalAccountInput = z.infer<typeof updatePersonalAccountSchema>;
 
 export const personalAccountSchema = upsertVisitorProfileSchema
+  .omit({ whatsappVerificationId: true })
   .extend({
     name: z.string(),
     email: z.string(),

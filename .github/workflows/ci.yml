@@ -219,6 +219,9 @@ jobs:
       - name: Verify compiled worker telemetry on Node 22
         run: pnpm --filter @repo/worker telemetry:smoke
 
+      - name: Verify worker health with rejected Redis credentials
+        run: pnpm --filter @repo/worker exec node scripts/readiness-smoke.mjs
+
       # Migration gating (blueprint §9): migrate the empty `tickif` DB, then
       # regenerate SQL from the schema and fail if the committed migrations drift
       # from the schema.
