@@ -72,6 +72,16 @@ application and browser with synthetic provider delivery; they do not establish
 real MSG91 or Resend deliverability. Keep recordings out of Git and link the
 workflow artifact from the PR.
 
+For playback, download the separate `whatsapp-ui-mp4` artifact: unzip it and open
+`index.html`, or open any numbered `.mp4` directly. These are H.264
+baseline / yuv420p files for broader player support, rather than requiring WebM
+support in a downloaded report. CI runs `node e2e/scripts/export-ui-videos.mjs`
+after recording, checks codec metadata and fully decodes every exported MP4.
+`node e2e/scripts/verify-ui-videos.mjs` then plays and seeks every MP4 in Google Chrome
+from the gallery's local file URL, saving playback results and a screenshot.
+The gallery uses ordinary video elements and relative files, with no report server
+or JavaScript required. Recording actions are paced for easier review.
+
 Local Chromium journeys passed for login, individual/company onboarding, personal
 settings and profile contact replacement. Additional direct API bypass attempts
 were rejected. These browser checks use isolated provider fixtures.
