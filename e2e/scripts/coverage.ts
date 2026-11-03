@@ -20,6 +20,18 @@ const billingMatrixEntries = ['overview', 'subscribe'].flatMap((entry) =>
 
 const requiredEntries: [file: string, title: string][] = [
   [
+    'whatsapp-verification.spec.ts',
+    'individual onboarding cannot skip WhatsApp verification for an entered contact',
+  ],
+  [
+    'whatsapp-verification.spec.ts',
+    'personal WhatsApp changes require OTP and leave the login number unchanged',
+  ],
+  [
+    'whatsapp-verification.spec.ts',
+    'company onboarding and profile contact replacement both verify WhatsApp',
+  ],
+  [
     'ownership-transfer.spec.ts',
     'ownership transfer requires nominee acceptance and preserves roles after cancellation and decline',
   ],

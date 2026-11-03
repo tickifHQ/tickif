@@ -9,6 +9,7 @@ on an environment. Keep credentials in the secret store.
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | [Admin access](./admin-access.md)                                | Bootstrap and recover privileged access                                        |
 | [Staging deployment](./staging-deployment.md)                    | Docker Swarm, Traefik, release, backup and restore                             |
+| [MSG91 WhatsApp](./msg91-whatsapp.md) | Authentication template setup, permissions and live verification |
 | [Search](./search.md)                                            | Typesense credentials, collection bootstrap, reindexing and fallback diagnosis |
 | [Media pipeline](./media-pipeline.md)                            | Retry failures, regenerate derivatives and verify image quality                |
 | [Worker media runtime](./worker-media.md)                     | Bundled logo assets and image validation in deployed workers                   |

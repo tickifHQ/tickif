@@ -1,3 +1,4 @@
+import { makeWhatsappProof } from '../../helpers/whatsapp.js';
 import { describe, expect, it } from 'vitest';
 import { personalAccountSchema } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
@@ -47,7 +48,7 @@ describe('personal account settings', () => {
     const org = await makeOrganization();
     const designer = await makeDesigner({ userId, orgId: org.id, displayName: 'Studio Name' });
     const original = await read(cookie);
-    const response = await request('PATCH', cookie, { ...changes, revision: original.revision });
+    const response = await request('PATCH', cookie, { ...changes, revision: original.revision, whatsappVerificationId: await makeWhatsappProof(userId, changes.whatsappNumber) });
     expect(response.status).toBe(200);
     const saved = personalAccountSchema.parse(await response.json());
     expect(saved).toMatchObject({
@@ -102,11 +103,12 @@ describe('personal account settings', () => {
     expect(await read(cookie)).toEqual(original);
   });
   it('prevents concurrent saves and stale overwrite through either account or onboarding APIs', async () => {
-    const { cookie } = await account();
+    const { cookie, userId } = await account();
+    const whatsappVerificationId = await makeWhatsappProof(userId, changes.whatsappNumber);
     const original = await read(cookie);
     const results = await Promise.all(
       ['First Name', 'Second Name'].map((name) =>
-        request('PATCH', cookie, { ...changes, name, revision: original.revision }),
+        request('PATCH', cookie, { ...changes, name, revision: original.revision, whatsappVerificationId }),
       ),
     );
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);

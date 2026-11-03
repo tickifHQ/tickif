@@ -6,7 +6,7 @@ approval, expiry, and renewal. It does not mock API responses or authenticated s
 It seeds only synthetic users, organizations, projects, and a one-pixel PNG document.
 
 Run against the local stack with Postgres, Redis, Typesense, and a private MinIO
-bucket whose CORS allows PUT from `http://localhost:3000`. Set `SMS_PROVIDER=console`
+bucket whose CORS allows PUT from `http://localhost:3000`. Set `WHATSAPP_PROVIDER=console`
 and use only local test credentials. Both `DATABASE_URL` and `DATABASE_URL_TEST`
 must point to the same local database ending in `_test`; the fixture fails closed
 otherwise. The database must exist; the fixture applies committed migrations.

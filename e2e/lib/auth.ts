@@ -67,3 +67,14 @@ export async function removeSyntheticUserByPhone(phoneNumber: string) {
   await assertTestDb();
   await db.delete(schema.user).where(eq(schema.user.phoneNumber, phoneNumber));
 }
+
+/** Exercises contact verification through the browser and isolated MSG91 mailbox. */
+export async function verifyWhatsappContact(page: Page, phoneNumber: string) {
+  await page.getByRole('button', { name: 'Verify WhatsApp number', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'OTP digit 1', exact: true })).toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'OTP digit 1', exact: true })
+    .fill(await emailCode(page.context(), phoneNumber.replace('+', '') + '@whatsapp.test'));
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('WhatsApp verified');
+}

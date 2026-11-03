@@ -1,6 +1,10 @@
 'use client';
 
 import {
+  WhatsappContactVerification,
+  type WhatsappContactProof,
+} from '@/components/whatsapp-contact-verification';
+import {
   useMemo,
   useRef,
   useState,
@@ -363,6 +367,7 @@ export function DesignerProfileEditor({
   taxonomyError: string | null;
 }) {
   const router = useRouter();
+  const [whatsappProof, setWhatsappProof] = useState<WhatsappContactProof>();
   const initialForm = useMemo(() => profileToForm(initialProfile), [initialProfile]);
   const [form, setForm] = useState<FormState>(() => initialForm);
   const [savedForm, setSavedForm] = useState<FormState>(() => initialForm);
@@ -417,6 +422,7 @@ export function DesignerProfileEditor({
   }
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
+    if (key === 'phone' || key === 'country') setWhatsappProof(undefined);
     formRevisionRef.current += 1;
     setForm((current) => ({ ...current, [key]: value }));
     const validationKey = key === 'country' ? 'phone' : key;
@@ -440,6 +446,13 @@ export function DesignerProfileEditor({
       return;
     }
 
+    if (input.phone) {
+      if (whatsappProof?.phoneNumber !== input.phone) {
+        setSaveError('Verify this WhatsApp number before saving.');
+        return;
+      }
+      input.whatsappVerificationId = whatsappProof.verificationId;
+    }
     const submittedRevision = formRevisionRef.current;
     setSaveError(null);
     setSaveSuccess(false);
@@ -604,6 +617,15 @@ export function DesignerProfileEditor({
             )}
           </Field>
 
+          {form.phone &&
+          (form.phone !== savedForm.phone || form.country.isoCode !== savedForm.country.isoCode) ? (
+            <WhatsappContactVerification
+              key={form.country.isoCode + form.phone}
+              phoneNumber={toE164PhoneNumber(form.country, form.phone) ?? ''}
+              target={`profile:${initialProfile.id}`}
+              onVerified={setWhatsappProof}
+            />
+          ) : null}
           <Field htmlFor="profile-phone" label="WhatsApp / phone" error={validationErrors.phone}>
             {(aria) => (
               <PhoneNumberInput

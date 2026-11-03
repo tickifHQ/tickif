@@ -1,6 +1,10 @@
 'use client';
 
 import type { FormEvent, ReactNode } from 'react';
+import {
+  WhatsappContactVerification,
+  type WhatsappContactProof,
+} from '@/components/whatsapp-contact-verification';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -230,6 +234,7 @@ export function DesignerOnboarding({
   const [companyName, setCompanyName] = useState(seedFields?.companyName ?? '');
   const [address, setAddress] = useState(seedFields?.address ?? '');
   const [firmType, setFirmType] = useState(seedFields?.firmType ?? 'Private Limited');
+  const [whatsappProof, setWhatsappProof] = useState<WhatsappContactProof>();
   const [whatsappNumber, setWhatsappNumber] = useState(seedFields?.phoneNumber ?? '');
   const [whatsappCountry, setWhatsappCountry] = useState(
     countryFromIsoCode(seedFields?.phoneCountry),
@@ -502,6 +507,14 @@ export function DesignerOnboarding({
     setSubmitting(true);
     try {
       const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
+      if (whatsappNumber.trim() && !phone) {
+        setError('Enter a valid WhatsApp number with country code.');
+        return;
+      }
+      if (phone && whatsappProof?.phoneNumber !== phone) {
+        setError('Verify this WhatsApp number before continuing.');
+        return;
+      }
       const normalizedWebsiteUrl = normalizeOptionalUrl(websiteUrl);
       const normalizedGoogleBusinessUrl = normalizeOptionalUrl(googleBusinessUrl);
       const foundedYearValue = foundedYear.trim() ? Number(foundedYear) : undefined;
@@ -515,7 +528,7 @@ export function DesignerOnboarding({
         ...(entityType === designerEntityType.enum.company
           ? { companyName: trimmedCompanyName }
           : {}),
-        ...(phone ? { phone } : {}),
+        ...(phone ? { phone, whatsappVerificationId: whatsappProof?.verificationId } : {}),
         ...(normalizedWebsiteUrl ? { websiteUrl: normalizedWebsiteUrl } : {}),
         ...(normalizedGoogleBusinessUrl ? { googleBusinessUrl: normalizedGoogleBusinessUrl } : {}),
         ...(optionalTrimmed(instagramHandle)
@@ -697,8 +710,14 @@ export function DesignerOnboarding({
                 id={`${formId}-whatsapp`}
                 phone={whatsappNumber}
                 selectedCountry={whatsappCountry}
-                onPhoneChange={setWhatsappNumber}
-                onSelectedCountryChange={setWhatsappCountry}
+                onPhoneChange={(value) => {
+                  setWhatsappProof(undefined);
+                  setWhatsappNumber(value);
+                }}
+                onSelectedCountryChange={(value) => {
+                  setWhatsappProof(undefined);
+                  setWhatsappCountry(value);
+                }}
                 placeholder="9123456789"
                 wrapperClassName="h-8"
                 countryButtonClassName="h-8 px-2 py-0 text-[13px]"
@@ -748,8 +767,14 @@ export function DesignerOnboarding({
             onInstagramHandleChange={setInstagramHandle}
             onLinkedinHandleChange={setLinkedinHandle}
             onWebsiteUrlChange={handleWebsiteUrlChange}
-            onWhatsappCountryChange={setWhatsappCountry}
-            onWhatsappNumberChange={setWhatsappNumber}
+            onWhatsappCountryChange={(value) => {
+              setWhatsappProof(undefined);
+              setWhatsappCountry(value);
+            }}
+            onWhatsappNumberChange={(value) => {
+              setWhatsappProof(undefined);
+              setWhatsappNumber(value);
+            }}
             onYoutubeHandleChange={setYoutubeHandle}
             websiteUrlError={websiteUrlError}
             googleBusinessUrlError={googleBusinessUrlError}
@@ -780,6 +805,14 @@ export function DesignerOnboarding({
           />
         ) : null}
 
+        {whatsappNumber.trim() ? (
+          <WhatsappContactVerification
+            key={whatsappCountry.isoCode + whatsappNumber}
+            phoneNumber={toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? ''}
+            target="onboarding"
+            onVerified={setWhatsappProof}
+          />
+        ) : null}
         {error && (
           <Alert variant="destructive">
             <AlertTitle>Could not continue</AlertTitle>

@@ -39,3 +39,5 @@ export { resolveProfileExperience } from './profile-experience';
 
 export * from './project-budgets';
 export * from './social-links';
+
+export * from './whatsapp';

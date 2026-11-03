@@ -32,6 +32,41 @@ export function installProviderDoubles(serveMailbox: boolean) {
         new Request(`${providerUrl}/razorpay${url.pathname}${url.search}`, request),
       );
     }
+    if (url.origin === 'https://api.msg91.com' || url.origin === 'https://control.msg91.com') {
+      if (request.headers.get('authkey') !== 'tickif-e2e-msg91-key')
+        throw new Error('WhatsApp double requires the synthetic key');
+      const payload = z
+        .object({
+          payload: z.object({
+            template: z.object({
+              to_and_components: z.array(
+                z.object({
+                  to: z.array(z.string().regex(/^\d{8,15}$/)),
+                  components: z.object({
+                    body_1: z.object({ value: z.string().regex(/^\d{6}$/) }),
+                  }),
+                }),
+              ),
+            }),
+          }),
+        })
+        .parse(await request.json());
+      for (const recipient of payload.payload.template.to_and_components) {
+        const message = {
+          to: recipient.to.map((phone) => phone + '@whatsapp.test'),
+          subject: 'WhatsApp OTP',
+          html: '<p>' + recipient.components.body_1.value + '</p>',
+        };
+        if (serveMailbox) messages.push(message);
+        else
+          await originalFetch(providerUrl + '/emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message),
+          });
+      }
+      return Response.json({ status: 'success' });
+    }
     if (url.origin === 'https://api.resend.com' && url.pathname === '/emails') {
       const message = emailMessage.parse(await request.json());
       const recipients = Array.isArray(message.to) ? message.to : [message.to];

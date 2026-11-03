@@ -1,3 +1,4 @@
+import { consumeWhatsappProof } from '../whatsapp/repository.js';
 import {
   ACCOUNT_STATUS,
   PLATFORM_ROLE,
@@ -53,11 +54,28 @@ export const visitorsRepository = {
           !isBanned;
         if (!canWrite) throw new VisitorProfileAccessDeniedError();
 
+        if ('whatsappNumber' in input && input.whatsappNumber) {
+          const [previous] = await tx
+            .select({ phone: schema.visitorProfile.whatsappNumber })
+            .from(schema.visitorProfile)
+            .where(eq(schema.visitorProfile.userId, userId))
+            .for('update');
+          if (previous?.phone !== input.whatsappNumber)
+            await consumeWhatsappProof(
+              tx,
+              userId,
+              'personal',
+              input.whatsappNumber,
+              input.whatsappVerificationId,
+            );
+        }
+        const { whatsappVerificationId: _proof, ...fields } =
+          'whatsappNumber' in input ? input : { ...input, whatsappVerificationId: undefined };
         const [profile] = await tx
           .insert(schema.visitorProfile)
           .values({
             userId,
-            ...input,
+            ...fields,
             onboardingCompletedAt: now,
             createdAt: now,
             updatedAt: now,
@@ -65,7 +83,7 @@ export const visitorsRepository = {
           .onConflictDoUpdate({
             target: schema.visitorProfile.userId,
             set: {
-              ...input,
+              ...fields,
               updatedAt: now,
             },
           })

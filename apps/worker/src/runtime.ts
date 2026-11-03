@@ -6,7 +6,7 @@ import { assertMediaStorageConfig } from '@repo/storage';
 import { isGooglePlacesConfigured } from '@repo/google-places';
 import {
   closeQueues,
-  scheduleBookingNotificationSweep,
+  retireBookingNotificationScheduler,
   scheduleGoogleReviewsSweep,
   scheduleVerificationNotificationSweep,
   scheduleBillingLifecycleSweep,
@@ -29,7 +29,6 @@ import { processMedia } from './jobs/media-process.js';
 import { markFailed } from './media/repository.js';
 import { selectSmsSender } from './jobs/sms-sender.js';
 import { SmsService } from './jobs/sms-service.js';
-import { processBookingNotificationSweep } from './jobs/booking-notifications.js';
 import { processGoogleReviewRefresh, processGoogleReviewSweep } from './jobs/google-reviews.js';
 import { processSearchIndex } from './jobs/search-indexer.js';
 import { dispatchSearchProjectionOutbox } from './search/outbox-dispatcher.js';
@@ -97,14 +96,11 @@ const mediaWorker = new Worker<MediaProcessJob>(QUEUES.media, observeProcessor(p
   telemetry,
 });
 
-// Provider strategy is selected once here, then injected into the service.
+await retireBookingNotificationScheduler();
+
+// Legacy local test queue; production phone codes are delivered directly by the API.
 const smsService = new SmsService(
   selectSmsSender({
-    provider: config.SMS_PROVIDER,
-    novuSecretKey: config.NOVU_SECRET_KEY,
-    novuWorkflowId: config.NOVU_OTP_WORKFLOW_ID,
-    novuBookingWorkflowId: config.NOVU_BOOKING_WORKFLOW_ID,
-    novuApiUrl: config.NOVU_API_URL,
     isProduction,
   }),
 );
@@ -112,15 +108,8 @@ const smsService = new SmsService(
 const smsWorker = new Worker<SmsQueueJob>(
   QUEUES.sms,
   observeProcessor(async (job) => {
-    if (job.name === JOBS.sweepBookingNotifications) {
-      const { enqueued, failed } = await processBookingNotificationSweep();
-      // Report failures separately: an all-failing batch and an empty one both
-      // enqueue zero, and only one of them is a problem.
-      logger.info(
-        { event: 'sweep.completed', sweep: 'booking-notifications', enqueued, failed },
-        'Sweep completed',
-      );
-      return { enqueued, failed };
+    if (job.name === JOBS.sweepBookingNotifications || job.name === JOBS.sendBookingRequestedSms) {
+      throw new Error('Booking messaging is retired');
     }
     await smsService.send(job.data);
   }),
@@ -129,12 +118,6 @@ const smsWorker = new Worker<SmsQueueJob>(
     concurrency: 4,
     telemetry,
   },
-);
-void scheduleBookingNotificationSweep(30_000).catch((err) =>
-  logger.error(
-    { event: 'scheduler.registration_failed', scheduler: 'booking-notifications', err },
-    'Scheduler registration failed',
-  ),
 );
 
 const verificationEmailWorker = new Worker<VerificationEmailQueueJob>(

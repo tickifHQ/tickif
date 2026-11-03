@@ -1,90 +1,67 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const { settings, enqueueSms, sendEmail } = vi.hoisted(() => ({
+import type * as ConfigModule from '@repo/config';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+const { settings, enqueueSms } = vi.hoisted(() => ({
   settings: {
-    PUBLIC_WEB_URL: 'https://tickif.example',
-    PHONE_OTP_DELIVERY: 'email',
-    PHONE_OTP_EMAIL_TO: 'tester@example.com',
-    PHONE_OTP_EMAIL_ALLOWED_NUMBERS: ['+919800000010'],
-    PHONE_OTP_EMAIL_ALLOW_ALL: false,
-    RESEND_API_KEY: 'test-key',
+    WHATSAPP_PROVIDER: 'msg91',
+    MSG91_KEY: 'test-key',
+    MSG91_WHATSAPP_NUMBER: '17115008251',
+    MSG91_WHATSAPP_TEMPLATE: 'login_code',
+    MSG91_WHATSAPP_LANGUAGE: 'en',
+    NODE_ENV: 'test',
+    TELEMETRY_ENABLED: false,
   },
   enqueueSms: vi.fn(),
-  sendEmail: vi.fn(),
 }));
-vi.mock('@repo/config', () => ({ config: settings }));
+vi.mock('@repo/config', async (original) => ({
+  ...(await original<typeof ConfigModule>()),
+  config: settings,
+}));
 vi.mock('@repo/queue', () => ({ enqueueSms }));
-vi.mock('../src/email.js', () => ({ sendEmail }));
-
 import { sendPhoneOtp } from '../src/phone-otp.js';
-
 const input = { phoneNumber: '+919800000010', code: '123456' };
-
-describe('temporary phone OTP email delivery', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    settings.PHONE_OTP_DELIVERY = 'email';
-    settings.PHONE_OTP_EMAIL_ALLOW_ALL = false;
-    settings.PHONE_OTP_EMAIL_ALLOWED_NUMBERS = ['+919800000010'];
-    settings.RESEND_API_KEY = 'test-key';
-  });
-
-  it('emails the generated code and phone to the configured inbox without enqueueing SMS', async () => {
+beforeEach(() => {
+  vi.clearAllMocks();
+  settings.WHATSAPP_PROVIDER = 'msg91';
+});
+afterEach(() => vi.unstubAllGlobals());
+describe('WhatsApp OTP delivery', () => {
+  it('sends the supplied code to the entered WhatsApp number', async () => {
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'success' })));
+    vi.stubGlobal('fetch', request);
     await sendPhoneOtp(input);
-    expect(sendEmail).toHaveBeenCalledWith({
-      to: 'tester@example.com',
-      subject: 'Your Tickif test login code',
-      html: expect.stringContaining(input.code),
-      text: expect.stringContaining(input.code),
+    const body = JSON.parse(request.mock.calls[0]![1].body);
+    expect(body.integrated_number).toBe('17115008251');
+    expect(body.payload.template.to_and_components[0]).toEqual({
+      to: ['919800000010'],
+      components: {
+        body_1: { type: 'text', value: '123456' },
+        button_1: { subtype: 'url', type: 'text', value: '123456' },
+      },
     });
-    expect(sendEmail.mock.calls[0]?.[0].html).toContain(input.phoneNumber);
     expect(enqueueSms).not.toHaveBeenCalled();
   });
-
-  it('redirects each allowlisted phone number to the same inbox', async () => {
-    settings.PHONE_OTP_EMAIL_ALLOWED_NUMBERS = ['+919800000010', '+919800000011'];
-    await sendPhoneOtp({ ...input, phoneNumber: '+919800000011' });
-    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'tester@example.com' }));
-    expect(enqueueSms).not.toHaveBeenCalled();
-  });
-
-  it('refuses to deliver a code for a phone outside the configured test allowlist', async () => {
-    await expect(sendPhoneOtp({ ...input, phoneNumber: '+919800000011' })).rejects.toThrow(
-      'not allowed',
+  it('rejects unsuccessful provider acknowledgements', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ status: 'error', message: 'sensitive' }))),
     );
-    expect(sendEmail).not.toHaveBeenCalled();
-    expect(enqueueSms).not.toHaveBeenCalled();
+    await expect(sendPhoneOtp(input)).rejects.toThrow('was not accepted');
   });
-
-  it('rejects HTML in delivery input', async () => {
-    await expect(sendPhoneOtp({ ...input, phoneNumber: '<script>' })).rejects.toThrow('Invalid');
-    expect(sendEmail).not.toHaveBeenCalled();
+  it('redacts provider errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('test-key 123456')));
+    await expect(sendPhoneOtp(input)).rejects.toThrow(/^WhatsApp OTP delivery failed$/);
   });
-
-  it('emails any valid phone to the same inbox when staging explicitly allows all phones', async () => {
-    settings.PHONE_OTP_EMAIL_ALLOW_ALL = true;
-    await sendPhoneOtp({ ...input, phoneNumber: '+919800000099' });
-    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'tester@example.com' }));
-    expect(enqueueSms).not.toHaveBeenCalled();
-    await expect(sendPhoneOtp({ ...input, phoneNumber: '<script>' })).rejects.toThrow('Invalid');
+  it('rejects invalid phone numbers before making requests', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    await expect(sendPhoneOtp({ ...input, phoneNumber: '9800000010' })).rejects.toThrow('Invalid');
+    expect(request).not.toHaveBeenCalled();
   });
-
-  it('fails closed when email credentials are missing', async () => {
-    settings.RESEND_API_KEY = '';
-    await expect(sendPhoneOtp(input)).rejects.toThrow('unavailable');
-    expect(sendEmail).not.toHaveBeenCalled();
-  });
-
-  it('propagates delivery failures without falling back to SMS', async () => {
-    sendEmail.mockRejectedValueOnce(new Error('Provider unavailable'));
-    await expect(sendPhoneOtp(input)).rejects.toThrow('Provider unavailable');
-    expect(enqueueSms).not.toHaveBeenCalled();
-  });
-
-  it('restores normal SMS delivery when the override is disabled', async () => {
-    settings.PHONE_OTP_DELIVERY = 'sms';
+  it('uses only the isolated local queue in console mode', async () => {
+    settings.WHATSAPP_PROVIDER = 'console';
     await sendPhoneOtp(input);
     expect(enqueueSms).toHaveBeenCalledWith(input);
-    expect(sendEmail).not.toHaveBeenCalled();
   });
 });

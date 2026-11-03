@@ -19,6 +19,10 @@
     "./email-templates": {
       "types": "./src/email-templates.ts",
       "default": "./src/email-templates.ts"
+    },
+    "./phone-otp": {
+      "types": "./src/phone-otp.ts",
+      "default": "./src/phone-otp.ts"
     }
   },
   "scripts": {

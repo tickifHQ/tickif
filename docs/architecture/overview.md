@@ -122,7 +122,7 @@ Anything slow or retryable (image processing, search indexing, notifications)
 goes on a **BullMQ** queue backed by Redis, processed by `apps/worker`. The API
 enqueues; the worker consumes. Queue names + typed enqueue helpers are the contract
 between them (`@repo/queue`). Queue definitions cover media, search indexing,
-SMS/email delivery, verification, retention and experience refresh; consult
+local test OTP/email delivery, verification, retention and experience refresh; consult
 `packages/queue/src/index.ts` for the current inventory. The worker exposes `/livez` + `/readyz` on
 `WORKER_HEALTH_PORT` (default 3002) and drains gracefully on SIGTERM.
 

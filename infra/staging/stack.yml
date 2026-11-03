@@ -275,15 +275,12 @@ services:
       R2_BUCKET: ${R2_BUCKET}
       RESEND_API_KEY_FILE: /run/secrets/resend_api_key
       EMAIL_FROM: ${EMAIL_FROM}
-      SMS_PROVIDER: ${SMS_PROVIDER}
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER}
+      MSG91_WHATSAPP_NUMBER: ${MSG91_WHATSAPP_NUMBER}
+      MSG91_WHATSAPP_TEMPLATE: ${MSG91_WHATSAPP_TEMPLATE}
+      MSG91_WHATSAPP_LANGUAGE: ${MSG91_WHATSAPP_LANGUAGE:-en}
       DEPLOYMENT_ENV: staging
-      PHONE_OTP_DELIVERY: ${PHONE_OTP_DELIVERY:-sms}
-      PHONE_OTP_EMAIL_TO: ${PHONE_OTP_EMAIL_TO:-}
-      PHONE_OTP_EMAIL_ALLOW_ALL: ${PHONE_OTP_EMAIL_ALLOW_ALL:-false}
-      NOVU_SECRET_KEY_FILE: /run/secrets/novu_secret
-      NOVU_OTP_WORKFLOW_ID: ${NOVU_OTP_WORKFLOW_ID}
-      NOVU_BOOKING_WORKFLOW_ID: ${NOVU_BOOKING_WORKFLOW_ID}
-      NOVU_API_URL: ${NOVU_API_URL}
+      MSG91_KEY_FILE: /run/secrets/msg91_auth_key
       WORKER_HEALTH_PORT: '3002'
     secrets: &app-secrets
       - postgres_password
@@ -291,7 +288,7 @@ services:
       - typesense_admin_key
       - typesense_search_key
       - better_auth_secret
-      - novu_secret
+      - msg91_auth_key
       - r2_access_key_id
       - r2_secret_access_key
       - resend_api_key
@@ -591,9 +588,9 @@ secrets:
   better_auth_secret:
     external: true
     name: ${BETTER_AUTH_SECRET_NAME}
-  novu_secret:
+  msg91_auth_key:
     external: true
-    name: ${NOVU_SECRET_NAME}
+    name: ${MSG91_SECRET_NAME}
   r2_access_key_id:
     external: true
     name: ${R2_ACCESS_KEY_ID_SECRET}

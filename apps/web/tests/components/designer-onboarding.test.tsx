@@ -942,7 +942,7 @@ describe('DesignerOnboarding', () => {
     });
   });
 
-  it('omits short phone numbers from the submit payload', async () => {
+  it('rejects short WhatsApp numbers before submitting', async () => {
     const submit = vi.fn().mockResolvedValue({
       created: true,
       data: {
@@ -966,11 +966,10 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
-    await waitFor(() => {
-      expect(submit).toHaveBeenCalledWith(
-        expect.not.objectContaining({ phone: expect.any(String) }),
-      );
-    });
+    expect(
+      await screen.findByText('Enter a valid WhatsApp number with country code.'),
+    ).toBeInTheDocument();
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it('surfaces API errors inline', async () => {

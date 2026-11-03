@@ -5,22 +5,21 @@ delivery. `packages/auth/src/email-templates.ts` owns the shared layout and type
 workflow variants; `email.ts` owns transport. Every send includes HTML and a
 plain-text alternative derived from the same rendered content.
 
-| Trigger                                   | Recipient             | Template variant           |
-| ----------------------------------------- | --------------------- | -------------------------- |
-| better-auth email verification link       | Account email         | `verify-email`             |
-| Email sign-in OTP                         | Login email           | `otp / sign-in`            |
-| Email verification OTP                    | Account email         | `otp / email-verification` |
-| Password reset OTP callback               | Account email         | `otp / forget-password`    |
-| Change-email OTP callback                 | New email             | `otp / change-email`       |
-| Allowlisted phone OTP test delivery       | Configured test inbox | `phone-otp`                |
-| Studio invitation, including resend       | Invitee               | `invitation`               |
-| Invitation rejection                      | Original inviter      | `invitation-declined`      |
-| Ownership transfer request                | Nominated owner       | `ownership-requested`      |
-| Ownership transfer accepted               | Previous owner        | `ownership-previous`       |
-| Ownership transfer accepted               | New owner             | `ownership-new`            |
-| Verification approval outbox job          | Designer              | `verification-approved`    |
-| Verification changes-requested outbox job | Designer              | `verification-changes`     |
-| Verification approval-revoked outbox job  | Designer              | `verification-revoked`     |
+| Trigger                                   | Recipient        | Template variant           |
+| ----------------------------------------- | ---------------- | -------------------------- |
+| better-auth email verification link       | Account email    | `verify-email`             |
+| Email sign-in OTP                         | Login email      | `otp / sign-in`            |
+| Email verification OTP                    | Account email    | `otp / email-verification` |
+| Password reset OTP callback               | Account email    | `otp / forget-password`    |
+| Change-email OTP callback                 | New email        | `otp / change-email`       |
+| Studio invitation, including resend       | Invitee          | `invitation`               |
+| Invitation rejection                      | Original inviter | `invitation-declined`      |
+| Ownership transfer request                | Nominated owner  | `ownership-requested`      |
+| Ownership transfer accepted               | Previous owner   | `ownership-previous`       |
+| Ownership transfer accepted               | New owner        | `ownership-new`            |
+| Verification approval outbox job          | Designer         | `verification-approved`    |
+| Verification changes-requested outbox job | Designer         | `verification-changes`     |
+| Verification approval-revoked outbox job  | Designer         | `verification-revoked`     |
 
 Password authentication is currently disabled. The reset and change-email
 callback variants are covered defensively; this change does not enable new auth
@@ -50,10 +49,14 @@ Layout uses React Email table components and inline styles. React escapes dynami
 names, notes, and addresses; action URLs only allow HTTP(S). No template embeds
 scripts, forms, remote tracking, or account secrets beyond the intended OTP/link.
 
+Phone login and contact verification codes use MSG91 WhatsApp. Email login codes
+continue to go to the entered email through Resend; there is no shared-inbox
+phone-code delivery mode.
+
 ## Preview and verification
 
 Run `pnpm --filter @repo/auth emails:preview`, then open
-[local previews](http://localhost:4178). All 14 HTML and text variants use
+[local previews](http://localhost:4178). All 13 HTML and text variants use
 synthetic data. The command imports neither config nor Resend and cannot send
 mail. `emails:export` writes the same files without starting a server. Generated
 files live in the ignored `packages/auth/email-previews` directory.

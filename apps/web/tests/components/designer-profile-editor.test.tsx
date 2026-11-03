@@ -16,6 +16,24 @@ const mock = vi.hoisted(() => ({
   updateDesignerProfile: vi.fn(),
 }));
 
+vi.mock('@/components/whatsapp-contact-verification', () => ({
+  WhatsappContactVerification: ({
+    phoneNumber,
+    onVerified,
+  }: {
+    phoneNumber: string;
+    onVerified: (value: { phoneNumber: string; verificationId: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onVerified({ phoneNumber, verificationId: '11111111-1111-4111-8111-111111111111' })
+      }
+    >
+      Verify WhatsApp number
+    </button>
+  ),
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: mock.refresh }),
 }));
@@ -925,6 +943,8 @@ describe('DesignerProfileEditor', () => {
     for (const [label, value] of changes) {
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
     }
+    if (screen.queryByRole('button', { name: 'Verify WhatsApp number' }))
+      await user.click(screen.getByRole('button', { name: 'Verify WhatsApp number' }));
     await user.click(screen.getByRole('button', { name: /services: full home interiors/i }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: 'Full Home Interiors' }));
     await user.keyboard('{Escape}');
@@ -939,6 +959,7 @@ describe('DesignerProfileEditor', () => {
         bio: 'Updated studio bio.',
         address: 'Pune, Maharashtra',
         phone: '+919123456789',
+        whatsappVerificationId: '11111111-1111-4111-8111-111111111111',
         websiteUrl: 'https://updated.example.com',
         instagramHandle: '@updatedstudio',
         linkedinHandle: '/company/updatedstudio',

@@ -1,7 +1,8 @@
 # Authentication & Authorization
 
 Auth is handled by **better-auth**, configured once in `packages/auth/src/index.ts`
-and mounted into the API. We do not hand-roll sessions, OTP, or OAuth.
+and mounted into the API. We do not hand-roll sessions, account-login OTP, or OAuth. Contact-only
+verification challenges do not create sessions and are described below.
 
 ## Account dropdown
 
@@ -71,53 +72,33 @@ Custom account SVG assets and reference screenshots are not shipped.
 | Orgs / membership          | `organization` plugin    | Implemented org access, invitations, fixed role capabilities and freeze/restore. |
 | Email + password           | —                        | Disabled (`emailAndPassword.enabled: false`).                                    |
 
-## Temporary phone OTP delivery by email
+## WhatsApp OTP and contact verification
 
-The existing `phoneNumber({ sendOTP })` callback can send allowlisted phone login
-codes through the existing Resend provider to a single test inbox. Better Auth
-still generates and verifies the code with the same expiry and attempt limits.
+Phone login codes are generated and verified by Better Auth (six digits, five minutes,
+three attempts) and delivered directly through MSG91 WhatsApp. Email OTPs continue
+through Resend to the entered email. Shared-inbox phone-code forwarding is removed.
 
-Set these values in the API environment (or the root `.env` for local runs),
-then restart the API:
+Set WHATSAPP_PROVIDER=msg91, MSG91_KEY (or its secret-file form),
+MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_TEMPLATE and MSG91_WHATSAPP_LANGUAGE in the API.
+The template must be an approved authentication template with code body and URL button.
+Provider requests have a ten-second timeout and fail closed on rejection.
 
-```dotenv
-PHONE_OTP_DELIVERY=email
-PHONE_OTP_EMAIL_TO=tester@example.com
-PHONE_OTP_EMAIL_ALLOWED_NUMBERS=+919800000010,+919800000011
-RESEND_API_KEY=<your Resend API key>
-EMAIL_FROM="Tickif <onboarding@resend.dev>"
-SMS_PROVIDER=console
-```
+Authenticated contact verification uses POST /api/whatsapp/send and /verify. A
+challenge is scoped to the user, E.164 number and personal/onboarding/profile target.
+Codes are HMAC hashed, expire after five minutes, allow three attempts, and sends
+are serialized with a sixty-second cooldown per user/target/number and ten sends per user per hour. A verified challenge is a
+single-use proof with a fresh five-minute save window after verification, consumed
+in the contact-write transaction. Changes to a number
+require new proof; unchanged existing contacts and optional removal need no code.
+Draft inputs confer no verification. Contact verification does not change the login
+phone or publication eligibility. The challenge retains verification/consumption
+timestamps; historical contacts are not retroactively treated as verified.
 
-Email delivery is rejected when `NODE_ENV=production` unless `DEPLOYMENT_ENV=staging` is explicitly configured. Requests for phone
-numbers outside `PHONE_OTP_EMAIL_ALLOWED_NUMBERS` fail without sending a code.
-Keep that comma-separated allowlist limited to dedicated test accounts in E.164
-format. The Resend test sender works only if the destination is the email associated
-with your Resend account. Otherwise use a sender on a verified domain. See
-[Resend's test sender restrictions](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
-Do not commit the API key. Missing inbox/key configuration fails at startup;
-provider failures fail the OTP request instead of silently dropping the code.
-
-Enter a phone number in the existing login form, retrieve its code from the
-configured inbox, and enter that code in the same form. The email includes the
-phone number to distinguish requests. The login UI still describes SMS delivery.
-Access to this inbox enables login as any allowlisted phone, so this mode is limited
-to controlled non-production testing.
-Ordinary email verification still goes to the user's email address.
-
-For staging containers, retain `NODE_ENV=production` so secure cookies, Redis
-rate limiting, and production checks stay enabled. Set `DEPLOYMENT_ENV=staging`
-and `PHONE_OTP_EMAIL_ALLOW_ALL=true` to send login codes for any valid phone
-number to `PHONE_OTP_EMAIL_TO`. This opt-in is rejected outside staging and
-defaults to false. The inbox can sign in as any staging phone account while it
-is enabled; use staging-only data. OTP generation, expiry, attempt limits, and
-verification still belong to Better Auth. Set `PHONE_OTP_DELIVERY=sms` and
-`PHONE_OTP_EMAIL_ALLOW_ALL=false` when switching to the real SMS provider.
-
-`SMS_PROVIDER=console` avoids requiring Novu credentials while it is unconfigured;
-booking SMS will not be delivered. To restore SMS, set `PHONE_OTP_DELIVERY=sms`,
-configure `SMS_PROVIDER=novu` and its credentials/workflows, and restart the API
-and worker. Email mode bypasses the SMS queue for phone OTPs only.
+WHATSAPP_PROVIDER=console is exclusively for local, telemetry-disabled tests. It
+uses the legacy sms queue for test-harness compatibility. Production OTPs bypass
+that queue, so old SMS jobs cannot trigger unexpected WhatsApp sends. Dormant
+booking notifications are no longer scheduled or delivered; consultation UI remains
+disabled. See ADR 0021.
 
 ## How it's wired into the API
 
@@ -183,10 +164,9 @@ while the non-throwing `getServerSession()` may use it.
 
 ## The phone-OTP flow (and how to test it)
 
-In dev, the SMS worker can use the `console` sender, which **logs the code to the
-worker console** instead of sending an SMS. Production should use the `novu`
-provider with `NOVU_SECRET_KEY` and `NOVU_OTP_WORKFLOW_ID` configured. So to test
-end-to-end locally:
+For local tests, select WHATSAPP_PROVIDER=console with telemetry disabled and read
+the code from the local worker. With MSG91 configured, read it on the recipient's
+WhatsApp account. To exercise the same Better Auth endpoints:
 
 ```bash
 PHONE="+919812345678"

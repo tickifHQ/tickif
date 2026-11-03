@@ -214,6 +214,7 @@ export const profilesService = {
         bio: input.bio ?? null,
         address: input.address ?? null,
         phone: input.phone ?? null,
+        whatsappVerificationId: input.whatsappVerificationId,
         websiteUrl: input.websiteUrl ?? null,
         googleBusinessUrl: input.googleBusinessUrl ?? null,
         instagramHandle: input.instagramHandle ?? null,
@@ -591,7 +592,8 @@ export const profilesService = {
     }
 
     // Validate taxonomy IDs (shared helper — single round-trip, consistent reporting)
-    const { cityIds, customCities, scopeIds, themeIds, ...profileFields } = input;
+    const { cityIds, customCities, scopeIds, themeIds, whatsappVerificationId, ...profileFields } =
+      input;
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
       cityIds,
       scopeIds,
@@ -645,6 +647,7 @@ export const profilesService = {
           scopeIds,
           themeIds,
         },
+        { userId, verificationId: whatsappVerificationId },
       )
       .catch((error: unknown) => {
         if (error instanceof ProfileCityLimitExceededError) {

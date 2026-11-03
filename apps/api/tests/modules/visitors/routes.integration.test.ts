@@ -1,3 +1,4 @@
+import { makeWhatsappProof } from '../../helpers/whatsapp.js';
 import { describe, expect, it } from 'vitest';
 import { ACCOUNT_STATUS, PLATFORM_ROLE, visitorProfileResponseSchema } from '@repo/contracts';
 import { db, eq, inArray, schema, sql } from '@repo/db';
@@ -46,6 +47,7 @@ describe('/api/visitors/me', () => {
     const write = await requestJson('PUT', cookie, {
       address: 'Bandra West, Mumbai',
       whatsappNumber: '+919800005002',
+      whatsappVerificationId: await makeWhatsappProof(userId, '+919800005002'),
     });
 
     expect(write.status).toBe(200);
@@ -77,6 +79,7 @@ describe('/api/visitors/me', () => {
     const first = await requestJson('PUT', cookie, {
       address: 'First address',
       whatsappNumber: '+919800005003',
+      whatsappVerificationId: await makeWhatsappProof(userId, '+919800005003'),
     });
     const firstBody = visitorProfileResponseSchema.parse(await first.json());
 

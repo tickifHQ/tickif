@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  WhatsappContactVerification,
+  type WhatsappContactProof,
+} from '@/components/whatsapp-contact-verification';
 import { useState, type FormEvent } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -27,6 +31,7 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
   );
   const [address, setAddress] = useState(initialAccount.address ?? '');
   const [whatsappNumber, setWhatsappNumber] = useState(initialAccount.whatsappNumber ?? '');
+  const [whatsappProof, setWhatsappProof] = useState<WhatsappContactProof>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -82,12 +87,24 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
       address: address.trim() || null,
       whatsappNumber: whatsappNumber.trim() || null,
       revision: account.revision,
+      whatsappVerificationId:
+        whatsappProof?.phoneNumber === whatsappNumber.trim()
+          ? whatsappProof.verificationId
+          : undefined,
     });
     if (!input.success) {
       setInvalidFields(input.error.issues.map((issue) => String(issue.path[0])));
       setError(
         'Enter a name between 2 and 100 characters, an address up to 300 characters, and a WhatsApp number with country code (for example +919876543210). Optional fields can be left blank.',
       );
+      return;
+    }
+    if (
+      whatsappNumber.trim() &&
+      whatsappNumber.trim() !== account.whatsappNumber &&
+      whatsappProof?.phoneNumber !== whatsappNumber.trim()
+    ) {
+      setError('Verify this WhatsApp number before saving.');
       return;
     }
     setInvalidFields([]);
@@ -177,10 +194,19 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
                   aria-invalid={invalidFields.includes('whatsappNumber')}
                   aria-describedby="whatsapp-help"
                   onChange={(e) => {
+                    setWhatsappProof(undefined);
                     setWhatsappNumber(e.target.value);
                     setSaved(false);
                   }}
                 />
+                {whatsappNumber.trim() && whatsappNumber.trim() !== account.whatsappNumber ? (
+                  <WhatsappContactVerification
+                    key={whatsappNumber.trim()}
+                    phoneNumber={whatsappNumber.trim()}
+                    target="personal"
+                    onVerified={setWhatsappProof}
+                  />
+                ) : null}
                 <FieldDescription id="whatsapp-help">
                   Include the country code, for example +919876543210. This does not change your
                   sign-in phone.

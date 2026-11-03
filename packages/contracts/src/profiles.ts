@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { e164PhoneNumberSchema } from './common';
 import { socialProfileValueSchema } from './social-links';
 
 import { designerProjectsResponseSchema } from './projects';
@@ -113,7 +114,8 @@ export const onboardDesignerSchema = z
     userName: z.string().trim().min(2).max(100),
     companyName: z.string().trim().min(2).max(100).optional(),
     bio: z.string().max(500).optional(),
-    phone: z.string().trim().min(7).max(20).optional(),
+    phone: e164PhoneNumberSchema.optional(),
+    whatsappVerificationId: z.uuid().optional(),
     websiteUrl: z.string().url().max(200).optional(),
     googleBusinessUrl: z.string().url().max(200).optional(),
     instagramHandle: instagramHandleSchema.optional(),
@@ -434,13 +436,8 @@ export const updateProfileSchema = z
       .max(200, 'Use 200 characters or fewer.')
       .optional()
       .nullable(),
-    phone: z
-      .string()
-      .trim()
-      .min(7, 'Enter a valid phone number.')
-      .max(20, 'Enter a valid phone number.')
-      .optional()
-      .nullable(),
+    phone: e164PhoneNumberSchema.optional().nullable(),
+    whatsappVerificationId: z.uuid().optional(),
     firmType: z.string().trim().max(60, 'Use 60 characters or fewer.').optional().nullable(),
     foundedYear: profileFoundedYearSchema.optional().nullable(),
     staffCount: profileStaffCountSchema.optional().nullable(),

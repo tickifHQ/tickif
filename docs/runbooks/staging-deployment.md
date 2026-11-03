@@ -133,7 +133,7 @@ Create all secret objects named by the environment file:
 - Typesense admin key and a distinct search-only key (minimum 16 characters).
   Generate both with `openssl rand -hex 32` for the same safe-character rule.
 - better-auth secret (at least 32 random bytes).
-- Novu secret, media-bucket R2 access-key ID/secret, and Resend API key.
+- MSG91 auth key secret, media-bucket R2 access-key ID/secret, and Resend API key.
 - A separate R2 access-key ID/secret restricted to the backup bucket; application
   services never receive these database-backup credentials.
 - Google OAuth client secret and Razorpay test-mode API/webhook secrets.
@@ -164,14 +164,15 @@ admin key, and API/worker get only their application credentials. Backup secrets
 are attached only to short-lived backup/restore jobs. No secret value belongs in
 Git, GitHub variables, the stack manifest, or the non-secret environment file.
 
-For temporary email-only phone login, set `SMS_PROVIDER=console`,
-`PHONE_OTP_DELIVERY=email`, `PHONE_OTP_EMAIL_TO` to the staging test inbox, and
-`PHONE_OTP_EMAIL_ALLOW_ALL=true`. Staging passes `DEPLOYMENT_ENV=staging` while
-retaining `NODE_ENV=production`. The configured inbox receives codes for every
-valid phone number; booking SMS remains unavailable and OTPs are never logged.
-The current manifest still mounts a Novu secret in console mode: provision an
-unused random value for that object, not a provider credential. Replace it with
-a real Novu credential before selecting `SMS_PROVIDER=novu`.
+Configure WHATSAPP_PROVIDER=msg91 and the approved authentication template, language
+and integrated sender number. Store MSG91_KEY in the MSG91_SECRET_NAME Swarm
+secret. Restart the API after configuration changes. Email OTPs use the existing
+Resend sender and go to the entered email; phone OTPs go to that number's WhatsApp.
+Verify real delivery in staging before revoking the retired messaging credentials.
+Before rollout, remove the legacy booking-notifications job scheduler and quarantine
+pending legacy production sms jobs (including delayed/failed jobs); do not replay
+old codes through MSG91. New production OTPs are delivered synchronously. Keep the
+legacy sms queue only for local fixtures. Consultation booking stays disabled.
 
 For R2, use a staging media bucket with browser CORS configured for the exact
 staging origin. Use a separate backup bucket and separate credentials restricted

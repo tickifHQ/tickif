@@ -55,14 +55,14 @@ in the deployment secrets manager, never in the repository:
 | Capability    | Provider      | Required configuration                                                                               |
 | ------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
 | Email         | Resend        | `RESEND_API_KEY`, plus `EMAIL_FROM` set to a verified sender/domain                                  |
-| SMS           | Novu          | `SMS_PROVIDER=novu`, `NOVU_SECRET_KEY`, `NOVU_OTP_WORKFLOW_ID`, and `NOVU_BOOKING_WORKFLOW_ID`       |
+| WhatsApp      | MSG91         | WHATSAPP_PROVIDER=msg91, MSG91_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_TEMPLATE                   |
 | Media storage | Cloudflare R2 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and either `R2_ACCOUNT_ID` or `R2_ENDPOINT` |
 
 The auth process fails production startup when required Resend values are missing,
-while `@repo/config` enforces R2 and selected Novu requirements globally. Worker
+and requires configured MSG91 WhatsApp delivery. `@repo/config` enforces R2 globally. Worker
 and migration processes that do not send email do not need the Resend secret.
-Development can omit Resend and Novu credentials: email logs metadata only and
-SMS uses the console fallback. Production never falls back to console delivery.
+Development can omit Resend and MSG91 credentials: email logs metadata only and
+local phone OTP fixtures use the console queue. Production never falls back to console delivery.
 
 ## 4. Start infrastructure
 

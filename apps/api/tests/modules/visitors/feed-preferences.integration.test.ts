@@ -11,6 +11,7 @@ import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeTaxonomy } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
+import { makeWhatsappProof } from '../../helpers/whatsapp.js';
 
 const skipped = { homeType: null, citySlug: null, localitySlug: null };
 const selected = { homeType: '3-bhk', citySlug: 'chennai', localitySlug: 'adyar' };
@@ -79,11 +80,16 @@ describe('/api/visitors/me/feed-preferences', () => {
 
   it('records a skip and preserves profile fields when either API is updated', async () => {
     const { cookie, userId } = await createRoleSession('+919800006103', PLATFORM_ROLE.VISITOR);
+    const whatsappVerificationId = await makeWhatsappProof(userId, '+919800006103');
     const writeProfile = () =>
       app.request('/api/visitors/me', {
         method: 'PUT',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ address: 'Home address', whatsappNumber: '+919800006103' }),
+        body: JSON.stringify({
+          address: 'Home address',
+          whatsappNumber: '+919800006103',
+          whatsappVerificationId,
+        }),
       });
     expect((await writeProfile()).status).toBe(200);
     expect((await request('PUT', cookie, skipped)).status).toBe(200);

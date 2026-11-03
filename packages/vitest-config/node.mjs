@@ -53,9 +53,10 @@ export function testEnv() {
     RAZORPAY_KEY_ID: '',
     RAZORPAY_KEY_SECRET: '',
     RAZORPAY_KEY_SECRET_FILE: '',
-    // Test runners must not inherit the staging email-forwarding mode after
-    // the email credentials above are deliberately cleared.
-    PHONE_OTP_DELIVERY: 'sms',
+    // Never send real WhatsApp messages from automated tests.
+    WHATSAPP_PROVIDER: 'console',
+    MSG91_KEY: '',
+    MSG91_KEY_FILE: '',
   };
 }
 

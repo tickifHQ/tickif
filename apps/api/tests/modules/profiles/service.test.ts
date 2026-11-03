@@ -392,6 +392,7 @@ describe('profilesService.updateProfile required Hero fields', () => {
       profileRow().id,
       { bio: 'A new biography' },
       expect.anything(),
+      { userId: 'u1', verificationId: undefined },
     );
   });
 
@@ -412,6 +413,7 @@ describe('profilesService.updateProfile required Hero fields', () => {
       profileRow().id,
       { customCities: ['Coimbatore', 'Kochi'] },
       expect.objectContaining({ cityIds: [] }),
+      { userId: 'u1', verificationId: undefined },
     );
   });
 

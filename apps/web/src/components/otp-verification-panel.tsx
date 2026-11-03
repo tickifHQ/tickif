@@ -58,7 +58,7 @@ export function OtpVerificationPanel({
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <span>We sent a 6-digit code to</span>
+          <span>We sent a 6-digit WhatsApp code to</span>
           <span className="font-medium text-foreground">{sentTo}</span>
           <Button
             type="button"

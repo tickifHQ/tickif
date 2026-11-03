@@ -1,3 +1,4 @@
+import { consumeWhatsappProof } from '../whatsapp/repository.js';
 import { createHash } from 'node:crypto';
 import { and, db, eq, schema, sql } from '@repo/db';
 import type { PersonalAccount, UpdatePersonalAccountInput } from '@repo/contracts';
@@ -74,6 +75,15 @@ async function access(
     if (!input) return { kind: 'ok', account: { ...account, revision } };
     if (input.revision !== revision) return { kind: 'conflict' };
 
+    if (input.whatsappNumber && input.whatsappNumber !== account.whatsappNumber) {
+      await consumeWhatsappProof(
+        tx,
+        userId,
+        'personal',
+        input.whatsappNumber,
+        input.whatsappVerificationId,
+      );
+    }
     // Use the database clock so even consecutive saves in the same JS millisecond advance.
     await tx
       .update(schema.user)

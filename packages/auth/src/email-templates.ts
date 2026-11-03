@@ -24,7 +24,6 @@ export type TickifEmail =
       purpose: 'sign-in' | 'email-verification' | 'forget-password' | 'change-email';
       code: string;
     }
-  | { kind: 'phone-otp'; phoneNumber: string; code: string }
   | { kind: 'invitation'; organization: string; inviter: string; url: string }
   | { kind: 'invitation-declined'; organization: string; email: string }
   | { kind: 'ownership-requested' }
@@ -95,15 +94,6 @@ function contentFor(input: TickifEmail, baseUrl: string): Content {
           'This code expires in 5 minutes. Never share it with anyone. If you didn’t request it, you can ignore this email.',
       };
     }
-    case 'phone-otp':
-      return {
-        category: 'Test login',
-        title: 'Your test login code.',
-        description: `Use this code for the Tickif phone login requested for ${input.phoneNumber}.`,
-        code: input.code,
-        detail:
-          'This code expires in 5 minutes. This test message was sent to the configured test inbox. Never share this code.',
-      };
     case 'invitation':
       return {
         category: 'Your studio',
