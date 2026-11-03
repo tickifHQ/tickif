@@ -1,13 +1,12 @@
 import '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { db, inArray, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
 import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
 
-async function expectUnifiedPhoneFocus(page: Page, inputId: string) {
-  const input = page.locator(`#${inputId}`);
+async function expectUnifiedPhoneFocus(input: Locator) {
   const group = input.locator('xpath=..');
   const countryButton = group.getByRole('button', { name: /Country code/ });
 
@@ -55,7 +54,7 @@ test('composite fields show one visible focus indicator across login and designe
 }, testInfo) => {
   test.setTimeout(90_000);
   await page.goto('/login');
-  await expectUnifiedPhoneFocus(page, 'phone');
+  await expectUnifiedPhoneFocus(page.locator('#phone'));
   await page.screenshot({
     path: testInfo.outputPath('login-phone-focus-desktop.png'),
     animations: 'disabled',
@@ -116,20 +115,27 @@ test('composite fields show one visible focus indicator across login and designe
     await expect(page.getByRole('heading', { name: 'Edit your profile' })).toBeVisible();
     await page.locator('#profile-website').focus();
     await expect(page.locator('#profile-website')).toBeFocused();
-    await expectUnifiedPhoneFocus(page, 'profile-phone');
-    await page.locator('#profile-phone').scrollIntoViewIfNeeded();
+    await page.getByRole('button', { name: 'Edit WhatsApp number', exact: true }).click();
+    const contactDialog = page.getByRole('dialog');
+    await expectUnifiedPhoneFocus(
+      contactDialog.getByRole('textbox', { name: 'Phone number', exact: true }),
+    );
     await page.screenshot({
       path: testInfo.outputPath('designer-profile-phone-focus-desktop.png'),
       animations: 'disabled',
     });
+    await contactDialog.getByRole('button', { name: 'Close', exact: true }).click();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('#profile-phone').scrollIntoViewIfNeeded();
-    await expectUnifiedPhoneFocus(page, 'profile-phone');
+    await page.getByRole('button', { name: 'Edit WhatsApp number', exact: true }).click();
+    await expectUnifiedPhoneFocus(
+      contactDialog.getByRole('textbox', { name: 'Phone number', exact: true }),
+    );
     await page.screenshot({
       path: testInfo.outputPath('designer-profile-phone-focus-mobile.png'),
       animations: 'disabled',
     });
+    await contactDialog.getByRole('button', { name: 'Close', exact: true }).click();
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/designer/portfolio');
