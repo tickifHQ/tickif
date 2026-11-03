@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Check, Clock3, Loader2, ArrowLeft, X, AlertTriangle } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import {
+  billingPaymentsResponseSchema,
   billingSelectionContextSchema,
   subscriptionResponseSchema,
+  type BillingPaymentsResponse,
   type BillingSelectionContext,
   type SubscriptionResponse,
   type PlanTier,
@@ -18,11 +20,18 @@ import { useBillingAutoRefresh } from './use-billing-auto-refresh';
 import { getResumableCheckoutTier } from './use-selection-context';
 import type { BillingSelectionScope } from './use-plan-selection';
 import { useWorkspaceEntitlementSync } from '@/components/workspace-entitlement-sync';
+import { useCheckoutPayment } from './checkout-payment';
+import { CheckoutPrinter, type CheckoutPrinterState } from './checkout-receipt';
 
 interface CheckoutResultProps extends BillingSelectionScope {
   outcome: 'complete' | 'closed';
   targetTier: PlanTier;
+  studioName: string | null;
 }
+
+type RecordedPayment = BillingPaymentsResponse['items'][number];
+
+const RECEIPT_CONFIRMATION_TIMEOUT_MS = 30_000;
 
 /** Return URLs describe the checkout callback, never proof of payment or access. */
 export function CheckoutResult(props: CheckoutResultProps) {
@@ -34,13 +43,24 @@ export function CheckoutResult(props: CheckoutResultProps) {
   );
 }
 
-function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutResultProps) {
+function ScopedCheckoutResult({
+  organizationId,
+  targetTier,
+  outcome,
+  studioName,
+}: CheckoutResultProps) {
   const synchronizeWorkspace = useWorkspaceEntitlementSync();
+  // Only a payment made from this tab prints a receipt; every other return keeps the
+  // plain status below.
+  const rememberedPaymentId = useCheckoutPayment(targetTier);
+  const receiptPaymentId = outcome === 'complete' ? rememberedPaymentId : null;
   const [details, setDetails] = useState<{
     subscription: SubscriptionResponse;
     context: BillingSelectionContext;
+    payment: RecordedPayment | null;
   } | null>(null);
   const [error, setError] = useState(false);
+  const [receiptTimedOut, setReceiptTimedOut] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -52,9 +72,10 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
     try {
       const refreshed = await api.api.billing.subscription.refresh.$get();
       if (!refreshed.ok) throw new Error('Billing unavailable');
-      const [subscriptionResponse, contextResponse] = await Promise.all([
+      const [subscriptionResponse, contextResponse, payment] = await Promise.all([
         api.api.billing.subscription.$get(),
         api.api.billing['selection-context'].$get(),
+        receiptPaymentId ? findCapturedPayment(receiptPaymentId) : null,
       ]);
       if (!subscriptionResponse.ok || !contextResponse.ok) throw new Error('Billing unavailable');
       const [subscriptionJson, contextJson] = await Promise.all([
@@ -70,14 +91,14 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
       )
         throw new Error('Billing could not be verified');
       if (!mounted.current) return;
-      setDetails({ subscription: subscription.data, context: context.data });
+      setDetails({ subscription: subscription.data, context: context.data, payment });
       synchronizeWorkspace(organizationId, subscription.data);
       setError(false);
     } catch (failure) {
       if (mounted.current) setError(true);
       throw failure;
     }
-  }, [organizationId, synchronizeWorkspace]);
+  }, [organizationId, receiptPaymentId, synchronizeWorkspace]);
 
   const context = details?.context;
   const subscription = details?.subscription;
@@ -106,8 +127,38 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
     !active &&
     !scheduled &&
     (resumable || (!context.pendingOperation && !context.unfinishedCheckout));
+  // The receipt waits for both: the plan active in our database and the payment
+  // captured by the webhook. The provider's client callback alone never prints it.
+  const receiptPayment = active && details?.payment ? details.payment : null;
+  const printerState: CheckoutPrinterState | null = !receiptPaymentId
+    ? null
+    : receiptTimedOut
+      ? { status: 'timed-out' }
+      : receiptPayment && subscription
+        ? {
+            status: 'confirmed',
+            receipt: {
+              planLabel: PLAN_MAP[targetTier].label,
+              payment: {
+                id: receiptPayment.id,
+                amount: receiptPayment.amount,
+                currency: receiptPayment.currency,
+                paidAt: receiptPayment.occurredAt,
+              },
+              studioName,
+              subscriptionId: subscription.razorpaySubscriptionId ?? null,
+              renewsAt: subscription.currentPeriodEnd,
+            },
+          }
+        : { status: 'processing' };
+  const awaitingReceipt = printerState?.status === 'processing';
+  useEffect(() => {
+    if (!awaitingReceipt) return;
+    const timer = setTimeout(() => setReceiptTimedOut(true), RECEIPT_CONFIRMATION_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingReceipt]);
   const refreshNow = useBillingAutoRefresh(refresh, {
-    enabled: !active && !scheduled,
+    enabled: (!active && !scheduled) || awaitingReceipt,
     urgent: true,
   });
   const label = PLAN_MAP[targetTier].label;
@@ -131,14 +182,17 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
       }).format(new Date(effectiveAt))
     : 'the confirmed renewal date';
 
+  if (printerState)
+    return (
+      <CheckoutResultFrame>
+        <div className="mx-auto w-full py-4">
+          <CheckoutPrinter state={printerState} planLabel={label} />
+        </div>
+      </CheckoutResultFrame>
+    );
+
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
-      <Link
-        href="/designer/plan-billing"
-        className="mb-12 inline-flex w-fit items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" /> Back to billing
-      </Link>
+    <CheckoutResultFrame>
       <div
         className="mx-auto my-auto flex w-full max-w-md flex-col items-center py-12 text-center"
         role="status"
@@ -206,6 +260,32 @@ function ScopedCheckoutResult({ organizationId, targetTier, outcome }: CheckoutR
           </a>
         )}
       </div>
+    </CheckoutResultFrame>
+  );
+}
+
+function CheckoutResultFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
+      <Link
+        href="/designer/plan-billing"
+        className="mb-12 inline-flex w-fit items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ArrowLeft className="size-4" aria-hidden="true" /> Back to billing
+      </Link>
+      {children}
     </div>
+  );
+}
+
+async function findCapturedPayment(paymentId: string): Promise<RecordedPayment | null> {
+  const response = await api.api.billing.payments.$get({ query: { limit: '20' } });
+  if (!response.ok) throw new Error('Billing unavailable');
+  const payments = billingPaymentsResponseSchema.safeParse(await response.json());
+  if (!payments.success) throw new Error('Billing could not be verified');
+  return (
+    payments.data.items.find(
+      (payment) => payment.id === paymentId && payment.status === 'captured',
+    ) ?? null
   );
 }

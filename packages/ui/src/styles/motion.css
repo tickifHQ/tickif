@@ -88,3 +88,25 @@
     transition-duration: 0ms;
   }
 }
+
+/* Checkout receipt: paper feeds out of the printer slot in steps, like a thermal
+ * printer. The mask cuts 4px teeth into the bottom for a torn edge. */
+@keyframes checkout-receipt-feed {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.checkout-receipt-paper {
+  mask: conic-gradient(from -45deg at bottom, transparent, black 1deg 89deg, transparent 90deg)
+    50% / 8px 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .checkout-receipt-paper[data-feeding] {
+    animation: checkout-receipt-feed 2.4s steps(12, jump-start) both;
+  }
+}

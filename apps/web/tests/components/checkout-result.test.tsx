@@ -72,6 +72,7 @@ const props = {
   organizationId: 'org',
   targetTier: 'professional_plus' as const,
   outcome: 'complete' as const,
+  studioName: null,
 };
 beforeEach(() => {
   vi.clearAllMocks();
