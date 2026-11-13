@@ -83,6 +83,35 @@ describe('search indexing queue', () => {
     });
   });
 
+  it('frees the id of a failed outbox job so the next dispatch can re-add it', async () => {
+    const { enqueueSearchProjectIndex, enqueueSearchDesignerDelete, JOBS } =
+      await import('../src/index.js');
+    const project = {
+      projectId: 'project-1',
+      updatedAtEpoch: 1_753_680_000_000,
+      eventId: '104',
+      outboxSequence: '104',
+    };
+    const designer = {
+      profileId: 'profile-1',
+      updatedAtEpoch: 1_753_680_000_000,
+      eventId: '105',
+      outboxSequence: '105',
+    };
+
+    await enqueueSearchProjectIndex(project);
+    await enqueueSearchDesignerDelete(designer);
+
+    expect(addMock).toHaveBeenNthCalledWith(1, JOBS.indexProject, project, {
+      jobId: 'index-project-project-1-104',
+      removeOnFail: true,
+    });
+    expect(addMock).toHaveBeenNthCalledWith(2, JOBS.deleteDesigner, designer, {
+      jobId: 'delete-designer-profile-1-105',
+      removeOnFail: true,
+    });
+  });
+
   it('deduplicates full reindexes while allowing a later request after completion', async () => {
     const { enqueueSearchReindexAll, JOBS } = await import('../src/index.js');
 

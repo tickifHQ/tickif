@@ -27,6 +27,7 @@ vi.mock('../../src/search/repository.js', () => ({
 vi.mock('../../src/search/outbox-repository.js', () => ({
   latestSearchProjectionSequence: vi.fn(async () => 10n),
   listSearchProjectionEventsBetween: vi.fn(),
+  markSearchProjectionEventsDispatchedThrough: vi.fn(async () => undefined),
   withSearchProjectionRebuildBarrier: vi.fn(async (work: () => Promise<unknown>) => work()),
 }));
 

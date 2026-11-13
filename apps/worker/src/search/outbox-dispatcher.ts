@@ -5,12 +5,17 @@ import {
   enqueueSearchProjectIndex,
 } from '@repo/queue';
 import {
-  listPendingSearchProjectionEvents,
+  listDueSearchProjectionEvents,
+  markSearchProjectionEventsEnqueued,
   type SearchProjectionOutboxRecord,
 } from './outbox-repository.js';
 import { logger } from '../observability/logger.js';
 
 const DISPATCH_BATCH_SIZE = 100;
+// An unfinished row is re-enqueued after 30s, doubling up to 10 minutes. The first delay
+// outlasts the job's own BullMQ retries, and failed jobs are removed so the same id re-adds.
+// Rows are never abandoned: an index delete must eventually land.
+const RETRY_BACKOFF = { baseSeconds: 30, maxSeconds: 10 * 60 };
 
 async function enqueueEvent(event: SearchProjectionOutboxRecord): Promise<void> {
   const updatedAtEpoch = event.sourceUpdatedAt.getTime();
@@ -52,18 +57,18 @@ async function enqueueEvent(event: SearchProjectionOutboxRecord): Promise<void> 
   }
 }
 
-export async function dispatchSearchProjectionOutbox(): Promise<{
+export async function dispatchSearchProjectionOutbox(now: Date = new Date()): Promise<{
   enqueued: number;
   failed: number;
 }> {
-  const events = await listPendingSearchProjectionEvents(DISPATCH_BATCH_SIZE);
-  let enqueued = 0;
+  const events = await listDueSearchProjectionEvents(DISPATCH_BATCH_SIZE, now);
+  const enqueued: bigint[] = [];
   let failed = 0;
 
   for (const event of events) {
     try {
       await enqueueEvent(event);
-      enqueued += 1;
+      enqueued.push(event.sequence);
     } catch (error) {
       failed += 1;
       logger.error(
@@ -77,5 +82,6 @@ export async function dispatchSearchProjectionOutbox(): Promise<{
     }
   }
 
-  return { enqueued, failed };
+  await markSearchProjectionEventsEnqueued(enqueued, now, RETRY_BACKOFF);
+  return { enqueued: enqueued.length, failed };
 }

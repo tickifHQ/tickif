@@ -8,7 +8,8 @@ vi.mock('@repo/queue', () => ({
 }));
 
 vi.mock('../../src/search/outbox-repository.js', () => ({
-  listPendingSearchProjectionEvents: vi.fn(),
+  listDueSearchProjectionEvents: vi.fn(),
+  markSearchProjectionEventsEnqueued: vi.fn(async () => undefined),
 }));
 
 const queue = await import('@repo/queue');
@@ -18,8 +19,9 @@ const { dispatchSearchProjectionOutbox } = await import('../../src/search/outbox
 beforeEach(() => vi.clearAllMocks());
 
 describe('search projection outbox dispatcher', () => {
-  it('queues each pending row independently and reports enqueue failures', async () => {
-    vi.mocked(repository.listPendingSearchProjectionEvents).mockResolvedValue([
+  it('queues each due row independently and backs off only the enqueued rows', async () => {
+    const now = new Date('2026-07-03T00:00:00.000Z');
+    vi.mocked(repository.listDueSearchProjectionEvents).mockResolvedValue([
       {
         sequence: 1n,
         entityKind: 'project',
@@ -39,9 +41,15 @@ describe('search projection outbox dispatcher', () => {
       new Error('Redis unavailable'),
     );
 
-    await expect(dispatchSearchProjectionOutbox()).resolves.toEqual({
+    await expect(dispatchSearchProjectionOutbox(now)).resolves.toEqual({
       enqueued: 1,
       failed: 1,
+    });
+
+    expect(repository.listDueSearchProjectionEvents).toHaveBeenCalledWith(100, now);
+    expect(repository.markSearchProjectionEventsEnqueued).toHaveBeenCalledWith([1n], now, {
+      baseSeconds: 30,
+      maxSeconds: 600,
     });
 
     expect(queue.enqueueSearchProjectIndex).toHaveBeenCalledWith({

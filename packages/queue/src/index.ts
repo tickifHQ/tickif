@@ -321,28 +321,41 @@ export async function scheduleBookingNotificationSweep(everyMs: number): Promise
   );
 }
 
+/** Outbox rows hold their own retry state, so a failed job must free its id for the next dispatch. */
+function searchEntityJobOptions(jobId: string, job: { outboxSequence?: string }): JobsOptions {
+  return job.outboxSequence ? { jobId, removeOnFail: true } : { jobId };
+}
+
 export async function enqueueSearchProjectIndex(job: SearchIndexProjectJob): Promise<void> {
-  await getSearchIndexQueue().add(JOBS.indexProject, job, {
-    jobId: `${JOBS.indexProject}-${job.projectId}-${job.eventId}`,
-  });
+  await getSearchIndexQueue().add(
+    JOBS.indexProject,
+    job,
+    searchEntityJobOptions(`${JOBS.indexProject}-${job.projectId}-${job.eventId}`, job),
+  );
 }
 
 export async function enqueueSearchProjectDelete(job: SearchDeleteProjectJob): Promise<void> {
-  await getSearchIndexQueue().add(JOBS.deleteProject, job, {
-    jobId: `${JOBS.deleteProject}-${job.projectId}-${job.eventId}`,
-  });
+  await getSearchIndexQueue().add(
+    JOBS.deleteProject,
+    job,
+    searchEntityJobOptions(`${JOBS.deleteProject}-${job.projectId}-${job.eventId}`, job),
+  );
 }
 
 export async function enqueueSearchDesignerIndex(job: SearchIndexDesignerJob): Promise<void> {
-  await getSearchIndexQueue().add(JOBS.indexDesigner, job, {
-    jobId: `${JOBS.indexDesigner}-${job.profileId}-${job.eventId}`,
-  });
+  await getSearchIndexQueue().add(
+    JOBS.indexDesigner,
+    job,
+    searchEntityJobOptions(`${JOBS.indexDesigner}-${job.profileId}-${job.eventId}`, job),
+  );
 }
 
 export async function enqueueSearchDesignerDelete(job: SearchDeleteDesignerJob): Promise<void> {
-  await getSearchIndexQueue().add(JOBS.deleteDesigner, job, {
-    jobId: `${JOBS.deleteDesigner}-${job.profileId}-${job.eventId}`,
-  });
+  await getSearchIndexQueue().add(
+    JOBS.deleteDesigner,
+    job,
+    searchEntityJobOptions(`${JOBS.deleteDesigner}-${job.profileId}-${job.eventId}`, job),
+  );
 }
 
 export async function enqueueSearchReindexAll(job: SearchReindexAllJob): Promise<void> {

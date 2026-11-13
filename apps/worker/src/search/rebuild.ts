@@ -23,6 +23,7 @@ import { mapDesignerSearchDocument, mapProjectSearchDocument } from './mapper.js
 import {
   latestSearchProjectionSequence,
   listSearchProjectionEventsBetween,
+  markSearchProjectionEventsDispatchedThrough,
   withSearchProjectionRebuildBarrier,
   type SearchProjectionOutboxRecord,
 } from './outbox-repository.js';
@@ -203,6 +204,9 @@ export async function rebuildSearchCollections(
         projectAliasSwapped = false;
         throw error;
       }
+      // The live collections now reflect every row through the watermark, including rows
+      // still backing off after failed incremental jobs.
+      await markSearchProjectionEventsDispatchedThrough(finalSequence);
       return count;
     });
 
