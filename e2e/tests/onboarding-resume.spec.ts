@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb } from '@repo/db/testing';
 import { apiUrl } from '../lib/environment';
-import { emailCode } from '../lib/auth';
+import { clearEmailLoginCodeLimits, emailCode } from '../lib/auth';
 
 /**
  * E-298: designer onboarding progress is ACCOUNT-LEVEL. A pending designer can
@@ -14,6 +14,7 @@ import { emailCode } from '../lib/auth';
  */
 
 async function signInAsPendingDesigner(page: Page, context: BrowserContext, email: string) {
+  await clearEmailLoginCodeLimits(email);
   await page.goto('/login?mode=designer');
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
   await page.getByRole('button', { name: 'Login', exact: true }).click();

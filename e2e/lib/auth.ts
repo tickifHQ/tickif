@@ -17,17 +17,18 @@ export async function phoneCode(phoneNumber: string) {
   return code;
 }
 
-// Login-code limits protect real numbers; journeys sign the same synthetic number in repeatedly.
-async function clearLoginCodeLimits(phoneNumber: string) {
+// Login-code limits protect real accounts; journeys sign the same synthetic one in repeatedly.
+async function clearLoginCodeLimits(identifier: `phone:${string}` | `email:${string}`) {
   await assertTestDb();
-  await db
-    .delete(schema.otpAttempt)
-    .where(eq(schema.otpAttempt.identifier, `phone:${phoneNumber}`));
+  await db.delete(schema.otpAttempt).where(eq(schema.otpAttempt.identifier, identifier));
 }
+
+export const clearEmailLoginCodeLimits = (email: string) =>
+  clearLoginCodeLimits(`email:${email.toLowerCase()}`);
 
 export async function signInPhone(context: BrowserContext, phoneNumber: string | null) {
   if (!phoneNumber) throw new Error('Synthetic user needs a phone number');
-  await clearLoginCodeLimits(phoneNumber);
+  await clearLoginCodeLimits(`phone:${phoneNumber}`);
   const headers = { origin: webUrl };
   expect(
     (
@@ -48,7 +49,7 @@ export async function signInPhone(context: BrowserContext, phoneNumber: string |
 }
 
 export async function signInPhoneUi(page: Page, phoneNumber: string) {
-  await clearLoginCodeLimits(phoneNumber);
+  await clearLoginCodeLimits(`phone:${phoneNumber}`);
   await page.goto('/login');
   await page.getByPlaceholder('9123456789').fill(phoneNumber.replace(/^\+91/, ''));
   await page.getByRole('button', { name: 'Get OTP', exact: true }).click();
