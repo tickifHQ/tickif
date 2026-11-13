@@ -199,7 +199,6 @@ export const leadsService = {
       hasMore: rows.length > query.limit,
       canReply:
         access.scope === ORGANIZATION_ACCESS_SCOPE.FULL &&
-        enquiry.status !== 'closed' &&
         lead.status !== 'closed' &&
         lead.status !== 'spam',
     };

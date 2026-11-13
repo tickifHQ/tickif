@@ -66,9 +66,11 @@ single field.
 Downgrades freeze active teams newest-first. `freeze_rank` records that order and
 restoration consumes it ascending. Freezing clears sessions that point at those
 teams. The next validated organization-context request preserves the organization
-in roll-up context. Operational project and lead roll-ups omit frozen teams, while
-public profile and published project reads deliberately do not join on
-`team.frozen`.
+in roll-up context. Operational project and lead roll-ups omit frozen teams, and
+lead reads by id treat a frozen team's lead as not found. Public profile and
+published project reads deliberately do not join on `team.frozen`, so a customer
+can still open a frozen branch's profile, but a new enquiry to it is rejected
+with a user-facing message instead of creating a lead nobody can answer.
 
 Hard deletion through Better Auth remains disabled because deleting a team directly
 cascades to its profile and projects. The owner-only Tickif removal endpoint requires

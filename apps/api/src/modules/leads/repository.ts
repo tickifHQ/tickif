@@ -173,6 +173,11 @@ export const leadsRepository = {
     const [row] = await db
       .select(leadProjection())
       .from(schema.lead)
+      // Frozen branches are hidden by id as well as from lists and counts.
+      .innerJoin(
+        schema.team,
+        and(eq(schema.team.id, schema.lead.teamId), eq(schema.team.frozen, false)),
+      )
       .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
       .leftJoin(schema.consultationBooking, eq(schema.consultationBooking.leadId, schema.lead.id))
       .leftJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
@@ -216,6 +221,13 @@ export const leadsRepository = {
         .where(and(eq(schema.lead.id, id), eq(schema.lead.organizationId, organizationId)))
         .returning({ id: schema.lead.id });
       if (!row) return null;
+      if (input.status === 'closed' || input.status === 'spam') {
+        // The customer's enquiry ends with the lead, so they may enquire again.
+        await tx
+          .update(schema.enquiry)
+          .set({ status: 'closed', updatedAt: new Date() })
+          .where(eq(schema.enquiry.leadId, row.id));
+      }
 
       const [updated] = await tx
         .select(leadProjection())
