@@ -1,4 +1,4 @@
-import { and, db, desc, eq, gt, inArray, schema, sql } from '@repo/db';
+import { and, db, desc, eq, inArray, schema, sql } from '@repo/db';
 import type {
   AdminReviewsQuery,
   ListPublishedReviewsQuery,
@@ -78,10 +78,7 @@ export type UpdateReviewResult =
   | { kind: 'forbidden' };
 
 export type TransitionReviewResult =
-  | { kind: 'updated'; review: ReviewViewRecord }
-  | { kind: 'conflict' }
-  | { kind: 'forbidden' }
-  | { kind: 'dispute_resolved' };
+  { kind: 'updated'; review: ReviewViewRecord } | { kind: 'conflict' } | { kind: 'forbidden' };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Handle = typeof db | Tx;
@@ -202,22 +199,6 @@ async function activeBranchMember(tx: Tx, teamId: string, userId: string): Promi
     .where(and(eq(schema.team.id, teamId), eq(schema.team.frozen, false)))
     .for('update');
   return !!branch;
-}
-
-async function disputeResolvedSincePublish(tx: Tx, reviewId: string): Promise<boolean> {
-  const [resolution] = await tx
-    .select({ id: schema.reviewModerationEvent.id })
-    .from(schema.reviewModerationEvent)
-    .innerJoin(schema.review, eq(schema.review.id, schema.reviewModerationEvent.reviewId))
-    .where(
-      and(
-        eq(schema.reviewModerationEvent.reviewId, reviewId),
-        eq(schema.reviewModerationEvent.action, 'resolve_publish'),
-        gt(schema.reviewModerationEvent.createdAt, schema.review.publishedAt),
-      ),
-    )
-    .limit(1);
-  return !!resolution;
 }
 
 function reviewProjection() {
@@ -729,9 +710,6 @@ export const reviewsRepository = {
         if (!(await activeBranchMember(tx, designer.teamId, params.requiredWriter.userId)))
           return { kind: 'forbidden' } as const;
       }
-      // An admin upholding a dispute settles this published version.
-      if (params.action === 'dispute' && (await disputeResolvedSincePublish(tx, params.id)))
-        return { kind: 'dispute_resolved' } as const;
 
       const [updated] = await tx
         .update(schema.review)
