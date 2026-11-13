@@ -217,7 +217,47 @@ describe('E-117: webhook event processing', () => {
       expect(result.outcome).toBe('duplicate');
     });
 
+    it.each(['payment_failed', 'grace', 'locked'] as const)(
+      'ignores a redelivered activation from %s while Razorpay reports the subscription is not active',
+      async (state) => {
+        mockFetchSubscription.mockResolvedValueOnce({
+          id: `sub_activate_replayed_${state}`,
+          status: 'halted',
+          plan_id: 'plan_test_professional_plus',
+          has_scheduled_changes: false,
+        });
+        const sub = await makeSubscription({
+          planTier: 'professional_plus',
+          subscriptionState: state,
+          razorpaySubscriptionId: `sub_activate_replayed_${state}`,
+          razorpayStatus: 'halted',
+        });
+
+        const result = await processWebhookEvent(
+          RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+          makeSubscriptionPayload(
+            RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+            `sub_activate_replayed_${state}`,
+            { status: 'active', notes: { tier: 'professional_plus' } },
+          ),
+        );
+
+        expect(result).toEqual({ outcome: 'ignored', reason: 'Live subscription is not active' });
+        const [unchanged] = await db
+          .select()
+          .from(schema.subscription)
+          .where(eq(schema.subscription.id, sub.id));
+        expect(unchanged).toMatchObject({ subscriptionState: state, razorpayStatus: 'halted' });
+      },
+    );
+
     it('clears lapse fields on activation from grace state', async () => {
+      mockFetchSubscription.mockResolvedValueOnce({
+        id: 'sub_activate_grace',
+        status: 'active',
+        plan_id: 'plan_test_professional_plus',
+        has_scheduled_changes: false,
+      });
       const sub = await makeSubscription({
         planTier: 'professional_plus',
         preLapseTier: 'professional_plus',
