@@ -8,6 +8,7 @@ vi.mock('@repo/config', () => ({
 }));
 
 const {
+  createSubscription,
   fetchSubscription,
   fetchPlan,
   fetchScheduledChanges,
@@ -166,6 +167,46 @@ describe('billing / razorpay-client failures', () => {
       'https://api.razorpay.com/v1/subscriptions/sub%2Fwith%20spaces',
       expect.objectContaining({ method: 'GET' }),
     );
+  });
+
+  it.each([400, 401, 429])(
+    'treats a %s on subscription create as a definite rejection the org can retry',
+    async (status) => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            Response.json(
+              { error: { code: 'BAD_REQUEST_ERROR', description: 'The plan is not active' } },
+              { status },
+            ),
+          ),
+      );
+
+      await expect(createSubscription({ planId: 'plan_inactive' })).rejects.toMatchObject({
+        code: 'checkout_rejected',
+        status: 422,
+      });
+    },
+  );
+
+  it('keeps subscription create outcomes unknown after a 5xx or a timeout', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ error: { code: 'SERVER_ERROR', description: 'Try later' } }, { status: 500 }),
+        )
+        .mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError')),
+    );
+
+    for (let attempt = 0; attempt < 2; attempt += 1)
+      await expect(createSubscription({ planId: 'plan_pro' })).rejects.toMatchObject({
+        code: 'upstream_error',
+        status: 502,
+      });
   });
 
   // ── E-289: domestic-card plan-change classification ────────────────────────

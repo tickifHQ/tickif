@@ -304,14 +304,29 @@ export async function createSubscription(params: {
   totalCount?: number;
   notes?: Record<string, string>;
 }): Promise<RazorpaySubscription> {
-  return requestRazorpay<RazorpaySubscription>('createSubscription', '/subscriptions', {
-    method: 'POST',
-    body: JSON.stringify({
-      plan_id: params.planId,
-      total_count: params.totalCount ?? 120, // ~10 years monthly
-      notes: params.notes ?? {},
-    }),
-  });
+  return requestRazorpay<RazorpaySubscription>(
+    'createSubscription',
+    '/subscriptions',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_id: params.planId,
+        total_count: params.totalCount ?? 120, // ~10 years monthly
+        notes: params.notes ?? {},
+      }),
+    },
+    // Razorpay creates nothing on a 4xx, so the checkout can fail definitively and
+    // the organization can choose again. 5xx and timeouts stay unknown outcomes.
+    (providerError, status) =>
+      status >= 400 && status < 500
+        ? new AppError(
+            'checkout_rejected',
+            'Razorpay could not start this checkout and nothing was charged. Review the plan and try again.',
+            422,
+            { source: 'razorpay', razorpayCode: providerError.error?.code },
+          )
+        : undefined,
+  );
 }
 
 /**

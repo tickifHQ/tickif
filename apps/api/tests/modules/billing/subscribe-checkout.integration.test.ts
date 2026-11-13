@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 
 // Use synthetic credentials for billing checks regardless of the developer's .env.
 // Mock the parsed config because global setup may have already loaded its singleton.
@@ -1007,5 +1007,53 @@ describe('durable reviewed checkout integration', () => {
     const context = await billingSelectionService.context(caller);
     expect(context.pendingOperation?.reason).toBe('provider_outcome_support_required');
     expect(context.currentTier).toBe('hobby');
+  });
+
+  it('fails a checkout Razorpay definitely rejected, so the organization can choose again', async () => {
+    const { billingSelectionService } =
+      await import('../../../src/modules/billing/selection-service.js');
+    const { billingMutationService } =
+      await import('../../../src/modules/billing/mutation-service.js');
+    const { claimEarlyBird } = await import('@repo/billing');
+    const actual = await vi.importActual<
+      typeof import('../../../src/modules/billing/razorpay-client.js')
+    >('../../../src/modules/billing/razorpay-client.js');
+    vi.mocked(mockCreateSubscription).mockImplementation(actual.createSubscription);
+    onTestFinished(() => vi.unstubAllGlobals());
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: { code: 'BAD_REQUEST_ERROR', description: 'The plan is not active' } },
+            { status: 400 },
+          ),
+        ),
+    );
+    const { user, org } = await makeOrgWithOwner();
+    const caller = { userId: user.id, activeOrgId: org.id };
+    const operationId = '1c3b2f6e-6a1f-4b8e-9f7d-2b1d5c0e8a41';
+    const preview = await billingSelectionService.preview(caller, { targetTier: 'corporate' });
+
+    await expect(
+      billingMutationService.execute(
+        caller,
+        { targetTier: 'corporate', previewToken: preview.previewToken, operationId },
+        'subscribe',
+      ),
+    ).rejects.toMatchObject({ code: 'checkout_rejected', status: 422 });
+
+    const [operation] = await db
+      .select()
+      .from(schema.billingOperation)
+      .where(eq(schema.billingOperation.operationId, operationId));
+    expect(operation?.status).toBe('failed');
+    const context = await billingSelectionService.context(caller);
+    expect(context.pendingOperation).toBeNull();
+    expect(context.actions.find((action) => action.targetTier === 'corporate')?.action).toBe(
+      'subscribe',
+    );
+    expect(await claimEarlyBird(org.id, 'corporate')).toMatchObject({ tier: 'corporate' });
   });
 });
