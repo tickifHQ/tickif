@@ -7,7 +7,7 @@ import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@rep
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { assertProductionEmailConfig, assertWhatsappConfig, config } from '@repo/config';
 import { sendPhoneOtp } from './phone-otp.js';
-import { isAllowedPhoneNumber, otpGuard } from './otp-guard.js';
+import { OTP_CODE_LIFETIME_SECONDS, isAllowedPhoneNumber, otpGuard } from './otp-guard.js';
 import { bodyString } from './request-body.js';
 import { ac, orgAc, orgRoles, roles } from './permissions.js';
 import {
@@ -583,7 +583,7 @@ export const auth = betterAuth({
         await sendPhoneOtp({ phoneNumber: phone, code });
       },
       otpLength: 6,
-      expiresIn: 300,
+      expiresIn: OTP_CODE_LIFETIME_SECONDS,
       allowedAttempts: 3,
       phoneNumberValidator: isAllowedPhoneNumber,
       signUpOnVerification: {
@@ -811,7 +811,7 @@ export const auth = betterAuth({
     }),
     emailOTP({
       otpLength: 6,
-      expiresIn: 300,
+      expiresIn: OTP_CODE_LIFETIME_SECONDS,
       allowedAttempts: 3,
       storeOTP: 'hashed',
       rateLimit: { window: 60, max: 3 },

@@ -16,6 +16,9 @@ export const OTP_LIMITS = {
   lockoutSeconds: 60 * 60,
 } as const;
 
+/** How long a phone or email login code stays valid. */
+export const OTP_CODE_LIFETIME_SECONDS = 300;
+
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -123,7 +126,20 @@ async function assertNotLocked(identifier: string, now: Date): Promise<void> {
   if (refusal) throw refusal;
 }
 
+/** Guesses count only against a code we sent, so nobody can lock out an address for free. */
 async function recordWrongGuess(identifier: string, now: Date): Promise<void> {
+  const [issued] = await db
+    .select({ id: schema.otpAttempt.id })
+    .from(schema.otpAttempt)
+    .where(
+      and(
+        eq(schema.otpAttempt.identifier, identifier),
+        eq(schema.otpAttempt.kind, 'send'),
+        gt(schema.otpAttempt.createdAt, new Date(now.getTime() - OTP_CODE_LIFETIME_SECONDS * 1000)),
+      ),
+    )
+    .limit(1);
+  if (!issued) return;
   await db.insert(schema.otpAttempt).values({ identifier, kind: 'wrong_guess', createdAt: now });
 }
 

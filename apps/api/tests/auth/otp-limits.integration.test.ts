@@ -161,6 +161,22 @@ describe('email OTP limits', () => {
   });
 });
 
+describe('wrong-guess lockout', () => {
+  it('does not let guesses against an address with no live code lock it out', async () => {
+    for (let guess = 0; guess < 12; guess += 1) {
+      expect((await signInWithEmailCode('000000')).status).not.toBe(429);
+    }
+    expect((await sendEmailCode()).status).toBe(200);
+
+    advanceSeconds(6 * 60);
+    for (let guess = 0; guess < 12; guess += 1) {
+      expect((await signInWithEmailCode('000000')).status).not.toBe(429);
+    }
+    advanceSeconds(61);
+    expect((await sendEmailCode()).status).toBe(200);
+  });
+});
+
 describe('per-IP auth limit', () => {
   it('counts requests in shared storage and gives spoofed forwarding chains no fresh bucket', async () => {
     const context = await auth.$context;

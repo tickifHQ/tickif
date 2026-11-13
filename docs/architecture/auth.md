@@ -87,7 +87,8 @@ and each lowercased email for email sign-in codes:
 - one send per 60 seconds and five per rolling hour;
 - ten wrong guesses in 24 hours lock the identifier for an hour, refusing sends and
   verifies; a resend does not reset the count, and each further wrong guess that day
-  locks it again.
+  locks it again. A guess counts only if a code was sent to that identifier within the
+  code's five-minute lifetime, so nobody can lock out an address without a send.
 
 Sends and wrong guesses are rows in `otp_attempt`, pruned after a day. A send is
 checked and recorded under a per-identifier advisory lock before Better Auth creates
