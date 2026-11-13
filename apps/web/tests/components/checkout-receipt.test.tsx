@@ -180,7 +180,7 @@ describe('checkout receipt printer', () => {
     expect(screen.queryByRole('article', { name: 'Receipt' })).not.toBeInTheDocument();
   });
 
-  it('says billing is still updating after 30 seconds without confirmation', async () => {
+  it('hands over to the self-updating status view after 30 seconds without confirmation', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     rememberCheckoutPayment('professional_plus', 'pay_RcReceipt42');
     confirmPayment({ subscription: pending, payments: [] });
@@ -192,18 +192,55 @@ describe('checkout receipt printer', () => {
       vi.advanceTimersByTime(30_000);
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('Billing is still updating');
-    expect(screen.queryByRole('article', { name: 'Receipt' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Close' })).toHaveAttribute(
-      'href',
-      '/designer/plan-billing',
-    );
+    expect(screen.getByRole('heading', { name: 'Confirming your payment' })).toBeInTheDocument();
+    expect(screen.getByText(/This page updates automatically/)).toBeInTheDocument();
 
     confirmPayment();
     await act(async () => {
       await mocks.poll();
     });
-    expect(screen.queryByRole('article', { name: 'Receipt' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Payment confirmed' })).toBeInTheDocument();
+    expect(screen.queryByText(/still updating/)).not.toBeInTheDocument();
+  });
+
+  it('confirms the plan after the timeout when the plan is active but the payment row never lands', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    rememberCheckoutPayment('professional_plus', 'pay_RcReceipt42');
+    confirmPayment({ payments: [] });
+    render(<CheckoutResult {...props} />);
+    await flush();
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(screen.getByRole('heading', { name: 'Payment confirmed' })).toBeInTheDocument();
+  });
+
+  it('shows the billing failure state with a retry and support link when billing cannot be read', async () => {
+    rememberCheckoutPayment('professional_plus', 'pay_RcReceipt42');
+    mocks.refresh.mockResolvedValue(new Response('unavailable', { status: 503 }));
+    render(<CheckoutResult {...props} />);
+    await flush();
+
+    expect(screen.getByRole('heading', { name: 'Unable to confirm payment' })).toBeInTheDocument();
+    expect(screen.getByText(/Please wait before starting another payment/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check payment status' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contact support' })).toBeInTheDocument();
+  });
+
+  it('does not let a failed payments read hide a confirmed plan', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    rememberCheckoutPayment('professional_plus', 'pay_RcReceipt42');
+    mocks.payments.mockImplementation(async () => new Response('boom', { status: 500 }));
+    render(<CheckoutResult {...props} />);
+    await flush();
+
+    expect(screen.queryByRole('heading', { name: 'Unable to confirm payment' })).not.toBeInTheDocument();
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(screen.getByRole('heading', { name: 'Payment confirmed' })).toBeInTheDocument();
   });
 
   it('shows the finished receipt without the feed when motion is reduced', async () => {

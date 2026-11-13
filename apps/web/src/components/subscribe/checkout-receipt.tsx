@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, Clock3, Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
@@ -18,7 +18,6 @@ export interface CheckoutReceipt {
 
 export type CheckoutPrinterState =
   | { status: 'processing' }
-  | { status: 'timed-out' }
   | { status: 'confirmed'; receipt: CheckoutReceipt };
 
 const BILLING_PATH = '/designer/plan-billing';
@@ -94,8 +93,6 @@ export function CheckoutPrinter({
           <p role="status" className="mt-3 flex min-h-4 items-start gap-2 text-xs leading-4">
             {stage === 'complete' ? (
               <Check className="size-4 shrink-0" aria-hidden="true" />
-            ) : stage === 'timed-out' ? (
-              <Clock3 className="size-4 shrink-0" aria-hidden="true" />
             ) : (
               <Loader2
                 className="size-4 shrink-0 animate-spin motion-reduce:animate-none"
@@ -106,21 +103,14 @@ export function CheckoutPrinter({
               ? 'Confirming your payment'
               : stage === 'printing'
                 ? 'Printing your receipt'
-                : stage === 'complete'
-                  ? 'Payment confirmed'
-                  : 'Billing is still updating. Your plan changes once the payment is confirmed.'}
+                : 'Payment confirmed'}
           </p>
         </div>
         <div className="absolute inset-x-6 bottom-3 h-1.5 rounded-full bg-surface-inverse-foreground/20" />
       </div>
 
       {/* Reserved height so the buttons below stay put while the paper feeds. */}
-      <div
-        className={cn(
-          'relative mx-auto -mt-3 min-h-68 w-64 overflow-hidden drop-shadow-md',
-          stage === 'timed-out' && 'invisible',
-        )}
-      >
+      <div className="relative mx-auto -mt-3 min-h-68 w-64 overflow-hidden drop-shadow-md">
         {receipt && (
           <article
             aria-label="Receipt"
@@ -151,14 +141,9 @@ export function CheckoutPrinter({
         )}
       </div>
 
-      <div
-        className={cn(
-          'mt-4 flex justify-center',
-          stage !== 'complete' && stage !== 'timed-out' && 'invisible',
-        )}
-      >
-        <Button variant={stage === 'timed-out' ? 'outline' : 'fancy'} asChild>
-          <Link href={BILLING_PATH}>{stage === 'timed-out' ? 'Close' : 'Go to billing'}</Link>
+      <div className={cn('mt-4 flex justify-center', stage !== 'complete' && 'invisible')}>
+        <Button variant="fancy" asChild>
+          <Link href={BILLING_PATH}>Go to billing</Link>
         </Button>
       </div>
     </div>

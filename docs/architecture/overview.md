@@ -153,8 +153,10 @@ downgrade. The original paid upgrade and provider identities remain durable; cur
 access continues through the verified boundary. See [ADR 0017](../adr/0017-confirmed-upgrade-renewal-downgrade.md).
 After a Razorpay payment made in the same tab, the checkout result page prints a
 receipt. It prints only once the plan is active and the webhook has recorded that
-captured payment, shows only values the billing API returned, and after 30 seconds
-without both says billing is still updating. Other returns keep the plain status.
+captured payment, and shows only values the billing API returned. If billing can't
+be read, or both haven't landed within 30 seconds, the page falls back to the plain
+status view, which keeps polling and shows the error, retry and support link. Other
+returns keep the plain status.
 
 Consultation scheduling remains disabled by default even though booking code and
 tests exist. [ADR 0003](../adr/0003-consultation-enquiries.md) establishes enquiries

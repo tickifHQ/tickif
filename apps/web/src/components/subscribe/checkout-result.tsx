@@ -75,7 +75,8 @@ function ScopedCheckoutResult({
       const [subscriptionResponse, contextResponse, payment] = await Promise.all([
         api.api.billing.subscription.$get(),
         api.api.billing['selection-context'].$get(),
-        receiptPaymentId ? findCapturedPayment(receiptPaymentId) : null,
+        // The plan is the source of truth; a failed payments read only delays the receipt.
+        receiptPaymentId ? findCapturedPayment(receiptPaymentId).catch(() => null) : null,
       ]);
       if (!subscriptionResponse.ok || !contextResponse.ok) throw new Error('Billing unavailable');
       const [subscriptionJson, contextJson] = await Promise.all([
@@ -129,11 +130,11 @@ function ScopedCheckoutResult({
     (resumable || (!context.pendingOperation && !context.unfinishedCheckout));
   // The receipt waits for both: the plan active in our database and the payment
   // captured by the webhook. The provider's client callback alone never prints it.
+  // Billing errors and slow webhooks fall back to the status view, which keeps updating.
   const receiptPayment = active && details?.payment ? details.payment : null;
-  const printerState: CheckoutPrinterState | null = !receiptPaymentId
-    ? null
-    : receiptTimedOut
-      ? { status: 'timed-out' }
+  const printerState: CheckoutPrinterState | null =
+    !receiptPaymentId || error || receiptTimedOut
+      ? null
       : receiptPayment && subscription
         ? {
             status: 'confirmed',
