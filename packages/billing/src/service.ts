@@ -259,6 +259,9 @@ export async function reconcileReplacement(org: string, now = new Date()) {
 }
 
 export async function applyReplacementSchedule(org: string, now = new Date()) {
+  // Entitlement reads call this on every request. Only take the billing lock when a
+  // confirmed replacement has reached its boundary; the locked check below decides.
+  if (!(await repository.hasDueConfirmed(org, now))) return false;
   return repository.locked(org, async (current, repo) => {
     // An unfinished successor must not erase the predecessor's paid boundary.
     const row =

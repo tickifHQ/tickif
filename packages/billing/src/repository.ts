@@ -7,6 +7,7 @@ import {
   notInArray,
   asc,
   desc,
+  lte,
   sql,
   inArray,
   freezeMembersToLimitOnTx,
@@ -265,6 +266,21 @@ export const replacementRepository = {
         )
         .orderBy(asc(schema.billingReplacement.createdAt))
     ).at(-1);
+  },
+  /** Unlocked read; the confirmed partial unique index serves it. */
+  async hasDueConfirmed(org: string, now: Date) {
+    const [row] = await db
+      .select({ id: schema.billingReplacement.id })
+      .from(schema.billingReplacement)
+      .where(
+        and(
+          eq(schema.billingReplacement.organizationId, org),
+          eq(schema.billingReplacement.status, 'confirmed'),
+          lte(schema.billingReplacement.periodEnd, now),
+        ),
+      )
+      .limit(1);
+    return !!row;
   },
   async byOrder(id: string) {
     return (
