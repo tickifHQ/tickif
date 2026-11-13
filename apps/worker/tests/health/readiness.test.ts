@@ -4,7 +4,6 @@ import { consumersAreReady, createWorkerReadinessProbe } from '../../src/health/
 function dependencies() {
   return {
     postgres: vi.fn(async () => true),
-    search: vi.fn(async () => true),
     consumers: vi.fn(async () => true),
   };
 }
@@ -12,8 +11,8 @@ function dependencies() {
 afterEach(() => vi.useRealTimers());
 
 describe('worker deployment readiness', () => {
-  it('requires Postgres, search and consumers independently', async () => {
-    for (const name of ['postgres', 'search', 'consumers'] as const) {
+  it('requires Postgres and consumers independently', async () => {
+    for (const name of ['postgres', 'consumers'] as const) {
       const checks = dependencies();
       checks[name].mockResolvedValue(false);
       await expect(createWorkerReadinessProbe(checks)()).resolves.toBe(false);

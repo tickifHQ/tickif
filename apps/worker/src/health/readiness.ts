@@ -30,10 +30,14 @@ export async function consumersAreReady(consumers: readonly Consumer[]): Promise
   ).every(Boolean);
 }
 
-/** Bound the response, retaining a hung operation so repeated probes cannot pile up commands. */
+/**
+ * Readiness covers Postgres and the consumers' Redis connections only. Typesense is left out
+ * on purpose: an outage only delays indexing, which the outbox retries, and must not restart
+ * the whole worker. Bound the response, retaining a hung operation so repeated probes cannot
+ * pile up commands.
+ */
 export function createWorkerReadinessProbe(dependencies: {
   postgres(): Promise<boolean>;
-  search(): Promise<boolean>;
   consumers(): Promise<boolean>;
 }) {
   let pending: Promise<boolean> | null = null;
@@ -42,9 +46,6 @@ export function createWorkerReadinessProbe(dependencies: {
       pending = Promise.all([
         Promise.resolve()
           .then(dependencies.postgres)
-          .catch(() => false),
-        Promise.resolve()
-          .then(dependencies.search)
           .catch(() => false),
         Promise.resolve()
           .then(dependencies.consumers)

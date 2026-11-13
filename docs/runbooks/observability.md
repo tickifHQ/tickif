@@ -144,7 +144,8 @@ release remaining closed must become visible when maintenance expires.
 ## Dependency and operational prerequisites
 
 API/worker probes and Typesense `/health` run privately. API readiness checks
-Postgres; worker readiness covers Redis. This does not supply full PostgreSQL or
+Postgres; worker readiness covers Postgres and Redis. Neither depends on
+Typesense, which has its own probe. This does not supply full PostgreSQL or
 Redis server metrics. For those, provision separate monitoring roles/ACL users
 and secrets before adding native receivers; never reuse application administrator
 credentials. Typesense JSON `/metrics.json`/`/stats.json` needs a scoped key and

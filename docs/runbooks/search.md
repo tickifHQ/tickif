@@ -155,10 +155,17 @@ WHERE dispatched_at IS NULL;
 
 A full rebuild (below) also clears them.
 
-The worker readiness endpoint includes Typesense:
+Worker health does not depend on Typesense:
 
 - `/livez` confirms that the process is alive.
-- `/readyz` returns `503` while draining or when Typesense is unavailable.
+- `/readyz` returns `503` while draining or when Postgres or the queue consumers'
+  Redis connections are unavailable. A Typesense outage leaves it `200`, so the
+  container healthcheck does not restart media, billing and email work while
+  indexing backs off.
+
+Watch Typesense itself through the collector's `httpcheck` on
+`typesense:8108/health`, the worker's `job.terminal_failed` logs for the
+`search-index` queue, and the stuck-row query above.
 
 ## Full rebuild
 

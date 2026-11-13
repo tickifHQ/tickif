@@ -12,7 +12,6 @@ import {
   scheduleBillingLifecycleSweep,
   scheduleDesignerExperienceRefresh,
 } from '@repo/queue';
-import { searchWriteClient } from '@repo/search';
 import {
   connection,
   QUEUES,
@@ -32,7 +31,6 @@ import { SmsService } from './jobs/sms-service.js';
 import { processGoogleReviewRefresh, processGoogleReviewSweep } from './jobs/google-reviews.js';
 import { processSearchIndex } from './jobs/search-indexer.js';
 import { dispatchSearchProjectionOutbox } from './search/outbox-dispatcher.js';
-import { probeSearchReadiness } from './search/readiness.js';
 import { purgeExpiredSearchActivity } from './search/activity-repository.js';
 import { isDatabaseReady, closeDatabase } from './health/repository.js';
 import { consumersAreReady, createWorkerReadinessProbe } from './health/readiness.js';
@@ -259,7 +257,6 @@ if (googleReviewsWorker) observeWorker(googleReviewsWorker);
 const queueMetrics = startQueueMetrics();
 const probeReadiness = createWorkerReadinessProbe({
   postgres: isDatabaseReady,
-  search: () => probeSearchReadiness(() => searchWriteClient().health.retrieve()),
   consumers: () => consumersAreReady(consumers),
 });
 

@@ -289,6 +289,7 @@ traffic. Backend ports 3001 and 3000 are explicit in `deploy.labels`.
 - API `/readyz` and compatibility `/health`: 200 only when accepting traffic and Postgres responds.
 - Redis and Typesense failures remain degraded/non-fatal to API readiness by design.
 - Worker `/livez` and `/readyz` remain private on port 3002; shutdown allows two minutes to drain jobs.
+  Worker `/readyz` checks Postgres and Redis only, so a Typesense outage does not fail the healthcheck.
 - Web `/health`: standalone Next.js server is answering.
 
 ### Web runtime cache
