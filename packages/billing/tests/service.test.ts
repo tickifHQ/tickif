@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
   cancellationPending: vi.fn(),
   finishCancellation: vi.fn(),
   invoices: vi.fn(),
+  hasDueConfirmed: vi.fn(),
 }));
+const { ProviderRejection } = vi.hoisted(() => ({ ProviderRejection: class extends Error {} }));
 vi.mock('../src/repository.js', () => ({
   replacementRepository: {
     locked: mocks.locked,
@@ -31,9 +33,10 @@ vi.mock('../src/repository.js', () => ({
     current: mocks.current,
     predecessor: mocks.predecessor,
     cancellationPending: mocks.cancellationPending,
+    hasDueConfirmed: mocks.hasDueConfirmed,
   },
 }));
-vi.mock('../src/provider.js', () => ({ replacementProvider: mocks }));
+vi.mock('../src/provider.js', () => ({ replacementProvider: mocks, ProviderRejection }));
 import {
   reconcileReplacement,
   createReplacement,
@@ -108,6 +111,7 @@ beforeEach(() => {
   });
   mocks.payments.mockResolvedValue([payment]);
   mocks.reserve.mockResolvedValue(true);
+  mocks.hasDueConfirmed.mockResolvedValue(true);
   mocks.capture.mockResolvedValue({ ...payment, status: 'authorized' });
   mocks.cancel.mockImplementation(async (id: string) => {
     if (id === 'old') source.cancel_at_cycle_end = true;
@@ -408,6 +412,18 @@ describe('replacement mandate transitions', () => {
     await expect(createReplacement(row)).rejects.toThrow('timeout');
     expect(mocks.reserve).toHaveBeenCalledBefore(mocks.create);
     expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it('fails the reservation when Razorpay rejects the mandate create', async () => {
+    mocks.create.mockRejectedValue(new ProviderRejection('Billing provider request failed (400)'));
+    await expect(createReplacement(row)).rejects.toBeInstanceOf(ProviderRejection);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith('operation', { status: 'failed' });
+  });
+  it('reads the schedule without the billing lock when no confirmed replacement is due', async () => {
+    mocks.hasDueConfirmed.mockResolvedValue(false);
+    expect(await applyReplacementSchedule('org', end)).toBe(false);
+    expect(mocks.hasDueConfirmed).toHaveBeenCalledWith('org', end);
+    expect(mocks.locked).not.toHaveBeenCalled();
   });
 });
 describe('proration', () => {
