@@ -100,15 +100,18 @@ services:
       - source: traefik_dynamic
         target: /etc/traefik/dynamic.yml
         mode: 0444
+    # Host mode keeps the client's address on the TCP connection; the ingress mesh would
+    # replace it with a mesh address and collapse every client into one rate-limit bucket.
+    # Valid because Traefik runs one replica on the labelled node that DNS points at.
     ports:
       - target: 80
         published: 80
         protocol: tcp
-        mode: ingress
+        mode: host
       - target: 443
         published: 443
         protocol: tcp
-        mode: ingress
+        mode: host
     volumes:
       - traefik_acme:/letsencrypt
       - type: tmpfs
@@ -279,6 +282,7 @@ services:
       MSG91_WHATSAPP_NUMBER: ${MSG91_WHATSAPP_NUMBER}
       MSG91_WHATSAPP_TEMPLATE: ${MSG91_WHATSAPP_TEMPLATE}
       MSG91_WHATSAPP_LANGUAGE: ${MSG91_WHATSAPP_LANGUAGE:-en}
+      OTP_ALLOWED_COUNTRY_CODES: ${OTP_ALLOWED_COUNTRY_CODES:-91}
       DEPLOYMENT_ENV: staging
       MSG91_KEY_FILE: /run/secrets/msg91_auth_key
       WORKER_HEALTH_PORT: '3002'

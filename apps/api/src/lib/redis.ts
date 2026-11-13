@@ -133,6 +133,27 @@ export async function acquireBillingRefreshLease(
 }
 
 /**
+ * Claim a profile's cooldown slot for a billable Google Places action. The slot
+ * outlives the connection row, so disconnecting cannot reset it. Outages fail
+ * closed, like the nearby budget; the queue needs Redis for the follow-up anyway.
+ */
+export async function acquireGooglePlacesAttempt(
+  profileId: string,
+  cooldownMs: number,
+): Promise<boolean> {
+  const redis = getClient();
+  if (!redis) return false;
+  try {
+    return (
+      (await redis.set(`google-places-attempt:${profileId}`, '1', 'PX', cooldownMs, 'NX')) ===
+      'OK'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Close the Redis connection gracefully (for shutdown).
  */
 export async function closeRedisCache(): Promise<void> {

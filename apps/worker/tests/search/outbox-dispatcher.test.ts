@@ -8,7 +8,8 @@ vi.mock('@repo/queue', () => ({
 }));
 
 vi.mock('../../src/search/outbox-repository.js', () => ({
-  listPendingSearchProjectionEvents: vi.fn(),
+  listDueSearchProjectionEvents: vi.fn(),
+  markSearchProjectionEventsEnqueued: vi.fn(async () => undefined),
 }));
 
 const queue = await import('@repo/queue');
@@ -18,8 +19,8 @@ const { dispatchSearchProjectionOutbox } = await import('../../src/search/outbox
 beforeEach(() => vi.clearAllMocks());
 
 describe('search projection outbox dispatcher', () => {
-  it('queues each pending row independently and reports enqueue failures', async () => {
-    vi.mocked(repository.listPendingSearchProjectionEvents).mockResolvedValue([
+  it('queues each due row independently and backs off only the enqueued rows', async () => {
+    vi.mocked(repository.listDueSearchProjectionEvents).mockResolvedValue([
       {
         sequence: 1n,
         entityKind: 'project',
@@ -42,6 +43,12 @@ describe('search projection outbox dispatcher', () => {
     await expect(dispatchSearchProjectionOutbox()).resolves.toEqual({
       enqueued: 1,
       failed: 1,
+    });
+
+    expect(repository.listDueSearchProjectionEvents).toHaveBeenCalledWith(100);
+    expect(repository.markSearchProjectionEventsEnqueued).toHaveBeenCalledWith([1n], {
+      baseSeconds: 30,
+      maxSeconds: 600,
     });
 
     expect(queue.enqueueSearchProjectIndex).toHaveBeenCalledWith({

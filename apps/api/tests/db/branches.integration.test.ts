@@ -635,6 +635,34 @@ describe('corporate branch persistence', () => {
     ).toHaveLength(1);
   });
 
+  it('keeps branches while organization deletion is pending', async () => {
+    const corporate = await makeOwnerSession('corporate');
+    const [target] = await db
+      .select({ id: schema.team.id })
+      .from(schema.team)
+      .where(eq(schema.team.organizationId, corporate.organization.id));
+    const created = await createBranch(corporate.cookie, corporate.organization.id, 'Retained');
+    const source = (await created.json()) as { id: string };
+    const now = new Date();
+    await db.insert(schema.organizationRetention).values({
+      organizationId: corporate.organization.id,
+      status: 'deletion_requested',
+      requestedByUserId: corporate.userId,
+      requestedAt: now,
+      archiveDueAt: new Date(now.getTime() + 86_400_000),
+      hardDeleteDueAt: new Date(now.getTime() + 2 * 86_400_000),
+      delistWindowDays: 1,
+      archiveWindowDays: 1,
+    });
+
+    const response = await removeBranch(corporate.cookie, source.id, target!.id);
+
+    expect(response.status).toBe(409);
+    expect(await db.select().from(schema.team).where(eq(schema.team.id, source.id))).toHaveLength(
+      1,
+    );
+  });
+
   it('freezes newest branches first and keeps published projects public', async () => {
     const organization = await makeOrganization();
     const oldest = await makeTeam({

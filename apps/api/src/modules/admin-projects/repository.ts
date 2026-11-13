@@ -425,6 +425,11 @@ export const adminProjectsRepository = {
           updatedAt: new Date(),
         };
         await writePendingAggregate(tx, aggregate, aggregate.project.moderationRevision);
+        // A designer tab opened before the correction must not save over it.
+        await tx
+          .update(schema.project)
+          .set({ editRevision: sql`${schema.project.editRevision} + 1` })
+          .where(eq(schema.project.id, input.projectId));
         await tx.insert(schema.projectModerationEvent).values({
           projectId: input.projectId,
           actorUserId: input.actorUserId,
@@ -452,6 +457,7 @@ export const adminProjectsRepository = {
                 metadata: sql`coalesce(${schema.project.metadata}, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`,
               }),
           moderationRevision: sql`${schema.project.moderationRevision} + 1`,
+          editRevision: sql`${schema.project.editRevision} + 1`,
           updatedAt: new Date(),
         })
         .where(

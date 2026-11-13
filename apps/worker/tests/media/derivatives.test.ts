@@ -34,6 +34,17 @@ describe('generateDerivatives', () => {
     expect(derivative?.height).toBe(1000);
   });
 
+  it('builds derivatives from an AVIF original', async () => {
+    const avif = await sharp({ create: { width: 64, height: 48, channels: 3, background: 'red' } })
+      .avif()
+      .toBuffer();
+    const [derivative] = await generateDerivatives(avif, {
+      variants: [{ variant: 'thumb', width: 320 }],
+      formats: ['webp'],
+    });
+    expect(derivative).toMatchObject({ format: 'webp', width: 64, height: 48 });
+  });
+
   it('produces every variant × format', async () => {
     const out = await generateDerivatives(source);
     expect(out).toHaveLength(MEDIA_VARIANTS.length * MEDIA_FORMATS.length);

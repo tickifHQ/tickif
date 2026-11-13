@@ -31,6 +31,7 @@ vi.mock('../../src/search/rebuild.js', () => ({
 
 vi.mock('../../src/search/outbox-repository.js', () => ({
   markSearchProjectionEventDispatched: vi.fn(async () => undefined),
+  recordSearchProjectionEventError: vi.fn(async () => undefined),
   withSearchProjectionEntityLock: vi.fn(
     async (_kind: string, _id: string, work: () => Promise<unknown>) => work(),
   ),
@@ -168,7 +169,7 @@ describe('search index processor', () => {
     );
   });
 
-  it('keeps the outbox row pending when the Typesense write fails', async () => {
+  it('keeps the outbox row pending with its error when the Typesense write fails', async () => {
     vi.mocked(repository.findProjectSearchSource).mockResolvedValue(projectSource);
     vi.mocked(search.upsertSearchDocument).mockRejectedValueOnce(
       new Error('Typesense unavailable'),
@@ -186,6 +187,10 @@ describe('search index processor', () => {
     ).rejects.toThrow('Typesense unavailable');
 
     expect(outbox.markSearchProjectionEventDispatched).not.toHaveBeenCalled();
+    expect(outbox.recordSearchProjectionEventError).toHaveBeenCalledWith(
+      20n,
+      'Typesense unavailable',
+    );
   });
 
   it('removes an inactive designer and all denormalized project documents', async () => {

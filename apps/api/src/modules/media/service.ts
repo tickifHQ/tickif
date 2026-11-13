@@ -11,6 +11,7 @@ import { config, formatBytes } from '@repo/config';
 import { buildOriginalKey, presignDownload, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
+import { isAbandonedProcessingImage } from './processing-timeout.js';
 import { mediaRepository, type ProjectImageListItem } from './repository.js';
 import { orgsService } from '../orgs/service.js';
 
@@ -57,10 +58,12 @@ async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
   // so a legacy or unexpected value degrades to an unknown failure, never a leak.
   const parsedReason =
     row.status === 'failed' ? imageFailureReason.safeParse(row.failureReason) : null;
+  // Completeness already ignores these rows; the editor shows its failed tile and remove action.
+  const abandoned = isAbandonedProcessingImage(row);
   return {
     id: row.id,
     roomId: row.roomId,
-    status: row.status,
+    status: abandoned ? 'failed' : row.status,
     sortOrder: row.sortOrder,
     themeSlugs: row.themeSlugs,
     materialSlugs: row.materialSlugs,
@@ -68,7 +71,11 @@ async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
     tagSlugs: row.tagSlugs,
     width: row.width,
     height: row.height,
-    failureReason: parsedReason && parsedReason.success ? parsedReason.data : null,
+    failureReason: abandoned
+      ? 'upload_failed'
+      : parsedReason && parsedReason.success
+        ? parsedReason.data
+        : null,
     derivatives: row.derivatives,
     previewUrl: previewKey ? await presignDownload({ key: previewKey }) : null,
     viewerUrl: viewerKey ? await presignDownload({ key: viewerKey }) : null,

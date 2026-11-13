@@ -8,6 +8,9 @@ import {
   razorpayRefundsSchema,
 } from '@repo/contracts';
 
+/** Razorpay answered with a 4xx: it refused the request, so nothing was created. */
+export class ProviderRejection extends Error {}
+
 async function request(path: string, body?: Record<string, unknown>): Promise<unknown> {
   if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET)
     throw new Error('Billing not configured');
@@ -20,7 +23,12 @@ async function request(path: string, body?: Record<string, unknown>): Promise<un
     ...(body ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(8_000),
   });
-  if (!response.ok) throw new Error(`Billing provider request failed (${response.status})`);
+  if (!response.ok) {
+    const message = `Billing provider request failed (${response.status})`;
+    throw response.status >= 400 && response.status < 500
+      ? new ProviderRejection(message)
+      : new Error(message);
+  }
   return response.json();
 }
 export const replacementProvider = {

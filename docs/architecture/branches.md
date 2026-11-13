@@ -66,16 +66,29 @@ single field.
 Downgrades freeze active teams newest-first. `freeze_rank` records that order and
 restoration consumes it ascending. Freezing clears sessions that point at those
 teams. The next validated organization-context request preserves the organization
-in roll-up context. Operational project and lead roll-ups omit frozen teams, while
-public profile and published project reads deliberately do not join on
-`team.frozen`.
+in roll-up context. Operational project and lead roll-ups omit frozen teams, and
+lead reads by id treat a frozen team's lead as not found. Public profile and
+published project reads deliberately do not join on `team.frozen`, so a customer
+can still open a frozen branch's profile, but a new enquiry to it is rejected
+with a user-facing message instead of creating a lead nobody can answer.
 
 Hard deletion through Better Auth remains disabled because deleting a team directly
 cascades to its profile and projects. The owner-only Tickif removal endpoint requires
 a different surviving active branch, reassigns retained operational data and search
-projections atomically, and deletes the source team last. It rejects the final branch,
-cross-organization or frozen targets, inactive target profiles, and review identity
-conflicts. Lifecycle reconciliation continues to use freeze and restore instead.
+projections atomically, and deletes the source team last. Followers and profile-view
+history move to the surviving profile; a visitor who already follows it, or viewed
+both profiles on the same day, keeps one row. The removed branch's own portfolio
+page settings, location footprint and Google listing link are branch presentation
+and are deleted with it rather than overwriting the surviving branch's. It rejects the final branch,
+cross-organization or frozen targets, inactive target profiles, review identity
+conflicts, and organizations with deletion or retention active. It takes the
+retention advisory lock so a deletion request cannot interleave with a removal.
+Lifecycle reconciliation continues to use freeze and restore instead.
+
+Better Auth's create, update, add-member and remove-member branch endpoints share the
+organization mutation guard: the caller must be an active (unfrozen) member, and the
+organization must not be in deletion or retention. Update-team is checked against the
+organization in its `data` selector, which is the one Better Auth acts on.
 
 The billing webhook calls both member-seat and branch reconciliation. The same
 `orgsService.reconcileBranches()` helper is available to lifecycle sweeps.

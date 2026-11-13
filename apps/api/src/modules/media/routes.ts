@@ -62,6 +62,7 @@ const uploadUrlRoute = createRoute({
     403: errorJson('Caller does not own the project'),
     404: errorJson('Project not found'),
     409: errorJson('Only draft or changes-requested project media can be edited'),
+    422: errorJson('File too large, or the project already holds its maximum photo count'),
   },
 });
 

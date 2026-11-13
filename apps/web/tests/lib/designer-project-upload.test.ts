@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_PROJECT_IMAGES, PROJECT_ERROR_CODE } from '@repo/contracts';
 import {
   buildCreateProjectPayload,
   buildImageMetadata,
   canonicalTaxonomySlug,
   getBackendProjectSelection,
+  isProjectEditConflict,
   moveProjectImage,
+  projectImageLimitError,
   roomSlugCandidates,
   roomSlugsMatch,
   shouldRefreshPristineDefaultRooms,
@@ -461,4 +464,38 @@ describe('validateSizeSqft', () => {
       expect(validateSizeSqft(value)).toBe('Enter an area between 1 and 100000 sq.ft.');
     },
   );
+});
+
+describe('isProjectEditConflict', () => {
+  it('recognizes the stale-revision 409 the editor stops saving on', () => {
+    expect(
+      isProjectEditConflict({
+        error: { code: PROJECT_ERROR_CODE.EDIT_CONFLICT, message: 'Saved from another tab.' },
+      }),
+    ).toBe(true);
+  });
+
+  it('leaves other failures as ordinary, retryable errors', () => {
+    expect(
+      isProjectEditConflict({
+        error: { code: 'conflict', message: 'Pending changes are currently under review' },
+      }),
+    ).toBe(false);
+    expect(isProjectEditConflict('<html>')).toBe(false);
+  });
+});
+
+describe('projectImageLimitError', () => {
+  it('allows a batch that exactly fills the project', () => {
+    expect(projectImageLimitError(MAX_PROJECT_IMAGES - 3, 3)).toBeNull();
+  });
+
+  it('rejects a batch before any upload starts when it would pass the limit', () => {
+    expect(projectImageLimitError(MAX_PROJECT_IMAGES - 2, 3)).toBe(
+      `A project can hold up to ${MAX_PROJECT_IMAGES} photos. You can add 2 more; remove photos to add others.`,
+    );
+    expect(projectImageLimitError(MAX_PROJECT_IMAGES, 1)).toBe(
+      `A project can hold up to ${MAX_PROJECT_IMAGES} photos. Remove a photo to add another.`,
+    );
+  });
 });

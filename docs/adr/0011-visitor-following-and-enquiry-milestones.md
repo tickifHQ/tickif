@@ -68,3 +68,11 @@ After a successful requester read acknowledgement, an authenticated Next.js
 Server Action invalidates only `/home`. This prevents cached Back navigation
 from restoring a stale NEW enquiry badge. Ownership and the read watermark
 remain enforced by the API; the action accepts no path or account identifiers.
+
+Amendment, 2026-11-13: marking a lead closed or spam now closes its enquiry in
+the same transaction. Only an open enquiry blocks a new one, so the customer can
+enquire again; spam is treated like closed for the customer. Reopening the lead
+leaves the enquiry closed until a studio reply moves it to responded. A referred
+project must be a published project of the receiving studio. Enquiries to a
+frozen branch are rejected with a user-facing message, because frozen leads are
+hidden from lists, counts and reads by id.

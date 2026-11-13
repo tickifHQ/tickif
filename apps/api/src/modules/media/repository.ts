@@ -1,7 +1,12 @@
 import { inArray } from 'drizzle-orm';
 import { db, schema, eq, and, asc, sql } from '@repo/db';
 import { config } from '@repo/config';
-import type { UpdateImageMetadataInput } from '@repo/contracts';
+import {
+  MAX_PROJECT_IMAGES,
+  PROJECT_ERROR_CODE,
+  type UpdateImageMetadataInput,
+} from '@repo/contracts';
+import { AppError } from '../../lib/errors.js';
 import {
   getPendingProject,
   readProjectAggregate,
@@ -27,6 +32,7 @@ export type ProjectImageListItem = Pick<
   | 'height'
   | 'failureReason'
   | 'derivatives'
+  | 'updatedAt'
 >;
 
 export const mediaRepository = {
@@ -84,10 +90,20 @@ export const mediaRepository = {
       ) {
         return null;
       }
-      const state =
-        project.status === 'published' ? await readProjectAggregate(input.projectId, tx) : null;
-      if (state?.pending && !['draft', 'changes_requested'].includes(state.pending.status))
+      const state = await readProjectAggregate(input.projectId, tx);
+      if (
+        !state ||
+        (state.pending && !['draft', 'changes_requested'].includes(state.pending.status))
+      )
         return null;
+      // Counted under the project row lock, so concurrent uploads cannot overshoot the cap.
+      if (state.current.images.length >= MAX_PROJECT_IMAGES) {
+        throw new AppError(
+          PROJECT_ERROR_CODE.IMAGE_LIMIT_REACHED,
+          `A project can hold up to ${MAX_PROJECT_IMAGES} photos. Remove a photo to add another.`,
+          422,
+        );
+      }
       const [retention] = await tx
         .select({ organizationId: schema.organizationRetention.organizationId })
         .from(schema.organizationRetention)
@@ -104,7 +120,7 @@ export const mediaRepository = {
         })
         .returning();
       if (!row) throw new Error('insert returned no row');
-      if (state) {
+      if (project.status === 'published') {
         const aggregate = state.current;
         aggregate.project.approvedImageIds ??= state.live.images.map((image) => image.id);
         aggregate.images.push(row);
@@ -238,6 +254,7 @@ export const mediaRepository = {
         height: schema.projectImage.height,
         failureReason: schema.projectImage.failureReason,
         derivatives: schema.projectImage.derivatives,
+        updatedAt: schema.projectImage.updatedAt,
       })
       .from(schema.projectImage)
       .where(eq(schema.projectImage.projectId, projectId))

@@ -78,6 +78,35 @@ Phone login codes are generated and verified by Better Auth (six digits, five mi
 three attempts) and delivered directly through MSG91 WhatsApp. Email OTPs continue
 through Resend to the entered email. Shared-inbox phone-code forwarding is removed.
 
+### Login-code limits
+
+Every WhatsApp send is paid, and each resend used to bring three fresh guesses. The
+`otp-guard` plugin (`packages/auth/src/otp-guard.ts`) now limits each phone number,
+and each lowercased email for email sign-in codes:
+
+- one send per 60 seconds and five per rolling hour;
+- ten wrong guesses in 24 hours lock the identifier for an hour, refusing sends and
+  verifies; a resend does not reset the count, and each further wrong guess that day
+  locks it again. A guess counts only if a code was sent to that identifier within the
+  code's five-minute lifetime, so nobody can lock out an address without a send.
+
+Sends and wrong guesses are rows in `otp_attempt`, pruned after a day. A send is
+checked and recorded under a per-identifier advisory lock before Better Auth creates
+or delivers a code. Refusals are 429s with `OTP_SEND_LIMITED` or `OTP_LOCKED`, a
+`Retry-After` header and a message the login card shows. If the table cannot be read
+or written the request fails with 503 rather than skipping the check.
+
+Phone codes go only to E.164 numbers in `OTP_ALLOWED_COUNTRY_CODES` (comma-separated
+calling codes, default `91`); anything else is a 400 before a code is stored. Accounts
+have no passwords, so the phone and email password-reset endpoints are disabled.
+
+Better Auth's own per-IP limits (`/phone-number*` 10 a minute, email OTP 3 a minute,
+defaults elsewhere) run in production with `rateLimit.storage: 'database'`, so the
+`rate_limit` table is shared by all replicas. `get-session` is exempt because the web
+tier's server renders all reach it from one address. The client address comes from
+`X-Forwarded-For`, which Traefik overwrites; see the
+[staging deployment runbook](../runbooks/staging-deployment.md#client-ip-for-rate-limits).
+
 Set WHATSAPP_PROVIDER=msg91, MSG91_KEY (or its secret-file form),
 MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_TEMPLATE and MSG91_WHATSAPP_LANGUAGE in the API.
 The template must be an approved authentication template with code body and URL button.

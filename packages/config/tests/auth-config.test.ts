@@ -66,3 +66,23 @@ describe('test auth environment', () => {
     expect(restored.config.BETTER_AUTH_URL).toBe('http://localhost:3001');
   });
 });
+
+describe('login code country allow-list', () => {
+  const auth = {
+    BETTER_AUTH_SECRET: testEnv().BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL: 'http://localhost:3000',
+  };
+
+  it('defaults to India and accepts a comma-separated list of calling codes', () => {
+    expect(parseConfig(auth).OTP_ALLOWED_COUNTRY_CODES).toEqual(['91']);
+    expect(
+      parseConfig({ ...auth, OTP_ALLOWED_COUNTRY_CODES: '91, 971' }).OTP_ALLOWED_COUNTRY_CODES,
+    ).toEqual(['91', '971']);
+  });
+
+  it.each(['', '+91', '91,', '0', '1234'])('rejects %j', (value) => {
+    expect(() => parseConfig({ ...auth, OTP_ALLOWED_COUNTRY_CODES: value })).toThrow(
+      'OTP_ALLOWED_COUNTRY_CODES',
+    );
+  });
+});

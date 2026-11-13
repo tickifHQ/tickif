@@ -97,6 +97,7 @@ function project(overrides: Partial<AdminProjectRecord> = {}): AdminProjectRecor
     moderationNote: null,
     featuredAt: null,
     moderationRevision: 0,
+    editRevision: 0,
     createdAt: new Date('2026-07-20T09:00:00.000Z'),
     updatedAt: new Date('2026-07-20T10:05:00.000Z'),
     ...overrides,

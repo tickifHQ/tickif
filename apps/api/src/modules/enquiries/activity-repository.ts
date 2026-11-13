@@ -14,7 +14,7 @@ export const enquiryActivityRepository = {
   },
   async byLead(leadId: string) {
     const [row] = await db
-      .select({ id: schema.enquiry.id, status: schema.enquiry.status })
+      .select({ id: schema.enquiry.id })
       .from(schema.enquiry)
       .where(eq(schema.enquiry.leadId, leadId))
       .limit(1);
@@ -44,7 +44,7 @@ export const enquiryActivityRepository = {
         .limit(1);
       if (!lead) return { kind: 'missing' } as const;
       const [enquiry] = await tx
-        .select({ id: schema.enquiry.id, status: schema.enquiry.status })
+        .select({ id: schema.enquiry.id })
         .from(schema.enquiry)
         .where(
           and(eq(schema.enquiry.leadId, leadId), eq(schema.enquiry.organizationId, organizationId)),
@@ -72,8 +72,8 @@ export const enquiryActivityRepository = {
         return prior.body === input.body
           ? ({ kind: 'sent', message: prior } as const)
           : ({ kind: 'conflict' } as const);
-      if (enquiry.status === 'closed' || lead.status === 'closed' || lead.status === 'spam')
-        return { kind: 'closed' } as const;
+      // A closed enquiry reopens as responded when the studio reopens its lead and replies.
+      if (lead.status === 'closed' || lead.status === 'spam') return { kind: 'closed' } as const;
       const [message] = await tx
         .insert(schema.enquiryMessage)
         .values({

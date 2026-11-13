@@ -70,6 +70,7 @@ vi.mock('../../../src/modules/orgs/branch-removal-repository.js', () => ({
     INVALID_TARGET: 'invalid_target',
     FINAL_BRANCH: 'final_branch',
     REVIEW_CONFLICT: 'review_conflict',
+    RETENTION_ACTIVE: 'retention_active',
   },
   removeBranchWithReassignment: vi.fn(),
 }));
@@ -123,6 +124,7 @@ describe('orgsService', () => {
     ['invalid_target', 422],
     ['final_branch', 409],
     ['review_conflict', 409],
+    ['retention_active', 409],
   ] as const)('maps branch removal %s to HTTP %s', async (outcome, status) => {
     vi.mocked(removeBranchWithReassignment).mockResolvedValue(outcome);
 

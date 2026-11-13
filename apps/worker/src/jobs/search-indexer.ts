@@ -28,6 +28,7 @@ import {
 } from './designer-experience-refresh.js';
 import {
   markSearchProjectionEventDispatched,
+  recordSearchProjectionEventError,
   withSearchProjectionEntityLock,
 } from '../search/outbox-repository.js';
 
@@ -163,6 +164,26 @@ export async function reconcileDesigner(
   });
 }
 
+/** Settle the outbox row behind a job: dispatched on success, last error kept for retries. */
+async function applyOutboxEvent<T>(
+  outboxSequence: string | undefined,
+  work: () => Promise<T>,
+): Promise<T> {
+  if (!outboxSequence) return work();
+  const sequence = BigInt(outboxSequence);
+  try {
+    const result = await work();
+    await markSearchProjectionEventDispatched(sequence);
+    return result;
+  } catch (error) {
+    await recordSearchProjectionEventError(
+      sequence,
+      error instanceof Error ? error.message : String(error),
+    );
+    throw error;
+  }
+}
+
 export async function processSearchIndex(job: Job<SearchIndexJob>): Promise<unknown> {
   switch (job.name) {
     case JOBS.sweepDesignerExperience:
@@ -182,20 +203,14 @@ export async function processSearchIndex(job: Job<SearchIndexJob>): Promise<unkn
     case JOBS.indexProject:
     case JOBS.deleteProject: {
       const data = projectJob(job.data);
-      const result = await reconcileProject(data.projectId);
-      if (data.outboxSequence) {
-        await markSearchProjectionEventDispatched(BigInt(data.outboxSequence));
-      }
-      return result;
+      return applyOutboxEvent(data.outboxSequence, () => reconcileProject(data.projectId));
     }
     case JOBS.indexDesigner:
     case JOBS.deleteDesigner: {
       const data = designerJob(job.data);
-      const result = await reconcileDesigner(data.profileId, data.updatedAtEpoch, data.eventId);
-      if (data.outboxSequence) {
-        await markSearchProjectionEventDispatched(BigInt(data.outboxSequence));
-      }
-      return result;
+      return applyOutboxEvent(data.outboxSequence, () =>
+        reconcileDesigner(data.profileId, data.updatedAtEpoch, data.eventId),
+      );
     }
     case JOBS.reindexAll: {
       const data = reindexJob(job.data);

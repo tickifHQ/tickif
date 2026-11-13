@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  PROJECT_ERROR_CODE,
   designProjectBudgetBands,
   projectBudgetBands,
   projectDetailResponseSchema,
@@ -259,6 +260,7 @@ describe('DesignerProjectUpload', () => {
           publishedAt: null,
           submittedAt: null,
           reviewComments: [],
+          editRevision: 0,
           createdAt: '2026-07-01T00:00:00.000Z',
           updatedAt: '2026-07-01T00:00:00.000Z',
           rooms: [
@@ -1025,6 +1027,65 @@ describe('DesignerProjectUpload', () => {
     ).toBeInTheDocument();
     expect(mock.projectPatch).toHaveBeenCalledOnce();
     expect(mock.submitPost).not.toHaveBeenCalled();
+  });
+
+  it('sends the revision it last saved so each save builds on its own previous one', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    mock.projectGet.mockImplementation(async () => Response.json({ ...project, editRevision: 4 }));
+    mock.projectPatch.mockImplementation(async ({ json }: { json: UpdateProjectInput }) =>
+      Response.json({ ...project, ...json, editRevision: 5 }),
+    );
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    mock.completenessGet.mockImplementation(async () =>
+      Response.json({ complete: false, score: 0, missing: [], requirements: [] }),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId={project.id} />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    expect(await screen.findByText('Draft saved.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(mock.projectPatch).toHaveBeenCalledTimes(2));
+
+    expect(
+      mock.projectPatch.mock.calls.map(([request]) => request.json.expectedEditRevision),
+    ).toEqual([4, 5]);
+  });
+
+  it('stops saving and offers a reload when another tab saved first', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    mock.projectGet.mockImplementation(async () => Response.json({ ...project, editRevision: 4 }));
+    mock.projectPatch.mockImplementation(async () =>
+      Response.json(
+        {
+          error: {
+            code: PROJECT_ERROR_CODE.EDIT_CONFLICT,
+            message:
+              'This project was saved from another tab or by a teammate. Reload to edit the latest version.',
+          },
+        },
+        { status: 409 },
+      ),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId={project.id} />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    expect(await screen.findByText('This project changed in another tab')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload project' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save as draft' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Preview & Submit Project' })).toBeDisabled();
+    expect(mock.projectPatch).toHaveBeenCalledWith(
+      expect.objectContaining({ json: expect.objectContaining({ expectedEditRevision: 4 }) }),
+    );
+    expect(mock.roomPatch).not.toHaveBeenCalled();
+    expect(mock.imageMetadataPatch).not.toHaveBeenCalled();
   });
 
   it('refreshes pending status when graph edits create a version after the scalar save', async () => {
@@ -1861,6 +1922,7 @@ describe('DesignerProjectUpload', () => {
               publishedAt: null,
               submittedAt: null,
               reviewComments: [],
+              editRevision: 0,
               createdAt: '2026-07-01T00:00:00.000Z',
               updatedAt: '2026-07-01T00:00:00.000Z',
               rooms: [firstRoom, secondRoom],
@@ -1990,6 +2052,7 @@ describe('DesignerProjectUpload batch recovery', () => {
         publishedAt: null,
         submittedAt: null,
         reviewComments: [],
+        editRevision: 0,
         createdAt: '2026-07-01T00:00:00.000Z',
         updatedAt: '2026-07-01T00:00:00.000Z',
         rooms: [
@@ -2487,6 +2550,7 @@ describe('DesignerProjectUpload photo counts', () => {
         publishedAt: null,
         submittedAt: null,
         reviewComments: [],
+        editRevision: 0,
         createdAt: '2026-07-01T00:00:00.000Z',
         updatedAt: '2026-07-01T00:00:00.000Z',
         rooms: [
@@ -2643,6 +2707,7 @@ describe('DesignerProjectUpload floor area', () => {
         publishedAt: null,
         submittedAt: null,
         reviewComments: [],
+        editRevision: 0,
         createdAt: '2026-07-01T00:00:00.000Z',
         updatedAt: '2026-07-01T00:00:00.000Z',
         rooms: [

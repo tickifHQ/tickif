@@ -2,7 +2,11 @@ import { exists, ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
 import type { DbTransaction } from '@repo/db';
-import { VERIFICATION_APPLICATION_STATUS, classifyProjectEdit } from '@repo/contracts';
+import {
+  PROJECT_ERROR_CODE,
+  VERIFICATION_APPLICATION_STATUS,
+  classifyProjectEdit,
+} from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -19,6 +23,10 @@ import type {
   UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import {
+  PROCESSING_IMAGE_TIMEOUT_MS,
+  isAbandonedProcessingImage,
+} from '../media/processing-timeout.js';
 import { AppError } from '../../lib/errors.js';
 import { projectFeedFilterClauses } from './feed-filters.repository.js';
 import {
@@ -130,7 +138,7 @@ const freshProcessingImageFilter = sql`
     ${schema.projectImage.status} = 'ready'
     or (
       ${schema.projectImage.status} = 'processing'
-      and ${schema.projectImage.updatedAt} >= now() - interval '30 minutes'
+      and ${schema.projectImage.updatedAt} >= now() - make_interval(secs => ${PROCESSING_IMAGE_TIMEOUT_MS / 1000})
     )
   )
 `;
@@ -980,7 +988,8 @@ export const projectsRepository = {
       });
 
       let copiedCoverImageId: string | null = null;
-      for (const image of sourceImages) {
+      // Unfinished uploads have no queued job for the copy, so only processed photos carry over.
+      for (const image of sourceImages.filter((candidate) => candidate.status === 'ready')) {
         const [copiedImage] = await tx
           .insert(schema.projectImage)
           .values({
@@ -1020,11 +1029,38 @@ export const projectsRepository = {
     });
   },
 
-  async updateDraft(id: string, input: UpdateProjectInput): Promise<ProjectRecord | null> {
-    const versioned = await mutateProjectAggregate(id, (aggregate) => {
+  /**
+   * Applies a whole-form save. Every save bumps the canonical edit revision, so a
+   * tab that read an older revision gets a conflict instead of reverting this one.
+   */
+  async updateDraft(
+    id: string,
+    input: UpdateProjectInput,
+    expectedEditRevision?: number,
+  ): Promise<ProjectRecord | null> {
+    const versioned = await mutateProjectAggregate(id, async (aggregate, tx) => {
+      if (
+        expectedEditRevision !== undefined &&
+        aggregate.project.editRevision !== expectedEditRevision
+      ) {
+        throw new AppError(
+          PROJECT_ERROR_CODE.EDIT_CONFLICT,
+          'This project was saved from another tab or by a teammate. Reload to edit the latest version.',
+          409,
+        );
+      }
       aggregate.project = { ...aggregate.project, ...input };
+      const [row] = await tx
+        .update(schema.project)
+        .set({ editRevision: sql`${schema.project.editRevision} + 1` })
+        .where(eq(schema.project.id, id))
+        .returning({ editRevision: schema.project.editRevision });
+      if (!row) throw new Error('Project disappeared while locked');
+      return row.editRevision;
     });
-    return versioned ? ((await getPendingProject(id)) ?? versioned.project) : null;
+    if (!versioned) return null;
+    const project = (await getPendingProject(id)) ?? versioned.project;
+    return { ...project, editRevision: versioned.value };
   },
 
   async assignResponsibleMember(input: {
@@ -1091,10 +1127,7 @@ export const projectsRepository = {
         const aggregate = state.current;
         const eligible = aggregate.images.filter(
           (image) =>
-            image.roomId &&
-            (image.status === 'ready' ||
-              (image.status === 'processing' &&
-                image.updatedAt.getTime() >= Date.now() - 30 * 60_000)),
+            image.roomId && image.status !== 'failed' && !isAbandonedProcessingImage(image),
         );
         const counts = {
           imageCount: eligible.length,
@@ -1496,11 +1529,7 @@ export const projectsRepository = {
     const state = await readProjectAggregate(projectId);
     if (state) {
       const images = state.current.images.filter(
-        (image) =>
-          image.roomId &&
-          (image.status === 'ready' ||
-            (image.status === 'processing' &&
-              image.updatedAt.getTime() >= Date.now() - 30 * 60_000)),
+        (image) => image.roomId && image.status !== 'failed' && !isAbandonedProcessingImage(image),
       );
       return {
         imageCount: images.length,

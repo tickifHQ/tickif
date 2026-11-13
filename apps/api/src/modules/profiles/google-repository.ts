@@ -46,17 +46,6 @@ export const googleReviewsRepository = {
     return row;
   },
 
-  /**
-   * Stamp the per-profile attempt clock (drives the connect/refresh cooldown).
-   * No-op if the profile has no cache row yet — the first connect creates it.
-   */
-  async touchAttempt(profileId: string): Promise<void> {
-    await db
-      .update(schema.googlePlaceCache)
-      .set({ lastAttemptAt: new Date() })
-      .where(eq(schema.googlePlaceCache.profileId, profileId));
-  },
-
   /** Leave worker results and newer attempts untouched when queueing fails. */
   async restoreRefresh(
     profileId: string,

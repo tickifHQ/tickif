@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { db, schema } from '@repo/db';
 import { makeOrganization, makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
+import { replacementRepository } from '@repo/billing';
 
 // Mock Redis to avoid requiring a live Redis connection in CI integration tests.
 // The service falls through to DB when Redis returns null (cache miss).
@@ -56,6 +57,34 @@ describe('E-119: entitlement service integration', () => {
     expect(result.currentPeriodEnd).toBeNull();
     expect(result.seatUsage).toBe(1);
     expect(result.branchUsage).toBe(1);
+  });
+
+  it('reads entitlements without waiting for a billing lock held across provider I/O', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    await makeSubscription({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      razorpaySubscriptionId: 'sub_locked_read',
+      razorpayStatus: 'active',
+    });
+    let release!: () => void;
+    let acquired!: () => void;
+    const lockAcquired = new Promise<void>((resolve) => (acquired = resolve));
+    const held = replacementRepository.locked(org.id, async () => {
+      acquired();
+      await new Promise<void>((resolve) => (release = resolve));
+    });
+    await lockAcquired;
+
+    const read = entitlementService.getSubscription({ userId: user.id, activeOrgId: org.id });
+    const outcome = await Promise.race([
+      read.then((result) => result.tier),
+      new Promise((resolve) => setTimeout(() => resolve('blocked by billing lock'), 2_000)),
+    ]);
+    release();
+    await Promise.all([held, read]);
+
+    expect(outcome).toBe('professional_plus');
   });
 
   it('returns Hobby defaults when activeOrgId is null', async () => {

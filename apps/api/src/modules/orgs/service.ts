@@ -407,6 +407,8 @@ export const orgsService = {
         throw AppError.unprocessable(
           'Select a different active branch from this organization as the reassignment target',
         );
+      case BRANCH_REMOVAL_RESULT.RETENTION_ACTIVE:
+        throw AppError.conflict('Branches cannot change while organization retention is active');
     }
   },
 

@@ -126,6 +126,12 @@ export const enquiriesService = {
     if (result.kind === 'own_studio') {
       throw AppError.forbidden('You cannot send an enquiry to your own studio');
     }
+    if (result.kind === 'branch_frozen') {
+      throw AppError.unprocessable('This studio branch is not accepting enquiries right now');
+    }
+    if (result.kind === 'invalid_project') {
+      throw AppError.unprocessable('referredProjectId must be a published project by the designer');
+    }
     if (result.kind === 'existing_enquiry') {
       throw AppError.conflict('You already have an open enquiry with this designer');
     }

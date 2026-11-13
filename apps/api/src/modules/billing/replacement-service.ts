@@ -5,10 +5,11 @@ import {
   replacementRepository,
   reconcileReplacement,
   replacementProvider,
+  ProviderRejection,
 } from '@repo/billing';
 import type { BillingChangePreview, BillingReplacementVerify } from '@repo/contracts';
 import { assertBillingAccess, type BillingCaller } from './selection-service.js';
-import { resolveRazorpayPlanId } from './razorpay-client.js';
+import { checkoutRejected, resolveRazorpayPlanId } from './razorpay-client.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
 import { AppError } from '../../lib/errors.js';
 
@@ -48,6 +49,8 @@ export async function startReplacement(
     periodEnd,
     expiresAt: new Date(Math.min(Date.now() + 15 * 60_000, periodEnd.getTime() - 30_000)),
     supersedesId: predecessor?.id ?? null,
+  }).catch((error: unknown) => {
+    throw error instanceof ProviderRejection ? checkoutRejected() : error;
   });
   return {
     razorpaySubscriptionId: (await replacementRepository.current(caller.activeOrgId!))!

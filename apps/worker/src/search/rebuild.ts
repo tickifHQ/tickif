@@ -2,6 +2,7 @@ import { Errors } from 'typesense';
 import {
   createSearchCollection,
   deleteSearchCollection,
+  deleteSearchCollectionsOlderThan,
   deleteSearchDocument,
   deleteSearchProjectsByDesigner,
   getSearchCollectionTarget,
@@ -23,6 +24,7 @@ import { mapDesignerSearchDocument, mapProjectSearchDocument } from './mapper.js
 import {
   latestSearchProjectionSequence,
   listSearchProjectionEventsBetween,
+  markSearchProjectionEventsDispatchedThrough,
   withSearchProjectionRebuildBarrier,
   type SearchProjectionOutboxRecord,
 } from './outbox-repository.js';
@@ -155,6 +157,42 @@ async function cleanupCandidate(kind: SearchCollectionKind, collectionName: stri
   }
 }
 
+/**
+ * The live collections reflect every outbox row through the watermark, including rows still
+ * backing off after failed incremental jobs. Unsettled rows simply keep retrying.
+ */
+async function settleReplayedBacklog(watermark: bigint): Promise<void> {
+  try {
+    await markSearchProjectionEventsDispatchedThrough(watermark);
+  } catch (error) {
+    logger.error(
+      { event: 'search.backlog_settle_failed', watermark: watermark.toString(), err: error },
+      'Rebuilt search backlog could not be marked dispatched',
+    );
+  }
+}
+
+/** Keep the live collection and the one it replaced for rollback; older copies only cost memory. */
+async function pruneSupersededCollections(
+  kind: SearchCollectionKind,
+  previousCollectionName: string,
+): Promise<void> {
+  try {
+    const deleted = await deleteSearchCollectionsOlderThan(kind, previousCollectionName);
+    if (deleted.length > 0) {
+      logger.info(
+        { event: 'search.collections_pruned', kind, collections: deleted },
+        'Superseded search collections deleted',
+      );
+    }
+  } catch (error) {
+    logger.error(
+      { event: 'search.collection_prune_failed', kind, err: error },
+      'Superseded search collection cleanup failed',
+    );
+  }
+}
+
 export async function rebuildSearchCollections(
   requestedAtEpoch: number,
   attempt: number,
@@ -189,11 +227,11 @@ export async function rebuildSearchCollections(
     const preReplaySequence = await withSearchProjectionRebuildBarrier(() =>
       latestSearchProjectionSequence(),
     );
-    let replayed = await replayThrough(startSequence, preReplaySequence, targets);
+    const replayed = await replayThrough(startSequence, preReplaySequence, targets);
 
-    replayed += await withSearchProjectionRebuildBarrier(async () => {
-      const finalSequence = await latestSearchProjectionSequence();
-      const count = await replayThrough(preReplaySequence, finalSequence, targets);
+    const final = await withSearchProjectionRebuildBarrier(async () => {
+      const watermark = await latestSearchProjectionSequence();
+      const count = await replayThrough(preReplaySequence, watermark, targets);
       await swapSearchCollectionAlias('projects', targets.projects);
       projectAliasSwapped = true;
       try {
@@ -203,10 +241,16 @@ export async function rebuildSearchCollections(
         projectAliasSwapped = false;
         throw error;
       }
-      return count;
+      return { count, watermark };
     });
 
-    return { projects, designers, replayed, collections: targets };
+    // Housekeeping after the swap only logs failures, so it can never trigger the rollback below.
+    await Promise.all([
+      settleReplayedBacklog(final.watermark),
+      pruneSupersededCollections('projects', previous.projects),
+      pruneSupersededCollections('designers', previous.designers),
+    ]);
+    return { projects, designers, replayed: replayed + final.count, collections: targets };
   } catch (error) {
     if (projectAliasSwapped) {
       await swapSearchCollectionAlias('projects', previous.projects).catch((rollbackError) =>

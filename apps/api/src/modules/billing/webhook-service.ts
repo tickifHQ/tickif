@@ -237,15 +237,6 @@ async function handleActivated(
     }
 
     const currentState = current.subscriptionState as SubscriptionState;
-    if (current.planTier !== 'hobby' && targetTier !== current.planTier) {
-      const live = await fetchSubscription(razorpaySubscriptionId);
-      const liveTier =
-        live.status === 'active' && !live.has_scheduled_changes
-          ? resolveTierFromRazorpayPlanId(live.plan_id)
-          : null;
-      if (!liveTier) return { outcome: 'ignored', reason: 'Live plan change is not confirmed' };
-      targetTier = liveTier;
-    }
     // A downgraded organization must explicitly start a replacement checkout.
     // The subscribe flow replaces the old halted ID and records created/authenticated;
     // a delayed charge for the old halted subscription must remain ignored.
@@ -258,6 +249,22 @@ async function handleActivated(
         outcome: 'ignored',
         reason: 'Subscription is downgraded; explicit recovery checkout required',
       };
+    }
+    // Razorpay retries and dashboard resends replay the original activation. Ending a
+    // lapse or changing a paid tier therefore needs the live subscription to agree.
+    const paidTierChange = current.planTier !== 'hobby' && targetTier !== current.planTier;
+    if (currentState !== SUBSCRIPTION_STATE.ACTIVE || paidTierChange) {
+      const live = await fetchSubscription(razorpaySubscriptionId);
+      if (live.status !== 'active') {
+        return { outcome: 'ignored', reason: 'Live subscription is not active' };
+      }
+      if (paidTierChange) {
+        const liveTier = live.has_scheduled_changes
+          ? null
+          : resolveTierFromRazorpayPlanId(live.plan_id);
+        if (!liveTier) return { outcome: 'ignored', reason: 'Live plan change is not confirmed' };
+        targetTier = liveTier;
+      }
     }
 
     if (currentState === SUBSCRIPTION_STATE.ACTIVE && current.planTier === targetTier) {
@@ -481,7 +488,8 @@ async function handlePaymentFailed(
 
 /**
  * subscription.halted — Razorpay halts the subscription after payment retries fail.
- * Maps to our grace state. Valid only from payment_failed.
+ * Maps to our grace state. Valid from payment_failed, or from a paid active plan
+ * when the live subscription is halted.
  * Sets graceStartedAt and preserves preLapseTier for future restoration.
  */
 async function handleHalted(
@@ -506,7 +514,13 @@ async function handleHalted(
     if (!current) return { outcome: 'ignored', reason: 'Subscription is no longer current' };
 
     const currentState = current.subscriptionState as SubscriptionState;
-    if (currentState !== SUBSCRIPTION_STATE.PAYMENT_FAILED) {
+    if (currentState === SUBSCRIPTION_STATE.ACTIVE && current.planTier !== 'hobby') {
+      // payment.failed can arrive after halted. A replayed halted must not lapse a renewed plan.
+      const live = await fetchSubscription(razorpaySubscriptionId);
+      if (live.status !== 'halted') {
+        return { outcome: 'ignored', reason: 'Live subscription is not halted' };
+      }
+    } else if (currentState !== SUBSCRIPTION_STATE.PAYMENT_FAILED) {
       return {
         outcome: 'invalid_transition',
         reason: `Cannot transition from ${currentState} to grace`,

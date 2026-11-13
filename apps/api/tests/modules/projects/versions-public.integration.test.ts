@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectImage, makeProjectRoom } from '@repo/db/testing';
-import type { ProjectDetailResponse } from '@repo/contracts';
+import type { ProjectDetailResponse, PublicProjectDetailResponse } from '@repo/contracts';
 import { app } from '../../../src/app.js';
 import { projectsRepository } from '../../../src/modules/projects/repository.js';
 import { createRoleSession } from '../../helpers/auth.js';
@@ -108,9 +108,9 @@ describe('Public project version boundaries', () => {
 
     const publicResponse = await app.request(`/api/projects/${project.id}`);
     expect(publicResponse.status).toBe(200);
-    const body = (await publicResponse.json()) as ProjectDetailResponse;
+    const body = (await publicResponse.json()) as PublicProjectDetailResponse;
     expect(body.title).toBe(project.title);
-    expect(body.coverImageId).toBe(project.coverImageId);
+    expect(JSON.stringify(body)).not.toContain(hiddenImage.id);
     expect(body.rooms.map((room) => room.id)).toEqual([liveRoom.id]);
     expect(body).not.toHaveProperty('pendingChanges');
     expect(body).not.toHaveProperty('liveVersion');

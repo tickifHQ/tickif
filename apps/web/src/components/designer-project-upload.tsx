@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  MAX_PROJECT_IMAGES,
   taxonomyTermSchema,
   createLocationResponseSchema,
   listProjectImagesResponseSchema,
@@ -78,6 +79,7 @@ import { uploadProjectImage } from '@/lib/upload-project-image';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
 import { projectBudgetOptions, projectBudgetSelectionForScope } from '@/lib/project-budget-options';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
+import { ProjectEditConflictAlert } from '@/components/project-edit-conflict-alert';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
   canonicalTaxonomySlug,
@@ -92,7 +94,11 @@ import {
   type BackendProjectSelection,
   type ProjectImagePreview,
   isLocalPreviewImage,
+  isProjectEditConflict,
+  ProjectEditConflictError,
+  projectImageLimitError,
 } from '@/lib/designer-project-upload';
+import { pollWhileVisible } from '@/lib/poll-while-visible';
 
 type ProjectTypeOption = {
   slug: string;
@@ -1252,7 +1258,8 @@ function RoomCard({
               <ImagePlus className="mx-auto size-5 text-muted-foreground" />
               <div className={cn(typography.label, 'mt-3 text-foreground')}>Upload Files</div>
               <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
-                Drag and drop files here or click to upload
+                Drag and drop files here or click to upload. Up to {MAX_PROJECT_IMAGES} photos per
+                project.
               </div>
               {room.uploading ? (
                 <div
@@ -1400,6 +1407,8 @@ export function DesignerProjectUpload({
   const [roomTypeError, setRoomTypeError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Another tab or teammate saved first; editing stays locked until a reload.
+  const [editConflict, setEditConflict] = useState(false);
   const [sizeSqftError, setSizeSqftError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   // E-286: the "Preview & Submit" CTA opens a confirmation step instead of
@@ -1421,6 +1430,8 @@ export function DesignerProjectUpload({
   const uploadStateRefreshVersionRef = useRef(0);
   const imageListRefreshVersionRef = useRef(0);
   const projectNameAutoManagedRef = useRef(true);
+  // The edit revision this tab last loaded or saved; only its own reads and saves move it.
+  const editRevisionRef = useRef(0);
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1875,6 +1886,7 @@ export function DesignerProjectUpload({
 
         setProjectId(project.id);
         setLoadedProjectId(project.id);
+        editRevisionRef.current = project.editRevision;
         setProjectStatus(project.status);
         setIsLive(project.liveStatus === 'published' || project.status === 'published');
         setPendingChanges(project.pendingChanges ?? false);
@@ -1985,7 +1997,7 @@ export function DesignerProjectUpload({
 
     let cancelled = false;
     let refreshing = false;
-    const timer = window.setInterval(() => {
+    const stopPolling = pollWhileVisible(() => {
       // A slow response must be allowed to land before a newer poll can
       // invalidate it, otherwise Ready previews can remain stuck Processing.
       if (cancelled || refreshing) return;
@@ -2016,7 +2028,7 @@ export function DesignerProjectUpload({
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [hasProcessingImages, projectId]);
 
@@ -2437,6 +2449,7 @@ export function DesignerProjectUpload({
       // room state while attaching server IDs instead of replacing it with that snapshot.
       setRooms((current) => attachExistingProjectRoomsToDrafts(current, detail.rooms, roomTerms));
       setProjectId(detail.id);
+      editRevisionRef.current = detail.editRevision;
       setSavedBudgetBandSlug(detail.budgetBandSlug ?? '');
       setLoadedProjectId(detail.id);
       setProjectStatus(detail.status);
@@ -2461,18 +2474,22 @@ export function DesignerProjectUpload({
 
     const response = await api.api.projects[':id'].$patch({
       param: { id: currentProjectId },
-      json: updatePayload,
+      json: { ...updatePayload, expectedEditRevision: editRevisionRef.current },
     });
     const payloadJson = await response.json();
 
     if (!response.ok) {
-      throw new Error(extractApiMessage(payloadJson, 'Could not save the draft project.'));
+      const message = extractApiMessage(payloadJson, 'Could not save the draft project.');
+      throw isProjectEditConflict(payloadJson)
+        ? new ProjectEditConflictError(message)
+        : new Error(message);
     }
     const updated = parseApiPayload(
       payloadJson,
       projectDetailResponseSchema,
       'Could not read the saved project.',
     );
+    editRevisionRef.current = updated.editRevision;
     setProjectStatus(updated.status);
     setSavedBudgetBandSlug(updated.budgetBandSlug ?? '');
     setIsLive(updated.liveStatus === 'published' || updated.status === 'published');
@@ -2653,6 +2670,11 @@ export function DesignerProjectUpload({
     return { projectId: currentProjectId, project };
   }
 
+  function showSaveError(saveError: unknown, fallback: string) {
+    if (saveError instanceof ProjectEditConflictError) setEditConflict(true);
+    else setError(saveError instanceof Error ? saveError.message : fallback);
+  }
+
   /**
    * Rejects numeric fields the client would silently drop. An invalid area
    * can reach the API as null and blank on reload, so block the save with
@@ -2693,9 +2715,7 @@ export function DesignerProjectUpload({
       }
       return currentProjectId;
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : 'Could not save this project draft.',
-      );
+      showSaveError(saveError, 'Could not save this project draft.');
       requestAnimationFrame(() => {
         errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -2756,11 +2776,7 @@ export function DesignerProjectUpload({
 
       setPreviewOpen(true);
     } catch (previewError) {
-      setError(
-        previewError instanceof Error
-          ? previewError.message
-          : 'Could not prepare this project for review.',
-      );
+      showSaveError(previewError, 'Could not prepare this project for review.');
       requestAnimationFrame(() => {
         errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -3085,12 +3101,20 @@ export function DesignerProjectUpload({
   }
 
   async function handleUploadFiles(room: RoomDraft, files: File[]) {
-    if (projectStatus === 'submitted' || projectStatus === 'in_review') return;
+    if (projectStatus === 'submitted' || projectStatus === 'in_review' || editConflict) return;
     if (room.uploading || uploadingRoomIdsRef.current.has(room.clientId)) {
       return;
     }
 
     if (files.length === 0) return;
+    const limitError = projectImageLimitError(
+      rooms.reduce((count, current) => count + current.images.length, 0),
+      files.length,
+    );
+    if (limitError) {
+      updateRoom(room.clientId, (current) => ({ ...current, uploadError: limitError }));
+      return;
+    }
 
     const previewBatchId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const pendingUploads: Array<{
@@ -3384,7 +3408,9 @@ export function DesignerProjectUpload({
         </Alert>
       ) : null}
 
-      {error ? (
+      {editConflict ? (
+        <ProjectEditConflictAlert ref={errorAlertRef} />
+      ) : error ? (
         <Alert ref={errorAlertRef} variant="destructive" className="mt-6">
           <AlertCircle className="size-4" />
           <AlertTitle>Something needs attention</AlertTitle>
@@ -3412,7 +3438,10 @@ export function DesignerProjectUpload({
       ) : null}
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,50.3125rem)_19.8125rem]">
-        <fieldset disabled={reviewLocked || loadingEditor} className="min-w-0 space-y-4 xl:pr-2">
+        <fieldset
+          disabled={reviewLocked || loadingEditor || editConflict}
+          className="min-w-0 space-y-4 xl:pr-2"
+        >
           <SectionFrame
             step="Step 1"
             title="Project classification"

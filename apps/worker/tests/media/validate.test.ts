@@ -6,17 +6,29 @@ const limits: MediaLimits = { maxBytes: 5_000_000, maxDimension: 100, maxPixels:
 
 let pngBuf: Buffer;
 let jpegBuf: Buffer;
+let avifBuf: Buffer;
 
 beforeAll(async () => {
   const base = sharp({ create: { width: 40, height: 30, channels: 3, background: 'red' } });
   pngBuf = await base.clone().png().toBuffer();
   jpegBuf = await base.clone().jpeg().toBuffer();
+  avifBuf = await base.clone().avif().toBuffer();
 });
 
 describe('validateImageBytes', () => {
   it('accepts a valid PNG and reports real format + dimensions', async () => {
     const res = await validateImageBytes(pngBuf, 'image/png', limits);
     expect(res).toEqual({ ok: true, format: 'image/png', width: 40, height: 30 });
+  });
+
+  it('accepts a real AVIF, which sharp reports as an AV1-compressed HEIF container', async () => {
+    const res = await validateImageBytes(avifBuf, 'image/avif', limits);
+    expect(res).toEqual({ ok: true, format: 'image/avif', width: 40, height: 30 });
+  });
+
+  it('rejects an AVIF declared as another type', async () => {
+    const res = await validateImageBytes(avifBuf, 'image/jpeg', limits);
+    expect(res).toEqual({ ok: false, reason: 'content_type_mismatch' });
   });
 
   it('rejects an empty buffer', async () => {

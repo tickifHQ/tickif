@@ -1,32 +1,66 @@
-import { db, schema, eq, and, sql, asc, inArray } from '@repo/db';
+import { db, schema, eq, ne, and, or, exists, sql, asc } from '@repo/db';
 import type { EarlyBirdTier } from '@repo/contracts';
 import { billingQueries } from './repository.js';
 type Subscription = typeof schema.subscription.$inferSelect;
 
-async function hasOpenOperation(
+/**
+ * History that cancellation never erases: payments, operations that were not
+ * definitively rejected (open checkouts included), plan replacements and
+ * abandoned provider checkouts.
+ */
+async function hasBillingHistory(
   connection: Pick<typeof db, 'select'>,
   organizationId: string,
 ): Promise<boolean> {
-  const rows = await connection
-    .select({ id: schema.billingOperation.operationId })
-    .from(schema.billingOperation)
+  const { billingOperation, billingReplacement, billingAbandonedCheckout } = schema;
+  const { paymentTransaction, subscription, organization } = schema;
+  const found = sql`1`;
+  const [row] = await connection
+    .select({ id: organization.id })
+    .from(organization)
     .where(
       and(
-        eq(schema.billingOperation.organizationId, organizationId),
-        inArray(schema.billingOperation.status, [
-          'requested',
-          'processing',
-          'reconciliation_pending',
-        ]),
+        eq(organization.id, organizationId),
+        or(
+          exists(
+            connection
+              .select({ found })
+              .from(billingOperation)
+              .where(
+                and(
+                  eq(billingOperation.organizationId, organizationId),
+                  ne(billingOperation.status, 'failed'),
+                ),
+              ),
+          ),
+          exists(
+            connection
+              .select({ found })
+              .from(billingReplacement)
+              .where(eq(billingReplacement.organizationId, organizationId)),
+          ),
+          exists(
+            connection
+              .select({ found })
+              .from(billingAbandonedCheckout)
+              .where(eq(billingAbandonedCheckout.organizationId, organizationId)),
+          ),
+          exists(
+            connection
+              .select({ found })
+              .from(paymentTransaction)
+              .innerJoin(subscription, eq(subscription.id, paymentTransaction.subscriptionId))
+              .where(eq(subscription.organizationId, organizationId)),
+          ),
+        ),
       ),
-    )
-    .limit(1);
-  return rows.length > 0;
+    );
+  return !!row;
 }
 
 export const earlyBirdRepository = {
-  hasOpenOperation(organizationId: string) {
-    return hasOpenOperation(db, organizationId);
+  hasBillingHistory(organizationId: string) {
+    return hasBillingHistory(db, organizationId);
   },
   async find(organizationId: string): Promise<Subscription | null> {
     return (
@@ -57,7 +91,7 @@ export const earlyBirdRepository = {
     organizationId: string,
     work: (repository: {
       find: () => Promise<Subscription | null>;
-      hasOpenOperation: () => Promise<boolean>;
+      hasBillingHistory: () => Promise<boolean>;
       grant: (tier: EarlyBirdTier, start: Date, end: Date) => Promise<void>;
       expire: () => Promise<void>;
     }) => Promise<T>,
@@ -83,7 +117,7 @@ export const earlyBirdRepository = {
       const repo = billingQueries(tx);
       return work({
         find: async () => (await repo.subscription(organizationId)) ?? null,
-        hasOpenOperation: () => hasOpenOperation(tx, organizationId),
+        hasBillingHistory: () => hasBillingHistory(tx, organizationId),
         grant: async (tier, start, end) => {
           await tx
             .insert(schema.subscription)

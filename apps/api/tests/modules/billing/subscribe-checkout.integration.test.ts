@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 
 // Use synthetic credentials for billing checks regardless of the developer's .env.
 // Mock the parsed config because global setup may have already loaded its singleton.
@@ -20,6 +20,7 @@ vi.mock('@repo/config', async (importOriginal) => {
 import { eq } from 'drizzle-orm';
 import { db, schema, sql } from '@repo/db';
 import { makeOrganization, makeSubscription, makeUser } from '@repo/db/testing';
+import type * as RazorpayClient from '../../../src/modules/billing/razorpay-client.js';
 
 /**
  * E-116 Subscribe/checkout integration tests.
@@ -1007,5 +1008,120 @@ describe('durable reviewed checkout integration', () => {
     const context = await billingSelectionService.context(caller);
     expect(context.pendingOperation?.reason).toBe('provider_outcome_support_required');
     expect(context.currentTier).toBe('hobby');
+  });
+
+  it('fails a checkout Razorpay definitely rejected, so the organization can choose again', async () => {
+    const { billingSelectionService } =
+      await import('../../../src/modules/billing/selection-service.js');
+    const { billingMutationService } =
+      await import('../../../src/modules/billing/mutation-service.js');
+    const { claimEarlyBird } = await import('@repo/billing');
+    const actual = await vi.importActual<typeof RazorpayClient>(
+      '../../../src/modules/billing/razorpay-client.js',
+    );
+    vi.mocked(mockCreateSubscription).mockImplementation(actual.createSubscription);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: { code: 'BAD_REQUEST_ERROR', description: 'The plan is not active' } },
+            { status: 400 },
+          ),
+        ),
+    );
+    const { user, org } = await makeOrgWithOwner();
+    const caller = { userId: user.id, activeOrgId: org.id };
+    const operationId = '1c3b2f6e-6a1f-4b8e-9f7d-2b1d5c0e8a41';
+    const preview = await billingSelectionService.preview(caller, { targetTier: 'corporate' });
+
+    await expect(
+      billingMutationService.execute(
+        caller,
+        { targetTier: 'corporate', previewToken: preview.previewToken, operationId },
+        'subscribe',
+      ),
+    ).rejects.toMatchObject({ code: 'checkout_rejected', status: 422 });
+
+    const [operation] = await db
+      .select()
+      .from(schema.billingOperation)
+      .where(eq(schema.billingOperation.operationId, operationId));
+    expect(operation?.status).toBe('failed');
+    const context = await billingSelectionService.context(caller);
+    expect(context.pendingOperation).toBeNull();
+    expect(context.actions.find((action) => action.targetTier === 'corporate')?.action).toBe(
+      'subscribe',
+    );
+    expect(await claimEarlyBird(org.id, 'corporate')).toMatchObject({ tier: 'corporate' });
+  });
+
+  it('fails a plan change Razorpay rejects and keeps Hobby cancellation available', async () => {
+    const { billingSelectionService } =
+      await import('../../../src/modules/billing/selection-service.js');
+    const { billingMutationService } =
+      await import('../../../src/modules/billing/mutation-service.js');
+    const { user, org } = await makeOrgWithOwner();
+    const caller = { userId: user.id, activeOrgId: org.id };
+    const seconds = Math.floor(Date.now() / 1000);
+    await makeSubscription({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      razorpaySubscriptionId: 'sub_change_source',
+      razorpayStatus: 'active',
+      currentPeriodEnd: new Date((seconds + 15 * 86400) * 1000),
+    });
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: 'sub_change_source',
+      entity: 'subscription',
+      plan_id: 'plan_test_professional_plus',
+      status: 'active',
+      current_start: seconds - 15 * 86400,
+      current_end: seconds + 15 * 86400,
+      short_url: null,
+      created_at: seconds - 15 * 86400,
+      has_scheduled_changes: false,
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: { code: 'BAD_REQUEST_ERROR', description: 'The plan is not active' } },
+            { status: 400 },
+          ),
+        ),
+    );
+    const operationId = '5d0c7a8e-3f42-4c1b-8e6d-9a2f1b7c4e10';
+    const preview = await billingSelectionService.preview(caller, { targetTier: 'corporate' });
+
+    await expect(
+      billingMutationService.execute(
+        caller,
+        { targetTier: 'corporate', previewToken: preview.previewToken, operationId },
+        'change_plan',
+      ),
+    ).rejects.toMatchObject({ code: 'checkout_rejected', status: 422 });
+
+    const [operation] = await db
+      .select()
+      .from(schema.billingOperation)
+      .where(eq(schema.billingOperation.operationId, operationId));
+    const [replacement] = await db
+      .select()
+      .from(schema.billingReplacement)
+      .where(eq(schema.billingReplacement.id, operationId));
+    expect([operation?.status, replacement?.status]).toEqual(['failed', 'failed']);
+    const context = await billingSelectionService.context(caller);
+    expect(context.pendingOperation).toBeNull();
+    expect(context.actions.find((action) => action.targetTier === 'hobby')?.action).toBe('cancel');
   });
 });

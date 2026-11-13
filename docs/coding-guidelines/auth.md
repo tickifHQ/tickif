@@ -11,8 +11,11 @@ Scope: `packages/auth/**`, auth middleware, and protected routes.
   `c.get('user')` after the `withSession` middleware.
 - Protect routes via the route `middleware: [requireAuth]` field (see [api.md](./api.md)).
 - Production hardening: `useSecureCookies: true`, set `trustedOrigins` (and
-  **remove** the localhost origin), keep CSRF/origin checks **on**, and move
-  sessions + rate limiting to Redis via `secondaryStorage`.
+  **remove** the localhost origin), and keep CSRF/origin checks **on**. Rate limits
+  use Better Auth's database storage and the login-code guard in `otp-guard.ts`, so
+  every replica shares them; sessions stay in Postgres (no `secondaryStorage`).
+- New endpoints that send or check a login code must be added to the OTP guard's
+  route list, or disabled with `disabledPaths`.
 - Prefer importing plugins from dedicated subpaths for tree-shaking
   (`better-auth/plugins/<name>`).
 - The 4-role RBAC (superadmin/admin/designer/visitor) is layered via better-auth

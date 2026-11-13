@@ -5,9 +5,14 @@ api:
 ping:
   entryPoint: ping
 
+# Traefik is the edge: nothing in front of it is trusted to report a client address.
+# Incoming X-Forwarded-* and X-Real-Ip headers are discarded and replaced with the TCP
+# peer, so the API (better-auth advanced.ipAddress) can rate-limit on X-Forwarded-For.
 entryPoints:
   web:
     address: ":80"
+    forwardedHeaders:
+      insecure: false
     http:
       redirections:
         entryPoint:
@@ -16,6 +21,8 @@ entryPoints:
           permanent: true
   websecure:
     address: ":443"
+    forwardedHeaders:
+      insecure: false
     http:
       tls:
         certResolver: letsencrypt

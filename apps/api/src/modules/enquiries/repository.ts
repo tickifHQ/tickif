@@ -40,6 +40,8 @@ export type CreateEnquiryWithLeadResult =
   | { kind: 'created'; enquiry: EnquiryViewRecord }
   | { kind: 'designer_not_found' }
   | { kind: 'own_studio' }
+  | { kind: 'branch_frozen' }
+  | { kind: 'invalid_project' }
   | { kind: 'existing_enquiry'; enquiryId: string };
 
 function enquiryViewQuery() {
@@ -175,10 +177,12 @@ export const enquiriesRepository = {
         .select({
           organizationId: schema.designerProfile.orgId,
           teamId: schema.designerProfile.teamId,
+          teamFrozen: schema.team.frozen,
           creatorUserId: schema.designerProfile.userId,
           memberUserId: schema.member.userId,
         })
         .from(schema.designerProfile)
+        .innerJoin(schema.team, eq(schema.team.id, schema.designerProfile.teamId))
         .leftJoin(
           schema.member,
           and(
@@ -192,6 +196,8 @@ export const enquiriesRepository = {
             eq(schema.designerProfile.status, 'active'),
           ),
         )
+        // Holds off a concurrent freeze until this lead is committed.
+        .for('share', { of: schema.team })
         .limit(1);
       if (!designer) return { kind: 'designer_not_found' } as const;
       if (
@@ -199,6 +205,23 @@ export const enquiriesRepository = {
         designer.memberUserId === params.requesterId
       ) {
         return { kind: 'own_studio' } as const;
+      }
+      // Frozen branches are hidden from every lead inbox, so nobody could answer.
+      if (designer.teamFrozen) return { kind: 'branch_frozen' } as const;
+
+      if (params.referredProjectId) {
+        const [project] = await tx
+          .select({ id: schema.project.id })
+          .from(schema.project)
+          .where(
+            and(
+              eq(schema.project.id, params.referredProjectId),
+              eq(schema.project.designerId, params.designerProfileId),
+              eq(schema.project.status, 'published'),
+            ),
+          )
+          .limit(1);
+        if (!project) return { kind: 'invalid_project' } as const;
       }
 
       await tx.execute(

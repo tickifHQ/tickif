@@ -33,7 +33,7 @@ describe('queue telemetry compatibility', () => {
     expect(fake.add).toHaveBeenCalledWith(
       'process-media',
       { imageId: 'image-1' },
-      { jobId: 'media-image-1' },
+      { jobId: 'media-image-1', removeOnFail: true },
     );
   });
 

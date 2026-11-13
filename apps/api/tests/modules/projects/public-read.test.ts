@@ -5,6 +5,7 @@ import type {
   ProjectRecord,
   ProjectFeedItemRecord,
   ProjectRecommendationRecord,
+  PublicProjectReadRecord,
 } from '../../../src/modules/projects/repository.js';
 
 // --- Mocks ---
@@ -693,7 +694,7 @@ describe('projectsService.getPublicById', () => {
 
 describe('projectsService.getGallery', () => {
   it('returns 410 from a durable tombstone after the project row is purged', async () => {
-    vi.mocked(projectsRepository.findById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
     vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(true);
 
     await expect(
@@ -1263,16 +1264,35 @@ describe('projectsService.designerProjects', () => {
 // =============================================================================
 
 describe('projectsService.similarProjects', () => {
+  const publicRecord = (project: ProjectRecord): PublicProjectReadRecord => ({
+    project,
+    designer: {
+      id: 'designer-1',
+      status: 'active',
+      displayName: 'Studio A',
+      orgSlug: 'studio-a',
+      avgRating: '4.5',
+      reviewCount: 10,
+      entityType: 'company',
+      logoImageId: null,
+      bio: null,
+      firmType: null,
+      foundedYear: null,
+      yearsExperience: 5,
+      isKycVerified: false,
+    },
+  });
+
   it('returns 404 when source project not found', async () => {
-    vi.mocked(projectsRepository.findById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
 
     await expect(projectsService.similarProjects('nonexistent')).rejects.toMatchObject({
       status: 404,
     });
   });
 
-  it('returns 404 when source project is not published', async () => {
-    vi.mocked(projectsRepository.findById).mockResolvedValue(makeProject({ status: 'draft' }));
+  it('returns 404 when the source project is not public', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
 
     await expect(projectsService.similarProjects('project-1')).rejects.toMatchObject({
       status: 404,
@@ -1280,7 +1300,9 @@ describe('projectsService.similarProjects', () => {
   });
 
   it('returns empty when no similar projects exist', async () => {
-    vi.mocked(projectsRepository.findById).mockResolvedValue(makeProject());
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(
+      publicRecord(makeProject()),
+    );
     vi.mocked(projectsRepository.findSimilarPublished).mockResolvedValue([]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
@@ -1291,7 +1313,9 @@ describe('projectsService.similarProjects', () => {
   });
 
   it('returns similar projects with feed card projection', async () => {
-    vi.mocked(projectsRepository.findById).mockResolvedValue(makeProject());
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(
+      publicRecord(makeProject()),
+    );
     vi.mocked(projectsRepository.findSimilarPublished).mockResolvedValue([
       makeFeedRow({ id: 'similar-1', slug: 'similar-project' }),
     ]);
@@ -1314,7 +1338,7 @@ describe('projectsService.similarProjects', () => {
       budgetBandSlug: '20-50l',
       bhkSlug: '2-bhk',
     });
-    vi.mocked(projectsRepository.findById).mockResolvedValue(project);
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(publicRecord(project));
     vi.mocked(projectsRepository.findSimilarPublished).mockResolvedValue([]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());

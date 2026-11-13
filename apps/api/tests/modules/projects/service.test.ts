@@ -32,6 +32,9 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findById: vi.fn(),
       findByIdWithRooms: vi.fn(),
       findLiveByIdWithRooms: vi.fn(),
+      findPublicProjectById: vi.fn(),
+      findPublicProjectLifecycleById: vi.fn(),
+      isProjectTombstonedById: vi.fn(),
       findBySlug: vi.fn(),
       createDraft: vi.fn(),
       duplicateProject: vi.fn(),
@@ -131,6 +134,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   moderationNote: null,
   featuredAt: null,
   moderationRevision: 0,
+  editRevision: 0,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-01T00:00:00Z'),
   ...over,
@@ -461,7 +465,9 @@ describe('projectsService.portfolio', () => {
 
 describe('projectsService.getById', () => {
   it('throws AppError(404) when the project is missing', async () => {
-    vi.mocked(projectsRepository.findByIdWithRooms).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(false);
 
     await expect(projectsService.getById('missing')).rejects.toBeInstanceOf(AppError);
     await expect(projectsService.getById('missing')).rejects.toMatchObject({ status: 404 });
@@ -764,11 +770,19 @@ describe('projectsService.update', () => {
     );
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
 
-    await projectsService.update(row().id, { citySlug: 'chennai' }, caller);
+    await projectsService.update(
+      row().id,
+      { citySlug: 'chennai', expectedEditRevision: 3 },
+      caller,
+    );
 
     expect(projectsRepository.updateDraft).toHaveBeenCalledWith(
       row().id,
       expect.objectContaining({ citySlug: 'chennai', cityName: null }),
+      3,
+    );
+    expect(vi.mocked(projectsRepository.updateDraft).mock.calls[0]?.[1]).not.toHaveProperty(
+      'expectedEditRevision',
     );
   });
 });

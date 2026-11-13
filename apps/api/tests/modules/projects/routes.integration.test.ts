@@ -1800,6 +1800,37 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(body.project.coverImageId).toBe(copiedImages[0]?.id);
   });
 
+  it('copies only ready photos when duplicating a draft with unfinished uploads', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002039');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const room = await makeProjectRoom({ projectId: project.id });
+    const ready = await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+    });
+    await makeProjectImage({ projectId: project.id, roomId: room.id, status: 'processing' });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'failed',
+      failureReason: 'corrupt',
+    });
+
+    const res = await app.request(`/api/projects/${project.id}/duplicate`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { project: ProjectDetailResponse };
+    const copiedImages = await db
+      .select({ status: schema.projectImage.status, originalKey: schema.projectImage.originalKey })
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, body.project.id));
+    expect(copiedImages).toEqual([{ status: 'ready', originalKey: ready.originalKey }]);
+  });
+
   it('rejects unauthenticated duplicate requests', async () => {
     const { designer } = await makeDesignerSession('+919800002033');
     const project = await makeProject({ designerId: designer.id, status: 'published' });
@@ -1980,6 +2011,10 @@ describe('Project draft CRUD + rooms (E-102)', () => {
 
   it('allows banned users to read published projects through the public route', async () => {
     const { cookie, designer, userId } = await makeDesignerSession('+919800002013');
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.designerProfile.id, designer.id));
     const project = await makeProject({ designerId: designer.id, status: 'published' });
     await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
 
@@ -1988,6 +2023,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
 
     expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty('responsibleMemberId');
   });
 
   it('reports completeness and submits complete draft projects', async () => {

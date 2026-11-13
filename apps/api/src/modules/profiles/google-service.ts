@@ -2,6 +2,7 @@ import { GooglePlacesError, isGooglePlacesConfigured, resolvePlaceId } from '@re
 import { enqueueGoogleReviewsRefresh } from '@repo/queue';
 import type { ConnectGooglePlaceInput, GoogleReviewsResponse } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
+import { acquireGooglePlacesAttempt } from '../../lib/redis.js';
 import { resolveProfile, type Caller } from './portfolio-service.js';
 import { googleReviewsRepository, type GooglePlaceCacheRecord } from './google-repository.js';
 import { readState } from './google-mapper.js';
@@ -50,10 +51,8 @@ function buildResponse(row: GooglePlaceCacheRecord | null): GoogleReviewsRespons
  */
 const ATTEMPT_COOLDOWN_MS = 10_000;
 
-function assertNotThrottled(row: GooglePlaceCacheRecord | null): void {
-  if (!row?.lastAttemptAt) return;
-  const elapsed = Date.now() - new Date(row.lastAttemptAt).getTime();
-  if (elapsed < ATTEMPT_COOLDOWN_MS) {
+async function claimAttempt(profileId: string): Promise<void> {
+  if (!(await acquireGooglePlacesAttempt(profileId, ATTEMPT_COOLDOWN_MS))) {
     throw AppError.tooManyRequests(
       'You just updated this Google connection — wait a few seconds and try again.',
     );
@@ -78,15 +77,8 @@ export const googleReviewsService = {
       throw AppError.unprocessable('Google review fetching is not available');
     }
     const profile = await resolveProfile(caller);
-
-    // Per-profile rate limit on the billable resolve. The first connect (no row
-    // yet) is allowed; every later attempt is gated and the clock is stamped
-    // *before* the outbound call so a failing reference can't be looped for free.
-    const existing = await googleReviewsRepository.findByProfileId(profile.id);
-    if (existing) {
-      assertNotThrottled(existing);
-      await googleReviewsRepository.touchAttempt(profile.id);
-    }
+    // Claimed before the outbound call so a failing reference can't be looped for free.
+    await claimAttempt(profile.id);
 
     let placeId: string;
     try {
@@ -120,7 +112,7 @@ export const googleReviewsService = {
     const profile = await resolveProfile(caller);
     const row = await googleReviewsRepository.findByProfileId(profile.id);
     if (!row) throw AppError.notFound('No Google location is connected');
-    assertNotThrottled(row);
+    await claimAttempt(profile.id);
     const attemptAt = new Date();
     const pending = await googleReviewsRepository.upsert(profile.id, {
       placeId: row.placeId,

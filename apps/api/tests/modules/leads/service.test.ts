@@ -98,7 +98,7 @@ describe('lead enquiry activity access', () => {
       leadDetailRow({ assignedMemberId: 'member_1' }),
     );
     vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
-    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue({ id, status: 'open' });
+    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue({ id });
     vi.mocked(enquiryActivityRepository.messages).mockResolvedValue([]);
     vi.mocked(enquiryActivityRepository.viewed).mockResolvedValue(true);
     expect(await leadsService.messages(id, { page: 1, limit: 20 }, caller)).toMatchObject({
@@ -137,7 +137,7 @@ describe('lead enquiry activity access', () => {
   });
 
   it('keeps closed and spam leads read-only, with bounded message pagination', async () => {
-    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue({ id, status: 'open' });
+    vi.mocked(enquiryActivityRepository.byLead).mockResolvedValue({ id });
     const message = {
       id,
       body: input.body,

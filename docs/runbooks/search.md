@@ -113,25 +113,59 @@ Search writes are asynchronous. PostgreSQL remains the source of truth:
 
 1. Project, profile, portfolio, logo, and terminal media-failure transactions
    append a row to `search_projection_outbox`.
-2. The worker dispatcher publishes undispatched rows to the `search-index`
-   BullMQ queue using the outbox sequence as the job identity.
+2. Every two seconds the worker dispatcher publishes up to 100 due rows
+   (undispatched, `next_attempt_at` in the past) to the `search-index` BullMQ
+   queue, using the outbox sequence as the job identity. Each publish adds one
+   to `attempts` and pushes `next_attempt_at` out by 30 seconds, doubling per
+   attempt up to 10 minutes.
 3. The indexer reloads the current PostgreSQL state before every write. A stale
    index or delete job therefore converges to the latest state instead of
    resurrecting or removing a document incorrectly. Same-entity jobs are
    serialized across worker replicas, and the row is marked dispatched only
-   after Typesense accepts the projection.
+   after Typesense accepts the projection. A failed attempt stores its message
+   in `last_error`.
 
-Jobs use deterministic IDs and exponential retries. If Redis is unavailable,
-the outbox row remains undispatched and a later dispatcher sweep retries it.
-Typesense downtime fails the BullMQ job without affecting the API write that
-created the outbox row. Exhausted jobs remain in BullMQ for seven days and their
-outbox rows remain undispatched; retry the failed job after recovery or run a
-full rebuild.
+Each job still makes three quick BullMQ attempts (about seven seconds). After
+that the job is removed, and the row waits for its `next_attempt_at` before the
+dispatcher re-adds the same job id. Rows that are backing off never block newer
+rows, and no row is ever abandoned: an unpublish or takedown keeps retrying at
+the 10 minute cap until Typesense accepts it. If Redis is unavailable, the row is
+left due and the next sweep retries it. Typesense downtime never affects the API
+write that created the outbox row.
 
-The worker readiness endpoint includes Typesense:
+To see stuck rows and why they failed:
+
+```sql
+SELECT sequence, entity_kind, entity_id, operation, attempts,
+       next_attempt_at, last_error, created_at
+FROM search_projection_outbox
+WHERE dispatched_at IS NULL AND attempts > 1
+ORDER BY sequence
+LIMIT 50;
+```
+
+Rows with `attempts > 1` have failed at least once. Once Typesense is healthy
+they drain on their own within the 10 minute cap. To retry immediately, make
+them due:
+
+```sql
+UPDATE search_projection_outbox SET next_attempt_at = now()
+WHERE dispatched_at IS NULL;
+```
+
+A full rebuild (below) also clears them.
+
+Worker health does not depend on Typesense:
 
 - `/livez` confirms that the process is alive.
-- `/readyz` returns `503` while draining or when Typesense is unavailable.
+- `/readyz` returns `503` while draining or when Postgres or the queue consumers'
+  Redis connections are unavailable. A Typesense outage leaves it `200`, so the
+  container healthcheck does not restart media, billing and email work while
+  indexing backs off.
+
+Watch Typesense itself through the collector's `httpcheck` on
+`typesense:8108/health`, the worker's `job.terminal_failed` logs for the
+`search-index` queue, and the stuck-row query above.
 
 ## Full rebuild
 
@@ -154,12 +188,25 @@ Only one rebuild can be queued or active at a time. The worker:
 The final lock prevents a domain transaction from committing between replay and
 alias swap. If the designer alias swap fails after the project alias moved, the
 worker restores the project alias. Failed candidate collections are deleted.
-Previous live physical collections are retained for operator rollback.
+
+After a successful swap the worker keeps two physical collections per kind: the
+new live one and the one it replaced, for operator rollback. Versioned
+collections created before the replaced one are deleted, so a rebuild on every
+release no longer accumulates full copies in Typesense memory. The collection an
+alias points to and anything newer than the replaced collection are never
+deleted. A failed cleanup is logged as `search.collection_prune_failed` and the
+next rebuild retries it.
+
+After both aliases move, the rebuild marks every undispatched outbox row up to
+its final watermark as dispatched. Those rows are
+already reflected in the new collections, so a rebuild clears any backlog left
+by an outage. Rows written after the watermark go through normal dispatch.
 
 To inspect queue and projection progress:
 
 ```sql
-SELECT count(*) AS undispatched
+SELECT count(*) AS undispatched,
+       count(*) FILTER (WHERE next_attempt_at > now()) AS backing_off
 FROM search_projection_outbox
 WHERE dispatched_at IS NULL;
 

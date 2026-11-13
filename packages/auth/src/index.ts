@@ -7,6 +7,8 @@ import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@rep
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { assertProductionEmailConfig, assertWhatsappConfig, config } from '@repo/config';
 import { sendPhoneOtp } from './phone-otp.js';
+import { OTP_CODE_LIFETIME_SECONDS, isAllowedPhoneNumber, otpGuard } from './otp-guard.js';
+import { bodyString } from './request-body.js';
 import { ac, orgAc, orgRoles, roles } from './permissions.js';
 import {
   organizationMembershipLimit,
@@ -49,6 +51,10 @@ const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
   '/organization/cancel-invitation',
   '/organization/remove-member',
   '/organization/update-member-role',
+  '/organization/create-team',
+  '/organization/update-team',
+  '/organization/add-team-member',
+  '/organization/remove-team-member',
 ]);
 
 const ACTIVE_MEMBER_ORGANIZATION_READS = new Set([
@@ -152,12 +158,6 @@ async function preferredContextForNewSession(userId: string): Promise<{
   return { activeOrganizationId: null, activeTeamId: null };
 }
 
-function bodyString(body: unknown, key: string): string | undefined {
-  if (!body || typeof body !== 'object') return undefined;
-  const value = Reflect.get(body, key);
-  return typeof value === 'string' ? value : undefined;
-}
-
 function branchSlug(name: string): string {
   const base =
     name
@@ -258,7 +258,13 @@ async function protectedMutationOrganizationId(
 ): Promise<string | undefined> {
   const invitationId = bodyString(body, 'invitationId');
   if (!invitationId) {
-    return bodyString(body, 'organizationId') ?? activeOrganizationId ?? undefined;
+    // Better Auth reads update-team's organization from `data`, and falls back to the
+    // active organization for any falsy id (including ""); guard the same one.
+    const selector =
+      path === '/organization/update-team' && body && typeof body === 'object'
+        ? Reflect.get(body, 'data')
+        : body;
+    return bodyString(selector, 'organizationId') || activeOrganizationId || undefined;
   }
 
   const [invitation] = await db
@@ -363,6 +369,28 @@ export const auth = betterAuth({
   // Driven by TRUSTED_ORIGINS env var — no hardcoded URLs.
   // Dev: "http://localhost:3000". Prod same-origin: leave empty.
   trustedOrigins: config.TRUSTED_ORIGINS,
+
+  // Per-IP limits live in Postgres so every API replica shares them across restarts.
+  // Server-rendered pages read sessions from the web tier's single egress IP, so
+  // get-session is exempt; a shared cap there would sign everyone out under load.
+  rateLimit: {
+    storage: 'database',
+    customRules: { '/get-session': false },
+  },
+  advanced: {
+    // Traefik replaces X-Forwarded-For with the TCP peer it accepted; see
+    // infra/staging/traefik/static.yml.tmpl. Only a single-value header is trusted.
+    ipAddress: { ipAddressHeaders: ['x-forwarded-for'] },
+  },
+  // Accounts have no passwords. Reset codes would be an unthrottled guessing path.
+  disabledPaths: [
+    '/sign-in/phone-number',
+    '/phone-number/request-password-reset',
+    '/phone-number/reset-password',
+    '/email-otp/request-password-reset',
+    '/forget-password/email-otp',
+    '/email-otp/reset-password',
+  ],
 
   databaseHooks: {
     session: {
@@ -555,8 +583,9 @@ export const auth = betterAuth({
         await sendPhoneOtp({ phoneNumber: phone, code });
       },
       otpLength: 6,
-      expiresIn: 300,
+      expiresIn: OTP_CODE_LIFETIME_SECONDS,
       allowedAttempts: 3,
+      phoneNumberValidator: isAllowedPhoneNumber,
       signUpOnVerification: {
         // Derive a placeholder email until the designer completes their profile.
         getTempEmail: (phone) => `${phone}@phone.tickif.local`,
@@ -630,9 +659,6 @@ export const auth = betterAuth({
         });
       },
       organizationHooks: {
-        beforeCreateTeam: async ({ team, user }) => {
-          if (user) await requireActiveOrganizationMember(user.id, team.organizationId);
-        },
         afterCreateTeam: async ({ team, user, organization }) => {
           try {
             const slug = await availableBranchSlug(team.name);
@@ -662,8 +688,7 @@ export const auth = betterAuth({
             throw error;
           }
         },
-        beforeUpdateTeam: async ({ team, user }) => {
-          await requireActiveOrganizationMember(user.id, team.organizationId);
+        beforeUpdateTeam: async ({ team }) => {
           if (team.frozen) {
             throw new APIError('FORBIDDEN', {
               code: 'BRANCH_INACTIVE',
@@ -786,7 +811,7 @@ export const auth = betterAuth({
     }),
     emailOTP({
       otpLength: 6,
-      expiresIn: 300,
+      expiresIn: OTP_CODE_LIFETIME_SECONDS,
       allowedAttempts: 3,
       storeOTP: 'hashed',
       rateLimit: { window: 60, max: 3 },
@@ -809,6 +834,7 @@ export const auth = betterAuth({
         });
       },
     }),
+    otpGuard(),
   ],
 });
 

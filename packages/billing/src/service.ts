@@ -1,4 +1,4 @@
-import { replacementProvider as provider } from './provider.js';
+import { replacementProvider as provider, ProviderRejection } from './provider.js';
 import {
   replacementRepository as repository,
   type NewReplacement,
@@ -10,15 +10,30 @@ const terminal = (status: string) => ['cancelled', 'completed', 'expired'].inclu
 /** Reserve before external creates. Unknown create outcomes are never blindly retried. */
 export async function createReplacement(input: NewReplacement) {
   if (!(await repository.reserve(input))) throw new Error('Organization billing is unavailable');
-  const remote = await provider.create(
-    input.targetPlanId,
-    Math.floor(input.periodEnd.getTime() / 1000),
-    Math.floor(input.expiresAt.getTime() / 1000),
-    input.id,
-  );
+  const remote = await provider
+    .create(
+      input.targetPlanId,
+      Math.floor(input.periodEnd.getTime() / 1000),
+      Math.floor(input.expiresAt.getTime() / 1000),
+      input.id,
+    )
+    .catch(async (error: unknown) => {
+      // A rejected create made no mandate. Other failures stay reserved until reconcile.
+      if (error instanceof ProviderRejection)
+        await repository.update(input.id, { status: 'failed' });
+      throw error;
+    });
   await repository.update(input.id, { replacementSubscriptionId: remote.id });
   if (input.amount > 0) {
-    const order = await provider.createOrder(input.amount, input.currency, input.id);
+    const order = await provider
+      .createOrder(input.amount, input.currency, input.id)
+      .catch((error: unknown) => {
+        // The mandate already exists, so this is not a clean "nothing was created" rejection;
+        // the reservation stays open until reconcile resolves the mandate.
+        throw error instanceof ProviderRejection
+          ? new Error('Billing order was rejected after the mandate was created', { cause: error })
+          : error;
+      });
     if (
       order.amount !== input.amount ||
       order.currency !== input.currency ||
@@ -39,7 +54,15 @@ export async function reconcileReplacement(org: string, now = new Date()) {
   if (previous?.status === 'confirmed' && (await repository.cancellationPending(org)))
     await cancelReplacementRenewal(org);
   const result = await repository.locked(org, async (candidate, repo) => {
-    if (!candidate || !candidate.replacementSubscriptionId) return false;
+    if (!candidate) return false;
+    if (!candidate.replacementSubscriptionId) {
+      // An unknown create outcome saved no mandate ID. Any mandate it made cannot be
+      // authorized after expire_by (expiresAt), so the reservation is released then.
+      if (now < candidate.expiresAt) return false;
+      await repo.update(candidate.id, { status: 'failed' });
+      await repo.operation(candidate, 'failed');
+      return true;
+    }
     let row = candidate;
     if (row.status === 'confirmed' && row.targetTier === 'hobby') return false;
     const local = await repo.subscription(org);
@@ -244,6 +267,9 @@ export async function reconcileReplacement(org: string, now = new Date()) {
 }
 
 export async function applyReplacementSchedule(org: string, now = new Date()) {
+  // Entitlement reads call this on every request. Only take the billing lock when a
+  // confirmed replacement has reached its boundary; the locked check below decides.
+  if (!(await repository.hasDueConfirmed(org, now))) return false;
   return repository.locked(org, async (current, repo) => {
     // An unfinished successor must not erase the predecessor's paid boundary.
     const row =

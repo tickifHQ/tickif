@@ -1,6 +1,9 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { db, schema } from '@repo/db';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { lockOrganizationRetention } from '../organization-retention/repository.js';
+import { orgsRepository } from './repository.js';
 
 export const BRANCH_REMOVAL_RESULT = {
   REMOVED: 'removed',
@@ -9,6 +12,7 @@ export const BRANCH_REMOVAL_RESULT = {
   INVALID_TARGET: 'invalid_target',
   FINAL_BRANCH: 'final_branch',
   REVIEW_CONFLICT: 'review_conflict',
+  RETENTION_ACTIVE: 'retention_active',
 } as const;
 
 type BranchRemovalFailure = (typeof BRANCH_REMOVAL_RESULT)[Exclude<
@@ -48,6 +52,10 @@ export async function removeBranchWithReassignment(input: {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`branch:${input.organizationId}`}, 0))`,
     );
+    await lockOrganizationRetention(tx, input.organizationId);
+    if (await orgsRepository.hasActiveRetention(input.organizationId, tx)) {
+      return BRANCH_REMOVAL_RESULT.RETENTION_ACTIVE;
+    }
 
     const [membership] = await tx
       .select({ role: schema.member.role, frozen: schema.member.frozen })
@@ -135,6 +143,47 @@ export async function removeBranchWithReassignment(input: {
       .update(schema.review)
       .set({ designerProfileId: target.profileId, updatedAt: now })
       .where(eq(schema.review.designerProfileId, source.profileId));
+    // Followers and profile views would otherwise cascade away with the source
+    // profile. Visitors who already follow, or viewed both profiles that day,
+    // keep their target row and the duplicate goes with the source.
+    await tx
+      .insert(schema.designerFollow)
+      .select(
+        tx
+          .select({
+            userId: schema.designerFollow.userId,
+            designerProfileId: sql<string>`${target.profileId}::uuid`.as('designer_profile_id'),
+            followedAt: schema.designerFollow.followedAt,
+            lastSeenAt: schema.designerFollow.lastSeenAt,
+          })
+          .from(schema.designerFollow)
+          .where(eq(schema.designerFollow.designerProfileId, source.profileId)),
+      )
+      .onConflictDoNothing();
+    await tx
+      .delete(schema.designerFollow)
+      .where(eq(schema.designerFollow.designerProfileId, source.profileId));
+    const keptView = alias(schema.interactionEvent, 'kept_view');
+    await tx
+      .update(schema.interactionEvent)
+      .set({ designerProfileId: target.profileId })
+      .where(
+        and(
+          eq(schema.interactionEvent.designerProfileId, source.profileId),
+          notExists(
+            tx
+              .select({ id: keptView.id })
+              .from(keptView)
+              .where(
+                and(
+                  eq(keptView.designerProfileId, target.profileId),
+                  eq(keptView.actorUserId, schema.interactionEvent.actorUserId),
+                  eq(keptView.eventDay, schema.interactionEvent.eventDay),
+                ),
+              ),
+          ),
+        ),
+      );
     await tx
       .update(schema.session)
       .set({ activeTeamId: null, updatedAt: now })

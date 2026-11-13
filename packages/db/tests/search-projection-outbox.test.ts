@@ -41,15 +41,15 @@ describe('search projection outbox schema', () => {
     );
   });
 
-  it('supports ordered undispatched claiming and entity replay', () => {
+  it('supports claiming due undispatched rows in order and entity replay', () => {
     expect(config.indexes.map((tableIndex) => tableIndex.config.name)).toEqual([
-      'search_projection_outbox_undispatched_sequence_idx',
+      'search_projection_outbox_due_idx',
       'search_projection_outbox_entity_sequence_idx',
     ]);
 
-    const [undispatched, entityReplay] = config.indexes;
-    expect(undispatched?.config.columns).toHaveLength(1);
-    expect(undispatched?.config.where).toBeDefined();
+    const [due, entityReplay] = config.indexes;
+    expect(due?.config.columns).toHaveLength(2);
+    expect(due?.config.where).toBeDefined();
     expect(entityReplay?.config.columns).toHaveLength(3);
   });
 });

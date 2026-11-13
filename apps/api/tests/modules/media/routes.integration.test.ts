@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { testClient } from 'hono/testing';
+import { MAX_PROJECT_IMAGES, PROJECT_ERROR_CODE } from '@repo/contracts';
 import { db, schema, eq } from '@repo/db';
 import {
   makeDesigner,
@@ -173,6 +174,36 @@ describe('POST /api/media/upload-url', () => {
     expect(row!.originalKey).toBe(body.key);
     expect(row!.projectId).toBe(project.id);
   });
+
+  it('rejects the 101st photo with a stable code before reserving anything', async () => {
+    const { cookie, designer } = await ownerProjectManager();
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    await db.insert(schema.projectImage).values(
+      Array.from({ length: MAX_PROJECT_IMAGES }, (_, index) => ({
+        projectId: project.id,
+        originalKey: `originals/${project.id}/${index}.jpg`,
+        contentType: 'image/jpeg',
+        status: index === 0 ? ('failed' as const) : ('ready' as const),
+        sortOrder: index,
+      })),
+    );
+
+    const res = await client.api.media['upload-url'].$post(
+      { json: { projectId: project.id, contentType: 'image/jpeg', size: 1000 } },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({
+      error: { code: PROJECT_ERROR_CODE.IMAGE_LIMIT_REACHED },
+    });
+    const rows = await db
+      .select({ id: schema.projectImage.id })
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, project.id));
+    expect(rows).toHaveLength(MAX_PROJECT_IMAGES);
+    expect(await db.select().from(schema.organizationUploadLease)).toEqual([]);
+  });
 });
 
 describe('POST /api/media/:imageId/commit', () => {
@@ -272,6 +303,37 @@ describe('GET /api/projects/:id/images', () => {
     expect(body.items[1]!.viewerUrl).toBeNull();
     expect(body.items[2]!.status).toBe('failed');
     expect(body.items[2]!.failureReason).toBe('duplicate');
+  });
+
+  it('reports a processing row abandoned for over 30 minutes as a failed upload', async () => {
+    const { cookie, designer } = await ownerProjectManager();
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const abandoned = await makeProjectImage({
+      projectId: project.id,
+      sortOrder: 0,
+      status: 'processing',
+      updatedAt: new Date(Date.now() - 31 * 60_000),
+    });
+    const fresh = await makeProjectImage({
+      projectId: project.id,
+      sortOrder: 1,
+      status: 'processing',
+    });
+
+    const res = await client.api.projects[':id'].images.$get(
+      { param: { id: project.id }, query: {} },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    if (res.status !== 200) throw new Error('expected 200');
+    const body = await res.json();
+    expect(
+      body.items.map(({ id, status, failureReason }) => ({ id, status, failureReason })),
+    ).toEqual([
+      { id: abandoned.id, status: 'failed', failureReason: 'upload_failed' },
+      { id: fresh.id, status: 'processing', failureReason: null },
+    ]);
   });
 });
 

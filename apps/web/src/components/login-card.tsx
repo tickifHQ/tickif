@@ -51,7 +51,8 @@ interface LoginCardProps {
 type Step = 'phone' | 'otp';
 type OtpDigits = string[];
 
-const COOLDOWN_SECONDS = 30;
+// Matches the API's limit of one login code a minute per phone number or email.
+const COOLDOWN_SECONDS = 60;
 
 function GoogleSignInButton({
   label,

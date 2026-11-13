@@ -185,6 +185,12 @@ const envSchema = z.object({
     z.string().trim().min(1).optional(),
   ),
   MSG91_WHATSAPP_LANGUAGE: z.string().trim().min(1).default('en'),
+  // Comma-separated calling codes that may receive WhatsApp login codes (each send is paid).
+  OTP_ALLOWED_COUNTRY_CODES: z
+    .string()
+    .default('91')
+    .transform((value) => value.split(',').map((code) => code.trim()))
+    .pipe(z.array(z.string().regex(/^[1-9]\d{0,2}$/)).min(1)),
 
   // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
   // R2_ENDPOINT explicitly to point at a local minio in tests/dev.

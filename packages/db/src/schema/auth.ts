@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   pgTable,
   pgEnum,
+  bigint,
   text,
   timestamp,
   boolean,
@@ -129,6 +130,34 @@ export const verification = pgTable(
       .notNull(),
   },
   (t) => [index('verification_identifier_idx').on(t.identifier)],
+);
+
+// rateLimit storage 'database': per-IP request windows shared by every API replica.
+export const rateLimit = pgTable(
+  'rate_limit',
+  {
+    id: text('id').primaryKey(),
+    key: text('key').notNull().unique(),
+    count: integer('count').notNull(),
+    lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+  },
+  (t) => [index('rate_limit_last_request_idx').on(t.lastRequest)],
+);
+
+/** Login-code sends and wrong guesses per phone number or email, kept for 24 hours. */
+export const otpAttempt = pgTable(
+  'otp_attempt',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    identifier: text('identifier').notNull(),
+    kind: text('kind').$type<'send' | 'wrong_guess'>().notNull(),
+    createdAt: timestamp('created_at').notNull(),
+  },
+  (t) => [
+    index('otp_attempt_identifier_created_idx').on(t.identifier, t.createdAt),
+    index('otp_attempt_created_idx').on(t.createdAt),
+    check('otp_attempt_kind_check', sql`${t.kind} in ('send', 'wrong_guess')`),
+  ],
 );
 
 // --- organization plugin (kept wired; Epic-3 RBAC builds on these — see plan note) ---

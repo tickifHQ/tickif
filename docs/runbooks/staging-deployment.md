@@ -32,7 +32,9 @@ install -d -m 750 /opt/tickif/releases
 ```
 
 The Traefik label should remain on one durable manager because the single ACME
-volume is node-local. The stateful label pins Postgres, Redis, and Typesense to
+volume is node-local. Traefik publishes 80/443 in Swarm `host` mode so it sees each
+client's real address; the label must be on the node the A/AAAA records point at, and
+`TRAEFIK_REPLICAS` must stay `1` because host ports cannot be shared on a node. The stateful label pins Postgres, Redis, and Typesense to
 the node that owns their named volumes. Release and restore scripts require one
 manager; multi-node storage and health verification need a separate design.
 
@@ -266,6 +268,31 @@ Desired replicas use `DESIRED_API_REPLICAS`, `DESIRED_WEB_REPLICAS`, and `DESIRE
 
 ## Routing, health, and inspection
 
+### Client IP for rate limits
+
+Better Auth's per-IP limits read `X-Forwarded-For`. Traefik's entry points do not trust
+forwarded headers from anyone, so it drops any client-sent `X-Forwarded-For` or
+`X-Real-Ip` and writes the TCP peer it accepted. The API is reachable only through
+Traefik on the private `edge` overlay, so that single value is the client address.
+The limit counters live in Postgres (`rate_limit`, `otp_attempt`) and are shared by
+every API replica.
+
+Deploy step for the switch from `ingress` to `host` ports (first release with it):
+
+1. Confirm the `tickif.traefik=true` node is the one the A/AAAA records resolve to.
+2. Release as usual. Traefik's stop-first update briefly closes 80/443 while it
+   rebinds the host ports; expect a few seconds of connection refusals.
+3. From an outside network, request a login code with a made-up
+   `X-Forwarded-For: 192.0.2.1` header. In Postgres,
+   `select key from rate_limit order by last_request desc limit 5` must show
+   `<your public IP>|/phone-number/send-otp`, never `192.0.2.1` or a `10.x` mesh
+   address.
+
+If you later put a CDN or load balancer in front of Traefik, set the entry points'
+`forwardedHeaders.trustedIPs` to its ranges and add matching
+`advanced.ipAddress.trustedProxies` in `packages/auth/src/index.ts`; otherwise every
+client shares one bucket.
+
 ### SigNoz observability
 
 Follow [the observability runbook](./observability.md) to provision the separate
@@ -289,6 +316,7 @@ traffic. Backend ports 3001 and 3000 are explicit in `deploy.labels`.
 - API `/readyz` and compatibility `/health`: 200 only when accepting traffic and Postgres responds.
 - Redis and Typesense failures remain degraded/non-fatal to API readiness by design.
 - Worker `/livez` and `/readyz` remain private on port 3002; shutdown allows two minutes to drain jobs.
+  Worker `/readyz` checks Postgres and Redis only, so a Typesense outage does not fail the healthcheck.
 - Web `/health`: standalone Next.js server is answering.
 
 ### Web runtime cache
