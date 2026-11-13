@@ -93,6 +93,21 @@ function leadProjection() {
   };
 }
 
+type Executor = Pick<typeof db, 'select'>;
+
+/** Reads a lead this module just wrote, whatever its branch's state. */
+async function writtenLead(executor: Executor, id: string): Promise<LeadDetailRecord | null> {
+  const [row] = await executor
+    .select(leadProjection())
+    .from(schema.lead)
+    .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
+    .leftJoin(schema.consultationBooking, eq(schema.consultationBooking.leadId, schema.lead.id))
+    .leftJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
+    .where(eq(schema.lead.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&');
 }
@@ -229,15 +244,7 @@ export const leadsRepository = {
           .where(eq(schema.enquiry.leadId, row.id));
       }
 
-      const [updated] = await tx
-        .select(leadProjection())
-        .from(schema.lead)
-        .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
-        .leftJoin(schema.consultationBooking, eq(schema.consultationBooking.leadId, schema.lead.id))
-        .leftJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
-        .where(eq(schema.lead.id, row.id))
-        .limit(1);
-      return updated ?? null;
+      return writtenLead(tx, row.id);
     });
   },
 
@@ -257,7 +264,7 @@ export const leadsRepository = {
       })
       .returning({ id: schema.lead.id });
     if (!row) throw new Error('insert returned no row');
-    const created = await this.findById(row.id);
+    const created = await writtenLead(db, row.id);
     if (!created) throw new Error('inserted lead not found');
     return created;
   },
