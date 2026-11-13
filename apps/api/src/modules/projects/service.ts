@@ -1478,6 +1478,21 @@ async function buildPublicProjectDetail(
   };
 }
 
+/** Pending-aware detail for a caller already authorized to edit the project. */
+async function readEditableDetail(id: string): Promise<ProjectDetailResponse> {
+  const live = await projectsRepository.findLiveByIdWithRooms(id);
+  if (!live) throw AppError.notFound(`Project ${id} not found`);
+  const row = (await projectsRepository.findByIdWithRooms(id)) ?? live;
+  const reviewComments =
+    row.project.status === 'changes_requested'
+      ? await projectsRepository.listUnresolvedReviewComments([id])
+      : [];
+  return {
+    ...toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment)),
+    ...(row.project.pendingChanges ? { liveVersion: toResponse(live.project) } : {}),
+  };
+}
+
 export const projectsService = {
   async assertPublicProjectNotDeleted(id: string): Promise<void> {
     const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
@@ -1642,34 +1657,22 @@ export const projectsService = {
     );
   },
 
-  async getById(id: string, caller?: Caller): Promise<ProjectDetailResponse> {
-    let row = await projectsRepository.findLiveByIdWithRooms(id);
-    if (!row) throw AppError.notFound(`Project ${id} not found`);
-    const live = row;
-    if (caller) {
-      const ownership = await projectsRepository.findOwnership(id);
-      if (
-        ownership &&
-        (!caller.isBanned || row.project.status !== 'published') &&
-        (caller.userRole === 'superadmin' || caller.activeOrgId === ownership.organizationId)
-      ) {
-        await assertAccess(ownership, caller);
-        row = (await projectsRepository.findByIdWithRooms(id)) ?? row;
-      } else if (row.project.status !== 'published') {
-        throw AppError.notFound(`Project ${id} not found`);
-      }
-    } else if (row.project.status !== 'published') {
-      throw AppError.notFound(`Project ${id} not found`);
+  /** The owning organization reads the editable project; everyone else gets the public read model. */
+  async getById(
+    id: string,
+    caller?: Caller,
+  ): Promise<ProjectDetailResponse | PublicProjectPageResponse> {
+    const ownership = caller ? await projectsRepository.findOwnership(id) : null;
+    if (
+      !caller ||
+      !ownership ||
+      (caller.isBanned && (ownership.liveStatus ?? ownership.status) === 'published') ||
+      (caller.userRole !== 'superadmin' && caller.activeOrgId !== ownership.organizationId)
+    ) {
+      return projectsService.getPublicById(id);
     }
-
-    const reviewComments =
-      row.project.status === 'changes_requested'
-        ? await projectsRepository.listUnresolvedReviewComments([id])
-        : [];
-    return {
-      ...toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment)),
-      ...(row.project.pendingChanges ? { liveVersion: toResponse(live.project) } : {}),
-    };
+    await assertAccess(ownership, caller);
+    return readEditableDetail(id);
   },
 
   async getPublicById(id: string): Promise<PublicProjectPageResponse> {
@@ -2051,7 +2054,7 @@ export const projectsService = {
       caller,
     );
 
-    return projectsService.getById(withdrawn.id, caller);
+    return readEditableDetail(withdrawn.id);
   },
 
   async moderationHistory(projectId: string, caller: Caller): Promise<ModerationHistoryResponse> {
@@ -2082,15 +2085,10 @@ export const projectsService = {
       roomName: string | null;
     }>
   > {
-    // Verify project exists and is published
-    const project = (await projectsRepository.findLiveByIdWithRooms(projectId))?.project;
-    if (!project) {
+    if (!(await projectsRepository.findPublicProjectById(projectId))) {
       if (await projectsRepository.isProjectTombstonedById(projectId)) {
         throw AppError.gone('Project permanently deleted');
       }
-      throw AppError.notFound('Project not found');
-    }
-    if (project.status !== 'published') {
       throw AppError.notFound('Project not found');
     }
 
@@ -2264,10 +2262,8 @@ export const projectsService = {
    * Rule-based: same city + bhk + budget band + scope on denormalized slug columns.
    */
   async similarProjects(projectId: string): Promise<SimilarProjectsResponse> {
-    const project = (await projectsRepository.findLiveByIdWithRooms(projectId))?.project;
-    if (!project || project.status !== 'published') {
-      throw AppError.notFound('Project not found');
-    }
+    const project = (await projectsRepository.findPublicProjectById(projectId))?.project;
+    if (!project) throw AppError.notFound('Project not found');
 
     const rows = await projectsRepository.findSimilarPublished(project, 8);
 

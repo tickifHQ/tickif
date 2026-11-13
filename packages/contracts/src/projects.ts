@@ -762,6 +762,15 @@ export const publicProjectPageResponseSchema = z.union([
 ]);
 export type PublicProjectPageResponse = z.infer<typeof publicProjectPageResponseSchema>;
 
+/**
+ * GET /api/projects/{id}: the owning organization reads the editable detail;
+ * anonymous and other callers receive the public page read model.
+ */
+export const projectReadResponseSchema = z
+  .union([projectDetailResponseSchema, publicProjectPageResponseSchema])
+  .meta({ id: 'ProjectRead' });
+export type ProjectReadResponse = z.infer<typeof projectReadResponseSchema>;
+
 /** Compatibility alias for existing slug-route consumers. */
 export const publicProjectBySlugResponseSchema = publicProjectPageResponseSchema;
 export type PublicProjectBySlugResponse = PublicProjectPageResponse;

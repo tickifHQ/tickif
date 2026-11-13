@@ -19,6 +19,7 @@ import {
   portfolioProjectsResponseSchema,
   projectCompletenessResponseSchema,
   projectDetailResponseSchema,
+  projectReadResponseSchema,
   publicImageDetailParamSchema,
   publicImageDetailResponseSchema,
   publicProjectPageResponseSchema,
@@ -120,25 +121,26 @@ const portfolioRoute = createRoute({
   },
 });
 
-// Optional auth: anonymous callers may read a published project, so this route
-// cannot use the required auth guard. It still decides draft visibility from the caller's
-// ban/role (`assertAccess` in the service), so the session must not come from the
-// cookie cache. The optional resolved guard refreshes the session and repairs stale
-// organization or branch selection without rejecting anonymous readers.
+// Optional auth: anonymous and cross-organization callers receive the public read
+// model, so this route cannot use the required auth guard. It still decides editable
+// access from the caller's ban/role (`assertAccess` in the service), so the session must
+// not come from the cookie cache. The optional resolved guard refreshes the session and
+// repairs stale organization or branch selection without rejecting anonymous readers.
 const getRoute = createRoute({
   method: 'get',
   path: '/{id}',
   tags: ['Projects'],
-  summary: 'Get a project by id, including rooms',
+  summary: 'Get a project by id: the editable detail for its organization, else the public page',
   middleware: [withFreshSession] as const,
   request: { params: projectIdParamSchema },
   responses: {
     200: {
-      description: 'The project',
-      content: { 'application/json': { schema: projectDetailResponseSchema } },
+      description: 'The editable project, or its public read model for other callers',
+      content: { 'application/json': { schema: projectReadResponseSchema } },
     },
     403: errorJson('Caller cannot read this draft'),
     404: errorJson('Not found'),
+    410: errorJson('Project permanently deleted'),
   },
 });
 

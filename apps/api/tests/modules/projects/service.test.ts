@@ -32,6 +32,9 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findById: vi.fn(),
       findByIdWithRooms: vi.fn(),
       findLiveByIdWithRooms: vi.fn(),
+      findPublicProjectById: vi.fn(),
+      findPublicProjectLifecycleById: vi.fn(),
+      isProjectTombstonedById: vi.fn(),
       findBySlug: vi.fn(),
       createDraft: vi.fn(),
       duplicateProject: vi.fn(),
@@ -462,7 +465,9 @@ describe('projectsService.portfolio', () => {
 
 describe('projectsService.getById', () => {
   it('throws AppError(404) when the project is missing', async () => {
-    vi.mocked(projectsRepository.findByIdWithRooms).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(false);
 
     await expect(projectsService.getById('missing')).rejects.toBeInstanceOf(AppError);
     await expect(projectsService.getById('missing')).rejects.toMatchObject({ status: 404 });

@@ -1980,6 +1980,10 @@ describe('Project draft CRUD + rooms (E-102)', () => {
 
   it('allows banned users to read published projects through the public route', async () => {
     const { cookie, designer, userId } = await makeDesignerSession('+919800002013');
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.designerProfile.id, designer.id));
     const project = await makeProject({ designerId: designer.id, status: 'published' });
     await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
 
@@ -1988,6 +1992,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
 
     expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty('responsibleMemberId');
   });
 
   it('reports completeness and submits complete draft projects', async () => {
