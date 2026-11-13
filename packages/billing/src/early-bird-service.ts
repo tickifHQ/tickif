@@ -45,11 +45,11 @@ export async function earlyBirdStatus(
   organizationId: string,
   now = new Date(),
 ): Promise<EarlyBirdStatus> {
-  const [row, pending] = await Promise.all([
+  const [row, history] = await Promise.all([
     earlyBirdRepository.find(organizationId),
-    earlyBirdRepository.hasOpenOperation(organizationId),
+    earlyBirdRepository.hasBillingHistory(organizationId),
   ]);
-  return { eligible: !pending && eligible(row, now), trial: activeEarlyBirdTrial(row, now) };
+  return { eligible: !history && eligible(row, now), trial: activeEarlyBirdTrial(row, now) };
 }
 
 export async function claimEarlyBird(
@@ -62,9 +62,9 @@ export async function claimEarlyBird(
     const current = activeEarlyBirdTrial(row, now);
     if (current) return current.tier === tier ? current : null;
     if (!eligible(row, now)) return null;
-    // Checkout reservations survive uncertain provider outcomes without a saved
-    // provider ID. Check them under the same billing lock before granting access.
-    if (await repo.hasOpenOperation()) return null;
+    // Cancellation clears the provider fields above, and checkout reservations can
+    // lack a provider ID. Durable history decides, under the same billing lock.
+    if (await repo.hasBillingHistory()) return null;
     const end = earlyBirdEndsAt(now);
     await repo.grant(tier, now, end);
     return { tier, startedAt: now.toISOString(), endsAt: end.toISOString() };

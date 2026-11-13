@@ -45,3 +45,10 @@ changed for paying organizations.
 One trial is enforced per organization, not per human across multiple organizations.
 Deleting an organization deletes its subscription/trial history under the existing
 retention policy; cross-organization promotion abuse controls are outside this scope.
+
+## Amendments
+
+2026-11-13: cancellation clears the subscription's provider fields, so they cannot
+prove "no history". Eligibility also reads records that are never cleared: payments,
+billing operations that were not definitively rejected, plan replacements and
+abandoned checkouts. A cancelled paying organization therefore stays ineligible.

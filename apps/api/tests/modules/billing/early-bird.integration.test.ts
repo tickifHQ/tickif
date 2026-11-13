@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { claimEarlyBird, earlyBirdStatus, expireEarlyBird } from '@repo/billing';
 import { db, schema, eq, effectivePlanTier } from '@repo/db';
-import { makeOrganization, makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
-import { EARLY_BIRD_DEADLINE } from '@repo/contracts';
+import {
+  makeOrganization,
+  makePaymentTransaction,
+  makeSubscription,
+  makeTeam,
+  makeUser,
+} from '@repo/db/testing';
+import { EARLY_BIRD_DEADLINE, RAZORPAY_EVENT } from '@repo/contracts';
+import { processWebhookEvent } from '../../../src/modules/billing/webhook-service.js';
 
 const start = new Date('2026-10-31T10:00:00.000Z');
 
@@ -69,6 +76,77 @@ describe('no-card early-bird trials', () => {
     expect(await claimEarlyBird(paid.organizationId, 'corporate', start)).toBeNull();
     const former = await makeSubscription({ planTier: 'hobby', razorpayStatus: 'cancelled' });
     expect(await claimEarlyBird(former.organizationId, 'corporate', start)).toBeNull();
+  });
+
+  it('keeps a paying organization ineligible after its cancellation webhook clears the provider fields', async () => {
+    const paid = await makeSubscription({
+      planTier: 'professional_plus',
+      razorpaySubscriptionId: 'sub_paid_then_cancelled',
+      razorpayStatus: 'active',
+    });
+    await makePaymentTransaction({ subscriptionId: paid.id });
+
+    const cancelled = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED, {
+      event: RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
+      payload: { subscription: { entity: { id: 'sub_paid_then_cancelled', status: 'cancelled' } } },
+    });
+
+    expect(cancelled.outcome).toBe('processed');
+    expect(await earlyBirdStatus(paid.organizationId, start)).toEqual({
+      eligible: false,
+      trial: null,
+    });
+    expect(await claimEarlyBird(paid.organizationId, 'corporate', start)).toBeNull();
+  });
+
+  it.each([
+    [
+      'a completed paid operation',
+      (organizationId: string) =>
+        db.insert(schema.billingOperation).values({
+          operationId: '88888888-8888-4888-8888-888888888888',
+          organizationId,
+          targetTier: 'professional_plus',
+          kind: 'subscribe',
+          stateRevision: 'checkout-created',
+          status: 'scheduled',
+        }),
+    ],
+    [
+      'a plan replacement',
+      (organizationId: string) =>
+        db.insert(schema.billingReplacement).values({
+          id: '99999999-9999-4999-8999-999999999999',
+          organizationId,
+          sourceSubscriptionId: 'sub_replaced_source',
+          replacementSubscriptionId: 'sub_replaced_target',
+          sourceTier: 'professional_plus',
+          targetTier: 'corporate',
+          targetPlanId: 'plan_test_corporate',
+          amount: 0,
+          recurringAmount: 799900,
+          currency: 'INR',
+          periodEnd: start,
+          expiresAt: start,
+          status: 'completed',
+        }),
+    ],
+    [
+      'an abandoned provider checkout',
+      (organizationId: string) =>
+        db
+          .insert(schema.billingAbandonedCheckout)
+          .values({ organizationId, razorpaySubscriptionId: 'sub_abandoned_checkout' }),
+    ],
+  ])('keeps a Hobby organization with %s ineligible', async (_history, record) => {
+    const hobby = await makeSubscription({ planTier: 'hobby' });
+    await record(hobby.organizationId);
+
+    expect(await earlyBirdStatus(hobby.organizationId, start)).toEqual({
+      eligible: false,
+      trial: null,
+    });
+    expect(await claimEarlyBird(hobby.organizationId, 'corporate', start)).toBeNull();
   });
 
   it('expires to Hobby and freezes excess resources without deleting them or allowing a second trial', async () => {

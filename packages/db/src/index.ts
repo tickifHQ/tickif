@@ -28,6 +28,7 @@ export {
   and,
   or,
   ne,
+  exists,
   inArray,
   notInArray,
   isNotNull,
