@@ -28,7 +28,11 @@ function lifecycleDueDates(now: Date): { archiveDueAt: Date; hardDeleteDueAt: Da
   };
 }
 
-async function lockOrganization(tx: Transaction, organizationId: string): Promise<void> {
+/** Serializes every change to an organization's retention state. */
+export async function lockOrganizationRetention(
+  tx: Transaction,
+  organizationId: string,
+): Promise<void> {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtextextended(${`organization-retention:${organizationId}`}, 0))`,
   );
@@ -488,7 +492,7 @@ export const organizationRetentionRepository = {
     now: Date;
   }): Promise<RetentionMutationResult> {
     return db.transaction(async (tx) => {
-      await lockOrganization(tx, input.organizationId);
+      await lockOrganizationRetention(tx, input.organizationId);
       return beginDeletion(tx, input);
     });
   },
@@ -500,7 +504,7 @@ export const organizationRetentionRepository = {
     now: Date;
   }): Promise<RetentionMutationResult> {
     return db.transaction(async (tx) => {
-      await lockOrganization(tx, input.organizationId);
+      await lockOrganizationRetention(tx, input.organizationId);
       const access = await organizationAccess(tx, input.organizationId, input.userId);
       if (!access) return { outcome: 'organization_not_found' };
       if (!input.allowArchived && !access.owner) return { outcome: 'forbidden' };
@@ -535,7 +539,7 @@ export const organizationRetentionRepository = {
     now: Date;
   }): Promise<RetentionMutationResult> {
     return db.transaction(async (tx) => {
-      await lockOrganization(tx, input.organizationId);
+      await lockOrganizationRetention(tx, input.organizationId);
       const retention = await findRetentionForUpdate(tx, input.organizationId);
       if (!retention) return { outcome: 'organization_not_found' };
       if (retention.status === 'purging' || retention.status === 'erased') {
@@ -573,7 +577,7 @@ export const organizationRetentionRepository = {
     now: Date;
   }): Promise<RetentionMutationResult> {
     return db.transaction(async (tx) => {
-      await lockOrganization(tx, input.organizationId);
+      await lockOrganizationRetention(tx, input.organizationId);
       let result = await beginDeletion(tx, input);
       if (result.outcome !== 'updated' || !result.retention) return result;
       let retention = result.retention;

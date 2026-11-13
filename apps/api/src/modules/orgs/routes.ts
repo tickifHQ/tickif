@@ -92,7 +92,7 @@ const removeBranchRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Only the active organization Owner can remove a branch'),
     404: errorJson('Branch not found'),
-    409: errorJson('Final branch or review data conflict'),
+    409: errorJson('Final branch, review data or retention conflict'),
     422: errorJson('Invalid reassignment branch'),
   },
 });

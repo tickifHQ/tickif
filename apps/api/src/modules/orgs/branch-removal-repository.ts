@@ -2,6 +2,8 @@ import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema } from '@repo/db';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { lockOrganizationRetention } from '../organization-retention/repository.js';
+import { orgsRepository } from './repository.js';
 
 export const BRANCH_REMOVAL_RESULT = {
   REMOVED: 'removed',
@@ -10,6 +12,7 @@ export const BRANCH_REMOVAL_RESULT = {
   INVALID_TARGET: 'invalid_target',
   FINAL_BRANCH: 'final_branch',
   REVIEW_CONFLICT: 'review_conflict',
+  RETENTION_ACTIVE: 'retention_active',
 } as const;
 
 type BranchRemovalFailure = (typeof BRANCH_REMOVAL_RESULT)[Exclude<
@@ -49,6 +52,10 @@ export async function removeBranchWithReassignment(input: {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`branch:${input.organizationId}`}, 0))`,
     );
+    await lockOrganizationRetention(tx, input.organizationId);
+    if (await orgsRepository.hasActiveRetention(input.organizationId, tx)) {
+      return BRANCH_REMOVAL_RESULT.RETENTION_ACTIVE;
+    }
 
     const [membership] = await tx
       .select({ role: schema.member.role, frozen: schema.member.frozen })

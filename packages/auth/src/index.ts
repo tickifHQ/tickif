@@ -49,6 +49,10 @@ const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
   '/organization/cancel-invitation',
   '/organization/remove-member',
   '/organization/update-member-role',
+  '/organization/create-team',
+  '/organization/update-team',
+  '/organization/add-team-member',
+  '/organization/remove-team-member',
 ]);
 
 const ACTIVE_MEMBER_ORGANIZATION_READS = new Set([
@@ -258,7 +262,12 @@ async function protectedMutationOrganizationId(
 ): Promise<string | undefined> {
   const invitationId = bodyString(body, 'invitationId');
   if (!invitationId) {
-    return bodyString(body, 'organizationId') ?? activeOrganizationId ?? undefined;
+    // Better Auth reads update-team's organization from `data`; guard the same one.
+    const selector =
+      path === '/organization/update-team' && body && typeof body === 'object'
+        ? Reflect.get(body, 'data')
+        : body;
+    return bodyString(selector, 'organizationId') ?? activeOrganizationId ?? undefined;
   }
 
   const [invitation] = await db
@@ -630,9 +639,6 @@ export const auth = betterAuth({
         });
       },
       organizationHooks: {
-        beforeCreateTeam: async ({ team, user }) => {
-          if (user) await requireActiveOrganizationMember(user.id, team.organizationId);
-        },
         afterCreateTeam: async ({ team, user, organization }) => {
           try {
             const slug = await availableBranchSlug(team.name);
@@ -662,8 +668,7 @@ export const auth = betterAuth({
             throw error;
           }
         },
-        beforeUpdateTeam: async ({ team, user }) => {
-          await requireActiveOrganizationMember(user.id, team.organizationId);
+        beforeUpdateTeam: async ({ team }) => {
           if (team.frozen) {
             throw new APIError('FORBIDDEN', {
               code: 'BRANCH_INACTIVE',
