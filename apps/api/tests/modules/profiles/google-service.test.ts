@@ -17,10 +17,10 @@ const places = vi.hoisted(() => ({
   resolvePlaceId: vi.fn(),
 }));
 const queue = vi.hoisted(() => ({ enqueueGoogleReviewsRefresh: vi.fn() }));
+const cooldown = vi.hoisted(() => ({ acquireGooglePlacesAttempt: vi.fn() }));
 const repo = vi.hoisted(() => ({
   findByProfileId: vi.fn(),
   upsert: vi.fn(),
-  touchAttempt: vi.fn(),
   restoreRefresh: vi.fn(),
   delete: vi.fn(),
 }));
@@ -31,6 +31,7 @@ vi.mock('@repo/google-places', () => ({
   GooglePlacesError: FakeGooglePlacesError,
 }));
 vi.mock('@repo/queue', () => ({ enqueueGoogleReviewsRefresh: queue.enqueueGoogleReviewsRefresh }));
+vi.mock('../../../src/lib/redis.js', () => cooldown);
 vi.mock('../../../src/modules/profiles/portfolio-service.js', () => ({
   resolveProfile: vi.fn(async () => ({ id: 'profile-1' })),
 }));
@@ -63,6 +64,7 @@ describe('googleReviewsService', () => {
     vi.clearAllMocks();
     queue.enqueueGoogleReviewsRefresh.mockResolvedValue(undefined);
     places.isGooglePlacesConfigured.mockReturnValue(true);
+    cooldown.acquireGooglePlacesAttempt.mockResolvedValue(true);
   });
 
   describe('connect', () => {
@@ -106,27 +108,23 @@ describe('googleReviewsService', () => {
     });
 
     it('throttles a rapid repeat connect without making a billable call', async () => {
-      // An existing row stamped moments ago is inside the cooldown window.
-      repo.findByProfileId.mockResolvedValue(cacheRow({ lastAttemptAt: new Date() }));
+      cooldown.acquireGooglePlacesAttempt.mockResolvedValue(false);
       await expect(
         googleReviewsService.connect({ reference: 'Studio Aakar' }, CALLER),
       ).rejects.toMatchObject({ status: 429 });
+      expect(cooldown.acquireGooglePlacesAttempt).toHaveBeenCalledWith('profile-1', 10_000);
       expect(places.resolvePlaceId).not.toHaveBeenCalled();
       expect(queue.enqueueGoogleReviewsRefresh).not.toHaveBeenCalled();
     });
 
-    it('stamps the attempt clock before resolving when a row already exists', async () => {
-      // Past the cooldown, so the attempt proceeds and is re-stamped first.
-      repo.findByProfileId.mockResolvedValue(
-        cacheRow({ lastAttemptAt: new Date(Date.now() - 60_000) }),
-      );
-      places.resolvePlaceId.mockResolvedValue('ChIJresolved');
-      repo.upsert.mockResolvedValue(cacheRow({ placeId: 'ChIJresolved', status: 'pending' }));
+    it('claims the cooldown even when the reference fails to resolve', async () => {
+      places.resolvePlaceId.mockRejectedValue(new FakeGooglePlacesError('not_found', 'none'));
 
-      await googleReviewsService.connect({ reference: 'Studio Aakar' }, CALLER);
+      await expect(
+        googleReviewsService.connect({ reference: 'Studio Aakar' }, CALLER),
+      ).rejects.toMatchObject({ status: 422 });
 
-      expect(repo.touchAttempt).toHaveBeenCalledWith('profile-1');
-      expect(places.resolvePlaceId).toHaveBeenCalledWith('Studio Aakar');
+      expect(cooldown.acquireGooglePlacesAttempt).toHaveBeenCalledWith('profile-1', 10_000);
     });
   });
 
@@ -179,7 +177,8 @@ describe('googleReviewsService', () => {
     });
 
     it('throttles a rapid repeat refresh without enqueuing', async () => {
-      repo.findByProfileId.mockResolvedValue(cacheRow({ lastAttemptAt: new Date() }));
+      repo.findByProfileId.mockResolvedValue(cacheRow());
+      cooldown.acquireGooglePlacesAttempt.mockResolvedValue(false);
       await expect(googleReviewsService.refresh(CALLER)).rejects.toMatchObject({ status: 429 });
       expect(queue.enqueueGoogleReviewsRefresh).not.toHaveBeenCalled();
     });
