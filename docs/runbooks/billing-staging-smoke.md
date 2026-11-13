@@ -70,7 +70,10 @@ Verify on desktop and mobile:
   identity, and replaying the old operation cannot resume the retired attempt.
 - Leave an unused paid-plan replacement, then choose Hobby cancellation. The
   existing paid access lasts through its verified period end; the unused upgrade
-  reservation must not prevent cancellation.
+  reservation must not prevent cancellation. A replacement whose create Razorpay
+  rejected (4xx) fails at once. One whose create timed out or hit a 5xx has no
+  saved mandate ID; it blocks plan changes only until its 15-minute checkout
+  window (the mandate's `expire_by`) closes, then the next reconcile releases it.
 - Deliver late authorization/charge evidence for a superseded attempt in the
   isolated provider test setup. It must not change entitlements. Confirm worker
   cancellation/refund reconciliation and that a failed provider request retries
@@ -106,6 +109,19 @@ must return a blocked review without a 500, charge, past effective date or past
 next-renewal promise. When Razorpay supplies a valid current period, existing
 proration and cancellation flows become available again. Provider lifecycle
 repair must use actual provider events/state; do not extend dates in the database.
+
+## Provider rejections and replayed lifecycle events
+
+- A 4xx from Razorpay on subscription create returns 422 `checkout_rejected`. The
+  operation fails and the organization can choose a plan or claim a trial again.
+  A 5xx or timeout still leaves `reconciliation_pending` for support.
+- `subscription.activated` ends a lapse (payment failed, grace, locked, recovery
+  checkout) only when the live subscription is active. A replayed activation for a
+  halted subscription returns 200 `ignored`.
+- `subscription.halted` moves a paid active plan to grace when the live
+  subscription is halted, so a `payment.failed` that arrives later does not leave
+  full access. When Razorpay reports it active again, the event is ignored. No
+  worker sweep polls `payment_failed` rows yet; billing page reads still advance them.
 
 ## E-291: verified staging payment history
 
