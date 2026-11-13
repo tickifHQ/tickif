@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type Metadata } from 'sharp';
 import { config } from '@repo/config';
 import type { AllowedImageContentType } from '@repo/contracts';
 
@@ -18,8 +18,13 @@ const FORMAT_TO_MIME: Record<string, AllowedImageContentType> = {
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
-  avif: 'image/avif',
 };
+
+// libvips reads AVIF as a HEIF container; only AV1 compression makes it AVIF (HEVC is HEIC).
+function realContentType(metadata: Metadata): AllowedImageContentType | undefined {
+  if (metadata.format === 'heif') return metadata.compression === 'av1' ? 'image/avif' : undefined;
+  return metadata.format ? FORMAT_TO_MIME[metadata.format] : undefined;
+}
 
 export type ValidationFailure =
   | 'empty'
@@ -47,18 +52,17 @@ export async function validateImageBytes(
   if (buffer.byteLength === 0) return { ok: false, reason: 'empty' };
   if (buffer.byteLength > limits.maxBytes) return { ok: false, reason: 'too_large' };
 
-  let format: string | undefined;
-  let width: number | undefined;
-  let height: number | undefined;
+  let metadata: Metadata;
   try {
     // metadata() parses the header only (no bitmap allocation), so it's safe to
     // read dimensions before the pixel-budget check below rejects bombs.
-    ({ format, width, height } = await sharp(buffer).metadata());
+    metadata = await sharp(buffer).metadata();
   } catch {
     return { ok: false, reason: 'corrupt' };
   }
 
-  const realMime = format ? FORMAT_TO_MIME[format] : undefined;
+  const { width, height } = metadata;
+  const realMime = realContentType(metadata);
   if (!realMime) return { ok: false, reason: 'unsupported_format' };
   if (realMime !== declaredContentType) return { ok: false, reason: 'content_type_mismatch' };
   if (!width || !height) return { ok: false, reason: 'corrupt' };
