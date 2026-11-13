@@ -13,6 +13,7 @@ export type RetentionMutationResult =
   | { outcome: 'confirmation_mismatch' }
   | { outcome: 'not_recoverable' }
   | { outcome: 'billing_pending' }
+  | { outcome: 'billing_cleanup_pending' }
   | { outcome: 'legal_hold' };
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -512,7 +513,7 @@ export const organizationRetentionRepository = {
         (retention.status === 'deletion_requested' || retention.status === 'archived');
       if (!ownerCanRestore && !adminCanRestore) return { outcome: 'not_recoverable' };
       if (await hasAmbiguousProviderCleanup(tx, input.organizationId)) {
-        return { outcome: 'not_recoverable' };
+        return { outcome: 'billing_cleanup_pending' };
       }
       const revision = retention.revision + 1;
       await restoreSnapshots(tx, {

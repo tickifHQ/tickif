@@ -47,6 +47,10 @@ function unwrapMutation(result: RetentionMutationResult): OrganizationRetentionM
       throw AppError.conflict(
         'Complete or resolve the pending billing checkout before deleting this organization.',
       );
+    case 'billing_cleanup_pending':
+      throw AppError.conflict(
+        'Your paid plan is still being cancelled. Try restoring again in a few minutes, or contact support if this keeps happening.',
+      );
   }
 }
 

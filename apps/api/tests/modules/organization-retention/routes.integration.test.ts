@@ -288,6 +288,13 @@ describe('organization retention routes', () => {
     const restore = await request('/api/orgs/retention/restore', seeded.owner.cookie, 'POST');
 
     expect(restore.status).toBe(409);
+    expect(await restore.json()).toMatchObject({
+      error: {
+        code: 'conflict',
+        message:
+          'Your paid plan is still being cancelled. Try restoring again in a few minutes, or contact support if this keeps happening.',
+      },
+    });
     const [retention, subscription, cleanup] = await Promise.all([
       organizationRetentionRepository.findByOrganization(seeded.organization.id),
       db

@@ -47,6 +47,14 @@ describe('DesignerCloseStudio', () => {
     expect(mock.refresh).toHaveBeenCalledOnce();
   });
 
+  it('warns before closing that a paid plan is cancelled now and restore comes back on Hobby', async () => {
+    renderStudio();
+    fireEvent.click(await screen.findByRole('button', { name: 'Close studio' }));
+    expect(within(screen.getByRole('alertdialog')).getByText(
+      "If you're on a paid plan, it's cancelled right away and the rest of the current billing period isn't refunded. A restored studio comes back on the free Hobby plan.",
+    )).toBeInTheDocument();
+  });
+
   it('lets the owner restore during the recovery window even under a legal hold', async () => {
     mock.fetchStudioRetention.mockResolvedValue({ retention: { ...retention, holdPlacedAt: retention.requestedAt } });
     renderStudio();

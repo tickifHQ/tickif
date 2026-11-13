@@ -366,6 +366,10 @@ export function DesignerCloseStudio({
             This takes {organizationName}, all its branches, and their public profiles offline and starts the recovery
             period before permanent deletion. Your personal account is not deleted.
           </DialogDescription>
+          <p className="text-[13px] text-muted-foreground">
+            If you&apos;re on a paid plan, it&apos;s cancelled right away and the rest of the current billing period
+            isn&apos;t refunded. A restored studio comes back on the free Hobby plan.
+          </p>
 
           <div className="space-y-2 pt-1">
             <Label htmlFor="close-studio-confirm" className="text-[13px]">
