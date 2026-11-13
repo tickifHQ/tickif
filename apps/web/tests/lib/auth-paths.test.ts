@@ -35,6 +35,11 @@ describe('safeCallbackPath', () => {
     'java\tscript:alert(1)',
     'evil.example',
     '',
+    '/.//evil.example',
+    '/a/..//evil.example',
+    '/%2e%2e//evil.example',
+    '/./\\evil.example',
+    '/.\t//evil.example',
   ])('rejects %j, which a browser would navigate off-origin or treat as absolute', (value) => {
     expect(safeCallbackPath(value)).toBeUndefined();
   });

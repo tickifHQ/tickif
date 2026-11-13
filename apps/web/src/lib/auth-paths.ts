@@ -21,7 +21,10 @@ export function safeCallbackPath(value: string | string[] | null | undefined): s
   if (!candidate?.startsWith('/')) return undefined;
   const url = parseUrl(candidate);
   if (url?.origin !== CALLBACK_BASE) return undefined;
-  return `${url.pathname}${url.search}${url.hash}`;
+  const path = `${url.pathname}${url.search}${url.hash}`;
+  // Dot segments can normalize "/.//evil.example" into "//evil.example"; the path we
+  // hand back must itself stay on this origin.
+  return parseUrl(path)?.origin === CALLBACK_BASE ? path : undefined;
 }
 
 export function callbackPathFromLoginHref(loginHref: string): string | undefined {
