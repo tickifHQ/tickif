@@ -23,6 +23,10 @@ import type {
   UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import {
+  PROCESSING_IMAGE_TIMEOUT_MS,
+  isAbandonedProcessingImage,
+} from '../media/processing-timeout.js';
 import { AppError } from '../../lib/errors.js';
 import { projectFeedFilterClauses } from './feed-filters.repository.js';
 import {
@@ -134,7 +138,7 @@ const freshProcessingImageFilter = sql`
     ${schema.projectImage.status} = 'ready'
     or (
       ${schema.projectImage.status} = 'processing'
-      and ${schema.projectImage.updatedAt} >= now() - interval '30 minutes'
+      and ${schema.projectImage.updatedAt} >= now() - make_interval(secs => ${PROCESSING_IMAGE_TIMEOUT_MS / 1000})
     )
   )
 `;
@@ -984,7 +988,8 @@ export const projectsRepository = {
       });
 
       let copiedCoverImageId: string | null = null;
-      for (const image of sourceImages) {
+      // Unfinished uploads have no queued job for the copy, so only processed photos carry over.
+      for (const image of sourceImages.filter((candidate) => candidate.status === 'ready')) {
         const [copiedImage] = await tx
           .insert(schema.projectImage)
           .values({
@@ -1122,10 +1127,7 @@ export const projectsRepository = {
         const aggregate = state.current;
         const eligible = aggregate.images.filter(
           (image) =>
-            image.roomId &&
-            (image.status === 'ready' ||
-              (image.status === 'processing' &&
-                image.updatedAt.getTime() >= Date.now() - 30 * 60_000)),
+            image.roomId && image.status !== 'failed' && !isAbandonedProcessingImage(image),
         );
         const counts = {
           imageCount: eligible.length,
@@ -1527,11 +1529,7 @@ export const projectsRepository = {
     const state = await readProjectAggregate(projectId);
     if (state) {
       const images = state.current.images.filter(
-        (image) =>
-          image.roomId &&
-          (image.status === 'ready' ||
-            (image.status === 'processing' &&
-              image.updatedAt.getTime() >= Date.now() - 30 * 60_000)),
+        (image) => image.roomId && image.status !== 'failed' && !isAbandonedProcessingImage(image),
       );
       return {
         imageCount: images.length,

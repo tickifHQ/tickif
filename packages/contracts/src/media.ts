@@ -47,6 +47,9 @@ export const uploadUrlResponseSchema = z
   });
 export type UploadUrlResponse = z.infer<typeof uploadUrlResponseSchema>;
 
+/** Every photo row counts, including failed ones until the designer removes them. */
+export const MAX_PROJECT_IMAGES = 100;
+
 export const imageStatus = z.enum(['processing', 'ready', 'failed']);
 export type ImageStatus = z.infer<typeof imageStatus>;
 
@@ -144,10 +147,10 @@ export const updateImageMetadataSchema = z
   .meta({ id: 'UpdateImageMetadata' });
 export type UpdateImageMetadataInput = z.infer<typeof updateImageMetadataSchema>;
 
-// Query strings arrive as text, so coerce; bounds keep an unbounded scan off the table.
+// Query strings arrive as text, so coerce. One page can hold a full project.
 export const listProjectImagesQuerySchema = z
   .object({
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(MAX_PROJECT_IMAGES).default(50),
     offset: z.coerce.number().int().min(0).default(0),
   })
   .meta({ id: 'ListProjectImagesQuery' });
