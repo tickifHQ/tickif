@@ -197,7 +197,10 @@ describe('billing / razorpay-client failures', () => {
       vi
         .fn()
         .mockResolvedValueOnce(
-          Response.json({ error: { code: 'SERVER_ERROR', description: 'Try later' } }, { status: 500 }),
+          Response.json(
+            { error: { code: 'SERVER_ERROR', description: 'Try later' } },
+            { status: 500 },
+          ),
         )
         .mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError')),
     );

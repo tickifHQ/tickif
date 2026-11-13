@@ -20,6 +20,7 @@ vi.mock('@repo/config', async (importOriginal) => {
 import { eq } from 'drizzle-orm';
 import { db, schema, sql } from '@repo/db';
 import { makeOrganization, makeSubscription, makeUser } from '@repo/db/testing';
+import type * as RazorpayClient from '../../../src/modules/billing/razorpay-client.js';
 
 /**
  * E-116 Subscribe/checkout integration tests.
@@ -1015,11 +1016,13 @@ describe('durable reviewed checkout integration', () => {
     const { billingMutationService } =
       await import('../../../src/modules/billing/mutation-service.js');
     const { claimEarlyBird } = await import('@repo/billing');
-    const actual = await vi.importActual<
-      typeof import('../../../src/modules/billing/razorpay-client.js')
-    >('../../../src/modules/billing/razorpay-client.js');
+    const actual = await vi.importActual<typeof RazorpayClient>(
+      '../../../src/modules/billing/razorpay-client.js',
+    );
     vi.mocked(mockCreateSubscription).mockImplementation(actual.createSubscription);
-    onTestFinished(() => vi.unstubAllGlobals());
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     vi.stubGlobal(
       'fetch',
       vi
@@ -1083,7 +1086,9 @@ describe('durable reviewed checkout integration', () => {
       created_at: seconds - 15 * 86400,
       has_scheduled_changes: false,
     });
-    onTestFinished(() => vi.unstubAllGlobals());
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     vi.stubGlobal(
       'fetch',
       vi
@@ -1117,8 +1122,6 @@ describe('durable reviewed checkout integration', () => {
     expect([operation?.status, replacement?.status]).toEqual(['failed', 'failed']);
     const context = await billingSelectionService.context(caller);
     expect(context.pendingOperation).toBeNull();
-    expect(context.actions.find((action) => action.targetTier === 'hobby')?.action).toBe(
-      'cancel',
-    );
+    expect(context.actions.find((action) => action.targetTier === 'hobby')?.action).toBe('cancel');
   });
 });
