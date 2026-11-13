@@ -100,15 +100,18 @@ services:
       - source: traefik_dynamic
         target: /etc/traefik/dynamic.yml
         mode: 0444
+    # Host mode keeps the client's address on the TCP connection; the ingress mesh would
+    # replace it with a mesh address and collapse every client into one rate-limit bucket.
+    # Valid because Traefik runs one replica on the labelled node that DNS points at.
     ports:
       - target: 80
         published: 80
         protocol: tcp
-        mode: ingress
+        mode: host
       - target: 443
         published: 443
         protocol: tcp
-        mode: ingress
+        mode: host
     volumes:
       - traefik_acme:/letsencrypt
       - type: tmpfs
