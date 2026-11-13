@@ -32,9 +32,22 @@ room IDs remain stable. Removing an approved image from pending content preserve
 the original live membership and storage references. Hidden physical rows remain
 available to the organization retention inventory but cannot be selected as covers,
 returned by public image IDs, or copied into a new project.
+Duplicating a project copies only ready photos; unfinished or failed uploads stay behind.
 Duplicating a project with pending changes copies its approved scalar fields,
 rooms, images and cover together under the canonical project lock. Pending edits
 remain only on the original project's review version.
+
+The upload editor saves its whole form at once, so the canonical project row keeps an
+`edit_revision` counter. Project reads return it as `editRevision`, the editor sends it back
+as `expectedEditRevision`, and the save compares it under the canonical row lock before
+incrementing it. A mismatch returns 409 `project_edit_conflict`; the editor then disables
+the form and offers a reload instead of overwriting the newer save. Reviewer metadata
+corrections also increment it. Room, photo and upload operations do not, so a tab's own
+per-item edits never conflict with its next save. Partial API updates may omit the revision.
+
+`GET /api/projects/{id}` returns the editable detail only to the owning organization or a
+superadmin. Anonymous and other callers receive the same public read model as
+`/api/projects/public/{id}`, so inactive studios and internal fields stay private there too.
 
 Every mutation locks the canonical project row before reading pending state. Submitted
 and in-review versions are locked against designer writes. Admin corrections use the

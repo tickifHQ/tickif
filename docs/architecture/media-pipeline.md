@@ -62,8 +62,19 @@ processing. Ready previews remain viewable while sibling files are uploading.
 The browser uses XMLHttpRequest only for the direct storage PUT so it can measure
 bytes; application API requests continue through the typed Hono client.
 
+A project holds at most 100 photo rows (`MAX_PROJECT_IMAGES`), failed ones included
+until they are removed. `POST /api/media/upload-url` counts them under the project row
+lock and returns 422 `project_image_limit_reached` before reserving anything; the editor
+checks the same limit before a batch starts and states it in the upload zone.
+
+A processing row untouched for 30 minutes belongs to an abandoned upload or a lost
+job. Completeness already ignores it, and the image list reports it as `failed` with
+`upload_failed`, so the editor shows its remove action instead of a permanent
+Processing tile.
+
 Processing status and completeness are polled every four seconds while images
-are processing. Timer ticks skip an outstanding poll so slow responses can land
+are processing, and only while the tab is visible; returning to the tab refreshes at
+once. Timer ticks skip an outstanding poll so slow responses can land
 without being invalidated by successive requests. Success and failure both
 release the poll guard, allowing later status updates to continue.
 
