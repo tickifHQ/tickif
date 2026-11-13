@@ -57,11 +57,11 @@ async function enqueueEvent(event: SearchProjectionOutboxRecord): Promise<void> 
   }
 }
 
-export async function dispatchSearchProjectionOutbox(now: Date = new Date()): Promise<{
+export async function dispatchSearchProjectionOutbox(): Promise<{
   enqueued: number;
   failed: number;
 }> {
-  const events = await listDueSearchProjectionEvents(DISPATCH_BATCH_SIZE, now);
+  const events = await listDueSearchProjectionEvents(DISPATCH_BATCH_SIZE);
   const enqueued: bigint[] = [];
   let failed = 0;
 
@@ -82,6 +82,6 @@ export async function dispatchSearchProjectionOutbox(now: Date = new Date()): Pr
     }
   }
 
-  await markSearchProjectionEventsEnqueued(enqueued, now, RETRY_BACKOFF);
+  await markSearchProjectionEventsEnqueued(enqueued, RETRY_BACKOFF);
   return { enqueued: enqueued.length, failed };
 }

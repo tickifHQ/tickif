@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Queue, Worker } from 'bullmq';
-import { asc, db, inArray, schema } from '@repo/db';
+import { asc, db, inArray, schema, sql } from '@repo/db';
 import { makeDesigner, makeProject } from '@repo/db/testing';
 import { QUEUES, closeQueues, connection, type SearchIndexJob } from '@repo/queue';
 import {
@@ -139,8 +139,12 @@ describe('search projection outbox retries', () => {
     expect(backingOff[0]).toMatchObject({ attempts: 1, lastError: 'Typesense unavailable' });
     expect(backingOff[0]!.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
 
-    const later = new Date(Date.now() + 60 * 60 * 1000);
-    await expect(dispatchSearchProjectionOutbox(later)).resolves.toEqual({
+    // The backoff has passed (the runbook's "make rows due now" step).
+    await db
+      .update(schema.searchProjectionOutbox)
+      .set({ nextAttemptAt: sql`now() - interval '1 second'` })
+      .where(inArray(schema.searchProjectionOutbox.sequence, failed));
+    await expect(dispatchSearchProjectionOutbox()).resolves.toEqual({
       enqueued: 100,
       failed: 0,
     });

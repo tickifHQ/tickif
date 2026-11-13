@@ -20,10 +20,12 @@ export type SearchProjectionOutboxRecord = {
   sourceUpdatedAt: Date;
 };
 
-/** Undispatched rows whose retry delay has passed, oldest due first. */
+/**
+ * Undispatched rows whose retry delay has passed, oldest due first. Due times use the
+ * database clock, the same one that stamps new rows, so a fresh row is always due.
+ */
 export async function listDueSearchProjectionEvents(
   limit: number,
-  now: Date,
 ): Promise<SearchProjectionOutboxRecord[]> {
   return db
     .select({
@@ -37,7 +39,7 @@ export async function listDueSearchProjectionEvents(
     .where(
       and(
         isNull(schema.searchProjectionOutbox.dispatchedAt),
-        lte(schema.searchProjectionOutbox.nextAttemptAt, now),
+        lte(schema.searchProjectionOutbox.nextAttemptAt, sql`now()`),
       ),
     )
     .orderBy(
@@ -53,7 +55,6 @@ export async function listDueSearchProjectionEvents(
  */
 export async function markSearchProjectionEventsEnqueued(
   sequences: bigint[],
-  now: Date,
   backoff: { baseSeconds: number; maxSeconds: number },
 ): Promise<void> {
   if (sequences.length === 0) return;
@@ -61,7 +62,7 @@ export async function markSearchProjectionEventsEnqueued(
     .update(schema.searchProjectionOutbox)
     .set({
       attempts: sql`${schema.searchProjectionOutbox.attempts} + 1`,
-      nextAttemptAt: sql`${now.toISOString()}::timestamptz + make_interval(secs => least(
+      nextAttemptAt: sql`now() + make_interval(secs => least(
         ${backoff.baseSeconds} * power(2, least(${schema.searchProjectionOutbox.attempts}, 30)),
         ${backoff.maxSeconds}
       ))`,

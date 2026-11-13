@@ -20,7 +20,6 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('search projection outbox dispatcher', () => {
   it('queues each due row independently and backs off only the enqueued rows', async () => {
-    const now = new Date('2026-07-03T00:00:00.000Z');
     vi.mocked(repository.listDueSearchProjectionEvents).mockResolvedValue([
       {
         sequence: 1n,
@@ -41,13 +40,13 @@ describe('search projection outbox dispatcher', () => {
       new Error('Redis unavailable'),
     );
 
-    await expect(dispatchSearchProjectionOutbox(now)).resolves.toEqual({
+    await expect(dispatchSearchProjectionOutbox()).resolves.toEqual({
       enqueued: 1,
       failed: 1,
     });
 
-    expect(repository.listDueSearchProjectionEvents).toHaveBeenCalledWith(100, now);
-    expect(repository.markSearchProjectionEventsEnqueued).toHaveBeenCalledWith([1n], now, {
+    expect(repository.listDueSearchProjectionEvents).toHaveBeenCalledWith(100);
+    expect(repository.markSearchProjectionEventsEnqueued).toHaveBeenCalledWith([1n], {
       baseSeconds: 30,
       maxSeconds: 600,
     });
