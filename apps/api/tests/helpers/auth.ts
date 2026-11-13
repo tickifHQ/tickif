@@ -13,6 +13,8 @@ import { auth } from '@repo/auth';
 export async function createAuthedSession(
   phoneNumber = '+919800000001',
 ): Promise<{ cookie: string; phoneNumber: string }> {
+  // Login-code limits protect real numbers; fixtures sign the same number in repeatedly.
+  await db.delete(schema.otpAttempt);
   await auth.api.sendPhoneNumberOTP({ body: { phoneNumber } });
 
   const { code } = await readLatestOtp();

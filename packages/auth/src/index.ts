@@ -7,6 +7,8 @@ import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@rep
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { assertProductionEmailConfig, assertWhatsappConfig, config } from '@repo/config';
 import { sendPhoneOtp } from './phone-otp.js';
+import { isAllowedPhoneNumber, otpGuard } from './otp-guard.js';
+import { bodyString } from './request-body.js';
 import { ac, orgAc, orgRoles, roles } from './permissions.js';
 import {
   organizationMembershipLimit,
@@ -154,12 +156,6 @@ async function preferredContextForNewSession(userId: string): Promise<{
   }
 
   return { activeOrganizationId: null, activeTeamId: null };
-}
-
-function bodyString(body: unknown, key: string): string | undefined {
-  if (!body || typeof body !== 'object') return undefined;
-  const value = Reflect.get(body, key);
-  return typeof value === 'string' ? value : undefined;
 }
 
 function branchSlug(name: string): string {
@@ -373,6 +369,28 @@ export const auth = betterAuth({
   // Dev: "http://localhost:3000". Prod same-origin: leave empty.
   trustedOrigins: config.TRUSTED_ORIGINS,
 
+  // Per-IP limits live in Postgres so every API replica shares them across restarts.
+  // Server-rendered pages read sessions from the web tier's single egress IP, so
+  // get-session is exempt; a shared cap there would sign everyone out under load.
+  rateLimit: {
+    storage: 'database',
+    customRules: { '/get-session': false },
+  },
+  advanced: {
+    // Traefik replaces X-Forwarded-For with the TCP peer it accepted; see
+    // infra/staging/traefik/static.yml.tmpl. Only a single-value header is trusted.
+    ipAddress: { ipAddressHeaders: ['x-forwarded-for'] },
+  },
+  // Accounts have no passwords. Reset codes would be an unthrottled guessing path.
+  disabledPaths: [
+    '/sign-in/phone-number',
+    '/phone-number/request-password-reset',
+    '/phone-number/reset-password',
+    '/email-otp/request-password-reset',
+    '/forget-password/email-otp',
+    '/email-otp/reset-password',
+  ],
+
   databaseHooks: {
     session: {
       create: {
@@ -566,6 +584,7 @@ export const auth = betterAuth({
       otpLength: 6,
       expiresIn: 300,
       allowedAttempts: 3,
+      phoneNumberValidator: isAllowedPhoneNumber,
       signUpOnVerification: {
         // Derive a placeholder email until the designer completes their profile.
         getTempEmail: (phone) => `${phone}@phone.tickif.local`,
@@ -814,6 +833,7 @@ export const auth = betterAuth({
         });
       },
     }),
+    otpGuard(),
   ],
 });
 
