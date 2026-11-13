@@ -156,6 +156,8 @@ export const defaultJobOptions = {
   },
   removeOnComplete: true,
   // Keep failed jobs for a week (not a fixed count) so a failure spike can't silently evict evidence.
+  // A retained failed job keeps its id, so re-adding that id is a silent no-op. Fixed-id jobs
+  // whose terminal state lives in Postgres set removeOnFail: true so a later request can rerun them.
   removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
 } satisfies JobsOptions;
 
@@ -190,7 +192,10 @@ function mediaJobId(job: MediaProcessJob): string {
 }
 
 export async function enqueueMedia(job: MediaProcessJob): Promise<void> {
-  await getMediaQueue().add(JOBS.processMedia, job, { jobId: mediaJobId(job) });
+  await getMediaQueue().add(JOBS.processMedia, job, {
+    jobId: mediaJobId(job),
+    removeOnFail: true,
+  });
 }
 
 /** Normalize a phone number to bare digits — for stable dedupe keys and provider APIs. */
@@ -258,6 +263,7 @@ function getBillingLifecycleQueue(): Queue<BillingLifecycleSweepJob> {
 export async function enqueueGoogleReviewsRefresh(job: GoogleReviewsRefreshJob): Promise<void> {
   await getGoogleReviewsQueue().add(JOBS.refreshGoogleReviews, job, {
     jobId: `google-refresh-${job.profileId}`,
+    removeOnFail: true,
   });
 }
 
@@ -373,6 +379,7 @@ export async function scheduleDesignerExperienceRefresh(): Promise<void> {
   // Catch up after a deploy or downtime without waiting for the next midnight.
   await queue.add(JOBS.sweepDesignerExperience, {}, {
     jobId: 'designer-experience-startup',
+    removeOnFail: true,
     telemetry: { omitContext: true },
   });
 }

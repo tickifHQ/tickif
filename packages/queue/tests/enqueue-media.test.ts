@@ -49,7 +49,7 @@ describe('enqueueMedia', () => {
     expect(addMock).toHaveBeenCalledWith(
       JOBS.processMedia,
       { imageId: 'img-1' },
-      { jobId: 'media-img-1' },
+      { jobId: 'media-img-1', removeOnFail: true },
     );
   });
 
@@ -71,7 +71,7 @@ describe('enqueueMedia', () => {
     expect(addMock).toHaveBeenCalledWith(
       JOBS.processMedia,
       { imageId: 'img-9', mode: 'reprocess' },
-      { jobId: 'media-reprocess-img-9' },
+      { jobId: 'media-reprocess-img-9', removeOnFail: true },
     );
   });
 });

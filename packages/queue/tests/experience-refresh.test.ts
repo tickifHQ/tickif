@@ -33,6 +33,7 @@ describe('designer experience refresh queue', () => {
       {},
       {
         jobId: 'designer-experience-startup',
+        removeOnFail: true,
         telemetry: { omitContext: true },
       },
     );

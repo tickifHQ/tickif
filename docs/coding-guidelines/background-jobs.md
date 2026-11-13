@@ -6,6 +6,9 @@ Scope: `apps/worker/**`.
   `jobId` or guard on existing state. BullMQ does not dedupe for you.
 - Configure **retries with exponential backoff** and `removeOnComplete` /
   `removeOnFail` (bounded) to cap Redis growth.
+- A retained failed job keeps its `jobId`, so re-adding that id is a silent
+  no-op. When a fixed-id job's durable state lives in Postgres, set
+  `removeOnFail: true` so the next request or sweep can run it again.
 - Set explicit concurrency (start ~`floor(cpuCount/2)`, then measure).
 - **Pass connection _options_, not a shared ioredis instance**
   (`apps/worker/src/connection.ts`) — avoids the ioredis dual-version type clash.

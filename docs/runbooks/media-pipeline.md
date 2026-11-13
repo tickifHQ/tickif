@@ -31,9 +31,10 @@ SELECT id, status, content_type, original_key, jsonb_array_length(derivatives) A
 FROM project_image WHERE id = '<imageId>';
 ```
 
-Failed jobs are retained in BullMQ for 7 days (`removeOnFail: { age: 604800, count: 5000 }`),
-so the failure + stack is still inspectable in the `media` failed set. Worker logs
-key everything on `media <imageId>`.
+Terminally failed `media` jobs are removed from BullMQ (`removeOnFail: true`), so a
+later re-enqueue of the same `media-{imageId}` id runs instead of colliding with the
+failed job. The error and stack are in the worker's `job.terminal_failed` log, and
+media logs key everything on `media <imageId>`.
 
 ## Replaying / re-enqueuing a job
 
@@ -223,12 +224,12 @@ OOMs, lower `MEDIA_WORKER_CONCURRENCY` first, then `MEDIA_MAX_IMAGE_PIXELS`.
 
 ## DLQ / failed-set retention
 
-There is no separate dead-letter queue — BullMQ keeps failed jobs in the `media`
-failed set for **7 days** (`removeOnFail: { age: 604800, count: 5000 }`, `@repo/queue`).
-Completed jobs are removed immediately (`removeOnComplete: true`). A failure spike is
-capped at 5000 retained jobs; if you need older evidence, pull it before the age
-window expires. The source of truth for terminal state is the `project_image.status`
-column — the failed set is for the error/stack detail.
+There is no separate dead-letter queue. Media jobs use fixed ids, so a retained
+failed job would turn every re-enqueue of that image into a silent no-op. They are
+removed on terminal failure (`removeOnFail: true`) and on completion
+(`removeOnComplete: true`). The source of truth for terminal state is the
+`project_image.status` column; the error and stack are in the `job.terminal_failed`
+worker log.
 
 ## Health & graceful shutdown
 
