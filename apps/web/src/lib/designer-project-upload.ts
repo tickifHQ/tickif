@@ -1,7 +1,10 @@
 import {
   materialFinishSlugs,
   createProjectSchema,
+  errorResponseSchema,
   imageFailureReason,
+  MAX_PROJECT_IMAGES,
+  PROJECT_ERROR_CODE,
   type ImageFailureReason,
   type ProjectImageDto,
   type CreateProjectInput,
@@ -58,6 +61,25 @@ const IMAGE_FAILURE_MESSAGES: Record<ImageFailureReason, string> = {
   processing_failed: 'Processing failed before it could finish.',
   upload_failed: 'The upload did not complete.',
 };
+
+/** Another tab or teammate saved first; the editor stops saving until the designer reloads. */
+export class ProjectEditConflictError extends Error {
+  override name = 'ProjectEditConflictError';
+}
+
+export function isProjectEditConflict(payload: unknown): boolean {
+  const parsed = errorResponseSchema.safeParse(payload);
+  return parsed.success && parsed.data.error.code === PROJECT_ERROR_CODE.EDIT_CONFLICT;
+}
+
+/** Checked before any upload URL is requested; the API enforces the same limit. */
+export function projectImageLimitError(currentCount: number, adding: number): string | null {
+  if (currentCount + adding <= MAX_PROJECT_IMAGES) return null;
+  const remaining = MAX_PROJECT_IMAGES - currentCount;
+  return remaining > 0
+    ? `A project can hold up to ${MAX_PROJECT_IMAGES} photos. You can add ${remaining} more; remove photos to add others.`
+    : `A project can hold up to ${MAX_PROJECT_IMAGES} photos. Remove a photo to add another.`;
+}
 
 export function imageFailureMessage(reason: string | null | undefined): string | null {
   if (!reason) return null;
