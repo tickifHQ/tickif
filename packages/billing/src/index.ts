@@ -9,7 +9,7 @@ export {
 export { replacementRepository } from './repository.js';
 export type { Replacement } from './repository.js';
 export { upgradeAmount } from './quote.js';
-export { replacementProvider } from './provider.js';
+export { replacementProvider, ProviderRejection } from './provider.js';
 export {
   activeEarlyBirdTrial,
   earlyBirdStatus,

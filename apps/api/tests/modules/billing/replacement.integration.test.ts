@@ -326,6 +326,56 @@ describe('replacement billing database transitions', () => {
       status: 'checkout',
     });
   });
+  it('releases a reservation whose create outcome is unknown once its checkout window closes', async () => {
+    const local = await makeSubscription({
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_source',
+      razorpayStatus: 'active',
+      currentPeriodEnd: end,
+    });
+    await db.insert(schema.billingOperation).values({
+      operationId,
+      organizationId: local.organizationId,
+      targetTier: 'corporate',
+      kind: 'change_plan',
+      stateRevision: 'reviewed',
+      sourceSubscriptionId: 'sub_source',
+      status: 'reconciliation_pending',
+    });
+    const expiresAt = new Date(now.getTime() + 900000);
+    await replacementRepository.insert({
+      id: operationId,
+      organizationId: local.organizationId,
+      sourceSubscriptionId: 'sub_source',
+      sourceTier: 'professional_plus',
+      targetTier: 'corporate',
+      targetPlanId: 'plan_target',
+      amount: 250000,
+      recurringAmount: 799900,
+      currency: 'INR',
+      periodEnd: end,
+      expiresAt,
+    });
+
+    // A timed-out create may still have made a mandate that can be paid until expire_by.
+    expect(await reconcileReplacement(local.organizationId, now)).toBe(false);
+    expect(await replacementRepository.current(local.organizationId)).toMatchObject({
+      status: 'creating',
+    });
+
+    expect(await reconcileReplacement(local.organizationId, expiresAt)).toBe(true);
+    expect(await replacementRepository.current(local.organizationId)).toBeUndefined();
+    const [operation] = await db
+      .select()
+      .from(schema.billingOperation)
+      .where(eq(schema.billingOperation.operationId, operationId));
+    expect(operation?.status).toBe('failed');
+    expect((await db.select().from(schema.subscription))[0]).toMatchObject({
+      planTier: 'professional_plus',
+      razorpaySubscriptionId: 'sub_source',
+    });
+  });
   it('rejects overlapping replacements at the database boundary', async () => {
     const local = await setup();
     const existing = (await replacementRepository.current(local.organizationId))!;

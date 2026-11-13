@@ -295,6 +295,16 @@ export async function createPlan(params: {
   });
 }
 
+/** A definite provider refusal: the operation fails and the organization can choose again. */
+export function checkoutRejected(razorpayCode?: string) {
+  return new AppError(
+    'checkout_rejected',
+    'Razorpay could not start this checkout and nothing was charged. Review the plan and try again.',
+    422,
+    { source: 'razorpay', razorpayCode },
+  );
+}
+
 /**
  * Create a Razorpay subscription for a given plan.
  * Returns the subscription object including the short_url for checkout.
@@ -318,14 +328,7 @@ export async function createSubscription(params: {
     // Razorpay creates nothing on a 4xx, so the checkout can fail definitively and
     // the organization can choose again. 5xx and timeouts stay unknown outcomes.
     (providerError, status) =>
-      status >= 400 && status < 500
-        ? new AppError(
-            'checkout_rejected',
-            'Razorpay could not start this checkout and nothing was charged. Review the plan and try again.',
-            422,
-            { source: 'razorpay', razorpayCode: providerError.error?.code },
-          )
-        : undefined,
+      status >= 400 && status < 500 ? checkoutRejected(providerError.error?.code) : undefined,
   );
 }
 
