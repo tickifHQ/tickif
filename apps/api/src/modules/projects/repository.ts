@@ -2,7 +2,11 @@ import { exists, ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
 import type { DbTransaction } from '@repo/db';
-import { VERIFICATION_APPLICATION_STATUS, classifyProjectEdit } from '@repo/contracts';
+import {
+  PROJECT_ERROR_CODE,
+  VERIFICATION_APPLICATION_STATUS,
+  classifyProjectEdit,
+} from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -1020,11 +1024,38 @@ export const projectsRepository = {
     });
   },
 
-  async updateDraft(id: string, input: UpdateProjectInput): Promise<ProjectRecord | null> {
-    const versioned = await mutateProjectAggregate(id, (aggregate) => {
+  /**
+   * Applies a whole-form save. Every save bumps the canonical edit revision, so a
+   * tab that read an older revision gets a conflict instead of reverting this one.
+   */
+  async updateDraft(
+    id: string,
+    input: UpdateProjectInput,
+    expectedEditRevision?: number,
+  ): Promise<ProjectRecord | null> {
+    const versioned = await mutateProjectAggregate(id, async (aggregate, tx) => {
+      if (
+        expectedEditRevision !== undefined &&
+        aggregate.project.editRevision !== expectedEditRevision
+      ) {
+        throw new AppError(
+          PROJECT_ERROR_CODE.EDIT_CONFLICT,
+          'This project was saved from another tab or by a teammate. Reload to edit the latest version.',
+          409,
+        );
+      }
       aggregate.project = { ...aggregate.project, ...input };
+      const [row] = await tx
+        .update(schema.project)
+        .set({ editRevision: sql`${schema.project.editRevision} + 1` })
+        .where(eq(schema.project.id, id))
+        .returning({ editRevision: schema.project.editRevision });
+      if (!row) throw new Error('Project disappeared while locked');
+      return row.editRevision;
     });
-    return versioned ? ((await getPendingProject(id)) ?? versioned.project) : null;
+    if (!versioned) return null;
+    const project = (await getPendingProject(id)) ?? versioned.project;
+    return { ...project, editRevision: versioned.value };
   },
 
   async assignResponsibleMember(input: {

@@ -433,6 +433,8 @@ export const project = pgTable(
     moderationNote: text('moderation_note'),
     featuredAt: timestamp('featured_at'),
     moderationRevision: integer('moderation_revision').default(0).notNull(),
+    // Whole-form editor saves compare and bump this on the canonical row, never in pending content.
+    editRevision: integer('edit_revision').default(0).notNull(),
     // Approval baseline survives minor image edits, so repeated autosaves cannot evade review.
     approvedImageIds: jsonb('approved_image_ids').$type<string[]>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),

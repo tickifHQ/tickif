@@ -32,7 +32,7 @@ import {
   publicProjectBySlugResponseSchema,
   reorderProjectRoomsSchema,
   updateProjectRoomSchema,
-  updateProjectSchema,
+  updateProjectRequestSchema,
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
@@ -204,7 +204,7 @@ const updateProjectRoute = createRoute({
   request: {
     params: projectIdParamSchema,
     body: {
-      content: { 'application/json': { schema: updateProjectSchema } },
+      content: { 'application/json': { schema: updateProjectRequestSchema } },
     },
   },
   responses: {
@@ -215,7 +215,9 @@ const updateProjectRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft or changes-requested projects can be edited'),
+    409: errorJson(
+      'Project is not editable, or another editor saved first (project_edit_conflict)',
+    ),
     422: errorJson('Invalid taxonomy refs or cover image'),
   },
 });

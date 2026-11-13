@@ -83,6 +83,22 @@ export const updateProjectSchema = z
   .meta({ id: 'UpdateProject' });
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 
+/**
+ * The editor saves its whole form at once. It sends the `editRevision` it last
+ * read so a stale tab cannot silently overwrite a newer save; partial API
+ * updates that name only the fields they change may omit it.
+ */
+export const updateProjectRequestSchema = updateProjectSchema
+  .extend({ expectedEditRevision: z.number().int().nonnegative().optional() })
+  .meta({ id: 'UpdateProjectRequest' });
+export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
+
+/** Stable project error codes the web app matches on instead of message text. */
+export const PROJECT_ERROR_CODE = {
+  EDIT_CONFLICT: 'project_edit_conflict',
+  IMAGE_LIMIT_REACHED: 'project_image_limit_reached',
+} as const;
+
 export const assignProjectResponsibleMemberSchema = z
   .object({ responsibleMemberId: z.string().min(1).nullable() })
   .strict()
@@ -200,6 +216,8 @@ export const projectResponseSchema = z
     publishedAt: z.string().datetime().nullable(),
     submittedAt: z.string().datetime().nullable(),
     reviewComments: z.array(projectReviewCommentSchema),
+    /** Counts whole-form saves; send it back as `expectedEditRevision`. */
+    editRevision: z.number().int().nonnegative(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -705,6 +723,7 @@ export const publicProjectDetailResponseSchema = projectDetailResponseSchema
     rejectionReasonCodes: true,
     moderationNote: true,
     reviewComments: true,
+    editRevision: true,
     rooms: true,
   })
   .extend({

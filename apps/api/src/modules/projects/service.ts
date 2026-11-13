@@ -42,6 +42,7 @@ import type {
   ReorderProjectRoomsInput,
   SimilarProjectsResponse,
   UpdateProjectInput,
+  UpdateProjectRequest,
   UpdateProjectRoomInput,
   Derivative,
 } from '@repo/contracts';
@@ -136,6 +137,7 @@ function toResponse(
     publishedAt: row.publishedAt?.toISOString() ?? null,
     submittedAt: row.submittedAt?.toISOString() ?? null,
     reviewComments,
+    editRevision: row.editRevision,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -1737,7 +1739,7 @@ export const projectsService = {
 
   async update(
     projectId: string,
-    input: UpdateProjectInput,
+    { expectedEditRevision, ...input }: UpdateProjectRequest,
     caller: Caller,
   ): Promise<ProjectDetailResponse> {
     await requireEditableProject(projectId, caller);
@@ -1751,7 +1753,11 @@ export const projectsService = {
       if (!image) throw AppError.unprocessable('Cover image must belong to the project');
     }
 
-    const row = await projectsRepository.updateDraft(projectId, normalizedInput);
+    const row = await projectsRepository.updateDraft(
+      projectId,
+      normalizedInput,
+      expectedEditRevision,
+    );
     if (!row) throw AppError.notFound('Project not found');
     const rooms = await prefillRoomsIfEmpty(row);
     return toDetailResponse(row, rooms);

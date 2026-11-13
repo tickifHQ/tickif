@@ -131,6 +131,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   moderationNote: null,
   featuredAt: null,
   moderationRevision: 0,
+  editRevision: 0,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-01T00:00:00Z'),
   ...over,
@@ -764,11 +765,19 @@ describe('projectsService.update', () => {
     );
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
 
-    await projectsService.update(row().id, { citySlug: 'chennai' }, caller);
+    await projectsService.update(
+      row().id,
+      { citySlug: 'chennai', expectedEditRevision: 3 },
+      caller,
+    );
 
     expect(projectsRepository.updateDraft).toHaveBeenCalledWith(
       row().id,
       expect.objectContaining({ citySlug: 'chennai', cityName: null }),
+      3,
+    );
+    expect(vi.mocked(projectsRepository.updateDraft).mock.calls[0]?.[1]).not.toHaveProperty(
+      'expectedEditRevision',
     );
   });
 });

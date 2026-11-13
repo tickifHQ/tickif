@@ -678,7 +678,12 @@ describe('bounded live project versions', () => {
     const fixture = await publishedProject();
     const before = (await readProjectAggregate(fixture.project.id))!.live;
     await startPendingReview(fixture);
-    expect((await readProjectAggregate(fixture.project.id))!.live).toEqual(before);
+    // Only the canonical edit counter moves; approved content stays as it was.
+    const afterEdit = {
+      ...before,
+      project: { ...before.project, editRevision: before.project.editRevision + 1 },
+    };
+    expect((await readProjectAggregate(fixture.project.id))!.live).toEqual(afterEdit);
     expect(await projectsService.getById(fixture.project.id)).toMatchObject({
       status: 'published',
       budgetBandSlug: 'premium',
@@ -714,7 +719,7 @@ describe('bounded live project versions', () => {
       reasonCode: 'other',
       reasonCodes: ['other'],
     });
-    expect((await readProjectAggregate(fixture.project.id))!.live).toEqual(before);
+    expect((await readProjectAggregate(fixture.project.id))!.live).toEqual(afterEdit);
     expect((await readProjectAggregate(fixture.project.id))!.pending).toBeNull();
     expect(await db.select().from(schema.searchProjectionOutbox)).toHaveLength(0);
   });

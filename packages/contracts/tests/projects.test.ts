@@ -13,6 +13,7 @@ import {
   projectStatus,
   projectRoomSchema,
   reorderProjectRoomsSchema,
+  updateProjectRequestSchema,
   updateProjectSchema,
 } from '../src/projects.js';
 
@@ -100,6 +101,19 @@ describe('updateProjectSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe('updateProjectRequestSchema', () => {
+  it('carries the editor revision separately from the editable project fields', () => {
+    expect(updateProjectRequestSchema.parse({ title: 'Saved', expectedEditRevision: 4 })).toEqual({
+      title: 'Saved',
+      expectedEditRevision: 4,
+    });
+    expect(updateProjectSchema.parse({ title: 'Saved', expectedEditRevision: 4 })).toEqual({
+      title: 'Saved',
+    });
+    expect(updateProjectRequestSchema.safeParse({ expectedEditRevision: -1 }).success).toBe(false);
   });
 });
 
