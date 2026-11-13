@@ -857,12 +857,18 @@ describe('E-117: subscription.halted', () => {
     expect(updated!.planTier).toBe('professional_plus'); // preserved
   });
 
-  it('rejects halted from active state (must go through payment_failed first)', async () => {
+  it('ignores halted from active state while Razorpay still reports it active', async () => {
     const sub = await makeSubscription({
       planTier: 'professional_plus',
       subscriptionState: 'active',
       razorpaySubscriptionId: `sub_halted_bad_${Date.now()}`,
       razorpayStatus: 'active',
+    });
+    mockFetchSubscription.mockResolvedValueOnce({
+      id: sub.razorpaySubscriptionId,
+      status: 'active',
+      plan_id: 'plan_test_professional_plus',
+      has_scheduled_changes: false,
     });
 
     const payload = buildPayload('subscription.halted', {
@@ -870,7 +876,7 @@ describe('E-117: subscription.halted', () => {
     });
 
     const result = await processWebhookEvent('subscription.halted' as RazorpayEvent, payload);
-    expect(result.outcome).toBe('invalid_transition');
+    expect(result.outcome).toBe('ignored');
   });
 });
 

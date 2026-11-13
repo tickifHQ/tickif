@@ -488,7 +488,8 @@ async function handlePaymentFailed(
 
 /**
  * subscription.halted — Razorpay halts the subscription after payment retries fail.
- * Maps to our grace state. Valid only from payment_failed.
+ * Maps to our grace state. Valid from payment_failed, or from a paid active plan
+ * when the live subscription is halted.
  * Sets graceStartedAt and preserves preLapseTier for future restoration.
  */
 async function handleHalted(
@@ -513,7 +514,13 @@ async function handleHalted(
     if (!current) return { outcome: 'ignored', reason: 'Subscription is no longer current' };
 
     const currentState = current.subscriptionState as SubscriptionState;
-    if (currentState !== SUBSCRIPTION_STATE.PAYMENT_FAILED) {
+    if (currentState === SUBSCRIPTION_STATE.ACTIVE && current.planTier !== 'hobby') {
+      // payment.failed can arrive after halted. A replayed halted must not lapse a renewed plan.
+      const live = await fetchSubscription(razorpaySubscriptionId);
+      if (live.status !== 'halted') {
+        return { outcome: 'ignored', reason: 'Live subscription is not halted' };
+      }
+    } else if (currentState !== SUBSCRIPTION_STATE.PAYMENT_FAILED) {
       return {
         outcome: 'invalid_transition',
         reason: `Cannot transition from ${currentState} to grace`,

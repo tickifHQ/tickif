@@ -973,20 +973,68 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.preLapseTier).toBe('corporate');
     });
 
-    it('rejects halted from active state', async () => {
-      await makeSubscription({
-        planTier: 'professional_plus',
+    it('moves active to grace when halted arrives before payment.failed and Razorpay confirms it', async () => {
+      mockFetchSubscription.mockResolvedValueOnce({
+        id: 'sub_halt_before_failure',
+        status: 'halted',
+        plan_id: 'plan_test_corporate',
+        has_scheduled_changes: false,
+      });
+      const sub = await makeSubscription({
+        planTier: 'corporate',
         subscriptionState: 'active',
-        razorpaySubscriptionId: 'sub_halt_invalid',
+        razorpaySubscriptionId: 'sub_halt_before_failure',
+        razorpayStatus: 'active',
       });
 
-      const payload = makeSubscriptionPayload(
+      const halted = await processWebhookEvent(
         RAZORPAY_EVENT.SUBSCRIPTION_HALTED,
-        'sub_halt_invalid',
+        makeSubscriptionPayload(RAZORPAY_EVENT.SUBSCRIPTION_HALTED, 'sub_halt_before_failure', {
+          status: 'halted',
+        }),
+      );
+      const failed = await processWebhookEvent(
+        RAZORPAY_EVENT.PAYMENT_FAILED,
+        makeSubscriptionPayload(RAZORPAY_EVENT.PAYMENT_FAILED, 'sub_halt_before_failure', {
+          status: 'halted',
+          paymentId: 'pay_failure_after_halt',
+        }),
       );
 
-      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_HALTED, payload);
+      expect(halted.outcome).toBe('processed');
+      expect(failed.outcome).toBe('invalid_transition');
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated).toMatchObject({
+        subscriptionState: 'grace',
+        preLapseTier: 'corporate',
+        razorpayStatus: 'halted',
+      });
+    });
+
+    it('keeps an unpaid Hobby checkout active when its first authorization halts', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_halt_unpaid_checkout',
+        razorpayStatus: 'created',
+      });
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_HALTED,
+        makeSubscriptionPayload(RAZORPAY_EVENT.SUBSCRIPTION_HALTED, 'sub_halt_unpaid_checkout', {
+          status: 'halted',
+        }),
+      );
+
       expect(result.outcome).toBe('invalid_transition');
+      const [unchanged] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(unchanged!.subscriptionState).toBe('active');
     });
   });
 
@@ -1184,21 +1232,32 @@ describe('E-117: webhook event processing', () => {
     });
 
     it('stale halted after reactivation is rejected', async () => {
+      mockFetchSubscription.mockResolvedValueOnce({
+        id: 'sub_stale_halted',
+        status: 'active',
+        plan_id: 'plan_test_corporate',
+        has_scheduled_changes: false,
+      });
       // Org was in grace, charged reactivated them back to active
-      await makeSubscription({
+      const sub = await makeSubscription({
         planTier: 'corporate',
         subscriptionState: 'active',
         razorpaySubscriptionId: 'sub_stale_halted',
       });
 
-      // Stale halted arrives — should fail (only valid from payment_failed)
+      // Stale halted arrives — Razorpay reports the subscription active again.
       const payload = makeSubscriptionPayload(
         RAZORPAY_EVENT.SUBSCRIPTION_HALTED,
         'sub_stale_halted',
       );
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_HALTED, payload);
-      expect(result.outcome).toBe('invalid_transition');
+      expect(result).toEqual({ outcome: 'ignored', reason: 'Live subscription is not halted' });
+      const [unchanged] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(unchanged!.subscriptionState).toBe('active');
     });
 
     it('stale payment.failed after reactivation is valid (new failure)', async () => {
