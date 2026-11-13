@@ -188,7 +188,14 @@ Only one rebuild can be queued or active at a time. The worker:
 The final lock prevents a domain transaction from committing between replay and
 alias swap. If the designer alias swap fails after the project alias moved, the
 worker restores the project alias. Failed candidate collections are deleted.
-Previous live physical collections are retained for operator rollback.
+
+After a successful swap the worker keeps two physical collections per kind: the
+new live one and the one it replaced, for operator rollback. Versioned
+collections created before the replaced one are deleted, so a rebuild on every
+release no longer accumulates full copies in Typesense memory. The collection an
+alias points to and anything newer than the replaced collection are never
+deleted. A failed cleanup is logged as `search.collection_prune_failed` and the
+next rebuild retries it.
 
 After both aliases move, still behind the final lock, the rebuild marks every
 undispatched outbox row up to its final watermark as dispatched. Those rows are

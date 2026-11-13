@@ -31,6 +31,7 @@ export { SEARCH_SYNONYMS, SEARCH_SYNONYM_SET } from './synonyms.js';
 export {
   createSearchCollection,
   deleteSearchCollection,
+  deleteSearchCollectionsOlderThan,
   deleteSearchDocument,
   deleteSearchProjectsByDesigner,
   getSearchCollectionTarget,

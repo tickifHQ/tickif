@@ -4,6 +4,7 @@ import type { ProjectSearchSource } from '../../src/search/mapper.js';
 vi.mock('@repo/search', () => ({
   createSearchCollection: vi.fn(async () => undefined),
   deleteSearchCollection: vi.fn(async () => undefined),
+  deleteSearchCollectionsOlderThan: vi.fn(async () => []),
   deleteSearchDocument: vi.fn(async () => false),
   deleteSearchProjectsByDesigner: vi.fn(async () => 0),
   getSearchCollectionTarget: vi.fn(async (kind: string) => `tickif_${kind}_v1`),
@@ -160,6 +161,28 @@ describe('full search rebuild', () => {
     );
   });
 
+  it('prunes collections older than the replaced ones after both aliases move', async () => {
+    vi.mocked(search.deleteSearchCollectionsOlderThan).mockRejectedValueOnce(
+      new Error('Typesense unavailable'),
+    );
+
+    await expect(rebuildSearchCollections(1000, 0)).resolves.toMatchObject({
+      collections: { projects: 'tickif_projects_v1000-0' },
+    });
+
+    expect(search.deleteSearchCollectionsOlderThan).toHaveBeenCalledWith(
+      'projects',
+      'tickif_projects_v1',
+    );
+    expect(search.deleteSearchCollectionsOlderThan).toHaveBeenCalledWith(
+      'designers',
+      'tickif_designers_v1',
+    );
+    expect(vi.mocked(search.swapSearchCollectionAlias).mock.invocationCallOrder[1]).toBeLessThan(
+      vi.mocked(search.deleteSearchCollectionsOlderThan).mock.invocationCallOrder[0]!,
+    );
+  });
+
   it('rolls the project alias back when the designer alias swap fails', async () => {
     vi.mocked(outbox.listSearchProjectionEventsBetween).mockReset();
     vi.mocked(outbox.listSearchProjectionEventsBetween).mockResolvedValue([]);
@@ -189,5 +212,6 @@ describe('full search rebuild', () => {
       'projects',
       'tickif_projects_v1000-0',
     );
+    expect(search.deleteSearchCollectionsOlderThan).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,7 @@ export type SearchWriteOperations = {
   ): Promise<{ num_deleted: number }>;
   getAlias(name: string): Promise<CollectionAliasSchema>;
   upsertAlias(name: string, alias: CollectionAliasCreateSchema): Promise<CollectionAliasSchema>;
+  listCollections(): Promise<CollectionSchema[]>;
   deleteCollection(name: string): Promise<CollectionSchema>;
 };
 
@@ -80,6 +81,7 @@ function typesenseWriteOperations(instance: Client): SearchWriteOperations {
       instance.collections(collectionName).documents().delete({ filter_by: filterBy }),
     getAlias: (name) => instance.aliases(name).retrieve(),
     upsertAlias: (name, alias) => instance.aliases().upsert(name, alias),
+    listCollections: () => instance.collections().retrieve({ exclude_fields: 'fields' }),
     deleteCollection: (name) => instance.collections(name).delete(),
   };
 }
@@ -100,10 +102,14 @@ function isNotFound(error: unknown): boolean {
   return error instanceof Errors.ObjectNotFound || httpStatus(error) === 404;
 }
 
-function assertVersionedCollectionName(kind: SearchCollectionKind, collectionName: string): void {
+function isVersionedCollectionName(kind: SearchCollectionKind, collectionName: string): boolean {
   const prefix = `${searchCollectionName(kind)}_v`;
   const version = collectionName.slice(prefix.length);
-  if (!collectionName.startsWith(prefix) || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(version)) {
+  return collectionName.startsWith(prefix) && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(version);
+}
+
+function assertVersionedCollectionName(kind: SearchCollectionKind, collectionName: string): void {
+  if (!isVersionedCollectionName(kind, collectionName)) {
     throw new Error(`Refusing to use non-versioned search collection ${collectionName}`);
   }
 }
@@ -254,4 +260,41 @@ export async function deleteSearchCollection(
 ): Promise<CollectionSchema> {
   assertVersionedCollectionName(kind, collectionName);
   return writeOperations(options.client).deleteCollection(collectionName);
+}
+
+/**
+ * Delete this kind's versioned collections created no later than `retainedCollectionName`,
+ * keeping that collection and whatever the alias points to. Newer collections, such as an
+ * in-progress rebuild candidate, are never touched. Returns the deleted names.
+ */
+export async function deleteSearchCollectionsOlderThan(
+  kind: SearchCollectionKind,
+  retainedCollectionName: string,
+  options: { client?: SearchWriteOperations } = {},
+): Promise<string[]> {
+  assertVersionedCollectionName(kind, retainedCollectionName);
+  const client = writeOperations(options.client);
+  const [collections, alias] = await Promise.all([
+    client.listCollections(),
+    client.getAlias(searchCollectionName(kind)),
+  ]);
+  const retained = collections.find((collection) => collection.name === retainedCollectionName);
+  if (!retained) return [];
+  const superseded = collections
+    .filter(
+      (collection) =>
+        collection.name !== retained.name &&
+        collection.name !== alias.collection_name &&
+        isVersionedCollectionName(kind, collection.name) &&
+        collection.created_at <= retained.created_at,
+    )
+    .map((collection) => collection.name);
+  await Promise.all(
+    superseded.map((name) =>
+      client.deleteCollection(name).catch((error: unknown) => {
+        if (!isNotFound(error)) throw error;
+      }),
+    ),
+  );
+  return superseded;
 }

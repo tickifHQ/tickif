@@ -2,6 +2,7 @@ import { Errors } from 'typesense';
 import {
   createSearchCollection,
   deleteSearchCollection,
+  deleteSearchCollectionsOlderThan,
   deleteSearchDocument,
   deleteSearchProjectsByDesigner,
   getSearchCollectionTarget,
@@ -156,6 +157,27 @@ async function cleanupCandidate(kind: SearchCollectionKind, collectionName: stri
   }
 }
 
+/** Keep the live collection and the one it replaced for rollback; older copies only cost memory. */
+async function pruneSupersededCollections(
+  kind: SearchCollectionKind,
+  previousCollectionName: string,
+): Promise<void> {
+  try {
+    const deleted = await deleteSearchCollectionsOlderThan(kind, previousCollectionName);
+    if (deleted.length > 0) {
+      logger.info(
+        { event: 'search.collections_pruned', kind, collections: deleted },
+        'Superseded search collections deleted',
+      );
+    }
+  } catch (error) {
+    logger.error(
+      { event: 'search.collection_prune_failed', kind, err: error },
+      'Superseded search collection cleanup failed',
+    );
+  }
+}
+
 export async function rebuildSearchCollections(
   requestedAtEpoch: number,
   attempt: number,
@@ -210,6 +232,10 @@ export async function rebuildSearchCollections(
       return count;
     });
 
+    await Promise.all([
+      pruneSupersededCollections('projects', previous.projects),
+      pruneSupersededCollections('designers', previous.designers),
+    ]);
     return { projects, designers, replayed, collections: targets };
   } catch (error) {
     if (projectAliasSwapped) {

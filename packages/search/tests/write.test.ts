@@ -12,6 +12,7 @@ import type { ProjectSearchDocument } from '../src/documents.js';
 import {
   createSearchCollection,
   deleteSearchCollection,
+  deleteSearchCollectionsOlderThan,
   deleteSearchDocument,
   deleteSearchProjectsByDesigner,
   getSearchCollectionTarget,
@@ -57,7 +58,7 @@ const projectDocument: ProjectSearchDocument = {
   reviewCount: 12,
 };
 
-function collectionSchema(name: string): CollectionSchema {
+function collectionSchema(name: string, createdAt = 1): CollectionSchema {
   return {
     name,
     fields: [],
@@ -69,7 +70,7 @@ function collectionSchema(name: string): CollectionSchema {
     voice_query_model: {},
     synonym_sets: [],
     curation_sets: [],
-    created_at: 1,
+    created_at: createdAt,
     num_documents: 0,
     num_memory_shards: 4,
   };
@@ -103,6 +104,7 @@ function fakeOperations() {
       ...alias,
     }),
   );
+  const listCollections = vi.fn(async (): Promise<CollectionSchema[]> => []);
   const deleteCollection = vi.fn(async (name: string) => collectionSchema(name));
 
   const operations: SearchWriteOperations = {
@@ -113,6 +115,7 @@ function fakeOperations() {
     deleteDocumentsByFilter,
     getAlias,
     upsertAlias,
+    listCollections,
     deleteCollection,
   };
 
@@ -125,6 +128,7 @@ function fakeOperations() {
     deleteDocumentsByFilter,
     getAlias,
     upsertAlias,
+    listCollections,
     deleteCollection,
   };
 }
@@ -292,5 +296,45 @@ describe('search write primitives', () => {
       }),
     ).rejects.toThrow('Refusing to use non-versioned search collection');
     expect(fake.deleteCollection).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes only collections older than the retained one, never the alias target', async () => {
+    const fake = fakeOperations();
+    fake.listCollections.mockResolvedValue([
+      collectionSchema(`${projectAlias}_v1`, 100),
+      collectionSchema(`${projectAlias}_v2`, 200),
+      collectionSchema(`${projectAlias}_v3`, 300),
+      collectionSchema(`${projectAlias}_v4`, 400),
+      collectionSchema(`${projectAlias}_vcandidate`, 500),
+      collectionSchema(`${designerAlias}_v1`, 100),
+      collectionSchema(projectAlias, 50),
+    ]);
+    fake.getAlias.mockResolvedValue({ name: projectAlias, collection_name: `${projectAlias}_v2` });
+    fake.deleteCollection.mockImplementation(async (name: string) => {
+      if (name === `${projectAlias}_v3`) throw notFound();
+      return collectionSchema(name);
+    });
+
+    await expect(
+      deleteSearchCollectionsOlderThan('projects', `${projectAlias}_v4`, {
+        client: fake.operations,
+      }),
+    ).resolves.toEqual([`${projectAlias}_v1`, `${projectAlias}_v3`]);
+    expect(fake.deleteCollection.mock.calls.map(([name]) => name)).toEqual([
+      `${projectAlias}_v1`,
+      `${projectAlias}_v3`,
+    ]);
+  });
+
+  it('deletes nothing when the retained collection no longer exists', async () => {
+    const fake = fakeOperations();
+    fake.listCollections.mockResolvedValue([collectionSchema(`${projectAlias}_v1`, 100)]);
+
+    await expect(
+      deleteSearchCollectionsOlderThan('projects', `${projectAlias}_v2`, {
+        client: fake.operations,
+      }),
+    ).resolves.toEqual([]);
+    expect(fake.deleteCollection).not.toHaveBeenCalled();
   });
 });
