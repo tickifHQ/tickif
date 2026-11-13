@@ -166,8 +166,9 @@ The E2E API defaults to port 3001; ordinary development defaults to 8008.
 The full-stack suite disables the automatic scroll sign-up gate so unrelated
 journeys can browse normally. CI separately runs
 `pnpm --filter @repo/e2e exec playwright test --config scroll-gate-evidence.config.ts`
-against the temporary component fixture with the gate enabled. This checks page
-scroll locking, dismissal and short-screen internal scrolling with native scrollbars.
+against the temporary component fixture with the gate enabled. This checks that
+the page keeps scrolling under the pinned prompt, that scrolling back releases it,
+dismissal, and short-screen internal scrolling with native scrollbars.
 
 ```bash
 pnpm --filter @repo/e2e test:e2e:install

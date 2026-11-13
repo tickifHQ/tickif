@@ -26,7 +26,7 @@ for (const viewport of [
   { width: 1512, height: 982 },
   { width: 390, height: 480 },
 ]) {
-  test(`scroll-revealed login locks the page until dismissal at ${viewport.width}px`, async ({
+  test(`scroll-revealed login fades out when the reader scrolls back at ${viewport.width}px`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -34,37 +34,51 @@ for (const viewport of [
     const gate = page.getByTestId('scroll-signup-gate');
     await expect(gate).toBeAttached();
     const before = await page.locator('main').boundingBox();
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.evaluate(() => window.scrollTo(0, 2_000));
     await expect(gate).toHaveAttribute('aria-hidden', 'false');
     const after = await page.locator('main').boundingBox();
     expect(Math.abs(after!.width - before!.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(after!.x - before!.x)).toBeLessThanOrEqual(1);
-    const backdrop = await page.getByTestId('scroll-signup-backdrop').boundingBox();
-    expect(Math.abs(backdrop!.width - viewport.width)).toBeLessThanOrEqual(1);
     const dialog = page.getByRole('dialog', { name: 'Sign in required' });
-    const lockedY = await page.evaluate(() => window.scrollY);
-
-    await page.mouse.move(4, viewport.height / 2);
-    await page.mouse.wheel(0, -300);
-    await settleScroll(page);
-    expect(await page.evaluate(() => window.scrollY)).toBe(lockedY);
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const backgroundAction = page.getByRole('button', { name: 'Background action' });
+    const openedY = await page.evaluate(() => window.scrollY);
+
+    // The page keeps scrolling underneath the pinned card.
+    await page.mouse.move(4, viewport.height / 2);
+    await page.mouse.wheel(0, 300);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(openedY);
+    await settleScroll(page);
+    await expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
+
+    await page.mouse.wheel(0, -300);
+    await expect(gate).toHaveAttribute('aria-hidden', 'true');
+    expect(Number(await gate.getAttribute('data-scroll-progress'))).toBeLessThan(1);
+    expect(
+      Number(await page.getByTestId('scroll-signup-backdrop').evaluate((e) => e.style.opacity)),
+    ).toBeLessThan(0.6);
+    await expect.poll(() => backgroundAction.evaluate((e) => e.closest('[inert]'))).toBeNull();
+
+    await page.mouse.wheel(0, 300);
+    await expect(gate).toHaveAttribute('aria-hidden', 'false');
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const pinnedY = await page.evaluate(() => window.scrollY);
 
     if (viewport.height === 480) {
       await dialog.getByRole('tab', { name: "I'm a designer" }).click();
       const scroller = gate.locator('[data-slot="scroll-gate-scroller"]');
       await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
       expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-      expect(await page.evaluate(() => window.scrollY)).toBe(lockedY);
+      expect(await page.evaluate(() => window.scrollY)).toBe(pinnedY);
       await expect(dialog.getByRole('link', { name: 'Privacy', exact: true })).toBeInViewport();
     }
 
     await page.keyboard.press('Escape');
     await expect(gate).toHaveCount(0);
-    expect(await page.evaluate(() => window.scrollY)).toBe(lockedY);
+    expect(await page.evaluate(() => window.scrollY)).toBe(pinnedY);
     await page.mouse.move(4, viewport.height / 2);
     await page.mouse.wheel(0, -300);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(lockedY);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(pinnedY);
   });
 }
 

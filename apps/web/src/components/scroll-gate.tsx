@@ -14,8 +14,8 @@ import { env } from '@/env';
  * card can still begin below the first viewport before it scrolls into view.
  * The card begins below the viewport at a document-relative offset, so normal
  * page scrolling carries it upward at the same speed. Once centered, it pins
- * in place and locks background scrolling. Before it is fully revealed, upward
- * scrolling reverses the same path.
+ * in place while the page keeps scrolling underneath. Scrolling back up
+ * releases it along the same path: the card slides down and the backdrop fades.
  * An explicit dismissal hides the prompt immediately and starts one shared
  * cooldown for every public route and browser tab on this origin.
  */
@@ -78,6 +78,11 @@ function readDismissedUntil(now: number): number {
     // The in-memory timestamp still protects the current mounted layout.
   }
   return 0;
+}
+
+function isTypingInto(panel: HTMLElement | null): boolean {
+  const focused = document.activeElement;
+  return Boolean(panel?.contains(focused) && focused?.matches('input, textarea'));
 }
 
 function getFocusableElements(panel: HTMLElement): HTMLElement[] {
@@ -256,9 +261,9 @@ export function ScrollGate() {
       const delta = currentY - lastScrollYRef.current;
       lastScrollYRef.current = currentY;
 
-      // A fully open modal stays pinned even if a programmatic scroll occurs.
-      // Dismissal or navigation releases the CSS scroll lock.
-      if (dialogActiveRef.current) return;
+      // Mobile browsers scroll the page around a focused field while the
+      // keyboard opens and closes; that must not slide the form away.
+      if (dialogActiveRef.current && isTypingInto(panelRef.current)) return;
       if (Date.now() < dismissedUntilRef.current || delta === 0) return;
 
       setSuppressed(false);
@@ -266,7 +271,9 @@ export function ScrollGate() {
 
       revealDistanceLockedRef.current = true;
 
-      distanceRef.current = Math.max(distanceRef.current + delta, 0);
+      // Clamping at the reveal distance keeps the open card pinned while the
+      // page scrolls on, so the first upward scroll starts releasing it.
+      distanceRef.current = clamp(distanceRef.current + delta, 0, revealDistanceRef.current);
       schedulePaint();
     }
 
@@ -400,7 +407,7 @@ export function ScrollGate() {
       <div
         ref={scrollerRef}
         data-slot="scroll-gate-scroller"
-        className="absolute inset-0 flex items-start justify-center overflow-x-hidden overscroll-contain p-4 sm:p-8"
+        className="absolute inset-0 flex items-start justify-center overflow-x-hidden p-4 sm:p-8"
         style={{ overflowY: interactive ? 'auto' : 'hidden' }}
       >
         <div

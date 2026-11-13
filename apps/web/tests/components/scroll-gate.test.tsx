@@ -25,6 +25,7 @@ vi.mock('../../src/components/login-card', () => ({
         <button type="button" onClick={onClose}>
           Close
         </button>
+        <input aria-label="Mobile number" />
         <button type="button">Continue</button>
       </div>
     );
@@ -290,7 +291,7 @@ describe('ScrollGate', () => {
     );
   });
 
-  it('reverses partial progress but stays pinned once the modal is fully open', () => {
+  it('reverses partial progress before the prompt opens', () => {
     render(<ScrollGate />);
 
     const gate = screen.getByTestId('scroll-signup-gate');
@@ -316,22 +317,72 @@ describe('ScrollGate', () => {
     expect(screen.getByTestId('login-card').parentElement).toHaveStyle({
       transform: 'translate3d(0, 1000px, 0)',
     });
+  });
+
+  it('stays pinned while the page scrolls on and fades out as soon as the reader scrolls back', () => {
+    render(
+      <>
+        <button type="button">Background action</button>
+        <ScrollGate />
+      </>,
+    );
+    const gate = screen.getByTestId('scroll-signup-gate');
+    const backgroundAction = screen.getByRole('button', { name: 'Background action' });
 
     scrollTo(1_000);
-    expect(screen.getByRole('dialog', { name: 'Sign in required' })).toBeVisible();
     expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
-    expect(gate).toHaveAttribute('aria-hidden', 'false');
+    expect(screen.getByRole('dialog', { name: 'Sign in required' })).toHaveAttribute(
+      'aria-modal',
+      'true',
+    );
     expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({ opacity: '0.6' });
 
-    scrollTo(1_200);
+    scrollTo(1_800);
     expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
+    expect(screen.getByTestId('login-card').parentElement).toHaveStyle({
+      transform: 'translate3d(0, 0px, 0)',
+    });
 
-    scrollTo(1_000);
-    expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
+    // Releasing starts from where the reader turned around, not from the first reveal.
+    scrollTo(1_600);
+    expect(gate).toHaveAttribute('data-scroll-progress', '0.800');
+    expect(gate).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByTestId('scroll-signup-backdrop')).toHaveStyle({
+      opacity: '0.48',
+      pointerEvents: 'none',
+    });
+    expect(screen.getByTestId('login-card').parentElement).toHaveStyle({
+      pointerEvents: 'none',
+      transform: 'translate3d(0, 200px, 0)',
+    });
+    expect(screen.getByTestId('login-card').parentElement).not.toHaveAttribute('aria-modal');
+    expect(backgroundAction.parentElement).not.toHaveAttribute('inert');
 
-    scrollTo(500);
+    scrollTo(1_800);
     expect(gate).toHaveAttribute('data-scroll-progress', '1.000');
     expect(gate).toHaveAttribute('aria-hidden', 'false');
+    expect(backgroundAction.parentElement).toHaveAttribute('inert');
+    expect(window.localStorage.getItem('tickif:scroll-gate-dismissed-until:v2')).toBeNull();
+  });
+
+  it('keeps the prompt pinned while the reader is typing into it', () => {
+    render(<ScrollGate />);
+    scrollTo(1_000);
+    screen.getByRole('textbox', { name: 'Mobile number' }).focus();
+
+    // Mobile browsers scroll the page around a focused field as the keyboard opens and closes.
+    scrollTo(700);
+    expect(screen.getByTestId('scroll-signup-gate')).toHaveAttribute(
+      'data-scroll-progress',
+      '1.000',
+    );
+
+    screen.getByRole('button', { name: 'Continue' }).focus();
+    scrollTo(600);
+    expect(screen.getByTestId('scroll-signup-gate')).toHaveAttribute(
+      'data-scroll-progress',
+      '0.900',
+    );
   });
 
   it('updates scrolling visuals without rerendering the login form each frame', () => {
