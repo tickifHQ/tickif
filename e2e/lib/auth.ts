@@ -17,8 +17,17 @@ export async function phoneCode(phoneNumber: string) {
   return code;
 }
 
+// Login-code limits protect real numbers; journeys sign the same synthetic number in repeatedly.
+async function clearLoginCodeLimits(phoneNumber: string) {
+  await assertTestDb();
+  await db
+    .delete(schema.otpAttempt)
+    .where(eq(schema.otpAttempt.identifier, `phone:${phoneNumber}`));
+}
+
 export async function signInPhone(context: BrowserContext, phoneNumber: string | null) {
   if (!phoneNumber) throw new Error('Synthetic user needs a phone number');
+  await clearLoginCodeLimits(phoneNumber);
   const headers = { origin: webUrl };
   expect(
     (
@@ -39,6 +48,7 @@ export async function signInPhone(context: BrowserContext, phoneNumber: string |
 }
 
 export async function signInPhoneUi(page: Page, phoneNumber: string) {
+  await clearLoginCodeLimits(phoneNumber);
   await page.goto('/login');
   await page.getByPlaceholder('9123456789').fill(phoneNumber.replace(/^\+91/, ''));
   await page.getByRole('button', { name: 'Get OTP', exact: true }).click();
