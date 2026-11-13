@@ -258,12 +258,13 @@ async function protectedMutationOrganizationId(
 ): Promise<string | undefined> {
   const invitationId = bodyString(body, 'invitationId');
   if (!invitationId) {
-    // Better Auth reads update-team's organization from `data`; guard the same one.
+    // Better Auth reads update-team's organization from `data`, and falls back to the
+    // active organization for any falsy id (including ""); guard the same one.
     const selector =
       path === '/organization/update-team' && body && typeof body === 'object'
         ? Reflect.get(body, 'data')
         : body;
-    return bodyString(selector, 'organizationId') ?? activeOrganizationId ?? undefined;
+    return bodyString(selector, 'organizationId') || activeOrganizationId || undefined;
   }
 
   const [invitation] = await db

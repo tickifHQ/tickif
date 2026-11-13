@@ -107,6 +107,30 @@ describe('Better Auth branch endpoints', () => {
     ).toHaveLength(2);
   });
 
+  it('treats an empty organizationId as the active organization, as Better Auth does', async () => {
+    const { organization, team } = await corporateOrganization('empty-selector-branches');
+    const admin = await createRoleSession('+919811300006', 'designer');
+    await joinOrganization(admin.userId, organization.id, 'admin');
+    const cookie = await activateOrganization(admin.cookie, organization.id);
+    await db
+      .update(schema.member)
+      .set({ frozen: true, frozenAt: new Date(), freezeRank: 1 })
+      .where(eq(schema.member.userId, admin.userId));
+
+    const responses = [
+      await postTeam('create-team', cookie, { organizationId: '', name: 'Empty selector' }),
+      await postTeam('update-team', cookie, {
+        teamId: team.id,
+        data: { organizationId: '', name: 'Renamed' },
+      }),
+    ];
+
+    expect(responses.map((response) => response.status)).toEqual([403, 403]);
+    expect(
+      await db.select().from(schema.team).where(eq(schema.team.organizationId, organization.id)),
+    ).toHaveLength(1);
+  });
+
   it('checks the organization a renamed branch belongs to, not the active one', async () => {
     const active = await corporateOrganization('active-organization');
     const frozen = await corporateOrganization('frozen-organization');
