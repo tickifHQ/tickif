@@ -197,8 +197,8 @@ alias points to and anything newer than the replaced collection are never
 deleted. A failed cleanup is logged as `search.collection_prune_failed` and the
 next rebuild retries it.
 
-After both aliases move, still behind the final lock, the rebuild marks every
-undispatched outbox row up to its final watermark as dispatched. Those rows are
+After both aliases move, the rebuild marks every undispatched outbox row up to
+its final watermark as dispatched. Those rows are
 already reflected in the new collections, so a rebuild clears any backlog left
 by an outage. Rows written after the watermark go through normal dispatch.
 

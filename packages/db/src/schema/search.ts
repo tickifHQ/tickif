@@ -27,10 +27,8 @@ export const searchProjectionOperationEnum = pgEnum('search_projection_operation
  * entityId is intentionally polymorphic and has no foreign key: delete events
  * must remain replayable after their source project or designer is removed.
  *
- * The worker dispatches rows whose nextAttemptAt is due and pushes it out with a
- * capped exponential backoff on every dispatch, so a failed row waits its turn
- * instead of blocking newer rows. Rows are never abandoned: a delete must
- * eventually reach the index. A full rebuild marks its replayed backlog dispatched.
+ * attempts, nextAttemptAt and lastError hold the worker dispatcher's retry state,
+ * so a failing row backs off instead of blocking newer rows.
  */
 export const searchProjectionOutbox = pgTable(
   'search_projection_outbox',

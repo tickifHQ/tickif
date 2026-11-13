@@ -157,6 +157,21 @@ async function cleanupCandidate(kind: SearchCollectionKind, collectionName: stri
   }
 }
 
+/**
+ * The live collections reflect every outbox row through the watermark, including rows still
+ * backing off after failed incremental jobs. Unsettled rows simply keep retrying.
+ */
+async function settleReplayedBacklog(watermark: bigint): Promise<void> {
+  try {
+    await markSearchProjectionEventsDispatchedThrough(watermark);
+  } catch (error) {
+    logger.error(
+      { event: 'search.backlog_settle_failed', watermark: watermark.toString(), err: error },
+      'Rebuilt search backlog could not be marked dispatched',
+    );
+  }
+}
+
 /** Keep the live collection and the one it replaced for rollback; older copies only cost memory. */
 async function pruneSupersededCollections(
   kind: SearchCollectionKind,
@@ -212,11 +227,11 @@ export async function rebuildSearchCollections(
     const preReplaySequence = await withSearchProjectionRebuildBarrier(() =>
       latestSearchProjectionSequence(),
     );
-    let replayed = await replayThrough(startSequence, preReplaySequence, targets);
+    const replayed = await replayThrough(startSequence, preReplaySequence, targets);
 
-    replayed += await withSearchProjectionRebuildBarrier(async () => {
-      const finalSequence = await latestSearchProjectionSequence();
-      const count = await replayThrough(preReplaySequence, finalSequence, targets);
+    const final = await withSearchProjectionRebuildBarrier(async () => {
+      const watermark = await latestSearchProjectionSequence();
+      const count = await replayThrough(preReplaySequence, watermark, targets);
       await swapSearchCollectionAlias('projects', targets.projects);
       projectAliasSwapped = true;
       try {
@@ -226,17 +241,16 @@ export async function rebuildSearchCollections(
         projectAliasSwapped = false;
         throw error;
       }
-      // The live collections now reflect every row through the watermark, including rows
-      // still backing off after failed incremental jobs.
-      await markSearchProjectionEventsDispatchedThrough(finalSequence);
-      return count;
+      return { count, watermark };
     });
 
+    // Housekeeping after the swap only logs failures, so it can never trigger the rollback below.
     await Promise.all([
+      settleReplayedBacklog(final.watermark),
       pruneSupersededCollections('projects', previous.projects),
       pruneSupersededCollections('designers', previous.designers),
     ]);
-    return { projects, designers, replayed, collections: targets };
+    return { projects, designers, replayed: replayed + final.count, collections: targets };
   } catch (error) {
     if (projectAliasSwapped) {
       await swapSearchCollectionAlias('projects', previous.projects).catch((rollbackError) =>

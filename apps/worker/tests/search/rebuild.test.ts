@@ -159,11 +159,18 @@ describe('full search rebuild', () => {
     ).toBeLessThan(
       vi.mocked(outbox.withSearchProjectionRebuildBarrier).mock.invocationCallOrder[2]!,
     );
+    expect(outbox.markSearchProjectionEventsDispatchedThrough).toHaveBeenCalledWith(11n);
+    expect(vi.mocked(search.swapSearchCollectionAlias).mock.invocationCallOrder[1]).toBeLessThan(
+      vi.mocked(outbox.markSearchProjectionEventsDispatchedThrough).mock.invocationCallOrder[0]!,
+    );
   });
 
-  it('prunes collections older than the replaced ones after both aliases move', async () => {
+  it('treats post-swap backlog and collection cleanup failures as non-fatal', async () => {
     vi.mocked(search.deleteSearchCollectionsOlderThan).mockRejectedValueOnce(
       new Error('Typesense unavailable'),
+    );
+    vi.mocked(outbox.markSearchProjectionEventsDispatchedThrough).mockRejectedValueOnce(
+      new Error('Postgres unavailable'),
     );
 
     await expect(rebuildSearchCollections(1000, 0)).resolves.toMatchObject({
@@ -213,5 +220,6 @@ describe('full search rebuild', () => {
       'tickif_projects_v1000-0',
     );
     expect(search.deleteSearchCollectionsOlderThan).not.toHaveBeenCalled();
+    expect(outbox.markSearchProjectionEventsDispatchedThrough).not.toHaveBeenCalled();
   });
 });
