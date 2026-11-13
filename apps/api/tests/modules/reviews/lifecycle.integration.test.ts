@@ -173,6 +173,51 @@ describe('review lifecycle', () => {
     expect(afterResolve?.reviewCount).toBe(1);
   });
 
+  it('keeps an admin-upheld review visible until the author publishes a new version', async () => {
+    const { owner, organization, designer, author, admin } = await makeReviewFixture();
+    const authorCaller = { userId: author.id, phoneNumberVerified: true, activeOrgId: null };
+    const ownerCaller = {
+      userId: owner.id,
+      phoneNumberVerified: true,
+      activeOrgId: organization.id,
+      activeTeamId: designer.teamId,
+    };
+    const review = await reviewsService.create(
+      {
+        designerProfileId: designer.id,
+        rating: 1,
+        body: 'Poor workmanship and the handover slipped by several months.',
+      },
+      authorCaller,
+    );
+    await reviewsService.publish(review.id, { userId: admin.id });
+    await reviewsService.dispute(review.id, { note: 'We disagree with this account.' }, ownerCaller);
+    await reviewsService.resolveDispute(
+      review.id,
+      { decision: 'publish', note: 'Within policy; restoring.' },
+      { userId: admin.id },
+    );
+
+    await expect(
+      reviewsService.dispute(review.id, { note: 'Disputing it again.' }, ownerCaller),
+    ).rejects.toMatchObject({ status: 409 });
+    const visible = await reviewsService.listPublished({
+      designerProfileId: designer.id,
+      page: 1,
+      limit: 20,
+    });
+    expect(visible.reviewCount).toBe(1);
+
+    await reviewsService.update(review.id, { rating: 2 }, authorCaller);
+    await reviewsService.publish(review.id, { userId: admin.id });
+    const disputedAgain = await reviewsService.dispute(
+      review.id,
+      { note: 'The edited review is also inaccurate.' },
+      ownerCaller,
+    );
+    expect(disputedAgain.status).toBe('disputed');
+  });
+
   it('rechecks organization write access when a designer disputes a review', async () => {
     const { organization, designer, author, admin } = await makeReviewFixture();
     const writer = await makeUser({ name: 'Designer Admin' });

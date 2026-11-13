@@ -130,6 +130,9 @@ async function transitionOrConflict(params: TransitionReviewParams): Promise<Rev
   if (result.kind === 'forbidden') {
     throw AppError.forbidden('Organization write access required');
   }
+  if (result.kind === 'dispute_resolved') {
+    throw AppError.conflict('An admin already reviewed a dispute and kept this review published');
+  }
   return toResponse(result.review);
 }
 
