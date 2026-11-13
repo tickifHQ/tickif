@@ -25,7 +25,15 @@ export async function createReplacement(input: NewReplacement) {
     });
   await repository.update(input.id, { replacementSubscriptionId: remote.id });
   if (input.amount > 0) {
-    const order = await provider.createOrder(input.amount, input.currency, input.id);
+    const order = await provider
+      .createOrder(input.amount, input.currency, input.id)
+      .catch((error: unknown) => {
+        // The mandate already exists, so this is not a clean "nothing was created" rejection;
+        // the reservation stays open until reconcile resolves the mandate.
+        throw error instanceof ProviderRejection
+          ? new Error('Billing order was rejected after the mandate was created', { cause: error })
+          : error;
+      });
     if (
       order.amount !== input.amount ||
       order.currency !== input.currency ||

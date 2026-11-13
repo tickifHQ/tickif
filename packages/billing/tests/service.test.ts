@@ -419,6 +419,18 @@ describe('replacement mandate transitions', () => {
     await expect(createReplacement(row)).rejects.toBeInstanceOf(ProviderRejection);
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith('operation', { status: 'failed' });
   });
+  it('does not report an order rejection as a clean rejection once the mandate exists', async () => {
+    mocks.create.mockResolvedValue({ id: 'sub_new' });
+    mocks.createOrder.mockRejectedValue(
+      new ProviderRejection('Billing provider request failed (400)'),
+    );
+    const failure = await createReplacement(row).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(ProviderRejection);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith('operation', {
+      replacementSubscriptionId: 'sub_new',
+    });
+  });
   it('reads the schedule without the billing lock when no confirmed replacement is due', async () => {
     mocks.hasDueConfirmed.mockResolvedValue(false);
     expect(await applyReplacementSchedule('org', end)).toBe(false);
