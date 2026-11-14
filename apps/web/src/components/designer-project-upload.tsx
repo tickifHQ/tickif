@@ -27,6 +27,8 @@ import {
 import {
   allowedImageContentType,
   MAX_PROJECT_IMAGES,
+  PROJECT_ROOM_LABEL_LIMIT,
+  PROJECT_ROOM_LABEL_MAX_LENGTH,
   taxonomyTermSchema,
   createLocationResponseSchema,
   listProjectImagesResponseSchema,
@@ -146,7 +148,6 @@ type RoomDraft = {
   designStyle: string;
   materialFinish: string;
   tags: string[];
-  tagInput: string;
   images: ProjectImagePreview[];
   uploading: boolean;
   uploadError: string;
@@ -474,7 +475,6 @@ function makeRoomDraft(seed: { roomSlug: string; title: string }, index: number)
     designStyle: '',
     materialFinish: '',
     tags: [],
-    tagInput: '',
     images: [],
     uploading: false,
     uploadError: '',
@@ -1118,9 +1118,7 @@ type RoomCardProps = {
   onDelete: () => void;
   onDesignStyleChange: (value: string) => void;
   onMaterialFinishChange: (value: string) => void;
-  onTagInputChange: (value: string) => void;
-  onAddTag: (tag: string) => void;
-  onRemoveTag: (tag: string) => void;
+  onTagsChange: (tags: string[]) => void;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onDropFiles: (files: File[]) => void;
   onSetCover: (imageId: string) => void;
@@ -1140,9 +1138,7 @@ function RoomCard({
   onDelete,
   onDesignStyleChange,
   onMaterialFinishChange,
-  onTagInputChange,
-  onAddTag,
-  onRemoveTag,
+  onTagsChange,
   onUpload,
   onDropFiles,
   onSetCover,
@@ -1311,12 +1307,13 @@ function RoomCard({
             </div>
 
             <TagCombobox
-              tags={room.tags}
-              value={room.tagInput}
-              onValueChange={onTagInputChange}
-              onAddTag={onAddTag}
-              onRemoveTag={onRemoveTag}
+              label="Search tags"
+              labelHint="Optional"
+              value={room.tags}
+              onChange={onTagsChange}
               options={roomTagOptions}
+              max={PROJECT_ROOM_LABEL_LIMIT}
+              validate={(tag) => tag.length <= PROJECT_ROOM_LABEL_MAX_LENGTH}
               placeholder="accent wall, marble counter"
             />
 
@@ -1872,7 +1869,6 @@ export function DesignerProjectUpload({
                       finishTerms,
                     ),
                     tags: room.metadata.labels ?? roomImages[0]?.tagSlugs ?? [],
-                    tagInput: '',
                     images: roomImages.map((image, imageIndex) =>
                       toProjectImagePreview(image, imageIndex),
                     ),
@@ -3791,21 +3787,8 @@ export function DesignerProjectUpload({
                   onMaterialFinishChange={(value) =>
                     updateRoom(room.clientId, (current) => ({ ...current, materialFinish: value }))
                   }
-                  onTagInputChange={(value) =>
-                    updateRoom(room.clientId, (current) => ({ ...current, tagInput: value }))
-                  }
-                  onAddTag={(tag) =>
-                    updateRoom(room.clientId, (current) => ({
-                      ...current,
-                      tags: current.tags.includes(tag) ? current.tags : [...current.tags, tag],
-                      tagInput: '',
-                    }))
-                  }
-                  onRemoveTag={(tag) =>
-                    updateRoom(room.clientId, (current) => ({
-                      ...current,
-                      tags: current.tags.filter((item) => item !== tag),
-                    }))
+                  onTagsChange={(tags) =>
+                    updateRoom(room.clientId, (current) => ({ ...current, tags }))
                   }
                   onUpload={(event) => handleUpload(room, event)}
                   onDropFiles={(files) => void handleUploadFiles(room, files)}

@@ -42,7 +42,6 @@ function room(
     designStyle: '',
     materialFinish: '',
     tags: [],
-    tagInput: '',
     images: [],
     uploading: false,
     uploadError: '',

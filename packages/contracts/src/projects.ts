@@ -107,9 +107,15 @@ export type AssignProjectResponsibleMemberInput = z.infer<
   typeof assignProjectResponsibleMemberSchema
 >;
 
+export const PROJECT_ROOM_LABEL_LIMIT = 20;
+export const PROJECT_ROOM_LABEL_MAX_LENGTH = 80;
+
 export const projectRoomMetadataSchema = z
   .object({
-    labels: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+    labels: z
+      .array(z.string().trim().min(1).max(PROJECT_ROOM_LABEL_MAX_LENGTH))
+      .max(PROJECT_ROOM_LABEL_LIMIT)
+      .optional(),
     attributeLabels: z
       .record(z.string().trim().min(1).max(80), z.array(z.string().trim().min(1).max(80)).max(20))
       .refine((value) => Object.keys(value).length <= 20, {
