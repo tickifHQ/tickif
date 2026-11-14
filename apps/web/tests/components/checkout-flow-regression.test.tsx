@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { openRazorpayCheckout } from '../../src/lib/razorpay-checkout';
+import { readCheckoutPayment } from '../../src/components/subscribe/checkout-payment';
 import {
   resolveEntitlements,
   type BillingChangePreview,
@@ -505,6 +506,7 @@ describe('billing preview checkout regressions', () => {
     expect(mocks.replace).toHaveBeenCalledWith(
       '/designer/plan-billing/subscribe/complete?plan=corporate',
     );
+    expect(readCheckoutPayment('corporate')).toBe('pay_test');
     expect(screen.queryByRole('heading', { name: 'Plan activated' })).not.toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
   });

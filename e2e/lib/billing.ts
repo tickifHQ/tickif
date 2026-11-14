@@ -97,8 +97,13 @@ export async function createBillingOwner(
 /** Feed signed synthetic provider evidence through the real webhook and reconciliation. */
 export async function deliverSubscriptionEvent(
   context: BrowserContext,
-  event: 'subscription.activated' | 'subscription.updated' | 'subscription.cancelled',
+  event:
+    | 'subscription.activated'
+    | 'subscription.charged'
+    | 'subscription.updated'
+    | 'subscription.cancelled',
   subscription: Record<string, unknown>,
+  payment?: Record<string, unknown>,
 ) {
   expect(
     (
@@ -110,7 +115,10 @@ export async function deliverSubscriptionEvent(
   const body = JSON.stringify({
     event,
     created_at: Math.floor(Date.now() / 1000),
-    payload: { subscription: { entity: subscription } },
+    payload: {
+      subscription: { entity: subscription },
+      ...(payment ? { payment: { entity: payment } } : {}),
+    },
   });
   const response = await context.request.post(`${apiUrl}/api/billing/webhook`, {
     headers: {

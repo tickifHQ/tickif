@@ -682,13 +682,11 @@ test('Corporate checkout refreshes the retained workspace and unlocks team and b
     ).toBeVisible();
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
     await expect(page).toHaveURL(/\/subscribe\/complete\?plan=corporate$/);
-    await expect(
-      page.getByRole('heading', { name: 'Confirming your payment', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText('Confirming your payment', { exact: true })).toBeVisible();
     expect((await owner.subscription())?.planTier).toBe('hobby');
     const pending = await owner.subscription();
     const now = Math.floor(Date.now() / 1000);
-    await deliverSubscriptionEvent(context, 'subscription.activated', {
+    const activeSubscription = {
       id: pending!.razorpaySubscriptionId,
       entity: 'subscription',
       status: 'active',
@@ -697,10 +695,18 @@ test('Corporate checkout refreshes the retained workspace and unlocks team and b
       current_end: now + 30 * 86400,
       created_at: now,
       notes: { organizationId: owner.org.id, tier: 'corporate' },
+    };
+    await deliverSubscriptionEvent(context, 'subscription.activated', activeSubscription);
+    await deliverSubscriptionEvent(context, 'subscription.charged', activeSubscription, {
+      id: `pay_workspace_${owner.org.id}`,
+      entity: 'payment',
+      amount: 799900,
+      currency: 'INR',
+      status: 'captured',
+      created_at: now,
     });
-    await expect(
-      page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText('Payment confirmed', { exact: true })).toBeVisible();
+    await expect(page.getByRole('article', { name: 'Receipt', exact: true })).toBeVisible();
     await expect(workspaceSwitcher).toContainText('Corporate');
     await page.getByRole('link', { name: 'Team & Roles', exact: true }).click();
     await expect(page).toHaveURL(`${stackWebUrl}/designer/terms-roles`);
