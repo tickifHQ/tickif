@@ -397,6 +397,37 @@ describe('DesignerProjectUpload', () => {
     expect(mock.roomPatch.mock.calls[0]![0].json).not.toHaveProperty('description');
   });
 
+  it('saves room tags typed, pasted and removed in the tag field as room labels and image tags', async () => {
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    project.rooms[0]!.metadata = { labels: ['Arches'] };
+    mock.projectGet.mockImplementation(async () => Response.json(project));
+    mock.projectPatch.mockImplementation(async () => Response.json(project));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId={project.id} />);
+    await screen.findByDisplayValue('2 BHK in Adyar');
+
+    const tagInput = screen.getByRole('combobox', { name: /search tags/i });
+    await user.type(tagInput, 'marble counter{Enter}');
+    await user.paste('Skylight\nArches');
+    await user.click(screen.getByRole('button', { name: 'Remove Arches' }));
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => expect(mock.roomPatch).toHaveBeenCalled());
+    expect(mock.roomPatch.mock.calls[0]![0].json.metadata.labels).toEqual([
+      'Marble counter',
+      'Skylight',
+    ]);
+    await waitFor(() => expect(mock.imageMetadataPatch).toHaveBeenCalled());
+    expect(mock.imageMetadataPatch.mock.calls[0]![0].json.tagSlugs).toEqual([
+      'marble-counter',
+      'skylight',
+    ]);
+  });
+
   it('uses scoped Design budgets and saves the selected range without changing other scopes', async () => {
     const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
     mock.projectGet.mockImplementation(async () => Response.json(project));

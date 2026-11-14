@@ -95,7 +95,6 @@ type DefaultRoomRefreshDraft = {
   designStyle: string;
   materialFinish: string;
   tags: string[];
-  tagInput: string;
   images: unknown[];
   uploading: boolean;
   uploadError: string;
@@ -444,7 +443,6 @@ export function shouldRefreshPristineDefaultRooms(
       room.designStyle.length === 0 &&
       room.materialFinish.length === 0 &&
       room.tags.length === 0 &&
-      room.tagInput.length === 0 &&
       room.images.length === 0 &&
       !room.uploading &&
       room.uploadError.length === 0,

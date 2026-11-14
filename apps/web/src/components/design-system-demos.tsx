@@ -174,7 +174,6 @@ export function FormDemos() {
   const [optionalStatus, setOptionalStatus] = useState('');
   const [month, setMonth] = useState('2026-10');
   const [tags, setTags] = useState(['Warm minimalism']);
-  const [tagQuery, setTagQuery] = useState('');
   const [notifications, setNotifications] = useState(true);
   const [published, setPublished] = useState(false);
   const [budget, setBudget] = useState([50]);
@@ -192,7 +191,6 @@ export function FormDemos() {
     setLocation('bengaluru');
     setMonth('2026-10');
     setTags(['Warm minimalism']);
-    setTagQuery('');
     setPublished(false);
     setNotifications(true);
     setBudget([50]);
@@ -260,13 +258,9 @@ export function FormDemos() {
               <TagCombobox
                 label="Design styles"
                 labelHint="Optional"
-                value={tagQuery}
-                tags={tags}
-                onValueChange={setTagQuery}
-                onAddTag={(tag) => setTags((current) => [...current, tag])}
-                onRemoveTag={(tag) =>
-                  setTags((current) => current.filter((existing) => existing !== tag))
-                }
+                value={tags}
+                onChange={setTags}
+                max={6}
                 options={[
                   { label: 'Warm minimalism', value: 'Warm minimalism' },
                   { label: 'Mid-century', value: 'Mid-century' },
