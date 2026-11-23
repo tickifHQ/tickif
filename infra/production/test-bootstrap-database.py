@@ -20,11 +20,14 @@ class BootstrapPermissionsTest(unittest.TestCase):
                       else "disposable_test_password" for part in statement.values)
         name = "tickif-db-bootstrap-test-" + uuid.uuid4().hex[:10]
         subprocess.run(["docker", "run", "-d", "--name", name, "-e",
-                        "POSTGRES_HOST_AUTH_METHOD=trust", "postgres:16-alpine"],
+                        "POSTGRES_HOST_AUTH_METHOD=trust",
+                        "postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"],
                        check=True, capture_output=True)
 
         def query(user, database, command, check=True):
-            return subprocess.run(["docker", "exec", "-i", name, "psql", "-XqAt",
+            # The entrypoint's temporary init server accepts Unix sockets before
+            # restarting. TCP becomes ready only on the final server.
+            return subprocess.run(["docker", "exec", "-i", name, "psql", "-h", "127.0.0.1", "-XqAt",
                                    "-U", user, "-d", database, "-v", "ON_ERROR_STOP=1"],
                                   input=command, text=True, capture_output=True, check=check)
         try:
@@ -32,6 +35,8 @@ class BootstrapPermissionsTest(unittest.TestCase):
                 if query("postgres", "postgres", "SELECT 1", False).returncode == 0:
                     break
                 time.sleep(1)
+            else:
+                self.fail("PostgreSQL did not accept TCP connections within 30 seconds")
             query("postgres", "postgres", "CREATE ROLE tickif_admin LOGIN CREATEROLE CREATEDB; CREATE DATABASE tickif OWNER tickif_admin;")
             query("tickif_admin", "tickif", sql)
             query("tickif_migrator", "tickif", "CREATE TABLE public.probe(id bigserial PRIMARY KEY, value text); CREATE SCHEMA drizzle; CREATE TABLE drizzle.private_probe(id integer);")
