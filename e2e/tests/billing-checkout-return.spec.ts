@@ -19,9 +19,9 @@ for (const width of [1412, 390]) {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     const before = await providerMutationCount(context, '/subscriptions');
+    const paymentId = `pay_test_${owner.org.id}`;
     await page.exposeBinding('confirmSyntheticPayment', async (_source, subscriptionId: string) => {
       expect(subscriptionId).toBe((await owner.subscription())?.razorpaySubscriptionId);
-      const paymentId = `pay_test_${owner.org.id}`;
       const now = Math.floor(Date.now() / 1000);
       // Signed callback acknowledges authorization, but does not grant paid access.
       expect(
@@ -176,13 +176,11 @@ for (const width of [1412, 390]) {
       ).toBe(1);
       await page.getByRole('button', { name: 'Simulate successful payment', exact: true }).click();
       await expect(page).toHaveURL(/\/subscribe\/complete\?plan=corporate$/);
-      await expect(
-        page.getByRole('heading', { name: 'Confirming your payment', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText('Confirming your payment', { exact: true })).toBeVisible();
       expect((await owner.subscription())?.planTier).toBe('hobby');
-      await page.screenshot({ path: testInfo.outputPath('05-confirming.png') });
+      await page.screenshot({ path: testInfo.outputPath('05-receipt-processing.png') });
       const now = Math.floor(Date.now() / 1000);
-      await deliverSubscriptionEvent(context, 'subscription.activated', {
+      const activeSubscription = {
         id: replacement!.razorpaySubscriptionId,
         entity: 'subscription',
         status: 'active',
@@ -191,15 +189,28 @@ for (const width of [1412, 390]) {
         current_end: now + 30 * 86400,
         created_at: now,
         notes: { organizationId: owner.org.id, tier: 'corporate' },
+      };
+      await deliverSubscriptionEvent(context, 'subscription.activated', activeSubscription);
+      // An active plan alone prints nothing; the receipt waits for the captured charge.
+      await expect(page.getByText('Confirming your payment', { exact: true })).toBeVisible();
+      await deliverSubscriptionEvent(context, 'subscription.charged', activeSubscription, {
+        id: paymentId,
+        entity: 'payment',
+        amount: 799900,
+        currency: 'INR',
+        status: 'captured',
+        created_at: now,
       });
-      await expect(
-        page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
-      ).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('06-confirmed.png') });
+      await expect(page.getByText('Printing your receipt', { exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('06-receipt-printing.png') });
+      const receipt = page.getByRole('article', { name: 'Receipt', exact: true });
+      await expect(page.getByText('Payment confirmed', { exact: true })).toBeVisible();
+      await expect(receipt).toContainText('Corporate plan');
+      await expect(receipt).toContainText('₹7,999.00');
+      await expect(receipt).toContainText(paymentId);
+      await page.screenshot({ path: testInfo.outputPath('07-receipt-complete.png') });
       await page.reload();
-      await expect(
-        page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText('Payment confirmed', { exact: true })).toBeVisible();
       await page.getByRole('link', { name: 'Go to billing', exact: true }).click();
       await expect(page).toHaveURL(`${webUrl}/designer/plan-billing`);
       await expect(page.getByText('Corporate', { exact: true }).first()).toBeVisible();
@@ -357,10 +368,11 @@ for (const width of [1412, 390]) {
       ).toHaveCount(0);
       await page.getByRole('button', { name: 'Capture adjustment', exact: true }).click();
       await expect(page).toHaveURL(/\/subscribe\/complete\?plan=corporate$/);
-      await expect(
-        page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
-      ).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('upgrade-confirmed.png') });
+      await expect(page.getByText('Payment confirmed', { exact: true })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Receipt', exact: true })).toContainText(
+        'Corporate plan',
+      );
+      await page.screenshot({ path: testInfo.outputPath('upgrade-receipt.png') });
       expect((await owner.subscription())?.planTier).toBe('corporate');
       expect((await owner.subscription())?.razorpayStatus).toBe('authenticated');
       expect(opened.map((entry) => entry.kind)).toEqual(['subscription', 'order']);
@@ -370,9 +382,7 @@ for (const width of [1412, 390]) {
         await providerMutationCount(context, `/subscriptions/${owner.provider.id}/cancel`),
       ).toBe(1);
       await page.reload();
-      await expect(
-        page.getByRole('heading', { name: 'Payment confirmed', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText('Payment confirmed', { exact: true })).toBeVisible();
       expect(errors).toEqual([]);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
