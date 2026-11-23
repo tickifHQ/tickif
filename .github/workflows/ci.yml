@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging]
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -11,6 +11,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  infrastructure:
+    name: terraform / validate / safety
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.14.0
+      - name: Validate production infrastructure without AWS credentials
+        working-directory: infra/production/terraform
+        run: |
+          terraform init -backend=false -input=false -lockfile=readonly
+          terraform fmt -check -recursive
+          terraform validate
+          terraform test
+      - name: Validate private production runtime and database permissions
+        run: |
+          python3 infra/production/test-runtime.py
+          python3 infra/production/test-bootstrap-database.py
+          bash -n infra/production/deploy-private.sh
+          node --test infra/production/register-search-key.test.mjs
+
   security:
     name: security / audit / codeql
     runs-on: ubuntu-latest
@@ -204,6 +228,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Verify release environment isolation
+        run: node --test infra/production/release-config.test.mjs
+
       - name: Lint
         run: pnpm lint
 
@@ -239,8 +266,8 @@ jobs:
 
   publish-images:
     name: publish / ${{ matrix.name }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [ci, security]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+    needs: [ci, security, infrastructure]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -261,10 +288,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Validate staging build-time URL
+      - name: Resolve environment-specific release
+        id: release
         env:
           STAGING_HOST: ${{ vars.STAGING_HOST }}
-        run: test -n "$STAGING_HOST"
+          PRODUCTION_HOST: ${{ vars.PRODUCTION_HOST }}
+        run: node infra/production/release-config.mjs >> "$GITHUB_OUTPUT"
 
       - name: Resolve lowercase image name
         id: image
@@ -287,14 +316,44 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          tags: ${{ steps.image.outputs.name }}:${{ steps.release.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+            com.tickif.deployment=${{ github.ref_name == 'main' && 'production' || 'staging' }}
           build-args: |
-            NEXT_PUBLIC_API_URL=https://${{ vars.STAGING_HOST }}
-            NEXT_PUBLIC_WEB_URL=https://${{ vars.STAGING_HOST }}
-            NEXT_PUBLIC_SCROLL_GATE_LIMIT=${{ vars.STAGING_SCROLL_GATE_LIMIT || '5' }}
-            NEXT_PUBLIC_TELEMETRY_ENABLED=${{ vars.STAGING_TELEMETRY_ENABLED || 'false' }}
-            NEXT_PUBLIC_APP_VERSION=${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+            NEXT_PUBLIC_API_URL=https://${{ steps.release.outputs.host }}
+            NEXT_PUBLIC_WEB_URL=https://${{ steps.release.outputs.host }}
+            NEXT_PUBLIC_SCROLL_GATE_LIMIT=${{ github.ref_name == 'main' && (vars.PRODUCTION_SCROLL_GATE_LIMIT || '5') || (vars.STAGING_SCROLL_GATE_LIMIT || '5') }}
+            NEXT_PUBLIC_TELEMETRY_ENABLED=${{ github.ref_name == 'main' && (vars.PRODUCTION_TELEMETRY_ENABLED || 'false') || (vars.STAGING_TELEMETRY_ENABLED || 'false') }}
+            NEXT_PUBLIC_APP_VERSION=${{ steps.release.outputs.version }}
+          cache-from: type=gha,scope=${{ github.ref_name }}-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}-${{ matrix.name }}
           provenance: mode=max
           sbom: true
+
+  tag-production-release:
+    name: record production release version
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [publish-images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Record immutable version after all images publish
+        env:
+          PRODUCTION_HOST: ${{ vars.PRODUCTION_HOST }}
+        run: |
+          node infra/production/release-config.mjs > "$RUNNER_TEMP/release.env"
+          version=$(sed -n 's/^version=//p' "$RUNNER_TEMP/release.env")
+          existing=$(git ls-remote origin "refs/tags/$version" | cut -f1)
+          if [[ -n "$existing" ]]; then
+            [[ "$existing" == "$GITHUB_SHA" ]] || { echo 'Release tag already points to a different commit' >&2; exit 1; }
+          else
+            git tag "$version" "$GITHUB_SHA"
+            git push origin "refs/tags/$version"
+          fi
+          echo "Release $version: production-$GITHUB_SHA (images published; deployment tracked separately)" >> "$GITHUB_STEP_SUMMARY"

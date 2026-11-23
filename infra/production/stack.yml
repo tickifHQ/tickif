@@ -1,0 +1,314 @@
+# Private production stack. External RDS/Redis; no published ports.
+x-logging: &id001
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '5'
+    labels: tickif.telemetry.service
+x-stateless-update: &id002
+  parallelism: 1
+  delay: 10s
+  failure_action: rollback
+  monitor: 30s
+  max_failure_ratio: 0
+  order: stop-first
+x-stateless-rollback: &id003
+  parallelism: 1
+  delay: 5s
+  failure_action: pause
+  monitor: 30s
+  max_failure_ratio: 0
+  order: stop-first
+services:
+  web:
+    labels:
+      tickif.telemetry.service: tickif-web
+    image: ${WEB_IMAGE}
+    environment:
+      NODE_ENV: production
+      CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
+      NEXT_PUBLIC_API_URL: https://${PRODUCTION_HOST}
+      NEXT_PUBLIC_WEB_URL: https://${PRODUCTION_HOST}
+      DEPLOYMENT_ENV: production
+      TELEMETRY_ENABLED: 'false'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${RELEASE_VERSION}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+    networks:
+      - edge
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+      - type: tmpfs
+        target: /app/apps/web/.next/cache
+        tmpfs:
+          size: 134217728
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging: *id001
+    deploy:
+      replicas: ${WEB_REPLICAS:-0}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 1m
+      update_config: *id002
+      rollback_config: *id003
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.00'
+          memory: 768M
+  api:
+    labels:
+      tickif.telemetry.service: tickif-api
+    image: ${API_IMAGE}
+    environment:
+      NODE_ENV: production
+      TELEMETRY_ENABLED: 'false'
+      TELEMETRY_BROWSER_INGEST_ENABLED: ${TELEMETRY_BROWSER_INGEST_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${RELEASE_VERSION}
+      CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
+      PORT: '3001'
+      TYPESENSE_HOST: http://typesense:8108
+      TYPESENSE_COLLECTION_PREFIX: ${TYPESENSE_COLLECTION_PREFIX}
+      BETTER_AUTH_URL: https://${PRODUCTION_HOST}
+      SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-}
+      NEXT_PUBLIC_API_URL: https://${PRODUCTION_HOST}
+      PUBLIC_WEB_URL: https://${PRODUCTION_HOST}
+      TRUSTED_ORIGINS: ''
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      EMAIL_FROM: ${EMAIL_FROM}
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER}
+      MSG91_WHATSAPP_NUMBER: ${MSG91_WHATSAPP_NUMBER}
+      MSG91_WHATSAPP_TEMPLATE: ${MSG91_WHATSAPP_TEMPLATE}
+      MSG91_WHATSAPP_LANGUAGE: ${MSG91_WHATSAPP_LANGUAGE:-en}
+      DEPLOYMENT_ENV: production
+      WORKER_HEALTH_PORT: '3002'
+      CONFIG_SECRETS_FILE: /run/secrets/app_config
+      NODE_EXTRA_CA_CERTS: /etc/tickif/rds-ca.pem
+    secrets:
+      - source: api_config
+        target: app_config
+        uid: '1001'
+        gid: '1001'
+        mode: 256
+    networks:
+      - edge
+      - backend
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3001/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging: *id001
+    deploy:
+      replicas: ${API_REPLICAS:-0}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 1m
+      update_config: *id002
+      rollback_config: *id003
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.00'
+          memory: 768M
+    configs:
+      - source: rds_ca
+        target: /etc/tickif/rds-ca.pem
+        mode: 292
+  worker:
+    labels:
+      tickif.telemetry.service: tickif-worker
+    image: ${WORKER_IMAGE}
+    environment:
+      NODE_ENV: production
+      TELEMETRY_ENABLED: 'false'
+      TELEMETRY_BROWSER_INGEST_ENABLED: ${TELEMETRY_BROWSER_INGEST_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${RELEASE_VERSION}
+      CONSULTATIONS_ENABLED: ${CONSULTATIONS_ENABLED:-false}
+      PORT: '3001'
+      TYPESENSE_HOST: http://typesense:8108
+      TYPESENSE_COLLECTION_PREFIX: ${TYPESENSE_COLLECTION_PREFIX}
+      BETTER_AUTH_URL: https://${PRODUCTION_HOST}
+      SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-}
+      NEXT_PUBLIC_API_URL: https://${PRODUCTION_HOST}
+      PUBLIC_WEB_URL: https://${PRODUCTION_HOST}
+      TRUSTED_ORIGINS: ''
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      EMAIL_FROM: ${EMAIL_FROM}
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER}
+      MSG91_WHATSAPP_NUMBER: ${MSG91_WHATSAPP_NUMBER}
+      MSG91_WHATSAPP_TEMPLATE: ${MSG91_WHATSAPP_TEMPLATE}
+      MSG91_WHATSAPP_LANGUAGE: ${MSG91_WHATSAPP_LANGUAGE:-en}
+      DEPLOYMENT_ENV: production
+      WORKER_HEALTH_PORT: '3002'
+      MEDIA_WORKER_CONCURRENCY: '1'
+      SEARCH_WORKER_CONCURRENCY: '2'
+      TELEMETRY_QUEUE_METRICS_ENABLED: ${TELEMETRY_QUEUE_METRICS_ENABLED:-false}
+      CONFIG_SECRETS_FILE: /run/secrets/app_config
+      NODE_EXTRA_CA_CERTS: /etc/tickif/rds-ca.pem
+    secrets:
+      - source: worker_config
+        target: app_config
+        uid: '1001'
+        gid: '1001'
+        mode: 256
+    networks:
+      - backend
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 2m
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3002/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging: *id001
+    deploy:
+      replicas: ${WORKER_REPLICAS:-0}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+      update_config: *id002
+      rollback_config: *id003
+      resources:
+        reservations:
+          cpus: '0.50'
+          memory: 768M
+        limits:
+          cpus: '2.00'
+          memory: 2G
+    configs:
+      - source: rds_ca
+        target: /etc/tickif/rds-ca.pem
+        mode: 292
+  typesense:
+    image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - key="$$(cat /run/secrets/typesense_admin_key)"; case "$$key" in ""|*[!A-Za-z0-9_-]*)
+        echo "Typesense key must contain only A-Z, a-z, 0-9, underscore or hyphen" >&2;
+        exit 1;; esac; [ "$${#key}" -ge 16 ] || { echo "Typesense key must be at least
+        16 characters" >&2; exit 1; }; umask 077; printf "[server]\ndata-dir = /data\napi-key
+        = %s\nenable-cors = false\n" "$$key" >/tmp/typesense.ini; unset key; exec /opt/typesense-server
+        --config=/tmp/typesense.ini
+    secrets:
+      - typesense_admin_key
+    volumes:
+      - typesense_data:/data
+      - type: tmpfs
+        target: /tmp
+    networks:
+      - backend
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bash -ec 'exec 3<>/dev/tcp/127.0.0.1/8108; printf "GET /health HTTP/1.0\r\n\r\n"
+          >&3; read -r status <&3; [[ "$$status" == *" 200 "* ]]'
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    logging: *id001
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.tickif.stateful == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        reservations:
+          cpus: '0.50'
+          memory: 512M
+        limits:
+          cpus: '2.00'
+          memory: 2G
+networks:
+  edge:
+    name: tickif_production_edge
+    driver: overlay
+    driver_opts:
+      encrypted: 'true'
+  backend:
+    name: tickif_production_backend
+    driver: overlay
+    driver_opts:
+      encrypted: 'true'
+volumes:
+  typesense_data:
+    name: tickif_production_typesense_data
+configs:
+  rds_ca:
+    external: true
+    name: ${RDS_CA_CONFIG}
+secrets:
+  api_config:
+    external: true
+    name: ${API_CONFIG_SECRET}
+  worker_config:
+    external: true
+    name: ${WORKER_CONFIG_SECRET}
+  typesense_admin_key:
+    external: true
+    name: ${TYPESENSE_ADMIN_KEY_SECRET}

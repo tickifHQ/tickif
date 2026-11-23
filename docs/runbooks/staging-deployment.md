@@ -1,5 +1,10 @@
 # Staging deployment (Docker Swarm + Traefik)
 
+CI image publishing and automatic staging deployment follow the `staging`
+branch. Manual deployment must select `staging` and a SHA reachable from it.
+`main` prepares production release images; see the
+[production runbook](./production-deployment.md).
+
 Tickif staging is a single Swarm stack named `tickif`. Traefik is the only
 public service and publishes ports 80/443. API, web, worker health, Postgres,
 Redis, Typesense, Docker socket proxy, and Traefik ping ports remain private.
@@ -240,9 +245,9 @@ The deployment workflow uses the protected `staging` GitHub environment. Configu
 - Variables: `STAGING_HOST` and optionally `STAGING_SCROLL_GATE_LIMIT`.
 - Environment reviewers if staging changes require approval.
 
-After successful main CI, deployment automatically uploads only the staging
+After successful staging-branch CI, deployment automatically uploads only the staging
 infrastructure files and invokes `scripts/deploy.sh`. Manual workflow dispatch
-requires the exact 40-character SHA of a commit reachable from `main`. Every
+requires the exact 40-character SHA of a commit reachable from `staging`. Every
 release rebuilds search synchronously.
 
 The deployment is explicitly migration-first:

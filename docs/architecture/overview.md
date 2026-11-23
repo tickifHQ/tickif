@@ -128,6 +128,15 @@ local test OTP/email delivery, verification, retention and experience refresh; c
 
 ## Build & deploy model
 
+Production preparation follows [ADR 0022](../adr/0022-production-hosting-and-release-branches.md):
+`staging` drives staging deployments; `main` builds separately versioned production
+images. The accepted production target is one AWS VM with RDS and ElastiCache.
+The production runtime has a private Swarm stack with per-service secret files,
+verified database/cache TLS, migration-role isolation and search-only key
+registration. Its separate ingress overlay is enabled only after launch review.
+See [production deployment preparation](../runbooks/production-deployment.md)
+for implemented release behavior and remaining provisioning/runtime work.
+
 - **web** builds with Next.js and produces a standalone Node deployment.
 - **api** and **worker** bundle workspace packages with **tsup**; npm dependencies
   remain external and must be declared directly by the consuming app. Startup uses

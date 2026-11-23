@@ -53,6 +53,12 @@ is accepted (2026-10-17). It defines read-only platform-admin access to full lea
 data and company/designer analytics, with India-date submission cohorts and
 explicit response/progression definitions. Consultation scheduling stays deferred.
 
+## Production hosting
+
+[0022: AWS production hosting and release branches](./0022-production-hosting-and-release-branches.md)
+is accepted (2026-11-23). It records single-VM AWS production, managed data
+services, staging/main branch isolation and production release versions.
+
 ## Recording decisions
 
 Create an ADR whenever implementation takes a major deviation from an agreed
