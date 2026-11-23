@@ -1,0 +1,10 @@
+{
+  "version": "v0.1.123",
+  "commit": "REPLACE_WITH_MAIN_COMMIT_SHA",
+  "images": {
+    "api": "ghcr.io/tickifhq/tickif-api@sha256:REPLACE_WITH_DIGEST",
+    "web": "ghcr.io/tickifhq/tickif-web@sha256:REPLACE_WITH_DIGEST",
+    "worker": "ghcr.io/tickifhq/tickif-worker@sha256:REPLACE_WITH_DIGEST",
+    "operations": "ghcr.io/tickifhq/tickif-operations@sha256:REPLACE_WITH_DIGEST"
+  }
+}

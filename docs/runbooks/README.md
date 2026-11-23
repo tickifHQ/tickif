@@ -27,3 +27,8 @@ Record the environment, deployed commit and date for validation evidence.
 Historical evidence is not certification of a later deployment. Keep referenced
 images colocated under `assets/`; generated reports, videos and traces belong in
 ignored output directories and CI artifacts.
+
+## Production preparation
+
+See [production deployment](./production-deployment.md) for the accepted AWS
+topology, release branch policy, version tags and remaining provisioning work.

@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [staging]
   workflow_dispatch:
     inputs:
       sha:
@@ -23,8 +23,8 @@ permissions:
 jobs:
   deploy:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/staging') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'staging')
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -45,13 +45,13 @@ jobs:
           ref: ${{ steps.release.outputs.sha }}
           fetch-depth: 0
 
-      - name: Require a release from main
+      - name: Require a release from staging
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$RELEASE_SHA" origin/main || {
-            echo "Staging only accepts commits reachable from main" >&2
+          git fetch --no-tags origin staging
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/staging || {
+            echo "Staging only accepts commits reachable from staging" >&2
             exit 1
           }
 

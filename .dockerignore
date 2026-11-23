@@ -1,6 +1,16 @@
 .git
 .gitignore
 .github
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.tfvars
+**/*.tfvars.json
+**/backend.hcl
+infra/production/runtime.env
+infra/production/release.json
+**/__pycache__
 **/.env
 **/.env.*
 **/*.pem

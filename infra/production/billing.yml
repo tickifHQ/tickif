@@ -1,0 +1,9 @@
+# Optional overlay, only with a complete live Razorpay configuration.
+services:
+  api:
+    environment: &billing
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: ${RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS}
+      RAZORPAY_PLAN_ID_CORPORATE: ${RAZORPAY_PLAN_ID_CORPORATE}
+  worker:
+    environment: *billing

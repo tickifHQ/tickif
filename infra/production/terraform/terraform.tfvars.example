@@ -1,0 +1,4 @@
+# Verified read-only in AWS Mumbai on 2026-11-23. Recheck before first apply.
+ami_id           = "ami-0593d733c2fc5bd2e"
+postgres_version = "16.15"
+# Never put redis_auth_token in this file; use ephemeral secret injection.
